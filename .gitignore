@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+
+# Perfis temporarios de navegador usados em validacoes locais
+.edge-*/
+.edge-*
+
+# Configuracoes locais de plataformas de deploy
+.vercel/
+.netlify/
+
+# Arquivos temporarios de preview
+_preview-*.pdf
