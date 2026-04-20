@@ -1263,7 +1263,9 @@ function updateAuthUI() {
   const logoutButton = document.querySelector("#logoutBtn");
   const recoverButton = document.querySelector("#recoverMagicLinkBtn");
   const isConnected = Boolean(state.supabase);
-  const isLoggedIn = Boolean(state.session?.user);
+  const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
+
+  document.body.classList.toggle("auth-locked", !isLoggedIn);
 
   loginButton.disabled = !isConnected || isLoggedIn;
   recoverButton.disabled = !isConnected || isLoggedIn;
