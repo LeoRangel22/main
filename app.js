@@ -405,6 +405,8 @@ const state = {
   supabase: null,
   session: null,
   proposals: [],
+  quoteRequests: [],
+  activeQuoteRequestId: "",
   guided: {
     event: "",
     beverageId: "",
@@ -466,6 +468,8 @@ const nodes = {
   supabaseStatus: document.querySelector("#supabaseStatus"),
   authStatus: document.querySelector("#authStatus"),
   historyList: document.querySelector("#historyList"),
+  quoteRequestList: document.querySelector("#quoteRequestList"),
+  clientFormLink: document.querySelector("#clientFormLink"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -1202,6 +1206,7 @@ function getProposalSnapshot() {
     prices: state.prices,
     guided: state.guided,
     privatizationChoice: state.privatizationChoice,
+    activeQuoteRequestId: state.activeQuoteRequestId,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
     paymentTerms,
@@ -1227,6 +1232,7 @@ function getProposalRow(snapshot) {
     privatizacao: snapshot.totals.privatizationAmount,
     total: snapshot.totals.total,
     status: "rascunho",
+    solicitacao_id: state.activeQuoteRequestId || null,
     snapshot,
   };
 }
@@ -1290,6 +1296,142 @@ function renderHistory() {
     .join("");
 }
 
+function getClientFormUrl() {
+  const path = window.location.pathname.endsWith("/")
+    ? window.location.pathname
+    : window.location.pathname.replace(/[^/]*$/, "");
+  return `${window.location.origin}${path}formulario.html`;
+}
+
+function renderClientFormLink() {
+  nodes.clientFormLink.textContent = getClientFormUrl();
+}
+
+function renderQuoteRequests() {
+  if (!state.supabase) {
+    nodes.quoteRequestList.innerHTML = `<p>Conecte o Supabase para ver os formulários recebidos.</p>`;
+    return;
+  }
+
+  if (!state.session) {
+    nodes.quoteRequestList.innerHTML = `<p>Entre com o e-mail da equipe para carregar solicitações.</p>`;
+    return;
+  }
+
+  if (!state.quoteRequests.length) {
+    nodes.quoteRequestList.innerHTML = `<p>Nenhuma solicitação recebida ainda.</p>`;
+    return;
+  }
+
+  nodes.quoteRequestList.innerHTML = state.quoteRequests
+    .map((request) => {
+      const dateLabel = request.data_evento ? formatDateFromIso(request.data_evento) : "Data a definir";
+      const timeLabel = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "Horário a definir";
+      const statusLabel = getRequestStatusLabel(request.status);
+      return `
+        <div class="request-item">
+          <strong>
+            <span>${escapeHtml(request.cliente_nome || "Cliente")}</span>
+            <span>${escapeHtml(statusLabel)}</span>
+          </strong>
+          <small>${escapeHtml(request.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)} · ${request.convidados || 1} pessoa(s)</small>
+          <small>${escapeHtml(request.cliente_email || "")}${request.cliente_whatsapp ? ` · ${escapeHtml(request.cliente_whatsapp)}` : ""}</small>
+          <div class="request-actions">
+            <button class="primary" type="button" data-use-request="${escapeHtml(request.id)}">Usar na proposta</button>
+            <button class="secondary" type="button" data-mark-request="${escapeHtml(request.id)}">Marcar analisada</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function getRequestStatusLabel(status) {
+  const labels = {
+    novo: "Novo",
+    em_cotacao: "Em cotação",
+    analisado: "Analisado",
+    proposta_gerada: "Proposta gerada",
+  };
+  return labels[status] || status || "Novo";
+}
+
+async function loadQuoteRequests() {
+  if (!state.supabase || !state.session) {
+    renderQuoteRequests();
+    return;
+  }
+
+  const { data, error } = await state.supabase
+    .from("solicitacoes_cotacao")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.warn("Falha ao carregar solicitacoes.", error);
+    nodes.quoteRequestList.innerHTML = `<p>Não foi possível carregar solicitações. Rode o schema atualizado no Supabase.</p>`;
+    return;
+  }
+
+  state.quoteRequests = data || [];
+  renderQuoteRequests();
+}
+
+function buildNotesFromRequest(request) {
+  const lines = [];
+  if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
+  if (request.preferencias) lines.push(`Preferências: ${request.preferencias}`);
+  if (request.observacoes) lines.push(`Observações do cliente: ${request.observacoes}`);
+  lines.push(`Solicitação recebida via formulário em ${formatSavedAt(request.created_at)}.`);
+  return lines.join("\n");
+}
+
+async function applyQuoteRequest(requestId) {
+  const request = state.quoteRequests.find((item) => item.id === requestId);
+  if (!request) return;
+
+  state.activeQuoteRequestId = request.id;
+  fields.clientName.value = request.cliente_nome || "";
+  fields.clientEmail.value = request.cliente_email || "";
+  fields.clientPhone.value = request.cliente_whatsapp || "";
+  fields.eventType.value = request.tipo_evento || "";
+  fields.eventDate.value = request.data_evento || "";
+  fields.eventTime.value = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "18:00";
+  fields.guestCount.value = request.convidados || 30;
+  fields.eventDuration.value = String(request.duracao || 2);
+  fields.eventReason.value = request.motivo_evento || "";
+  fields.notes.value = buildNotesFromRequest(request);
+
+  await updateQuoteRequest(request.id, { status: "em_cotacao" }, false);
+  renderAll();
+  showToast("Solicitação carregada para revisão.");
+}
+
+async function markQuoteRequestAnalyzed(requestId) {
+  await updateQuoteRequest(requestId, { status: "analisado" });
+}
+
+async function updateQuoteRequest(requestId, changes, shouldToast = true) {
+  if (!state.supabase || !state.session) return;
+  const { data, error } = await state.supabase
+    .from("solicitacoes_cotacao")
+    .update(changes)
+    .eq("id", requestId)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.warn("Falha ao atualizar solicitacao.", error);
+    if (shouldToast) showToast("Não foi possível atualizar a solicitação.");
+    return;
+  }
+
+  state.quoteRequests = state.quoteRequests.map((item) => (item.id === requestId ? data : item));
+  renderQuoteRequests();
+  if (shouldToast) showToast("Solicitação atualizada.");
+}
+
 async function initSupabase() {
   const config = loadSupabaseConfig();
   fields.supabaseUrl.value = config.url;
@@ -1299,6 +1441,7 @@ async function initSupabase() {
     renderSupabaseStatus("Supabase ainda nao configurado.");
     updateAuthUI();
     renderHistory();
+    renderQuoteRequests();
     return;
   }
 
@@ -1306,6 +1449,7 @@ async function initSupabase() {
     renderSupabaseStatus("Biblioteca do Supabase nao carregou. Verifique a internet deste navegador.");
     updateAuthUI();
     renderHistory();
+    renderQuoteRequests();
     return;
   }
 
@@ -1320,16 +1464,26 @@ async function initSupabase() {
     state.supabase.auth.onAuthStateChange((_event, session) => {
       state.session = session;
       updateAuthUI();
-      if (session) loadProposalHistory();
+      if (session) {
+        loadProposalHistory();
+        loadQuoteRequests();
+      }
       else {
         state.proposals = [];
+        state.quoteRequests = [];
         renderHistory();
+        renderQuoteRequests();
       }
     });
 
     updateAuthUI();
-    if (state.session) await loadProposalHistory();
-    else renderHistory();
+    if (state.session) {
+      await loadProposalHistory();
+      await loadQuoteRequests();
+    } else {
+      renderHistory();
+      renderQuoteRequests();
+    }
   } catch (error) {
     console.warn("Falha ao iniciar Supabase.", error);
     state.supabase = null;
@@ -1337,6 +1491,7 @@ async function initSupabase() {
     renderSupabaseStatus("Nao foi possivel conectar. Confira URL e anon key.");
     updateAuthUI();
     renderHistory();
+    renderQuoteRequests();
   }
 }
 
@@ -1383,8 +1538,10 @@ async function logoutSupabase() {
   await state.supabase.auth.signOut();
   state.session = null;
   state.proposals = [];
+  state.quoteRequests = [];
   updateAuthUI();
   renderHistory();
+  renderQuoteRequests();
 }
 
 async function saveCurrentProposal() {
@@ -1413,6 +1570,13 @@ async function saveCurrentProposal() {
   }
 
   state.proposals = [data, ...state.proposals].slice(0, 20);
+  if (state.activeQuoteRequestId) {
+    await updateQuoteRequest(
+      state.activeQuoteRequestId,
+      { status: "proposta_gerada", proposta_id: data.id },
+      false,
+    );
+  }
   renderHistory();
   showToast("Proposta salva no historico.");
 }
@@ -1667,6 +1831,17 @@ async function copyProposal() {
   }
 }
 
+async function copyClientFormLink() {
+  const url = getClientFormUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Link do formulário copiado.");
+  } catch (error) {
+    console.warn("Falha ao copiar link do formulario.", error);
+    showToast("Não foi possível copiar automaticamente.");
+  }
+}
+
 function openWhatsApp() {
   const phone = fields.clientPhone.value.replace(/\D/g, "");
   const text = encodeURIComponent(buildProposalText());
@@ -1836,15 +2011,27 @@ function bindEvents() {
   document.querySelector("#loginBtn").addEventListener("click", loginWithEmail);
   document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);
+  document.querySelector("#refreshRequestsBtn").addEventListener("click", loadQuoteRequests);
+  document.querySelector("#copyClientFormLinkBtn").addEventListener("click", copyClientFormLink);
   nodes.historyList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (!button) return;
     openSavedProposal(button.dataset.proposalId);
   });
+  nodes.quoteRequestList.addEventListener("click", (event) => {
+    const useButton = event.target.closest("button[data-use-request]");
+    if (useButton) {
+      applyQuoteRequest(useButton.dataset.useRequest);
+      return;
+    }
+    const markButton = event.target.closest("button[data-mark-request]");
+    if (markButton) markQuoteRequestAnalyzed(markButton.dataset.markRequest);
+  });
 }
 
 renderCategoryFilter();
 renderPrivatizationRulesTable();
+renderClientFormLink();
 fields.generalTerms.value = loadGeneralTerms();
 bindEvents();
 renderAll();
