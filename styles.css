@@ -54,8 +54,25 @@ button {
     color 160ms ease;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
 button:hover {
   transform: translateY(-1px);
+}
+
+.button-link {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  text-decoration: none;
 }
 
 .primary {
@@ -139,6 +156,8 @@ button:hover {
 
 .team-panel {
   border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 18px;
   margin-bottom: 24px;
   padding-bottom: 24px;
 }
@@ -191,6 +210,79 @@ button:hover {
   font-weight: 800;
   line-height: 1.35;
   padding: 10px 12px;
+}
+
+.request-panel,
+.request-inbox {
+  background: rgba(255, 255, 255, 0.46);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.request-panel {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.request-panel p {
+  color: var(--verde);
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.request-panel strong {
+  color: var(--verde-escuro);
+  overflow-wrap: anywhere;
+}
+
+.request-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.request-list p {
+  color: var(--muted);
+  font-weight: 700;
+  margin: 0;
+}
+
+.request-item {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.request-item strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.request-item small {
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.request-actions button {
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .eyebrow {
@@ -1152,6 +1244,112 @@ td:nth-child(9) {
   }
 }
 
+.public-form-body {
+  background: var(--paper);
+}
+
+.public-form-shell {
+  min-height: 100vh;
+}
+
+.public-form-hero {
+  min-height: 46svh;
+  overflow: hidden;
+  position: relative;
+}
+
+.public-form-hero::after {
+  background:
+    linear-gradient(90deg, rgba(24, 58, 45, 0.9) 0%, rgba(24, 58, 45, 0.62) 42%, rgba(24, 58, 45, 0.08) 100%),
+    linear-gradient(0deg, rgba(24, 58, 45, 0.26), rgba(24, 58, 45, 0.08));
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.public-form-hero > img {
+  filter: saturate(1.04) contrast(1.02);
+  height: 100%;
+  object-fit: cover;
+  object-position: center 24%;
+  position: absolute;
+  transform: scale(0.96);
+  width: 100%;
+}
+
+.public-form-hero-copy {
+  color: var(--white);
+  display: grid;
+  gap: 10px;
+  max-width: 700px;
+  padding: 42px 28px;
+  position: relative;
+  z-index: 1;
+}
+
+.public-form-hero-copy img {
+  background: rgba(237, 226, 201, 0.92);
+  border-radius: 50%;
+  height: 74px;
+  padding: 6px;
+  width: 74px;
+}
+
+.public-form-hero-copy .eyebrow {
+  color: var(--verde-2);
+}
+
+.public-form-hero-copy h1 {
+  font-size: 4.2rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 0.95;
+  margin: 0;
+}
+
+.public-form-hero-copy span {
+  color: var(--verde-2);
+  font-size: 1.14rem;
+  font-weight: 800;
+  line-height: 1.35;
+  max-width: 520px;
+}
+
+.public-form-panel {
+  margin: 0 auto;
+  max-width: 1080px;
+  padding: 28px;
+}
+
+.client-quote-form {
+  display: grid;
+  gap: 18px;
+}
+
+.public-form-actions {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.public-form-actions p {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.public-form-actions p[data-status="success"] {
+  color: var(--verde);
+}
+
+.public-form-actions p[data-status="error"] {
+  color: var(--danger);
+}
+
 @media (max-width: 1080px) {
   .quote-layout {
     grid-template-columns: 1fr;
@@ -1161,6 +1359,11 @@ td:nth-child(9) {
   .supabase-config-grid,
   .login-row {
     grid-template-columns: 1fr;
+  }
+
+  .request-panel {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .summary-panel {
@@ -1200,6 +1403,10 @@ td:nth-child(9) {
   }
 
   .topbar-actions button {
+    flex: 1 1 150px;
+  }
+
+  .button-link {
     flex: 1 1 150px;
   }
 
@@ -1244,6 +1451,18 @@ td:nth-child(9) {
 
   .proposal-summary-strip {
     grid-template-columns: 1fr;
+  }
+
+  .public-form-hero {
+    min-height: 420px;
+  }
+
+  .public-form-hero-copy h1 {
+    font-size: 2.7rem;
+  }
+
+  .public-form-panel {
+    padding: 22px 18px;
   }
 }
 

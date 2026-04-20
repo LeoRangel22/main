@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solicitação de Evento | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="public-form-body">
+    <main class="public-form-shell">
+      <section class="public-form-hero">
+        <img src="./assets/venue.jpg" alt="Área externa da Embaixada Carioca com vista para o Pão de Açúcar" />
+        <div class="public-form-hero-copy">
+          <img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" />
+          <p class="eyebrow">Embaixada Carioca</p>
+          <h1>Solicitação de evento</h1>
+          <span>Conte um pouco sobre o seu evento para prepararmos a proposta.</span>
+        </div>
+      </section>
+
+      <section class="public-form-panel" aria-label="Formulário de solicitação">
+        <form id="clientQuoteForm" class="client-quote-form">
+          <div class="section-heading">
+            <span>01</span>
+            <h2>Contato</h2>
+          </div>
+          <div class="fields-grid">
+            <label>
+              Nome completo
+              <input id="requestClientName" type="text" required placeholder="Seu nome" />
+            </label>
+            <label>
+              E-mail
+              <input id="requestClientEmail" type="email" required placeholder="seu@email.com" />
+            </label>
+            <label>
+              WhatsApp
+              <input id="requestClientPhone" type="tel" placeholder="DDD + número" />
+            </label>
+            <label>
+              Empresa
+              <input id="requestCompany" type="text" placeholder="Opcional" />
+            </label>
+          </div>
+
+          <div class="section-heading">
+            <span>02</span>
+            <h2>Evento</h2>
+          </div>
+          <div class="fields-grid">
+            <label>
+              Tipo de evento
+              <select id="requestEventType" required>
+                <option value="">Selecione</option>
+                <option value="Coquetel">Coquetel</option>
+                <option value="Workshop de Caipirinha">Workshop de Caipirinha</option>
+                <option value="Café da Manhã / Coffee Break">Café da Manhã / Coffee Break</option>
+                <option value="Welcome Drink">Welcome Drink</option>
+                <option value="Evento corporativo">Evento corporativo</option>
+                <option value="Aniversário">Aniversário</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </label>
+            <label>
+              Data desejada
+              <input id="requestEventDate" type="date" />
+            </label>
+            <label>
+              Horário desejado
+              <input id="requestEventTime" type="time" />
+            </label>
+            <label>
+              Convidados
+              <input id="requestGuestCount" type="number" min="1" step="1" required placeholder="Ex.: 30" />
+            </label>
+            <label>
+              Duração estimada
+              <select id="requestDuration">
+                <option value="">A definir</option>
+                <option value="1">1h</option>
+                <option value="2">2h</option>
+                <option value="2.5">2h30</option>
+                <option value="3">3h</option>
+                <option value="3.5">3h30</option>
+                <option value="4">4h</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            Motivo do evento
+            <textarea id="requestReason" rows="3" placeholder="Confraternização, aniversário, lançamento, reunião com clientes..."></textarea>
+          </label>
+          <label>
+            Preferências de alimentos e bebidas
+            <textarea id="requestPreferences" rows="3" placeholder="Coquetel, café da manhã, restrições alimentares, bebidas preferidas..."></textarea>
+          </label>
+          <label>
+            Observações
+            <textarea id="requestNotes" rows="3" placeholder="O que mais devemos saber para preparar a proposta?"></textarea>
+          </label>
+
+          <div class="public-form-actions">
+            <button class="primary" id="submitClientQuoteBtn" type="submit">Enviar solicitação</button>
+            <p id="clientFormStatus">Responderemos com uma proposta após análise da equipe.</p>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./formulario.js"></script>
+  </body>
+</html>
