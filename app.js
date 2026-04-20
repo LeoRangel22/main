@@ -446,6 +446,7 @@ const fields = {
   supabaseUrl: document.querySelector("#supabaseUrl"),
   supabaseAnonKey: document.querySelector("#supabaseAnonKey"),
   loginEmail: document.querySelector("#loginEmail"),
+  magicLinkUrl: document.querySelector("#magicLinkUrl"),
 };
 
 const nodes = {
@@ -1244,15 +1245,22 @@ function renderSupabaseStatus(message, connected = false) {
   nodes.supabaseStatus.style.borderLeftColor = connected ? "var(--verde)" : "var(--verde-2)";
 }
 
+function getAuthRedirectUrl() {
+  return CANONICAL_APP_URL;
+}
+
 function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
+  const recoverButton = document.querySelector("#recoverMagicLinkBtn");
   const isConnected = Boolean(state.supabase);
   const isLoggedIn = Boolean(state.session?.user);
 
   loginButton.disabled = !isConnected || isLoggedIn;
+  recoverButton.disabled = !isConnected || isLoggedIn;
   logoutButton.classList.toggle("is-hidden", !isLoggedIn);
   fields.loginEmail.disabled = !isConnected || isLoggedIn;
+  fields.magicLinkUrl.disabled = !isConnected || isLoggedIn;
 
   if (!isConnected) {
     nodes.authStatus.textContent = "Conecte o Supabase para liberar o login.";
@@ -1519,7 +1527,7 @@ async function loginWithEmail() {
 
   const { error } = await state.supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: CANONICAL_APP_URL },
+    options: { emailRedirectTo: getAuthRedirectUrl() },
   });
 
   if (error) {
@@ -1530,6 +1538,49 @@ async function loginWithEmail() {
 
   nodes.authStatus.textContent = "Link de acesso enviado. Abra o e-mail neste navegador.";
   showToast("Link de acesso enviado.");
+}
+
+function extractSessionFromMagicLink(rawUrl) {
+  const value = rawUrl.trim();
+  if (!value) return null;
+
+  const hashIndex = value.indexOf("#");
+  const queryIndex = value.indexOf("?");
+  const tokenSource =
+    hashIndex >= 0 ? value.slice(hashIndex + 1) : queryIndex >= 0 ? value.slice(queryIndex + 1) : value;
+  const params = new URLSearchParams(tokenSource);
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+
+  if (!accessToken || !refreshToken) return null;
+  return { access_token: accessToken, refresh_token: refreshToken };
+}
+
+async function recoverMagicLinkSession() {
+  if (!state.supabase) {
+    showToast("Conecte o Supabase primeiro.");
+    return;
+  }
+
+  const tokens = extractSessionFromMagicLink(fields.magicLinkUrl.value);
+  if (!tokens) {
+    showToast("Cole a URL completa do magic link, incluindo access_token e refresh_token.");
+    return;
+  }
+
+  const { data, error } = await state.supabase.auth.setSession(tokens);
+  if (error || !data?.session) {
+    console.warn("Falha ao recuperar magic link.", error);
+    showToast("Nao foi possivel entrar com essa URL. Peça um novo magic link.");
+    return;
+  }
+
+  state.session = data.session;
+  fields.magicLinkUrl.value = "";
+  updateAuthUI();
+  await loadProposalHistory();
+  await loadQuoteRequests();
+  showToast("Login concluido.");
 }
 
 async function logoutSupabase() {
@@ -2008,6 +2059,7 @@ function bindEvents() {
   document.querySelector("#addItemBtn").addEventListener("click", createNewItem);
   document.querySelector("#saveSupabaseConfigBtn").addEventListener("click", configureSupabaseFromForm);
   document.querySelector("#loginBtn").addEventListener("click", loginWithEmail);
+  document.querySelector("#recoverMagicLinkBtn").addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);
   document.querySelector("#refreshRequestsBtn").addEventListener("click", loadQuoteRequests);

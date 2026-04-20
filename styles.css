@@ -186,6 +186,14 @@ button:hover {
   margin: 0;
 }
 
+.magic-link-recovery {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
 .supabase-config-grid,
 .login-row {
   align-items: end;
