@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260420-authfix" />
   </head>
   <body>
     <main class="app-shell">
@@ -55,6 +55,16 @@
                 </label>
                 <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
                 <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
+              </div>
+              <div class="magic-link-recovery">
+                <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
+                <div class="login-row">
+                  <label>
+                    URL do magic link
+                    <input id="magicLinkUrl" type="url" placeholder="https://jazzy-otter.../#access_token=..." autocomplete="off" />
+                  </label>
+                  <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
+                </div>
               </div>
               <div class="team-status" id="authStatus">Aguardando login.</div>
             </div>
@@ -440,6 +450,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260420-authfix"></script>
   </body>
 </html>
