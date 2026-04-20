@@ -6,6 +6,8 @@ const SUPABASE_CONFIG_KEY = "embaixada_orcamentos_supabase_v1";
 const DEFAULT_SUPABASE_URL = "https://pdgbnpztdnrvrphzdjas.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
+const CANONICAL_APP_URL = "https://leorangel22.github.io/main/";
+const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
 const SERVICE_RATE = 0.12;
 const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
@@ -1297,10 +1299,7 @@ function renderHistory() {
 }
 
 function getClientFormUrl() {
-  const path = window.location.pathname.endsWith("/")
-    ? window.location.pathname
-    : window.location.pathname.replace(/[^/]*$/, "");
-  return `${window.location.origin}${path}formulario.html`;
+  return CANONICAL_CLIENT_FORM_URL;
 }
 
 function renderClientFormLink() {
@@ -1520,7 +1519,7 @@ async function loginWithEmail() {
 
   const { error } = await state.supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href.split("#")[0] },
+    options: { emailRedirectTo: CANONICAL_APP_URL },
   });
 
   if (error) {
