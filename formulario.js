@@ -5,14 +5,19 @@ const DEFAULT_SUPABASE_ANON_KEY =
 const form = document.querySelector("#clientQuoteForm");
 const statusNode = document.querySelector("#clientFormStatus");
 const submitButton = document.querySelector("#submitClientQuoteBtn");
+const recommendationIntro = document.querySelector("#recommendationIntro");
+const recommendationList = document.querySelector("#formatRecommendations");
 
 const fields = {
   name: document.querySelector("#requestClientName"),
   email: document.querySelector("#requestClientEmail"),
   phone: document.querySelector("#requestClientPhone"),
   company: document.querySelector("#requestCompany"),
+  moment: document.querySelector("#requestMoment"),
+  profile: document.querySelector("#requestProfile"),
   eventType: document.querySelector("#requestEventType"),
   date: document.querySelector("#requestEventDate"),
+  timeRange: document.querySelector("#requestTimeRange"),
   time: document.querySelector("#requestEventTime"),
   guests: document.querySelector("#requestGuestCount"),
   duration: document.querySelector("#requestDuration"),
@@ -21,24 +26,92 @@ const fields = {
   notes: document.querySelector("#requestNotes"),
 };
 
+const momentLabels = {
+  "weekday-morning": "Manhã em dia de semana",
+  "late-afternoon": "Fim de tarde",
+  night: "Noite (19h-21h)",
+  evaluating: "Ainda estou avaliando",
+};
+
+const profileLabels = {
+  corporate: "Reunião / encontro corporativo",
+  celebration: "Confraternização",
+  birthday: "Aniversário / celebração",
+  relationship: "Lançamento / relacionamento com clientes",
+  experience: "Experiência gastronômica",
+  suggestion: "Ainda não sei, quero sugestão",
+};
+
+const timeRangeLabels = {
+  morning: "Manhã",
+  lunch: "Almoço",
+  "late-afternoon": "Fim de tarde",
+  night: "Noite",
+  flexible: "Flexível",
+};
+
+const formats = {
+  recommendation: {
+    label: "Quero recomendação da equipe",
+    description: "A equipe indica o melhor formato considerando horário, grupo e objetivo.",
+    badge: "Consultivo",
+  },
+  breakfast: {
+    label: "Café da Manhã / Brunch",
+    description: "Perfeito para encontros matinais, reuniões, ativações e recepções mais leves.",
+    badge: "Mais indicado para manhã",
+  },
+  coffee: {
+    label: "Coffee Break",
+    description: "Ideal para pausas corporativas e eventos curtos com praticidade.",
+    badge: "Muito pedido por grupos corporativos",
+  },
+  welcome: {
+    label: "Welcome Drink",
+    description: "Recepção elegante para grupos que querem começar o evento com impacto.",
+    badge: "Ideal para fim de tarde",
+  },
+  cocktail: {
+    label: "Coquetel",
+    description: "Ótimo para confraternizações, networking, lançamentos e celebrações.",
+    badge: "Ótima opção para 19h-21h",
+  },
+  workshop: {
+    label: "Workshop de Caipirinha",
+    description: "Experiência interativa e memorável para grupos que buscam algo diferente.",
+    badge: "Experiência interativa",
+  },
+  custom: {
+    label: "Evento sob medida",
+    description: "Para demandas personalizadas com proposta construída pela equipe.",
+    badge: "Sob consulta",
+  },
+};
+
+const recommendationRules = {
+  "weekday-morning": ["breakfast", "coffee", "workshop", "custom"],
+  "late-afternoon": ["welcome", "cocktail", "workshop", "custom"],
+  night: ["welcome", "cocktail", "workshop", "custom"],
+  evaluating: ["recommendation", "breakfast", "coffee", "welcome", "cocktail", "workshop", "custom"],
+};
+
+const preferredTimeRangeByMoment = {
+  "weekday-morning": "morning",
+  "late-afternoon": "late-afternoon",
+  night: "night",
+};
+
+const timeOptionsByRange = {
+  morning: ["08:30", "09:00", "09:30", "10:00", "10:30"],
+  lunch: ["12:00", "12:30", "13:00", "13:30"],
+  "late-afternoon": ["17:00", "17:30", "18:00", "18:30"],
+  night: ["19:00", "19:30", "20:00"],
+  flexible: [""],
+};
+
 function setStatus(message, type = "neutral") {
   statusNode.textContent = message;
   statusNode.dataset.status = type;
-}
-
-function pad(value) {
-  return String(value).padStart(2, "0");
-}
-
-function fillTimeOptions() {
-  const start = 8 * 60 + 30;
-  const end = 20 * 60 + 30;
-  const options = ['<option value="">Selecione</option>'];
-  for (let minutes = start; minutes <= end; minutes += 15) {
-    const label = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-    options.push(`<option value="${label}">${label}</option>`);
-  }
-  fields.time.innerHTML = options.join("");
 }
 
 function fillGuestOptions() {
@@ -47,6 +120,17 @@ function fillGuestOptions() {
   fields.guests.innerHTML = values
     .map((guests) => `<option value="${guests}" ${guests === 30 ? "selected" : ""}>${guests} pessoas</option>`)
     .join("");
+}
+
+function fillTimeOptions(range = fields.timeRange.value) {
+  const times = timeOptionsByRange[range] || [];
+  if (range === "flexible") {
+    fields.time.innerHTML = '<option value="">A definir</option>';
+    return;
+  }
+  const options = ['<option value="">Selecione</option>'];
+  times.forEach((time) => options.push(`<option value="${time}">${time.replace(":", "h")}</option>`));
+  fields.time.innerHTML = options.join("");
 }
 
 function toNumber(value) {
@@ -79,7 +163,87 @@ function setFieldValidity(field, isValid) {
   field.toggleAttribute("aria-invalid", !isValid);
 }
 
+function setActiveChoice(group, value) {
+  document.querySelectorAll(`[data-choice-group="${group}"]`).forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.choiceValue === value);
+  });
+}
+
+function getRecommendedFormatIds() {
+  const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
+  const profile = fields.profile.value;
+  if (profile === "corporate") return prioritize(base, ["coffee", "breakfast", "workshop"]);
+  if (profile === "relationship") return prioritize(base, ["welcome", "cocktail", "workshop"]);
+  if (profile === "experience") return prioritize(base, ["workshop", "cocktail", "welcome"]);
+  if (profile === "birthday" || profile === "celebration") return prioritize(base, ["cocktail", "welcome", "custom"]);
+  return base;
+}
+
+function prioritize(ids, priority) {
+  const set = new Set(ids);
+  return [...priority.filter((id) => set.has(id)), ...ids.filter((id) => !priority.includes(id))];
+}
+
+function renderRecommendations() {
+  if (!fields.moment.value) {
+    recommendationIntro.textContent = "Escolha o momento e o perfil para ver as experiências mais indicadas.";
+    recommendationList.innerHTML =
+      '<div class="recommendation-empty">As sugestões aparecem aqui depois da primeira escolha.</div>';
+    return;
+  }
+
+  const ids = getRecommendedFormatIds();
+  const moment = momentLabels[fields.moment.value];
+  recommendationIntro.textContent = `Com base em ${moment.toLowerCase()}, estas opções tendem a funcionar melhor.`;
+  recommendationList.innerHTML = ids
+    .map((id, index) => {
+      const item = formats[id];
+      const selected = fields.eventType.value === item.label;
+      return `
+        <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}">
+          <span>${item.badge}</span>
+          <strong>${item.label}</strong>
+          <em>${item.description}</em>
+          <b>${index === 0 ? "Mais indicado" : "Selecionar"}</b>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function selectFormat(formatId) {
+  const item = formats[formatId];
+  if (!item) return;
+  fields.eventType.value = item.label;
+  renderRecommendations();
+}
+
+function handleChoiceClick(event) {
+  const button = event.target.closest("[data-choice-group]");
+  if (!button) return;
+  const { choiceGroup, choiceValue } = button.dataset;
+  fields[choiceGroup].value = choiceValue;
+  setActiveChoice(choiceGroup, choiceValue);
+
+  if (choiceGroup === "moment") {
+    const preferredRange = preferredTimeRangeByMoment[choiceValue];
+    if (preferredRange) {
+      fields.timeRange.value = preferredRange;
+      fillTimeOptions(preferredRange);
+    }
+  }
+
+  renderRecommendations();
+}
+
+function handleFormatClick(event) {
+  const button = event.target.closest("[data-format-id]");
+  if (!button) return;
+  selectFormat(button.dataset.formatId);
+}
+
 function getSnapshot() {
+  const selectedTime = fields.time.value || "";
   return {
     cliente: {
       nome: fields.name.value.trim(),
@@ -88,9 +252,12 @@ function getSnapshot() {
       empresa: fields.company.value.trim(),
     },
     evento: {
+      momento: momentLabels[fields.moment.value] || "",
+      perfil: profileLabels[fields.profile.value] || "",
       tipo: fields.eventType.value,
       data: fields.date.value,
-      horario: fields.time.value,
+      faixaHorario: timeRangeLabels[fields.timeRange.value] || "",
+      horario: selectedTime,
       convidados: Math.max(1, Math.floor(toNumber(fields.guests.value) || 1)),
       duracao: toNumber(fields.duration.value),
       motivo: fields.reason.value.trim(),
@@ -123,6 +290,40 @@ function getPayload(snapshot) {
   };
 }
 
+function validateSnapshot(snapshot) {
+  const required = [
+    [fields.moment, Boolean(snapshot.evento.momento)],
+    [fields.profile, Boolean(snapshot.evento.perfil)],
+    [fields.eventType, Boolean(snapshot.evento.tipo)],
+    [fields.timeRange, Boolean(snapshot.evento.faixaHorario)],
+    [fields.name, Boolean(snapshot.cliente.nome)],
+    [fields.email, Boolean(snapshot.cliente.email)],
+    [fields.phone, Boolean(snapshot.cliente.whatsapp)],
+  ];
+  required.forEach(([field, valid]) => setFieldValidity(field, valid));
+
+  if (required.some(([, valid]) => !valid)) {
+    setStatus("Complete momento, perfil, formato, faixa de horário e contato.", "error");
+    return false;
+  }
+
+  if (!isValidEmail(snapshot.cliente.email)) {
+    setStatus("Informe um e-mail válido.", "error");
+    setFieldValidity(fields.email, false);
+    fields.email.focus();
+    return false;
+  }
+
+  if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
+    setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
+    setFieldValidity(fields.phone, false);
+    fields.phone.focus();
+    return false;
+  }
+
+  return true;
+}
+
 async function submitRequest(event) {
   event.preventDefault();
 
@@ -132,32 +333,7 @@ async function submitRequest(event) {
   }
 
   const snapshot = getSnapshot();
-  if (!snapshot.cliente.nome || !snapshot.cliente.email || !snapshot.evento.tipo) {
-    setStatus("Preencha nome, e-mail e tipo de evento.", "error");
-    setFieldValidity(fields.name, Boolean(snapshot.cliente.nome));
-    setFieldValidity(fields.email, Boolean(snapshot.cliente.email));
-    setFieldValidity(fields.eventType, Boolean(snapshot.evento.tipo));
-    return;
-  }
-
-  if (!isValidEmail(snapshot.cliente.email)) {
-    setStatus("Informe um e-mail válido.", "error");
-    setFieldValidity(fields.email, false);
-    fields.email.focus();
-    return;
-  }
-
-  if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
-    setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
-    setFieldValidity(fields.phone, false);
-    fields.phone.focus();
-    return;
-  }
-
-  setFieldValidity(fields.name, true);
-  setFieldValidity(fields.email, true);
-  setFieldValidity(fields.phone, true);
-  setFieldValidity(fields.eventType, true);
+  if (!validateSnapshot(snapshot)) return;
 
   submitButton.disabled = true;
   setStatus("Enviando solicitação...", "neutral");
@@ -174,14 +350,23 @@ async function submitRequest(event) {
   }
 
   form.reset();
+  fields.moment.value = "";
+  fields.profile.value = "";
+  fields.eventType.value = "";
+  document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
   fillGuestOptions();
-  fillTimeOptions();
+  fillTimeOptions("");
+  renderRecommendations();
   setStatus("Solicitação enviada. A equipe vai preparar a proposta e entrar em contato.", "success");
 }
 
-fillTimeOptions();
 fillGuestOptions();
+fillTimeOptions("");
+renderRecommendations();
 fields.date.min = new Date().toISOString().slice(0, 10);
+form.addEventListener("click", handleChoiceClick);
+recommendationList.addEventListener("click", handleFormatClick);
+fields.timeRange.addEventListener("change", () => fillTimeOptions());
 fields.phone.addEventListener("input", () => {
   fields.phone.value = formatBrazilianPhone(fields.phone.value);
   setFieldValidity(fields.phone, !fields.phone.value || isValidBrazilianMobile(fields.phone.value));
