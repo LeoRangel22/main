@@ -101,6 +101,37 @@ button:hover {
   padding: 28px;
 }
 
+.auth-locked .workspace {
+  margin: 0 auto;
+  max-width: 980px;
+  min-height: 100vh;
+}
+
+.auth-locked .topbar-actions,
+.auth-locked .team-context,
+.auth-locked .request-panel,
+.auth-locked .request-inbox,
+.auth-locked .quote-layout,
+.auth-locked .prices-editor,
+.auth-locked .proposal-paper {
+  display: none;
+}
+
+.auth-locked .team-panel {
+  border-bottom: 0;
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+.auth-locked .team-access {
+  grid-template-columns: 1fr;
+}
+
+.auth-locked .team-auth {
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
 .topbar {
   align-items: center;
   border-bottom: 1px solid var(--line);

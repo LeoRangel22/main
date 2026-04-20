@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260420-mobile" />
+    <link rel="stylesheet" href="./styles.css?v=20260420-secure" />
   </head>
-  <body>
+  <body class="auth-locked">
     <main class="app-shell">
       <section class="workspace" aria-label="Gerador de orçamento">
         <header class="topbar">
@@ -27,11 +27,11 @@
         <section class="team-panel" aria-label="Equipe e historico">
           <div class="section-heading">
             <span>Equipe</span>
-            <h2>Acesso e solicitações</h2>
+            <h2>Acesso da equipe</h2>
           </div>
           <div class="team-access">
             <div class="team-auth team-primary">
-              <p>Entre com um e-mail autorizado para ver solicitações, salvar propostas e consultar histórico.</p>
+              <p>Acesso exclusivo da equipe Embaixada Carioca. Entre com um e-mail autorizado para liberar orçamentos, preços, propostas e histórico.</p>
               <div class="team-email-presets" aria-label="E-mails autorizados">
                 <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
                 <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
@@ -467,6 +467,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260420-consultivo"></script>
+    <script src="./app.js?v=20260420-secure"></script>
   </body>
 </html>
