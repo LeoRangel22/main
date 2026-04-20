@@ -31,11 +31,18 @@
             </label>
             <label>
               E-mail
-              <input id="requestClientEmail" type="email" required placeholder="seu@email.com" />
+              <input id="requestClientEmail" type="email" required autocomplete="email" placeholder="seu@email.com" />
             </label>
             <label>
               WhatsApp
-              <input id="requestClientPhone" type="tel" placeholder="DDD + número" />
+              <input
+                id="requestClientPhone"
+                type="tel"
+                inputmode="tel"
+                required
+                autocomplete="tel"
+                placeholder="Ex.: 21 99999-9999"
+              />
             </label>
             <label>
               Empresa
@@ -67,11 +74,15 @@
             </label>
             <label>
               Horário desejado
-              <input id="requestEventTime" type="time" />
+              <select id="requestEventTime">
+                <option value="">Selecione</option>
+              </select>
             </label>
             <label>
               Convidados
-              <input id="requestGuestCount" type="number" min="1" step="1" required placeholder="Ex.: 30" />
+              <select id="requestGuestCount" required>
+                <option value="30" selected>30 pessoas</option>
+              </select>
             </label>
             <label>
               Duração estimada

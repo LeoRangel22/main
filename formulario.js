@@ -26,9 +26,47 @@ function setStatus(message, type = "neutral") {
   statusNode.dataset.status = type;
 }
 
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function fillTimeOptions() {
+  const start = 8 * 60 + 30;
+  const end = 20 * 60 + 30;
+  const options = ['<option value="">Selecione</option>'];
+  for (let minutes = start; minutes <= end; minutes += 15) {
+    const label = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+    options.push(`<option value="${label}">${label}</option>`);
+  }
+  fields.time.innerHTML = options.join("");
+}
+
+function fillGuestOptions() {
+  const values = [];
+  for (let guests = 10; guests <= 200; guests += 5) values.push(guests);
+  [250, 300].forEach((guests) => values.push(guests));
+  fields.guests.innerHTML = values
+    .map((guests) => `<option value="${guests}" ${guests === 30 ? "selected" : ""}>${guests} pessoas</option>`)
+    .join("");
+}
+
 function toNumber(value) {
   const number = Number(String(value || "").replace(",", "."));
   return Number.isFinite(number) ? number : null;
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || "").trim());
+}
+
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function isValidBrazilianMobile(value) {
+  const digits = normalizePhone(value);
+  const local = digits.startsWith("55") && digits.length === 13 ? digits.slice(2) : digits;
+  return local.length === 11 && /^[1-9]{2}9\d{8}$/.test(local);
 }
 
 function getSnapshot() {
@@ -89,6 +127,18 @@ async function submitRequest(event) {
     return;
   }
 
+  if (!isValidEmail(snapshot.cliente.email)) {
+    setStatus("Informe um e-mail válido.", "error");
+    fields.email.focus();
+    return;
+  }
+
+  if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
+    setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
+    fields.phone.focus();
+    return;
+  }
+
   submitButton.disabled = true;
   setStatus("Enviando solicitação...", "neutral");
 
@@ -107,4 +157,6 @@ async function submitRequest(event) {
   setStatus("Solicitação enviada. A equipe vai preparar a proposta e entrar em contato.", "success");
 }
 
+fillTimeOptions();
+fillGuestOptions();
 form.addEventListener("submit", submitRequest);
