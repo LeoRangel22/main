@@ -17,6 +17,23 @@ Abra `index.html` no navegador.
 
 O histórico fica compartilhado entre todos os usuários autenticados nesse projeto Supabase. Para limitar o acesso, use somente e-mails da equipe no Auth do Supabase.
 
+## Formulário público para clientes
+
+O formulário externo fica em:
+
+`https://leorangel22.github.io/main/formulario.html`
+
+Fluxo recomendado:
+
+1. Envie o link do formulário ao cliente.
+2. O cliente preenche contato, tipo de evento, data, horário, convidados, duração e observações.
+3. A solicitação entra na tabela `solicitacoes_cotacao` do Supabase.
+4. No app interno, entre com o e-mail da equipe e clique em `Atualizar` em `Solicitações recebidas`.
+5. Clique em `Usar na proposta` para preencher os dados do cliente automaticamente.
+6. Revise, ajuste itens/preços e gere a proposta em PDF, e-mail ou WhatsApp.
+
+Importante: rode novamente `supabase/schema.sql` no SQL Editor para criar a tabela `solicitacoes_cotacao` e liberar apenas `insert` anônimo para clientes. Clientes não conseguem ler o histórico.
+
 Projeto configurado no app:
 
 - URL: `https://pdgbnpztdnrvrphzdjas.supabase.co`
@@ -80,6 +97,8 @@ Atenção: o texto padrão recebido informa validade até `30/06/2025`; atualize
 - Conecta ao Supabase para login por e-mail.
 - Salva propostas no histórico da equipe.
 - Reabre propostas salvas para copiar, enviar ou gerar PDF novamente.
+- Recebe solicitações por formulário público.
+- Importa dados do formulário para revisar e montar a cotação.
 - Calcula orçamento por convidados, duração e mínimo de pessoas.
 - Soma taxa de serviço de 12% e privatização quando aplicável.
 - Inclui condições gerais editáveis na proposta final.

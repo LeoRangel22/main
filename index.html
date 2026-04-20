@@ -18,6 +18,7 @@
             </div>
           </div>
           <div class="topbar-actions">
+            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário do cliente</a>
             <button class="secondary" id="resetPricesBtn" type="button">Restaurar preços</button>
             <button class="primary" id="printBtn" type="button">Criar PDF</button>
           </div>
@@ -56,6 +57,22 @@
                 <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
               </div>
               <div class="team-status" id="authStatus">Aguardando login.</div>
+            </div>
+          </div>
+          <div class="request-panel">
+            <div>
+              <p>Link para enviar ao cliente</p>
+              <strong id="clientFormLink">Carregando link do formulário...</strong>
+            </div>
+            <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
+          </div>
+          <div class="request-inbox">
+            <div class="history-heading">
+              <span>Solicitações recebidas</span>
+              <button class="secondary" id="refreshRequestsBtn" type="button">Atualizar</button>
+            </div>
+            <div class="request-list" id="quoteRequestList">
+              <p>Entre com Supabase para ver os formulários recebidos.</p>
             </div>
           </div>
         </section>
