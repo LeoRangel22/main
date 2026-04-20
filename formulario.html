@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Solicitação de Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260420-ux" />
+    <title>Planeje seu Evento | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260420-consultivo" />
   </head>
   <body class="public-form-body">
     <main class="public-form-shell">
@@ -13,116 +13,184 @@
         <div class="public-form-hero-copy">
           <img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" />
           <p class="eyebrow">Embaixada Carioca</p>
-          <h1>Solicitação de evento</h1>
-          <span>Compartilhe os dados principais para a equipe preparar sua proposta.</span>
+          <h1>Planeje seu evento na Embaixada Carioca</h1>
+          <span>Escolha o momento ideal e descubra o formato mais indicado para o seu grupo.</span>
         </div>
       </section>
 
       <section class="public-form-panel" aria-label="Formulário de solicitação">
         <div class="public-form-intro">
           <div>
-            <p class="eyebrow">Proposta personalizada</p>
-            <h2>Leva menos de 3 minutos.</h2>
+            <p class="eyebrow">Mini consultor de eventos</p>
+            <h2>Em poucos passos, recomendamos a melhor experiência no Morro da Urca.</h2>
           </div>
           <ol class="public-form-steps" aria-label="Etapas do pedido">
-            <li><span>01</span>Contato</li>
-            <li><span>02</span>Evento</li>
-            <li><span>03</span>Detalhes</li>
+            <li><span>01</span>Momento</li>
+            <li><span>02</span>Perfil</li>
+            <li><span>03</span>Sugestão</li>
+            <li><span>04</span>Dados</li>
+            <li><span>05</span>Contato</li>
           </ol>
         </div>
         <form id="clientQuoteForm" class="client-quote-form">
-          <div class="section-heading">
-            <span>01</span>
-            <h2>Contato</h2>
-          </div>
-          <div class="fields-grid">
-            <label>
-              Nome completo
-              <input id="requestClientName" type="text" required autocomplete="name" placeholder="Seu nome" />
-            </label>
-            <label>
-              E-mail
-              <input id="requestClientEmail" type="email" required autocomplete="email" placeholder="seu@email.com" />
-              <small>Usaremos para enviar a proposta.</small>
-            </label>
-            <label>
-              WhatsApp
-              <input
-                id="requestClientPhone"
-                type="tel"
-                inputmode="tel"
-                required
-                autocomplete="tel"
-                placeholder="Ex.: 21 99999-9999"
-              />
-              <small>Informe DDD e celular.</small>
-            </label>
-            <label>
-              Empresa
-              <input id="requestCompany" type="text" placeholder="Opcional" />
-            </label>
-          </div>
+          <input id="requestMoment" type="hidden" required />
+          <input id="requestProfile" type="hidden" required />
+          <input id="requestEventType" type="hidden" required />
 
-          <div class="section-heading">
-            <span>02</span>
-            <h2>Evento</h2>
-          </div>
-          <div class="fields-grid">
-            <label>
-              Tipo de evento
-              <select id="requestEventType" required>
-                <option value="">Selecione</option>
-                <option value="Coquetel">Coquetel</option>
-                <option value="Workshop de Caipirinha">Workshop de Caipirinha</option>
-                <option value="Café da Manhã / Coffee Break">Café da Manhã / Coffee Break</option>
-                <option value="Welcome Drink">Welcome Drink</option>
-                <option value="Evento corporativo">Evento corporativo</option>
-                <option value="Aniversário">Aniversário</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </label>
-            <label>
-              Data desejada
-              <input id="requestEventDate" type="date" />
-            </label>
-            <label>
-              Horário desejado
-              <select id="requestEventTime">
-                <option value="">Selecione</option>
-              </select>
-            </label>
-            <label>
-              Convidados
-              <select id="requestGuestCount" required>
-                <option value="30" selected>30 pessoas</option>
-              </select>
-            </label>
-            <label>
-              Duração estimada
-              <select id="requestDuration">
-                <option value="">A definir</option>
-                <option value="1">1h</option>
-                <option value="2">2h</option>
-                <option value="2.5">2h30</option>
-                <option value="3">3h</option>
-                <option value="3.5">3h30</option>
-                <option value="4">4h</option>
-              </select>
-            </label>
-          </div>
+          <section class="consult-step" aria-labelledby="momentTitle">
+            <div class="section-heading">
+              <span>01</span>
+              <h2 id="momentTitle">Quando você imagina seu evento?</h2>
+            </div>
+            <div class="choice-card-grid" id="momentChoices" aria-label="Momento do evento">
+              <button type="button" data-choice-group="moment" data-choice-value="weekday-morning">
+                <strong>Manhã em dia de semana</strong>
+                <span>Ideal para café da manhã, brunch, coffee break e encontros corporativos.</span>
+              </button>
+              <button type="button" data-choice-group="moment" data-choice-value="late-afternoon">
+                <strong>Fim de tarde</strong>
+                <span>Excelente para welcome drink, networking e confraternizações.</span>
+              </button>
+              <button type="button" data-choice-group="moment" data-choice-value="night">
+                <strong>Noite (19h-21h)</strong>
+                <span>Ótima opção para coquetéis e encontros mais objetivos.</span>
+              </button>
+              <button type="button" data-choice-group="moment" data-choice-value="evaluating">
+                <strong>Ainda estou avaliando</strong>
+                <span>Podemos sugerir o melhor formato para o seu grupo.</span>
+              </button>
+            </div>
+            <div class="commercial-windows" aria-label="Janelas recomendadas">
+              <span>Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.</span>
+              <span>Após 17h de domingo a 5ª: welcome drink e coquetéis.</span>
+              <span>Das 19h às 21h: encontros elegantes, leves e objetivos.</span>
+            </div>
+          </section>
 
-          <label>
-            Motivo do evento
-            <textarea id="requestReason" rows="3" placeholder="Confraternização, aniversário, lançamento, reunião com clientes..."></textarea>
-          </label>
-          <label>
-            Preferências de alimentos e bebidas
-            <textarea id="requestPreferences" rows="3" placeholder="Coquetel, café da manhã, restrições alimentares, bebidas preferidas..."></textarea>
-          </label>
-          <label>
-            Observações
-            <textarea id="requestNotes" rows="3" placeholder="O que mais devemos saber para preparar a proposta?"></textarea>
-          </label>
+          <section class="consult-step" aria-labelledby="profileTitle">
+            <div class="section-heading">
+              <span>02</span>
+              <h2 id="profileTitle">Qual é o perfil do seu evento?</h2>
+            </div>
+            <div class="choice-card-grid profile-grid" id="profileChoices" aria-label="Perfil do evento">
+              <button type="button" data-choice-group="profile" data-choice-value="corporate">Reunião / encontro corporativo</button>
+              <button type="button" data-choice-group="profile" data-choice-value="celebration">Confraternização</button>
+              <button type="button" data-choice-group="profile" data-choice-value="birthday">Aniversário / celebração</button>
+              <button type="button" data-choice-group="profile" data-choice-value="relationship">Lançamento / relacionamento com clientes</button>
+              <button type="button" data-choice-group="profile" data-choice-value="experience">Experiência gastronômica</button>
+              <button type="button" data-choice-group="profile" data-choice-value="suggestion">Ainda não sei, quero sugestão</button>
+            </div>
+          </section>
+
+          <section class="consult-step" aria-labelledby="recommendationTitle">
+            <div class="section-heading">
+              <span>03</span>
+              <h2 id="recommendationTitle">Sugestões para o seu evento</h2>
+            </div>
+            <p class="step-support" id="recommendationIntro">Escolha o momento e o perfil para ver as experiências mais indicadas.</p>
+            <div class="format-grid" id="formatRecommendations" aria-live="polite"></div>
+          </section>
+
+          <section class="consult-step" aria-labelledby="eventDetailsTitle">
+            <div class="section-heading">
+              <span>04</span>
+              <h2 id="eventDetailsTitle">Detalhes do evento</h2>
+            </div>
+            <div class="fields-grid">
+              <label>
+                Data desejada
+                <input id="requestEventDate" type="date" />
+              </label>
+              <label>
+                Quantidade de convidados
+                <select id="requestGuestCount" required>
+                  <option value="30" selected>30 pessoas</option>
+                </select>
+              </label>
+              <label>
+                Faixa de horário desejada
+                <select id="requestTimeRange" required>
+                  <option value="">Selecione</option>
+                  <option value="morning">Manhã</option>
+                  <option value="lunch">Almoço</option>
+                  <option value="late-afternoon">Fim de tarde</option>
+                  <option value="night">Noite</option>
+                  <option value="flexible">Flexível</option>
+                </select>
+              </label>
+              <label>
+                Horário aproximado
+                <select id="requestEventTime">
+                  <option value="">Selecione uma faixa</option>
+                </select>
+              </label>
+              <label>
+                Duração estimada
+                <select id="requestDuration">
+                  <option value="">A definir</option>
+                  <option value="1">1h</option>
+                  <option value="2">2h</option>
+                  <option value="2.5">2h30</option>
+                  <option value="3">3h</option>
+                  <option value="3.5">3h30</option>
+                  <option value="4">4h</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="consult-step" aria-labelledby="briefingTitle">
+            <div class="section-heading">
+              <span>05</span>
+              <h2 id="briefingTitle">Preferências e briefing</h2>
+            </div>
+            <label>
+              Motivo do evento
+              <textarea id="requestReason" rows="3" placeholder="Confraternização, aniversário, lançamento, reunião com clientes..."></textarea>
+            </label>
+            <label>
+              Preferências de alimentos e bebidas
+              <textarea id="requestPreferences" rows="3" placeholder="Café da manhã, coquetel, restrições alimentares, bebidas preferidas..."></textarea>
+            </label>
+            <label>
+              Há algo importante que devemos considerar para montar sua proposta?
+              <textarea id="requestNotes" rows="3" placeholder="Perfil do grupo, objetivo da ocasião, necessidade técnica, acessibilidade, restrições alimentares..."></textarea>
+            </label>
+          </section>
+
+          <section class="consult-step" aria-labelledby="contactTitle">
+            <div class="section-heading">
+              <span>06</span>
+              <h2 id="contactTitle">Contato</h2>
+            </div>
+            <div class="fields-grid">
+              <label>
+                Nome completo
+                <input id="requestClientName" type="text" required autocomplete="name" placeholder="Seu nome" />
+              </label>
+              <label>
+                E-mail
+                <input id="requestClientEmail" type="email" required autocomplete="email" placeholder="seu@email.com" />
+                <small>Usaremos para enviar a proposta.</small>
+              </label>
+              <label>
+                WhatsApp
+                <input
+                  id="requestClientPhone"
+                  type="tel"
+                  inputmode="tel"
+                  required
+                  autocomplete="tel"
+                  placeholder="Ex.: 21 99999-9999"
+                />
+                <small>Informe DDD e celular.</small>
+              </label>
+              <label>
+                Empresa
+                <input id="requestCompany" type="text" placeholder="Opcional" />
+              </label>
+            </div>
+          </section>
 
           <div class="public-form-actions">
             <button class="primary" id="submitClientQuoteBtn" type="submit">Enviar solicitação</button>
@@ -133,6 +201,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260420-ux"></script>
+    <script src="./formulario.js?v=20260420-consultivo"></script>
   </body>
 </html>

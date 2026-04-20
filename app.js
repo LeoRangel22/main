@@ -1344,13 +1344,22 @@ function renderQuoteRequests() {
       const dateLabel = request.data_evento ? formatDateFromIso(request.data_evento) : "Data a definir";
       const timeLabel = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "Horário a definir";
       const statusLabel = getRequestStatusLabel(request.status);
+      const eventSnapshot = request.snapshot?.evento || {};
+      const detailParts = [
+        request.tipo_evento || "Evento",
+        dateLabel,
+        timeLabel,
+        `${request.convidados || 1} pessoa(s)`,
+      ];
+      const consultParts = [eventSnapshot.momento, eventSnapshot.perfil, eventSnapshot.faixaHorario].filter(Boolean);
       return `
         <div class="request-item">
           <strong>
             <span>${escapeHtml(request.cliente_nome || "Cliente")}</span>
             <span>${escapeHtml(statusLabel)}</span>
           </strong>
-          <small>${escapeHtml(request.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)} · ${request.convidados || 1} pessoa(s)</small>
+          <small>${detailParts.map((part) => escapeHtml(part)).join(" · ")}</small>
+          ${consultParts.length ? `<small>${consultParts.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
           <small>${escapeHtml(request.cliente_email || "")}${request.cliente_whatsapp ? ` · ${escapeHtml(request.cliente_whatsapp)}` : ""}</small>
           <div class="request-actions">
             <button class="primary" type="button" data-use-request="${escapeHtml(request.id)}">Usar na proposta</button>
@@ -1395,10 +1404,16 @@ async function loadQuoteRequests() {
 }
 
 function buildNotesFromRequest(request) {
+  const eventSnapshot = request.snapshot?.evento || {};
   const lines = [];
   if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
-  if (request.preferencias) lines.push(`Preferências: ${request.preferencias}`);
-  if (request.observacoes) lines.push(`Observações do cliente: ${request.observacoes}`);
+  if (eventSnapshot.momento) lines.push(`Momento informado: ${eventSnapshot.momento}`);
+  if (eventSnapshot.perfil) lines.push(`Perfil do evento: ${eventSnapshot.perfil}`);
+  if (request.tipo_evento) lines.push(`Formato escolhido: ${request.tipo_evento}`);
+  if (eventSnapshot.faixaHorario) lines.push(`Faixa de horário: ${eventSnapshot.faixaHorario}`);
+  if (eventSnapshot.horario) lines.push(`Horário aproximado: ${eventSnapshot.horario}`);
+  if (request.preferencias) lines.push(`Preferências de A&B: ${request.preferencias}`);
+  if (request.observacoes) lines.push(`Briefing do cliente: ${request.observacoes}`);
   lines.push(`Solicitação recebida via formulário em ${formatSavedAt(request.created_at)}.`);
   return lines.join("\n");
 }

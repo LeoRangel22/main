@@ -1331,6 +1331,7 @@ td:nth-child(9) {
 
 .public-form-body {
   background: var(--paper);
+  overflow-x: hidden;
 }
 
 .public-form-shell {
@@ -1367,8 +1368,10 @@ td:nth-child(9) {
   display: grid;
   gap: 10px;
   max-width: 700px;
+  min-width: 0;
   padding: 42px 28px;
   position: relative;
+  width: 100%;
   z-index: 1;
 }
 
@@ -1390,6 +1393,7 @@ td:nth-child(9) {
   letter-spacing: 0;
   line-height: 0.95;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .public-form-hero-copy span {
@@ -1450,7 +1454,116 @@ td:nth-child(9) {
 
 .client-quote-form {
   display: grid;
-  gap: 18px;
+  gap: 26px;
+}
+
+.consult-step {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.step-support {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
+  margin: -6px 0 0;
+}
+
+.choice-card-grid,
+.format-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choice-card-grid button,
+.format-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 16px;
+  text-align: left;
+}
+
+.profile-grid button {
+  min-height: 72px;
+}
+
+.choice-card-grid button:hover,
+.choice-card-grid button.is-selected,
+.format-card:hover,
+.format-card.is-selected {
+  background: var(--verde-escuro);
+  border-color: var(--verde-escuro);
+  color: var(--white);
+}
+
+.choice-card-grid strong,
+.format-card strong {
+  font-size: 1.02rem;
+  line-height: 1.1;
+}
+
+.choice-card-grid span,
+.format-card em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.choice-card-grid button:hover span,
+.choice-card-grid button.is-selected span,
+.format-card:hover em,
+.format-card.is-selected em {
+  color: var(--verde-2);
+}
+
+.format-card span {
+  color: var(--amarelo);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.format-card b {
+  align-self: end;
+  color: inherit;
+  font-size: 0.86rem;
+}
+
+.recommendation-empty {
+  background: var(--verde-claro);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-weight: 900;
+  padding: 16px;
+}
+
+.commercial-windows {
+  border-left: 4px solid var(--verde);
+  color: var(--verde-escuro);
+  display: grid;
+  gap: 6px;
+  line-height: 1.35;
+  padding: 4px 0 4px 12px;
+}
+
+.commercial-windows span {
+  font-weight: 800;
 }
 
 .public-form-actions {
@@ -1501,6 +1614,12 @@ td:nth-child(9) {
   .fields-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .choice-card-grid,
+  .format-grid,
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1542,6 +1661,9 @@ td:nth-child(9) {
   .filters,
   .choice-grid,
   .choice-grid.compact,
+  .choice-card-grid,
+  .format-grid,
+  .profile-grid,
   .calculation-grid,
   .builder-grid,
   .proposal-grid,
@@ -1585,12 +1707,34 @@ td:nth-child(9) {
     min-height: 420px;
   }
 
+  .public-form-hero-copy {
+    max-width: 390px;
+  }
+
   .public-form-hero-copy h1 {
-    font-size: 2.7rem;
+    font-size: 2.35rem;
+    line-height: 1;
+    max-width: 11ch;
   }
 
   .public-form-panel {
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 390px;
     padding: 22px 18px;
+    width: 100%;
+  }
+
+  .public-form-intro h2 {
+    font-size: 1.55rem;
+    line-height: 1.05;
+    max-width: 16ch;
+  }
+
+  .commercial-windows,
+  .choice-card-grid button,
+  .format-card {
+    max-width: 100%;
   }
 
   .public-form-intro {
