@@ -7,6 +7,7 @@ const statusNode = document.querySelector("#clientFormStatus");
 const submitButton = document.querySelector("#submitClientQuoteBtn");
 const recommendationIntro = document.querySelector("#recommendationIntro");
 const recommendationList = document.querySelector("#formatRecommendations");
+const mobileFormQuery = window.matchMedia("(max-width: 720px)");
 
 const fields = {
   name: document.querySelector("#requestClientName"),
@@ -24,6 +25,15 @@ const fields = {
   reason: document.querySelector("#requestReason"),
   preferences: document.querySelector("#requestPreferences"),
   notes: document.querySelector("#requestNotes"),
+};
+
+const steps = {
+  moment: document.querySelector("#momentStep"),
+  profile: document.querySelector("#profileStep"),
+  recommendation: document.querySelector("#recommendationStep"),
+  eventDetails: document.querySelector("#eventDetailsStep"),
+  briefing: document.querySelector("#briefingStep"),
+  contact: document.querySelector("#contactStep"),
 };
 
 const momentLabels = {
@@ -163,10 +173,29 @@ function setFieldValidity(field, isValid) {
   field.toggleAttribute("aria-invalid", !isValid);
 }
 
+function setStepValidity(stepName, isValid) {
+  const step = steps[stepName];
+  if (!step) return;
+  step.toggleAttribute("data-invalid", !isValid);
+}
+
+function clearAllStepValidity() {
+  Object.keys(steps).forEach((stepName) => setStepValidity(stepName, true));
+}
+
+function scrollToStep(stepName, force = false) {
+  const step = steps[stepName];
+  if (!step || (!force && !mobileFormQuery.matches)) return;
+  window.requestAnimationFrame(() => {
+    step.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function setActiveChoice(group, value) {
   document.querySelectorAll(`[data-choice-group="${group}"]`).forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.choiceValue === value);
   });
+  setStepValidity(group, true);
 }
 
 function getRecommendedFormatIds() {
@@ -184,6 +213,10 @@ function prioritize(ids, priority) {
   return [...priority.filter((id) => set.has(id)), ...ids.filter((id) => !priority.includes(id))];
 }
 
+function getFormatIdByLabel(label) {
+  return Object.entries(formats).find(([, item]) => item.label === label)?.[0] || "";
+}
+
 function renderRecommendations() {
   if (!fields.moment.value) {
     recommendationIntro.textContent = "Escolha o momento e o perfil para ver as experiências mais indicadas.";
@@ -193,6 +226,8 @@ function renderRecommendations() {
   }
 
   const ids = getRecommendedFormatIds();
+  const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
+  if (fields.eventType.value && !ids.includes(selectedFormatId)) fields.eventType.value = "";
   const moment = momentLabels[fields.moment.value];
   recommendationIntro.textContent = `Com base em ${moment.toLowerCase()}, estas opções tendem a funcionar melhor.`;
   recommendationList.innerHTML = ids
@@ -215,7 +250,9 @@ function selectFormat(formatId) {
   const item = formats[formatId];
   if (!item) return;
   fields.eventType.value = item.label;
+  setStepValidity("recommendation", true);
   renderRecommendations();
+  scrollToStep("eventDetails");
 }
 
 function handleChoiceClick(event) {
@@ -234,6 +271,8 @@ function handleChoiceClick(event) {
   }
 
   renderRecommendations();
+  if (choiceGroup === "moment") scrollToStep("profile");
+  if (choiceGroup === "profile") scrollToStep("recommendation");
 }
 
 function handleFormatClick(event) {
@@ -291,33 +330,43 @@ function getPayload(snapshot) {
 }
 
 function validateSnapshot(snapshot) {
+  clearAllStepValidity();
   const required = [
-    [fields.moment, Boolean(snapshot.evento.momento)],
-    [fields.profile, Boolean(snapshot.evento.perfil)],
-    [fields.eventType, Boolean(snapshot.evento.tipo)],
-    [fields.timeRange, Boolean(snapshot.evento.faixaHorario)],
-    [fields.name, Boolean(snapshot.cliente.nome)],
-    [fields.email, Boolean(snapshot.cliente.email)],
-    [fields.phone, Boolean(snapshot.cliente.whatsapp)],
+    [fields.moment, Boolean(snapshot.evento.momento), "moment"],
+    [fields.profile, Boolean(snapshot.evento.perfil), "profile"],
+    [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
+    [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
+    [fields.name, Boolean(snapshot.cliente.nome), "contact"],
+    [fields.email, Boolean(snapshot.cliente.email), "contact"],
+    [fields.phone, Boolean(snapshot.cliente.whatsapp), "contact"],
   ];
-  required.forEach(([field, valid]) => setFieldValidity(field, valid));
+  required.forEach(([field, valid, stepName]) => {
+    setFieldValidity(field, valid);
+    if (!valid) setStepValidity(stepName, false);
+  });
 
-  if (required.some(([, valid]) => !valid)) {
+  const firstInvalid = required.find(([, valid]) => !valid);
+  if (firstInvalid) {
     setStatus("Complete momento, perfil, formato, faixa de horário e contato.", "error");
+    scrollToStep(firstInvalid[2], true);
     return false;
   }
 
   if (!isValidEmail(snapshot.cliente.email)) {
     setStatus("Informe um e-mail válido.", "error");
+    setStepValidity("contact", false);
     setFieldValidity(fields.email, false);
     fields.email.focus();
+    scrollToStep("contact", true);
     return false;
   }
 
   if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
     setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
+    setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
     fields.phone.focus();
+    scrollToStep("contact", true);
     return false;
   }
 
@@ -354,6 +403,7 @@ async function submitRequest(event) {
   fields.profile.value = "";
   fields.eventType.value = "";
   document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
+  clearAllStepValidity();
   fillGuestOptions();
   fillTimeOptions("");
   renderRecommendations();
@@ -366,12 +416,18 @@ renderRecommendations();
 fields.date.min = new Date().toISOString().slice(0, 10);
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
-fields.timeRange.addEventListener("change", () => fillTimeOptions());
+fields.timeRange.addEventListener("change", () => {
+  fillTimeOptions();
+  setFieldValidity(fields.timeRange, true);
+  setStepValidity("eventDetails", true);
+});
 fields.phone.addEventListener("input", () => {
   fields.phone.value = formatBrazilianPhone(fields.phone.value);
   setFieldValidity(fields.phone, !fields.phone.value || isValidBrazilianMobile(fields.phone.value));
+  setStepValidity("contact", true);
 });
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
+  setStepValidity("contact", true);
 });
 form.addEventListener("submit", submitRequest);

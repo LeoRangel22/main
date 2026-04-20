@@ -1462,6 +1462,14 @@ td:nth-child(9) {
   display: grid;
   gap: 16px;
   padding-bottom: 24px;
+  scroll-margin-top: 18px;
+}
+
+.consult-step[data-invalid] {
+  border-color: var(--danger);
+  border-radius: 8px;
+  outline: 2px solid rgba(157, 67, 47, 0.16);
+  outline-offset: 8px;
 }
 
 .step-support {
@@ -1704,25 +1712,32 @@ td:nth-child(9) {
   }
 
   .public-form-hero {
-    min-height: 420px;
+    min-height: 410px;
   }
 
   .public-form-hero-copy {
-    max-width: 390px;
+    max-width: 100%;
+    padding: 32px 22px;
   }
 
   .public-form-hero-copy h1 {
-    font-size: 2.35rem;
+    font-size: clamp(2.15rem, 9vw, 2.55rem);
     line-height: 1;
-    max-width: 11ch;
+    max-width: 12ch;
   }
 
   .public-form-panel {
-    margin-left: 0;
-    margin-right: 0;
-    max-width: 390px;
+    margin: 0;
+    max-width: none;
+    overflow: hidden;
     padding: 22px 18px;
     width: 100%;
+  }
+
+  .public-form-intro {
+    align-items: start;
+    display: grid;
+    gap: 16px;
   }
 
   .public-form-intro h2 {
@@ -1731,10 +1746,76 @@ td:nth-child(9) {
     max-width: 16ch;
   }
 
+  .public-form-steps {
+    background: rgba(247, 250, 248, 0.96);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: nowrap;
+    margin: 0;
+    overflow-x: auto;
+    padding: 8px 0 10px;
+    position: sticky;
+    scrollbar-width: none;
+    top: 0;
+    z-index: 5;
+  }
+
+  .public-form-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .public-form-steps li {
+    flex: 0 0 auto;
+  }
+
+  .consult-step {
+    gap: 14px;
+    padding-bottom: 28px;
+    scroll-margin-top: 76px;
+  }
+
+  .consult-step[data-invalid] {
+    outline-offset: 4px;
+  }
+
+  .section-heading {
+    margin-bottom: 0;
+  }
+
   .commercial-windows,
   .choice-card-grid button,
   .format-card {
     max-width: 100%;
+  }
+
+  .choice-card-grid button,
+  .format-card {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .profile-grid button {
+    min-height: 58px;
+  }
+
+  .public-form-actions {
+    align-items: stretch;
+    background: var(--paper);
+    bottom: 0;
+    display: grid;
+    margin: 0;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+    position: sticky;
+    z-index: 6;
+  }
+
+  .public-form-actions button {
+    width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 
   .public-form-intro {
