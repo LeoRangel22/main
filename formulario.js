@@ -62,10 +62,21 @@ function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function formatBrazilianPhone(value) {
+  const digits = normalizePhone(value).replace(/^55(?=\d{11}$)/, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 function isValidBrazilianMobile(value) {
   const digits = normalizePhone(value);
   const local = digits.startsWith("55") && digits.length === 13 ? digits.slice(2) : digits;
   return local.length === 11 && /^[1-9]{2}9\d{8}$/.test(local);
+}
+
+function setFieldValidity(field, isValid) {
+  field.toggleAttribute("aria-invalid", !isValid);
 }
 
 function getSnapshot() {
@@ -123,20 +134,30 @@ async function submitRequest(event) {
   const snapshot = getSnapshot();
   if (!snapshot.cliente.nome || !snapshot.cliente.email || !snapshot.evento.tipo) {
     setStatus("Preencha nome, e-mail e tipo de evento.", "error");
+    setFieldValidity(fields.name, Boolean(snapshot.cliente.nome));
+    setFieldValidity(fields.email, Boolean(snapshot.cliente.email));
+    setFieldValidity(fields.eventType, Boolean(snapshot.evento.tipo));
     return;
   }
 
   if (!isValidEmail(snapshot.cliente.email)) {
     setStatus("Informe um e-mail válido.", "error");
+    setFieldValidity(fields.email, false);
     fields.email.focus();
     return;
   }
 
   if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
     setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
+    setFieldValidity(fields.phone, false);
     fields.phone.focus();
     return;
   }
+
+  setFieldValidity(fields.name, true);
+  setFieldValidity(fields.email, true);
+  setFieldValidity(fields.phone, true);
+  setFieldValidity(fields.eventType, true);
 
   submitButton.disabled = true;
   setStatus("Enviando solicitação...", "neutral");
@@ -153,9 +174,19 @@ async function submitRequest(event) {
   }
 
   form.reset();
+  fillGuestOptions();
+  fillTimeOptions();
   setStatus("Solicitação enviada. A equipe vai preparar a proposta e entrar em contato.", "success");
 }
 
 fillTimeOptions();
 fillGuestOptions();
+fields.date.min = new Date().toISOString().slice(0, 10);
+fields.phone.addEventListener("input", () => {
+  fields.phone.value = formatBrazilianPhone(fields.phone.value);
+  setFieldValidity(fields.phone, !fields.phone.value || isValidBrazilianMobile(fields.phone.value));
+});
+fields.email.addEventListener("blur", () => {
+  setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
+});
 form.addEventListener("submit", submitRequest);

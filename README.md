@@ -11,11 +11,16 @@ Abra `index.html` no navegador.
 1. Crie um projeto no Supabase.
 2. Abra `supabase/schema.sql`, copie o conteúdo e rode no SQL Editor do Supabase.
 3. Em `Authentication > Providers`, mantenha o login por e-mail habilitado.
-4. Em `Authentication > URL Configuration`, coloque a URL onde o app ficará publicado como `Site URL`.
-5. Copie `Project URL` e `anon public key` em `Project Settings > API`.
-6. No app, preencha `Supabase URL` e `Supabase anon key`, clique em `Conectar Supabase` e entre com o e-mail da equipe.
+4. Em `Authentication > URL Configuration`, use `https://leorangel22.github.io/main/` como `Site URL`.
+5. Em `Redirect URLs`, deixe `https://leorangel22.github.io/main/` e `https://leorangel22.github.io/main/**`.
+6. No app, a conexão técnica já vem preenchida. A equipe só precisa entrar com o e-mail autorizado.
 
-O histórico fica compartilhado entre todos os usuários autenticados nesse projeto Supabase. Para limitar o acesso, use somente e-mails da equipe no Auth do Supabase.
+O histórico fica compartilhado somente entre os e-mails liberados no schema:
+
+- `leorangel@gmail.com`
+- `eventos@embaixadacarioca.com.br`
+
+Se novos usuários entrarem na equipe, atualize a função `public.is_team_member()` em `supabase/schema.sql` e rode o SQL novamente no Supabase.
 
 ## Formulário público para clientes
 
