@@ -43,8 +43,7 @@ function fillTimeOptions() {
 
 function fillGuestOptions() {
   const values = [];
-  for (let guests = 10; guests <= 200; guests += 5) values.push(guests);
-  [250, 300].forEach((guests) => values.push(guests));
+  for (let guests = 1; guests <= 300; guests += 1) values.push(guests);
   fields.guests.innerHTML = values
     .map((guests) => `<option value="${guests}" ${guests === 30 ? "selected" : ""}>${guests} pessoas</option>`)
     .join("");
