@@ -8,6 +8,7 @@ const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
 const CANONICAL_APP_URL = "https://leorangel22.github.io/main/";
 const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
+const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SERVICE_RATE = 0.12;
 const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
@@ -1249,6 +1250,14 @@ function getAuthRedirectUrl() {
   return CANONICAL_APP_URL;
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isTeamEmail(email) {
+  return TEAM_EMAILS.includes(normalizeEmail(email));
+}
+
 function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
@@ -1263,18 +1272,18 @@ function updateAuthUI() {
   fields.magicLinkUrl.disabled = !isConnected || isLoggedIn;
 
   if (!isConnected) {
-    nodes.authStatus.textContent = "Conecte o Supabase para liberar o login.";
+    nodes.authStatus.textContent = "A conexão da equipe ainda está carregando.";
     return;
   }
 
   nodes.authStatus.textContent = isLoggedIn
     ? `Conectado como ${state.session.user.email}.`
-    : "Digite o e-mail da equipe para receber o link de acesso.";
+    : "Use eventos@embaixadacarioca.com.br ou leorangel@gmail.com para receber o link de acesso.";
 }
 
 function renderHistory() {
   if (!state.supabase) {
-    nodes.historyList.innerHTML = `<p>Conecte o Supabase para ver o historico da equipe.</p>`;
+    nodes.historyList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     return;
   }
 
@@ -1291,7 +1300,7 @@ function renderHistory() {
   nodes.historyList.innerHTML = state.proposals
     .map((proposal) => {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
-      const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horario a definir";
+      const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
       return `
         <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
           <strong>
@@ -1316,7 +1325,7 @@ function renderClientFormLink() {
 
 function renderQuoteRequests() {
   if (!state.supabase) {
-    nodes.quoteRequestList.innerHTML = `<p>Conecte o Supabase para ver os formulários recebidos.</p>`;
+    nodes.quoteRequestList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     return;
   }
 
@@ -1470,6 +1479,11 @@ async function initSupabase() {
 
     state.supabase.auth.onAuthStateChange((_event, session) => {
       state.session = session;
+      if (session?.user?.email && !isTeamEmail(session.user.email)) {
+        state.supabase.auth.signOut();
+        showToast("E-mail sem acesso ao app da equipe.");
+        return;
+      }
       updateAuthUI();
       if (session) {
         loadProposalHistory();
@@ -1485,8 +1499,17 @@ async function initSupabase() {
 
     updateAuthUI();
     if (state.session) {
-      await loadProposalHistory();
-      await loadQuoteRequests();
+      if (!isTeamEmail(state.session.user.email)) {
+        await state.supabase.auth.signOut();
+        state.session = null;
+        showToast("E-mail sem acesso ao app da equipe.");
+        updateAuthUI();
+        renderHistory();
+        renderQuoteRequests();
+      } else {
+        await loadProposalHistory();
+        await loadQuoteRequests();
+      }
     } else {
       renderHistory();
       renderQuoteRequests();
@@ -1515,13 +1538,18 @@ function configureSupabaseFromForm() {
 
 async function loginWithEmail() {
   if (!state.supabase) {
-    showToast("Conecte o Supabase primeiro.");
+    showToast("A conexao da equipe ainda esta carregando. Tente novamente em instantes.");
     return;
   }
 
-  const email = fields.loginEmail.value.trim();
+  const email = normalizeEmail(fields.loginEmail.value);
   if (!email) {
     showToast("Preencha o e-mail da equipe.");
+    return;
+  }
+
+  if (!isTeamEmail(email)) {
+    showToast("Use um e-mail autorizado da equipe.");
     return;
   }
 
@@ -1572,6 +1600,12 @@ async function recoverMagicLinkSession() {
   if (error || !data?.session) {
     console.warn("Falha ao recuperar magic link.", error);
     showToast("Nao foi possivel entrar com essa URL. Peça um novo magic link.");
+    return;
+  }
+
+  if (!isTeamEmail(data.session.user.email)) {
+    await state.supabase.auth.signOut();
+    showToast("E-mail sem acesso ao app da equipe.");
     return;
   }
 
@@ -2059,6 +2093,12 @@ function bindEvents() {
   document.querySelector("#addItemBtn").addEventListener("click", createNewItem);
   document.querySelector("#saveSupabaseConfigBtn").addEventListener("click", configureSupabaseFromForm);
   document.querySelector("#loginBtn").addEventListener("click", loginWithEmail);
+  document.querySelectorAll("[data-team-email]").forEach((button) => {
+    button.addEventListener("click", () => {
+      fields.loginEmail.value = button.dataset.teamEmail;
+      fields.loginEmail.focus();
+    });
+  });
   document.querySelector("#recoverMagicLinkBtn").addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);

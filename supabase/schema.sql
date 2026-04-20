@@ -1,9 +1,22 @@
 -- Embaixada Carioca - Orcamentos de eventos
 -- Rode este arquivo no SQL Editor do Supabase.
--- Politica escolhida: historico compartilhado por todos os usuarios autenticados
--- do projeto. Use apenas convites/e-mails da equipe no Supabase Auth.
+-- Politica escolhida: historico compartilhado apenas entre os e-mails da equipe.
+-- E-mails autorizados: leorangel@gmail.com e eventos@embaixadacarioca.com.br.
 
 create extension if not exists pgcrypto;
+
+create or replace function public.is_team_member()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select lower(coalesce(auth.jwt() ->> 'email', '')) in (
+    'leorangel@gmail.com',
+    'eventos@embaixadacarioca.com.br'
+  );
+$$;
 
 create table if not exists public.propostas (
   id uuid primary key default gen_random_uuid(),
@@ -63,29 +76,29 @@ create policy "Equipe autenticada pode ler propostas"
 on public.propostas
 for select
 to authenticated
-using (true);
+using ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode criar propostas" on public.propostas;
 create policy "Equipe autenticada pode criar propostas"
 on public.propostas
 for insert
 to authenticated
-with check (true);
+with check ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode atualizar propostas" on public.propostas;
 create policy "Equipe autenticada pode atualizar propostas"
 on public.propostas
 for update
 to authenticated
-using (true)
-with check (true);
+using ((select public.is_team_member()))
+with check ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode remover propostas" on public.propostas;
 create policy "Equipe autenticada pode remover propostas"
 on public.propostas
 for delete
 to authenticated
-using (true);
+using ((select public.is_team_member()));
 
 create table if not exists public.solicitacoes_cotacao (
   id uuid primary key default gen_random_uuid(),
@@ -150,7 +163,8 @@ on public.solicitacoes_cotacao
 for insert
 to authenticated
 with check (
-  status = 'novo'
+  (select public.is_team_member())
+  and status = 'novo'
   and proposta_id is null
   and origem = 'formulario'
 );
@@ -160,19 +174,19 @@ create policy "Equipe autenticada pode ler solicitacoes"
 on public.solicitacoes_cotacao
 for select
 to authenticated
-using (true);
+using ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode atualizar solicitacoes" on public.solicitacoes_cotacao;
 create policy "Equipe autenticada pode atualizar solicitacoes"
 on public.solicitacoes_cotacao
 for update
 to authenticated
-using (true)
-with check (true);
+using ((select public.is_team_member()))
+with check ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode remover solicitacoes" on public.solicitacoes_cotacao;
 create policy "Equipe autenticada pode remover solicitacoes"
 on public.solicitacoes_cotacao
 for delete
 to authenticated
-using (true);
+using ((select public.is_team_member()));

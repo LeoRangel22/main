@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260420-authfix" />
+    <link rel="stylesheet" href="./styles.css?v=20260420-ux" />
   </head>
   <body>
     <main class="app-shell">
@@ -27,51 +27,68 @@
         <section class="team-panel" aria-label="Equipe e historico">
           <div class="section-heading">
             <span>Equipe</span>
-            <h2>Login e historico de propostas</h2>
+            <h2>Acesso e solicitações</h2>
           </div>
-          <div class="team-grid">
-            <div class="team-config">
-              <p>Conecte o Supabase uma vez neste navegador para salvar propostas no historico da equipe.</p>
-              <div class="supabase-config-grid">
-                <label>
-                  Supabase URL
-                  <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
-                </label>
-                <label>
-                  Supabase anon key
-                  <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
-                </label>
-                <button class="secondary" id="saveSupabaseConfigBtn" type="button">Conectar Supabase</button>
+          <div class="team-access">
+            <div class="team-auth team-primary">
+              <p>Entre com um e-mail autorizado para ver solicitações, salvar propostas e consultar histórico.</p>
+              <div class="team-email-presets" aria-label="E-mails autorizados">
+                <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
+                <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
               </div>
-              <div class="team-status" id="supabaseStatus">Supabase ainda nao configurado.</div>
-            </div>
-
-            <div class="team-auth">
-              <p>Entre com o e-mail da equipe para salvar e consultar propostas.</p>
               <div class="login-row">
                 <label>
                   E-mail da equipe
-                  <input id="loginEmail" type="email" placeholder="eventos@embaixadacarioca.com.br" />
+                  <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
                 </label>
                 <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
                 <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
               </div>
-              <div class="magic-link-recovery">
+              <div class="team-status" id="authStatus">Aguardando login.</div>
+              <details class="magic-link-recovery">
+                <summary>Problema com magic link?</summary>
                 <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
                 <div class="login-row">
                   <label>
                     URL do magic link
-                    <input id="magicLinkUrl" type="url" placeholder="https://jazzy-otter.../#access_token=..." autocomplete="off" />
+                    <input id="magicLinkUrl" type="url" placeholder="Cole a URL completa do magic link" autocomplete="off" />
                   </label>
                   <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
                 </div>
+              </details>
+            </div>
+
+            <div class="team-context">
+              <div class="team-ready">
+                <span>Sistema pronto</span>
+                <strong>O app já está conectado ao histórico da equipe.</strong>
+                <p>A conexão técnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
               </div>
-              <div class="team-status" id="authStatus">Aguardando login.</div>
+              <ul class="team-checklist">
+                <li>Clientes enviam pedidos pelo formulário externo.</li>
+                <li>A equipe revisa, ajusta valores e gera a proposta.</li>
+                <li>As propostas salvas ficam no histórico compartilhado.</li>
+              </ul>
+              <details class="team-advanced">
+                <summary>Configuração técnica</summary>
+                <div class="supabase-config-grid">
+                  <label>
+                    Supabase URL
+                    <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
+                  </label>
+                  <label>
+                    Supabase anon key
+                    <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
+                  </label>
+                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+                </div>
+                <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+              </details>
             </div>
           </div>
           <div class="request-panel">
             <div>
-              <p>Link para enviar ao cliente</p>
+              <p>Formulário externo para clientes</p>
               <strong id="clientFormLink">Carregando link do formulário...</strong>
             </div>
             <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
@@ -450,6 +467,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260420-authfix"></script>
+    <script src="./app.js?v=20260420-ux"></script>
   </body>
 </html>

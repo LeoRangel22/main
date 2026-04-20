@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Solicitação de Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260420-ux" />
   </head>
   <body class="public-form-body">
     <main class="public-form-shell">
@@ -14,11 +14,22 @@
           <img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" />
           <p class="eyebrow">Embaixada Carioca</p>
           <h1>Solicitação de evento</h1>
-          <span>Conte um pouco sobre o seu evento para prepararmos a proposta.</span>
+          <span>Compartilhe os dados principais para a equipe preparar sua proposta.</span>
         </div>
       </section>
 
       <section class="public-form-panel" aria-label="Formulário de solicitação">
+        <div class="public-form-intro">
+          <div>
+            <p class="eyebrow">Proposta personalizada</p>
+            <h2>Leva menos de 3 minutos.</h2>
+          </div>
+          <ol class="public-form-steps" aria-label="Etapas do pedido">
+            <li><span>01</span>Contato</li>
+            <li><span>02</span>Evento</li>
+            <li><span>03</span>Detalhes</li>
+          </ol>
+        </div>
         <form id="clientQuoteForm" class="client-quote-form">
           <div class="section-heading">
             <span>01</span>
@@ -27,11 +38,12 @@
           <div class="fields-grid">
             <label>
               Nome completo
-              <input id="requestClientName" type="text" required placeholder="Seu nome" />
+              <input id="requestClientName" type="text" required autocomplete="name" placeholder="Seu nome" />
             </label>
             <label>
               E-mail
               <input id="requestClientEmail" type="email" required autocomplete="email" placeholder="seu@email.com" />
+              <small>Usaremos para enviar a proposta.</small>
             </label>
             <label>
               WhatsApp
@@ -43,6 +55,7 @@
                 autocomplete="tel"
                 placeholder="Ex.: 21 99999-9999"
               />
+              <small>Informe DDD e celular.</small>
             </label>
             <label>
               Empresa
@@ -120,6 +133,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js"></script>
+    <script src="./formulario.js?v=20260420-ux"></script>
   </body>
 </html>
