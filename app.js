@@ -1477,7 +1477,7 @@ function renderQuoteRequests() {
         timeLabel,
         `${request.convidados || 1} pessoa(s)`,
       ];
-      const consultParts = [eventSnapshot.momento, eventSnapshot.perfil, eventSnapshot.faixaHorario].filter(Boolean);
+      const consultParts = [eventSnapshot.momento, eventSnapshot.perfil, eventSnapshot.faixaHorario, eventSnapshot.dataFlexivel].filter(Boolean);
       return `
         <div class="request-item">
           <strong>
@@ -1537,6 +1537,7 @@ function buildNotesFromRequest(request) {
   if (eventSnapshot.momento) lines.push(`Momento informado: ${eventSnapshot.momento}`);
   if (eventSnapshot.perfil) lines.push(`Perfil do evento: ${eventSnapshot.perfil}`);
   if (request.tipo_evento) lines.push(`Formato escolhido: ${request.tipo_evento}`);
+  if (eventSnapshot.dataFlexivel) lines.push(`Janela de data flexível: ${eventSnapshot.dataFlexivel}`);
   if (eventSnapshot.faixaHorario) lines.push(`Faixa de horário: ${eventSnapshot.faixaHorario}`);
   if (eventSnapshot.horario) lines.push(`Horário aproximado: ${eventSnapshot.horario}`);
   if (request.preferencias) lines.push(`Preferências de A&B: ${request.preferencias}`);

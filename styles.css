@@ -922,7 +922,7 @@ textarea {
 .status-chip {
   align-items: center;
   background: var(--surface);
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--verde);
   display: inline-flex;
   font-size: 0.72rem;
@@ -1398,10 +1398,27 @@ td:nth-child(9) {
 .public-form-body {
   background: var(--paper);
   overflow-x: hidden;
+  position: relative;
+}
+
+.public-form-body::before {
+  background: url("./assets/venue.jpg") center / cover no-repeat;
+  border-radius: 8px 0 0 0;
+  bottom: 0;
+  content: "";
+  height: 190px;
+  opacity: 0.08;
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  width: 280px;
+  z-index: 0;
 }
 
 .public-form-shell {
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
 }
 
 .public-form-hero {
@@ -1464,10 +1481,28 @@ td:nth-child(9) {
 
 .public-form-hero-copy span {
   color: var(--verde-2);
+  display: block;
   font-size: 1.14rem;
   font-weight: 800;
   line-height: 1.35;
   max-width: 520px;
+  overflow-wrap: anywhere;
+}
+
+.public-form-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.public-form-trust b {
+  background: rgba(237, 226, 201, 0.16);
+  border: 1px solid rgba(237, 226, 201, 0.32);
+  border-radius: 8px;
+  color: var(--white);
+  font-size: 0.78rem;
+  padding: 8px 10px;
 }
 
 .public-form-panel {
@@ -1492,6 +1527,15 @@ td:nth-child(9) {
   margin: 4px 0 0;
 }
 
+.public-form-intro p:not(.eyebrow) {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  max-width: 620px;
+  overflow-wrap: anywhere;
+}
+
 .public-form-steps {
   display: flex;
   flex-wrap: wrap;
@@ -1513,9 +1557,43 @@ td:nth-child(9) {
   padding: 0 12px;
 }
 
+.public-form-steps li[data-active],
+.public-form-steps li[data-complete] {
+  background: var(--verde-escuro);
+  color: var(--white);
+}
+
 .public-form-steps span {
   color: var(--amarelo);
   font-size: 0.78rem;
+}
+
+.form-progress {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 8px;
+}
+
+.form-progress span {
+  color: var(--verde);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.form-progress div {
+  background: rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.form-progress i {
+  background: var(--verde-escuro);
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+  width: 16.666%;
 }
 
 .client-quote-form {
@@ -1575,6 +1653,24 @@ td:nth-child(9) {
   min-height: 72px;
 }
 
+.profile-grid button {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.choice-card-grid .profile-icon {
+  align-items: center;
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--verde);
+  display: inline-flex;
+  font-size: 0.74rem;
+  font-weight: 900;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
 .choice-card-grid button:hover,
 .choice-card-grid button.is-selected,
 .format-card:hover,
@@ -1596,12 +1692,22 @@ td:nth-child(9) {
   font-style: normal;
   font-weight: 700;
   line-height: 1.3;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .choice-card-grid button:hover span,
 .choice-card-grid button.is-selected span,
 .format-card:hover em,
-.format-card.is-selected em {
+.format-card.is-selected em,
+.format-card:hover small,
+.format-card.is-selected small {
+  color: var(--verde-2);
+}
+
+.choice-card-grid button:hover .profile-icon,
+.choice-card-grid button.is-selected .profile-icon {
+  background: rgba(237, 226, 201, 0.16);
   color: var(--verde-2);
 }
 
@@ -1610,6 +1716,32 @@ td:nth-child(9) {
   font-size: 0.76rem;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.format-card i {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  display: inline-flex;
+  font-style: normal;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 54px;
+  text-align: center;
+}
+
+.format-card:hover i,
+.format-card.is-selected i {
+  background: rgba(237, 226, 201, 0.12);
+  border-color: rgba(237, 226, 201, 0.28);
+  color: var(--verde-2);
+}
+
+.format-card small {
+  color: var(--muted);
+  font-weight: 900;
 }
 
 .format-card b {
@@ -1636,8 +1768,73 @@ td:nth-child(9) {
   padding: 4px 0 4px 12px;
 }
 
+.commercial-windows summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
 .commercial-windows span {
+  display: block;
   font-weight: 800;
+}
+
+.guest-range-output {
+  color: var(--verde-escuro);
+  display: inline-block;
+  font-size: 1.8rem;
+  font-weight: 900;
+  margin: 6px 0;
+}
+
+input[type="range"] {
+  accent-color: var(--verde-escuro);
+  cursor: pointer;
+}
+
+.preference-chips {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+}
+
+.preference-chips legend {
+  color: var(--verde);
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.preference-chips label {
+  align-items: center;
+  background: var(--surface);
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: row;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 900;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.preference-chips input {
+  accent-color: var(--verde-escuro);
+}
+
+.contact-promise {
+  background: var(--verde-claro);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-weight: 900;
+  margin: 0;
+  padding: 12px 14px;
 }
 
 .public-form-actions {
@@ -1807,9 +2004,13 @@ td:nth-child(9) {
   }
 
   .public-form-hero-copy h1 {
-    font-size: clamp(2.15rem, 9vw, 2.55rem);
+    font-size: 2.4rem;
     line-height: 1;
     max-width: 12ch;
+  }
+
+  .public-form-hero-copy span {
+    max-width: 26ch;
   }
 
   .public-form-panel {
@@ -1830,6 +2031,10 @@ td:nth-child(9) {
     font-size: 1.55rem;
     line-height: 1.05;
     max-width: 16ch;
+  }
+
+  .public-form-intro p:not(.eyebrow) {
+    max-width: 28ch;
   }
 
   .public-form-steps {

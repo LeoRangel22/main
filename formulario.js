@@ -7,6 +7,9 @@ const statusNode = document.querySelector("#clientFormStatus");
 const submitButton = document.querySelector("#submitClientQuoteBtn");
 const recommendationIntro = document.querySelector("#recommendationIntro");
 const recommendationList = document.querySelector("#formatRecommendations");
+const progressText = document.querySelector("#formProgressText");
+const progressBar = document.querySelector("#formProgressBar");
+const progressSteps = [...document.querySelectorAll(".public-form-steps li")];
 const mobileFormQuery = window.matchMedia("(max-width: 720px)");
 
 const fields = {
@@ -18,14 +21,20 @@ const fields = {
   profile: document.querySelector("#requestProfile"),
   eventType: document.querySelector("#requestEventType"),
   date: document.querySelector("#requestEventDate"),
+  dateFlex: document.querySelector("#requestDateFlex"),
   timeRange: document.querySelector("#requestTimeRange"),
   time: document.querySelector("#requestEventTime"),
   guests: document.querySelector("#requestGuestCount"),
+  guestOutput: document.querySelector("#requestGuestOutput"),
   duration: document.querySelector("#requestDuration"),
   reason: document.querySelector("#requestReason"),
   preferences: document.querySelector("#requestPreferences"),
   notes: document.querySelector("#requestNotes"),
 };
+
+const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")];
+const selectedProfiles = new Set();
+const stepOrder = ["moment", "profile", "recommendation", "eventDetails", "briefing", "contact"];
 
 const steps = {
   moment: document.querySelector("#momentStep"),
@@ -50,7 +59,7 @@ const profileLabels = {
   birthday: "Aniversário / celebração",
   relationship: "Lançamento / relacionamento com clientes",
   experience: "Experiência gastronômica",
-  suggestion: "Ainda não sei, quero sugestão",
+  suggestion: "Me ajudem a definir",
 };
 
 const timeRangeLabels = {
@@ -66,41 +75,57 @@ const formats = {
     label: "Quero recomendação da equipe",
     description: "A equipe indica o melhor formato considerando horário, grupo e objetivo.",
     badge: "Consultivo",
+    visual: "Sob medida",
+    group: "Qualquer grupo",
   },
   breakfast: {
     label: "Café da Manhã / Brunch",
     description: "Perfeito para encontros matinais, reuniões, ativações e recepções mais leves.",
     badge: "Mais indicado para manhã",
+    visual: "Manhã",
+    group: "A partir de 30 pessoas",
   },
   coffee: {
     label: "Coffee Break",
     description: "Ideal para pausas corporativas e eventos curtos com praticidade.",
     badge: "Muito pedido por grupos corporativos",
+    visual: "Pausa",
+    group: "A partir de 20 pessoas",
   },
   lunch: {
     label: "Almoço Carioca",
     description: "Formato para início do almoço em dias úteis, com feijoada premiada e bebidas.",
     badge: "Novo para 2ª a 6ª",
+    visual: "Carioca",
+    group: "A partir de 2 pessoas",
   },
   welcome: {
     label: "Welcome Drink",
     description: "Recepção elegante para grupos que querem começar o evento com impacto.",
     badge: "Ideal para fim de tarde",
+    visual: "Recepção",
+    group: "A partir de 20 pessoas",
   },
   cocktail: {
     label: "Coquetel",
     description: "Ótimo para confraternizações, networking, lançamentos e celebrações.",
     badge: "Ótima opção para 19h-21h",
+    visual: "Coquetel",
+    group: "A partir de 20 pessoas",
   },
   workshop: {
     label: "Workshop de Caipirinha",
     description: "Experiência interativa e memorável para grupos que buscam algo diferente.",
     badge: "Experiência interativa",
+    visual: "Experiência",
+    group: "A partir de 8 pessoas",
   },
   custom: {
     label: "Evento sob medida",
     description: "Para demandas personalizadas com proposta construída pela equipe.",
     badge: "Sob consulta",
+    visual: "Especial",
+    group: "Sob consulta",
   },
 };
 
@@ -132,6 +157,17 @@ function setStatus(message, type = "neutral") {
   statusNode.dataset.status = type;
 }
 
+function updateProgress(stepName = "moment") {
+  const index = Math.max(0, stepOrder.indexOf(stepName));
+  const percent = ((index + 1) / stepOrder.length) * 100;
+  if (progressText) progressText.textContent = `Etapa ${index + 1} de ${stepOrder.length}`;
+  if (progressBar) progressBar.style.width = `${percent}%`;
+  progressSteps.forEach((step, stepIndex) => {
+    step.toggleAttribute("data-active", stepIndex === index);
+    step.toggleAttribute("data-complete", stepIndex < index);
+  });
+}
+
 function createReferenceCode() {
   const now = new Date();
   const datePart = [
@@ -147,8 +183,8 @@ function renderSuccessStatus(referenceCode) {
   statusNode.dataset.status = "success";
   statusNode.innerHTML = `
     <strong>Solicitação enviada. Obrigado!</strong>
-    <span>Sua referência é <b>${referenceCode}</b>. Nossa equipe vai analisar os dados e preparar sua proposta.</span>
-    <span>Em caso de dúvida, fale com <a href="mailto:eventos@embaixadacarioca.com.br">eventos@embaixadacarioca.com.br</a> ou <a href="https://wa.me/5521971426007" target="_blank" rel="noopener">21 97142-6007</a>.</span>
+    <span>Sua referência é <b>${referenceCode}</b>. O departamento de eventos da Embaixada Carioca vai analisar os detalhes e responder em até 24h úteis.</span>
+    <span>Se quiser acrescentar algo, fale com <a href="mailto:eventos@embaixadacarioca.com.br">eventos@embaixadacarioca.com.br</a> ou <a href="https://wa.me/5521971426007" target="_blank" rel="noopener">21 97142-6007</a>.</span>
   `;
   window.requestAnimationFrame(() => {
     statusNode.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -156,11 +192,13 @@ function renderSuccessStatus(referenceCode) {
 }
 
 function fillGuestOptions() {
-  const values = [];
-  for (let guests = 1; guests <= 300; guests += 1) values.push(guests);
-  fields.guests.innerHTML = values
-    .map((guests) => `<option value="${guests}" ${guests === 30 ? "selected" : ""}>${guests} pessoas</option>`)
-    .join("");
+  fields.guests.value = "30";
+  updateGuestOutput();
+}
+
+function updateGuestOutput() {
+  const guests = Math.max(1, Math.floor(toNumber(fields.guests.value) || 1));
+  fields.guestOutput.textContent = `${guests} ${guests === 1 ? "pessoa" : "pessoas"}`;
 }
 
 function fillTimeOptions(range = fields.timeRange.value) {
@@ -216,6 +254,7 @@ function clearAllStepValidity() {
 
 function scrollToStep(stepName, force = false) {
   const step = steps[stepName];
+  updateProgress(stepName);
   if (!step || (!force && !mobileFormQuery.matches)) return;
   window.requestAnimationFrame(() => {
     step.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -229,14 +268,36 @@ function setActiveChoice(group, value) {
   setStepValidity(group, true);
 }
 
+function setProfileChoice(value) {
+  if (value === "suggestion") {
+    selectedProfiles.clear();
+    selectedProfiles.add(value);
+  } else {
+    selectedProfiles.delete("suggestion");
+    if (selectedProfiles.has(value)) selectedProfiles.delete(value);
+    else selectedProfiles.add(value);
+  }
+
+  if (!selectedProfiles.size) selectedProfiles.add(value);
+  fields.profile.value = [...selectedProfiles].join(",");
+  document.querySelectorAll(`[data-choice-group="profile"]`).forEach((button) => {
+    button.classList.toggle("is-selected", selectedProfiles.has(button.dataset.choiceValue));
+  });
+  setStepValidity("profile", true);
+}
+
+function getSelectedProfileLabels() {
+  return [...selectedProfiles].map((profile) => profileLabels[profile]).filter(Boolean);
+}
+
 function getRecommendedFormatIds() {
   const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
-  const profile = fields.profile.value;
+  const profiles = fields.profile.value.split(",").filter(Boolean);
   if (fields.moment.value === "weekday-lunch") return base;
-  if (profile === "corporate") return prioritize(base, ["coffee", "breakfast", "workshop"]);
-  if (profile === "relationship") return prioritize(base, ["welcome", "cocktail", "workshop"]);
-  if (profile === "experience") return prioritize(base, ["workshop", "cocktail", "welcome"]);
-  if (profile === "birthday" || profile === "celebration") return prioritize(base, ["cocktail", "welcome", "custom"]);
+  if (profiles.includes("corporate")) return prioritize(base, ["coffee", "breakfast", "workshop"]);
+  if (profiles.includes("relationship")) return prioritize(base, ["welcome", "cocktail", "workshop"]);
+  if (profiles.includes("experience")) return prioritize(base, ["workshop", "cocktail", "welcome"]);
+  if (profiles.includes("birthday") || profiles.includes("celebration")) return prioritize(base, ["cocktail", "welcome", "custom"]);
   return base;
 }
 
@@ -261,7 +322,7 @@ function renderRecommendations() {
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
   if (fields.eventType.value && !ids.includes(selectedFormatId)) fields.eventType.value = "";
   const moment = momentLabels[fields.moment.value];
-  recommendationIntro.textContent = `Com base em ${moment.toLowerCase()}, estas opções tendem a funcionar melhor.`;
+  recommendationIntro.textContent = `Baseado no que nos contou, estas experiências combinam melhor com ${moment.toLowerCase()}.`;
   recommendationList.innerHTML = ids
     .map((id, index) => {
       const item = formats[id];
@@ -269,8 +330,10 @@ function renderRecommendations() {
       return `
         <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}">
           <span>${item.badge}</span>
+          <i>${item.visual}</i>
           <strong>${item.label}</strong>
           <em>${item.description}</em>
+          <small>${item.group}</small>
           <b>${index === 0 ? "Mais indicado" : "Selecionar"}</b>
         </button>
       `;
@@ -291,8 +354,12 @@ function handleChoiceClick(event) {
   const button = event.target.closest("[data-choice-group]");
   if (!button) return;
   const { choiceGroup, choiceValue } = button.dataset;
-  fields[choiceGroup].value = choiceValue;
-  setActiveChoice(choiceGroup, choiceValue);
+  if (choiceGroup === "profile") {
+    setProfileChoice(choiceValue);
+  } else {
+    fields[choiceGroup].value = choiceValue;
+    setActiveChoice(choiceGroup, choiceValue);
+  }
 
   if (choiceGroup === "moment") {
     const preferredRange = preferredTimeRangeByMoment[choiceValue];
@@ -319,6 +386,8 @@ function handleFormatClick(event) {
 
 function getSnapshot(referenceCode) {
   const selectedTime = fields.time.value || "";
+  const selectedPreferences = getSelectedPreferenceLabels();
+  const preferenceText = fields.preferences.value.trim();
   return {
     referencia: referenceCode,
     cliente: {
@@ -329,15 +398,18 @@ function getSnapshot(referenceCode) {
     },
     evento: {
       momento: momentLabels[fields.moment.value] || "",
-      perfil: profileLabels[fields.profile.value] || "",
+      perfil: getSelectedProfileLabels().join(", "),
       tipo: fields.eventType.value,
       data: fields.date.value,
+      dataFlexivel: fields.dateFlex.value.trim(),
       faixaHorario: timeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
       convidados: Math.max(1, Math.floor(toNumber(fields.guests.value) || 1)),
       duracao: toNumber(fields.duration.value),
       motivo: fields.reason.value.trim(),
-      preferencias: fields.preferences.value.trim(),
+      preferencias: [selectedPreferences.length ? `Preferências marcadas: ${selectedPreferences.join(", ")}` : "", preferenceText]
+        .filter(Boolean)
+        .join("\n"),
       observacoes: fields.notes.value.trim(),
     },
     origem: "formulario",
@@ -384,13 +456,13 @@ function validateSnapshot(snapshot) {
 
   const firstInvalid = required.find(([, valid]) => !valid);
   if (firstInvalid) {
-    setStatus("Complete momento, perfil, formato, faixa de horário e contato.", "error");
+    setStatus("Falta só escolher momento, perfil, experiência, período e contato para seguirmos.", "error");
     scrollToStep(firstInvalid[2], true);
     return false;
   }
 
   if (!isValidEmail(snapshot.cliente.email)) {
-    setStatus("Informe um e-mail válido.", "error");
+    setStatus("Revise o e-mail para a proposta chegar no endereço certo.", "error");
     setStepValidity("contact", false);
     setFieldValidity(fields.email, false);
     fields.email.focus();
@@ -399,7 +471,7 @@ function validateSnapshot(snapshot) {
   }
 
   if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
-    setStatus("Informe um celular válido com DDD. Ex.: 21 99999-9999.", "error");
+    setStatus("Revise o WhatsApp com DDD. Ex.: 21 99999-9999.", "error");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
     fields.phone.focus();
@@ -440,6 +512,7 @@ async function submitRequest(event) {
   fields.moment.value = "";
   fields.profile.value = "";
   fields.eventType.value = "";
+  selectedProfiles.clear();
   document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
   clearAllStepValidity();
   fillGuestOptions();
@@ -464,8 +537,11 @@ fields.phone.addEventListener("input", () => {
   setFieldValidity(fields.phone, !fields.phone.value || isValidBrazilianMobile(fields.phone.value));
   setStepValidity("contact", true);
 });
+fields.guests.addEventListener("input", updateGuestOutput);
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   setStepValidity("contact", true);
 });
+preferenceChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
+updateProgress();
 form.addEventListener("submit", submitRequest);
