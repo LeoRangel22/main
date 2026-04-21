@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260420-secure" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-lunch" />
   </head>
   <body class="auth-locked">
     <main class="app-shell">
@@ -144,6 +144,7 @@
                   Duração
                   <select id="eventDuration">
                     <option value="1">1h</option>
+                    <option value="1.5">1h30</option>
                     <option value="2" selected>2h</option>
                     <option value="2.5">2h30</option>
                     <option value="3">3h</option>
@@ -187,8 +188,12 @@
                       <strong>3. Café da Manhã / Coffee Break</strong>
                       <span>Filtra os pacotes de café.</span>
                     </button>
+                    <button type="button" data-flow-event="almoco">
+                      <strong>4. Almoço Carioca</strong>
+                      <span>Prioriza início do almoço em dias úteis.</span>
+                    </button>
                     <button type="button" data-flow-event="welcome">
-                      <strong>4. Welcome Drink</strong>
+                      <strong>5. Welcome Drink</strong>
                       <span>Filtra as opções de recepção.</span>
                     </button>
                   </div>
@@ -389,6 +394,7 @@
                 Fórmula
                 <select id="newFormula">
                   <option value="durationPerPerson">Por pessoa + duração</option>
+                  <option value="serviceIncluded90PerPerson">1h30 por pessoa, taxa inclusa</option>
                   <option value="perPersonFixed">Por pessoa fixo</option>
                   <option value="fixedPlusPerPerson">Fixo + por pessoa</option>
                   <option value="fixedCoversMinimum">Fixo inclui mínimo</option>
@@ -467,6 +473,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260420-secure"></script>
+    <script src="./app.js?v=20260421-lunch"></script>
   </body>
 </html>

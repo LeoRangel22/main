@@ -38,6 +38,7 @@ const steps = {
 
 const momentLabels = {
   "weekday-morning": "Manhã em dia de semana",
+  "weekday-lunch": "Início do almoço",
   "late-afternoon": "Fim de tarde",
   night: "Noite (19h-21h)",
   evaluating: "Ainda estou avaliando",
@@ -76,6 +77,11 @@ const formats = {
     description: "Ideal para pausas corporativas e eventos curtos com praticidade.",
     badge: "Muito pedido por grupos corporativos",
   },
+  lunch: {
+    label: "Almoço Carioca",
+    description: "Formato para início do almoço em dias úteis, com feijoada premiada e bebidas.",
+    badge: "Novo para 2ª a 6ª",
+  },
   welcome: {
     label: "Welcome Drink",
     description: "Recepção elegante para grupos que querem começar o evento com impacto.",
@@ -100,20 +106,22 @@ const formats = {
 
 const recommendationRules = {
   "weekday-morning": ["breakfast", "coffee", "workshop", "custom"],
+  "weekday-lunch": ["lunch", "custom", "workshop"],
   "late-afternoon": ["welcome", "cocktail", "workshop", "custom"],
   night: ["welcome", "cocktail", "workshop", "custom"],
-  evaluating: ["recommendation", "breakfast", "coffee", "welcome", "cocktail", "workshop", "custom"],
+  evaluating: ["recommendation", "breakfast", "coffee", "lunch", "welcome", "cocktail", "workshop", "custom"],
 };
 
 const preferredTimeRangeByMoment = {
   "weekday-morning": "morning",
+  "weekday-lunch": "lunch",
   "late-afternoon": "late-afternoon",
   night: "night",
 };
 
 const timeOptionsByRange = {
   morning: ["08:30", "09:00", "09:30", "10:00", "10:30"],
-  lunch: ["12:00", "12:30", "13:00", "13:30"],
+  lunch: ["11:00", "11:30", "12:00", "12:30"],
   "late-afternoon": ["17:00", "17:30", "18:00", "18:30"],
   night: ["19:00", "19:30", "20:00"],
   flexible: [""],
@@ -201,6 +209,7 @@ function setActiveChoice(group, value) {
 function getRecommendedFormatIds() {
   const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
   const profile = fields.profile.value;
+  if (fields.moment.value === "weekday-lunch") return base;
   if (profile === "corporate") return prioritize(base, ["coffee", "breakfast", "workshop"]);
   if (profile === "relationship") return prioritize(base, ["welcome", "cocktail", "workshop"]);
   if (profile === "experience") return prioritize(base, ["workshop", "cocktail", "welcome"]);
@@ -267,6 +276,10 @@ function handleChoiceClick(event) {
     if (preferredRange) {
       fields.timeRange.value = preferredRange;
       fillTimeOptions(preferredRange);
+    }
+    if (choiceValue === "weekday-lunch") {
+      fields.time.value = "11:30";
+      fields.duration.value = "1.5";
     }
   }
 
