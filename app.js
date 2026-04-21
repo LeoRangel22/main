@@ -15,6 +15,48 @@ const paymentTerms = [
   "50% restante até 72 horas antes do evento.",
 ];
 
+const funnelStages = [
+  {
+    id: "solicitacoes",
+    title: "Solicitações",
+    description: "Leads recebidos e qualificados.",
+    statuses: ["lead_recebido", "qualificado"],
+  },
+  {
+    id: "negociacao",
+    title: "Em negociação",
+    description: "Proposta enviada ou em conversa.",
+    statuses: ["proposta_enviada", "negociacao"],
+  },
+  {
+    id: "sinal",
+    title: "Aguardando sinal",
+    description: "Cliente aprovou e falta confirmação.",
+    statuses: ["aguardando_sinal"],
+  },
+  {
+    id: "confirmados",
+    title: "Confirmados",
+    description: "Sinal pago e operação em andamento.",
+    statuses: ["confirmado", "planejamento", "pronto", "realizado", "pos_venda"],
+  },
+];
+
+const proposalStatusOptions = [
+  "proposta_enviada",
+  "negociacao",
+  "aguardando_sinal",
+  "confirmado",
+  "planejamento",
+  "pronto",
+  "realizado",
+  "pos_venda",
+];
+
+const requestStatusOptions = ["lead_recebido", "qualificado"];
+
+const operationStatuses = new Set(["confirmado", "planejamento", "pronto", "realizado", "pos_venda"]);
+
 const initialPrices = [
   {
     id: "coquetel-caipirinha",
@@ -466,6 +508,8 @@ const fields = {
   guestCount: document.querySelector("#guestCount"),
   eventDuration: document.querySelector("#eventDuration"),
   validity: document.querySelector("#validity"),
+  manualAdjustment: document.querySelector("#manualAdjustment"),
+  manualAdjustmentLabel: document.querySelector("#manualAdjustmentLabel"),
   notes: document.querySelector("#notes"),
   eventReason: document.querySelector("#eventReason"),
   generalTerms: document.querySelector("#generalTerms"),
@@ -510,8 +554,11 @@ const nodes = {
   supabaseStatus: document.querySelector("#supabaseStatus"),
   authStatus: document.querySelector("#authStatus"),
   historyList: document.querySelector("#historyList"),
-  confirmedEventsList: document.querySelector("#confirmedEventsList"),
-  quoteRequestList: document.querySelector("#quoteRequestList"),
+  pipelineBoard: document.querySelector("#pipelineBoard"),
+  metricLeads: document.querySelector("#metricLeads"),
+  metricProposals: document.querySelector("#metricProposals"),
+  metricConfirmed: document.querySelector("#metricConfirmed"),
+  metricAverageTicket: document.querySelector("#metricAverageTicket"),
   clientFormLink: document.querySelector("#clientFormLink"),
 };
 
@@ -750,6 +797,14 @@ function getServiceFee() {
   return getSubtotal() * SERVICE_RATE;
 }
 
+function getManualAdjustment() {
+  return toNumber(fields.manualAdjustment.value) || 0;
+}
+
+function getManualAdjustmentLabel() {
+  return fields.manualAdjustmentLabel.value.trim() || (getManualAdjustment() < 0 ? "Desconto comercial" : "Ajuste comercial");
+}
+
 function timeToMinutes(value) {
   if (!value) return null;
   const [hours, minutes] = value.split(":").map(Number);
@@ -884,11 +939,14 @@ function getQuoteTotals() {
   const subtotal = getSubtotal();
   const serviceFee = subtotal * SERVICE_RATE;
   const privatization = getPrivatization();
+  const adjustment = getManualAdjustment();
   return {
     subtotal,
     serviceFee,
     privatization,
-    total: subtotal + serviceFee + privatization.amount,
+    adjustment,
+    adjustmentLabel: getManualAdjustmentLabel(),
+    total: Math.max(0, subtotal + serviceFee + privatization.amount + adjustment),
   };
 }
 
@@ -1146,9 +1204,14 @@ function renderCalculation() {
       <small>${escapeHtml(privatization.title)}</small>
     </div>
     <div>
+      <span>Ajuste</span>
+      <strong>${formatMoney(totals.adjustment)}</strong>
+      <small>${escapeHtml(totals.adjustmentLabel)}.</small>
+    </div>
+    <div>
       <span>Total</span>
       <strong>${formatMoney(totals.total)}</strong>
-      <small>Subtotal + taxa + privatização.</small>
+      <small>Subtotal + taxa + privatização + ajuste.</small>
     </div>
   `;
 
@@ -1237,6 +1300,7 @@ function buildProposalText() {
     `Privatização: ${formatMoney(totals.privatization.amount)} - ${totals.privatization.title}`,
     `Total estimado: ${formatMoney(totals.total)}`,
   );
+  if (totals.adjustment) lines.splice(lines.length - 1, 0, `${totals.adjustmentLabel}: ${formatMoney(totals.adjustment)}`);
 
   const notes = fields.notes.value.trim();
   if (notes) lines.push(``, `Observações: ${notes}`);
@@ -1247,8 +1311,10 @@ function buildProposalText() {
 function getProposalSnapshot() {
   const totals = getQuoteTotals();
   const selected = getSelectedItems();
+  const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   return {
     version: 1,
+    referencia: activeRequest?.snapshot?.referencia || "",
     savedAt: new Date().toISOString(),
     client: {
       name: fields.clientName.value.trim(),
@@ -1262,6 +1328,8 @@ function getProposalSnapshot() {
       guests: getGuestCount(),
       duration: getDuration(),
       validity: fields.validity.value.trim(),
+      manualAdjustment: getManualAdjustment(),
+      manualAdjustmentLabel: fields.manualAdjustmentLabel.value.trim(),
       reason: fields.eventReason.value.trim(),
       notes: fields.notes.value.trim(),
     },
@@ -1269,6 +1337,8 @@ function getProposalSnapshot() {
       subtotal: roundCurrency(totals.subtotal),
       serviceFee: roundCurrency(totals.serviceFee),
       privatizationAmount: roundCurrency(totals.privatization.amount),
+      adjustment: roundCurrency(totals.adjustment),
+      adjustmentLabel: totals.adjustmentLabel,
       total: roundCurrency(totals.total),
       privatization: totals.privatization,
     },
@@ -1286,6 +1356,7 @@ function getProposalSnapshot() {
     guided: state.guided,
     privatizationChoice: state.privatizationChoice,
     activeQuoteRequestId: state.activeQuoteRequestId,
+    qualificacao: activeRequest?.snapshot?.qualificacao || {},
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
     paymentTerms,
@@ -1293,7 +1364,7 @@ function getProposalSnapshot() {
   };
 }
 
-function getProposalRow(snapshot, status = "rascunho") {
+function getProposalRow(snapshot, status = "proposta_enviada") {
   const user = state.session?.user;
   return {
     responsavel_id: user?.id || null,
@@ -1379,7 +1450,7 @@ function renderHistory() {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
       const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
       const statusLabel = getProposalStatusLabel(proposal.status);
-      const statusClass = proposal.status === "confirmado" ? " confirmed" : "";
+      const statusClass = operationStatuses.has(normalizeProposalStatus(proposal.status)) ? " confirmed" : "";
       return `
         <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
           <strong>
@@ -1394,49 +1465,41 @@ function renderHistory() {
     .join("");
 }
 
+function normalizeRequestStatus(status) {
+  const legacy = {
+    novo: "lead_recebido",
+    em_cotacao: "qualificado",
+    analisado: "qualificado",
+    proposta_gerada: "proposta_enviada",
+  };
+  return legacy[status] || status || "lead_recebido";
+}
+
+function normalizeProposalStatus(status) {
+  const legacy = {
+    rascunho: "proposta_enviada",
+  };
+  return legacy[status] || status || "proposta_enviada";
+}
+
 function getProposalStatusLabel(status) {
   const labels = {
-    rascunho: "Rascunho",
-    confirmado: "Sinal pago",
+    lead_recebido: "Lead recebido",
+    qualificado: "Qualificado",
+    proposta_enviada: "Proposta enviada",
+    negociacao: "Negociação",
+    aguardando_sinal: "Aguardando sinal",
+    confirmado: "Confirmado",
+    planejamento: "Planejamento",
+    pronto: "Pronto para execução",
+    realizado: "Evento realizado",
+    pos_venda: "Pós-venda",
   };
-  return labels[status] || status || "Rascunho";
+  return labels[normalizeProposalStatus(status)] || status || "Proposta enviada";
 }
 
 function renderConfirmedEvents() {
-  if (!nodes.confirmedEventsList) return;
-
-  if (!state.supabase) {
-    nodes.confirmedEventsList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
-    return;
-  }
-
-  if (!state.session) {
-    nodes.confirmedEventsList.innerHTML = `<p>Entre com o e-mail da equipe para carregar eventos confirmados.</p>`;
-    return;
-  }
-
-  const confirmed = state.proposals.filter((proposal) => proposal.status === "confirmado");
-  if (!confirmed.length) {
-    nodes.confirmedEventsList.innerHTML = `<p>Nenhum evento confirmado ainda.</p>`;
-    return;
-  }
-
-  nodes.confirmedEventsList.innerHTML = confirmed
-    .map((proposal) => {
-      const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
-      const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
-      return `
-        <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
-          <strong>
-            <span>${escapeHtml(proposal.cliente_nome || "Cliente")}</span>
-            <span>${formatMoney(proposal.total)}</span>
-          </strong>
-          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</small>
-          <small><span class="status-chip confirmed">Sinal pago</span>Confirmado em ${escapeHtml(formatSavedAt(proposal.updated_at || proposal.created_at))}</small>
-        </button>
-      `;
-    })
-    .join("");
+  renderPipeline();
 }
 
 function getClientFormUrl() {
@@ -1447,64 +1510,172 @@ function renderClientFormLink() {
   nodes.clientFormLink.textContent = getClientFormUrl();
 }
 
-function renderQuoteRequests() {
+function getRequestStatusLabel(status) {
+  return getProposalStatusLabel(normalizeRequestStatus(status));
+}
+
+function getPipelineStage(status) {
+  const normalized = normalizeProposalStatus(status);
+  return funnelStages.find((stage) => stage.statuses.includes(normalized))?.id || "solicitacoes";
+}
+
+function getPipelineItems() {
+  const linkedRequests = new Set(state.proposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
+  const requestItems = state.quoteRequests
+    .filter((request) => !request.proposta_id && !linkedRequests.has(request.id))
+    .map((request) => {
+      const eventSnapshot = request.snapshot?.evento || {};
+      const qualification = request.snapshot?.qualificacao || {};
+      const status = normalizeRequestStatus(request.status);
+      return {
+        kind: "request",
+        id: request.id,
+        status,
+        stage: getPipelineStage(status),
+        name: request.cliente_nome || "Cliente",
+        type: request.tipo_evento || eventSnapshot.tipo || "Evento",
+        date: request.data_evento || "",
+        time: request.horario_evento || "",
+        guests: request.convidados || eventSnapshot.convidados || 1,
+        total: null,
+        updatedAt: request.updated_at || request.created_at,
+        reference: request.snapshot?.referencia || "",
+        meta: [qualification.tipoCliente, qualification.faixaInvestimento, qualification.origem].filter(Boolean),
+      };
+    });
+
+  const proposalItems = state.proposals.map((proposal) => {
+    const status = normalizeProposalStatus(proposal.status);
+    return {
+      kind: "proposal",
+      id: proposal.id,
+      status,
+      stage: getPipelineStage(status),
+      name: proposal.cliente_nome || "Cliente",
+      type: proposal.tipo_evento || "Evento",
+      date: proposal.data_evento || "",
+      time: proposal.horario_evento || "",
+      guests: proposal.convidados || 1,
+      total: proposal.total || 0,
+      updatedAt: proposal.updated_at || proposal.created_at,
+      reference: proposal.snapshot?.referencia || "",
+      meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
+    };
+  });
+
+  return [...requestItems, ...proposalItems].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+}
+
+function renderPipelineMetrics(items = getPipelineItems()) {
+  if (!nodes.metricLeads) return;
+  const proposalItems = items.filter((item) => item.kind === "proposal");
+  const confirmedItems = proposalItems.filter((item) => operationStatuses.has(item.status));
+  const averageBase = confirmedItems.length ? confirmedItems : proposalItems;
+  const averageTicket = averageBase.length
+    ? averageBase.reduce((sum, item) => sum + (Number(item.total) || 0), 0) / averageBase.length
+    : 0;
+
+  nodes.metricLeads.textContent = String(state.quoteRequests.length);
+  nodes.metricProposals.textContent = String(proposalItems.length);
+  nodes.metricConfirmed.textContent = String(confirmedItems.length);
+  nodes.metricAverageTicket.textContent = formatMoney(averageTicket);
+}
+
+function getProposalTransitionOptions(currentStatus) {
+  const status = normalizeProposalStatus(currentStatus);
+  if (operationStatuses.has(status)) return ["confirmado", "planejamento", "pronto", "realizado", "pos_venda"];
+  return ["proposta_enviada", "negociacao", "aguardando_sinal"];
+}
+
+function renderStatusSelect(item) {
+  const options = item.kind === "request" ? requestStatusOptions : getProposalTransitionOptions(item.status);
+  return `
+    <label class="pipeline-status-control">
+      Mudar etapa
+      <select data-pipeline-status-kind="${escapeHtml(item.kind)}" data-pipeline-status-id="${escapeHtml(item.id)}">
+        ${options
+          .map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${escapeHtml(getProposalStatusLabel(status))}</option>`)
+          .join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderPipelineCard(item) {
+  const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
+  const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
+  const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
+  const statusClass = operationStatuses.has(item.status) ? " confirmed" : "";
+  return `
+    <article class="pipeline-card">
+      <div class="pipeline-card-title">
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${escapeHtml(valueLabel)}</span>
+      </div>
+      <small>${escapeHtml(item.type)} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)} · ${item.guests} pessoa(s)</small>
+      ${item.meta.length ? `<small>${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
+      <small><span class="status-chip${statusClass}">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.reference || "Sem referência")}</small>
+      ${renderStatusSelect(item)}
+      <div class="request-actions">
+        ${
+          item.kind === "proposal"
+            ? `<button class="primary" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir proposta</button>
+               ${
+                 operationStatuses.has(item.status)
+                   ? ""
+                   : `<button class="secondary" type="button" data-mark-paid="${escapeHtml(item.id)}">Marcar sinal pago</button>`
+               }`
+            : `<button class="primary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir proposta</button>
+               <button class="secondary" type="button" data-mark-request="${escapeHtml(item.id)}">Qualificar</button>`
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderPipeline() {
+  if (!nodes.pipelineBoard) return;
   if (!state.supabase) {
-    nodes.quoteRequestList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
+    nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
+    renderPipelineMetrics([]);
     return;
   }
 
   if (!state.session) {
-    nodes.quoteRequestList.innerHTML = `<p>Entre com o e-mail da equipe para carregar solicitações.</p>`;
+    nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
+    renderPipelineMetrics([]);
     return;
   }
 
-  if (!state.quoteRequests.length) {
-    nodes.quoteRequestList.innerHTML = `<p>Nenhuma solicitação recebida ainda.</p>`;
+  const items = getPipelineItems();
+  renderPipelineMetrics(items);
+
+  if (!items.length) {
+    nodes.pipelineBoard.innerHTML = `<p>Nenhum evento no funil ainda.</p>`;
     return;
   }
 
-  nodes.quoteRequestList.innerHTML = state.quoteRequests
-    .map((request) => {
-      const dateLabel = request.data_evento ? formatDateFromIso(request.data_evento) : "Data a definir";
-      const timeLabel = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "Horário a definir";
-      const statusLabel = getRequestStatusLabel(request.status);
-      const eventSnapshot = request.snapshot?.evento || {};
-      const referenceCode = request.snapshot?.referencia || "";
-      const statusText = [referenceCode, statusLabel].filter(Boolean).join(" · ");
-      const detailParts = [
-        request.tipo_evento || "Evento",
-        dateLabel,
-        timeLabel,
-        `${request.convidados || 1} pessoa(s)`,
-      ];
-      const consultParts = [eventSnapshot.momento, eventSnapshot.perfil, eventSnapshot.faixaHorario, eventSnapshot.dataFlexivel].filter(Boolean);
+  nodes.pipelineBoard.innerHTML = funnelStages
+    .map((stage) => {
+      const stageItems = items.filter((item) => item.stage === stage.id);
       return `
-        <div class="request-item">
-          <strong>
-            <span>${escapeHtml(request.cliente_nome || "Cliente")}</span>
-            <span>${escapeHtml(statusText)}</span>
-          </strong>
-          <small>${detailParts.map((part) => escapeHtml(part)).join(" · ")}</small>
-          ${consultParts.length ? `<small>${consultParts.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
-          <small>${escapeHtml(request.cliente_email || "")}${request.cliente_whatsapp ? ` · ${escapeHtml(request.cliente_whatsapp)}` : ""}</small>
-          <div class="request-actions">
-            <button class="primary" type="button" data-use-request="${escapeHtml(request.id)}">Usar na proposta</button>
-            <button class="secondary" type="button" data-mark-request="${escapeHtml(request.id)}">Marcar analisada</button>
+        <section class="pipeline-column">
+          <div class="pipeline-column-heading">
+            <span>${escapeHtml(stage.title)}</span>
+            <strong>${stageItems.length}</strong>
           </div>
-        </div>
+          <p>${escapeHtml(stage.description)}</p>
+          <div class="pipeline-column-list">
+            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
+          </div>
+        </section>
       `;
     })
     .join("");
 }
 
-function getRequestStatusLabel(status) {
-  const labels = {
-    novo: "Novo",
-    em_cotacao: "Em cotação",
-    analisado: "Analisado",
-    proposta_gerada: "Proposta gerada",
-  };
-  return labels[status] || status || "Novo";
+function renderQuoteRequests() {
+  renderPipeline();
 }
 
 async function loadQuoteRequests() {
@@ -1521,7 +1692,9 @@ async function loadQuoteRequests() {
 
   if (error) {
     console.warn("Falha ao carregar solicitacoes.", error);
-    nodes.quoteRequestList.innerHTML = `<p>Não foi possível carregar solicitações. Rode o schema atualizado no Supabase.</p>`;
+    if (nodes.pipelineBoard) {
+      nodes.pipelineBoard.innerHTML = `<p>Não foi possível carregar solicitações. Rode o schema atualizado no Supabase.</p>`;
+    }
     return;
   }
 
@@ -1531,15 +1704,22 @@ async function loadQuoteRequests() {
 
 function buildNotesFromRequest(request) {
   const eventSnapshot = request.snapshot?.evento || {};
+  const qualification = request.snapshot?.qualificacao || {};
   const lines = [];
   if (request.snapshot?.referencia) lines.push(`Referência do formulário: ${request.snapshot.referencia}`);
   if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
+  if (qualification.tipoCliente) lines.push(`Tipo de cliente: ${qualification.tipoCliente}`);
+  if (qualification.faixaInvestimento) lines.push(`Faixa de investimento: ${qualification.faixaInvestimento}`);
+  if (qualification.origem) lines.push(`Origem: ${qualification.origem}`);
   if (eventSnapshot.momento) lines.push(`Momento informado: ${eventSnapshot.momento}`);
-  if (eventSnapshot.perfil) lines.push(`Perfil do evento: ${eventSnapshot.perfil}`);
+  if (eventSnapshot.ocasiao || eventSnapshot.perfil) lines.push(`Ocasião: ${eventSnapshot.ocasiao || eventSnapshot.perfil}`);
   if (request.tipo_evento) lines.push(`Formato escolhido: ${request.tipo_evento}`);
   if (eventSnapshot.dataFlexivel) lines.push(`Janela de data flexível: ${eventSnapshot.dataFlexivel}`);
+  if (eventSnapshot.dataFlexivelStatus) lines.push(`Data é flexível: ${eventSnapshot.dataFlexivelStatus}`);
   if (eventSnapshot.faixaHorario) lines.push(`Faixa de horário: ${eventSnapshot.faixaHorario}`);
   if (eventSnapshot.horario) lines.push(`Horário aproximado: ${eventSnapshot.horario}`);
+  if (eventSnapshot.horarioFlexivel) lines.push(`Horário é flexível: ${eventSnapshot.horarioFlexivel}`);
+  if (eventSnapshot.extras) lines.push(`Extras: ${eventSnapshot.extras}`);
   if (request.preferencias) lines.push(`Preferências de A&B: ${request.preferencias}`);
   if (request.observacoes) lines.push(`Briefing do cliente: ${request.observacoes}`);
   lines.push(`Solicitação recebida via formulário em ${formatSavedAt(request.created_at)}.`);
@@ -1563,13 +1743,13 @@ async function applyQuoteRequest(requestId) {
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
 
-  await updateQuoteRequest(request.id, { status: "em_cotacao" }, false);
+  await updateQuoteRequest(request.id, { status: "qualificado" }, false);
   renderAll();
   showToast("Solicitação carregada para revisão.");
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
-  await updateQuoteRequest(requestId, { status: "analisado" });
+  await updateQuoteRequest(requestId, { status: "qualificado" });
 }
 
 async function updateQuoteRequest(requestId, changes, shouldToast = true) {
@@ -1588,8 +1768,59 @@ async function updateQuoteRequest(requestId, changes, shouldToast = true) {
   }
 
   state.quoteRequests = state.quoteRequests.map((item) => (item.id === requestId ? data : item));
-  renderQuoteRequests();
+  renderPipeline();
   if (shouldToast) showToast("Solicitação atualizada.");
+}
+
+function canMoveProposalStatus(currentStatus, nextStatus) {
+  const current = normalizeProposalStatus(currentStatus);
+  const next = normalizeProposalStatus(nextStatus);
+  if (current === next) return { ok: true };
+  if (next === "confirmado") return { ok: true };
+  if (next === "planejamento" && !operationStatuses.has(current)) {
+    return { ok: false, message: "Sem sinal pago, o evento não pode entrar em planejamento." };
+  }
+  if (next === "pronto" && !["confirmado", "planejamento", "pronto"].includes(current)) {
+    return { ok: false, message: "Só eventos confirmados podem ficar prontos para execução." };
+  }
+  if (next === "realizado" && current !== "pronto") {
+    return { ok: false, message: "Evento realizado só pode vir de pronto para execução." };
+  }
+  if (next === "pos_venda" && current !== "realizado") {
+    return { ok: false, message: "Pós-venda só pode vir depois de evento realizado." };
+  }
+  return { ok: true };
+}
+
+async function updateProposalStatus(proposalId, nextStatus) {
+  if (!state.supabase || !state.session) return;
+  const proposal = state.proposals.find((item) => item.id === proposalId);
+  if (!proposal) return;
+  const validation = canMoveProposalStatus(proposal.status, nextStatus);
+  if (!validation.ok) {
+    showToast(validation.message);
+    renderPipeline();
+    return;
+  }
+
+  const { data, error } = await state.supabase
+    .from("propostas")
+    .update({ status: nextStatus })
+    .eq("id", proposalId)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.warn("Falha ao atualizar status da proposta.", error);
+    showToast("Não foi possível mudar a etapa.");
+    renderPipeline();
+    return;
+  }
+
+  upsertProposalState(data);
+  renderHistory();
+  renderPipeline();
+  showToast(nextStatus === "confirmado" ? "Sinal pago: evento confirmado." : "Etapa atualizada.");
 }
 
 async function initSupabase() {
@@ -1803,7 +2034,7 @@ async function saveCurrentProposal(status) {
 
   const snapshot = getProposalSnapshot();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
-  const nextStatus = status || activeProposal?.status || "rascunho";
+  const nextStatus = status || activeProposal?.status || "proposta_enviada";
   const row = getProposalRow(snapshot, nextStatus);
   const query = state.activeProposalId
     ? state.supabase.from("propostas").update(row).eq("id", state.activeProposalId)
@@ -1821,13 +2052,13 @@ async function saveCurrentProposal(status) {
   if (state.activeQuoteRequestId) {
     await updateQuoteRequest(
       state.activeQuoteRequestId,
-      { status: "proposta_gerada", proposta_id: data.id },
+      { status: "proposta_enviada", proposta_id: data.id },
       false,
     );
   }
   renderHistory();
-  renderConfirmedEvents();
-  showToast(nextStatus === "confirmado" ? "Evento marcado como sinal pago." : "Proposta salva no historico.");
+  renderPipeline();
+  showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
 
@@ -1838,7 +2069,7 @@ async function confirmCurrentEvent() {
 async function loadProposalHistory() {
   if (!state.supabase || !state.session) {
     renderHistory();
-    renderConfirmedEvents();
+    renderPipeline();
     return;
   }
 
@@ -1856,7 +2087,7 @@ async function loadProposalHistory() {
 
   state.proposals = data || [];
   renderHistory();
-  renderConfirmedEvents();
+  renderPipeline();
 }
 
 function applyProposalSnapshot(snapshot) {
@@ -1874,6 +2105,8 @@ function applyProposalSnapshot(snapshot) {
   fields.guestCount.value = snapshot.event?.guests || 30;
   fields.eventDuration.value = String(snapshot.event?.duration || 2);
   fields.validity.value = snapshot.event?.validity || "7 dias";
+  fields.manualAdjustment.value = snapshot.event?.manualAdjustment || snapshot.totals?.adjustment || "";
+  fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
@@ -1930,6 +2163,9 @@ function renderProposal() {
   const reason = fields.eventReason.value.trim();
   const terms = fields.generalTerms.value.trim();
   const totals = getQuoteTotals();
+  const includedSummary = selected.length
+    ? selected.map((item) => item.nome).join(", ")
+    : "Itens a definir pela equipe.";
 
   nodes.proposalContent.innerHTML = `
     <section class="proposal-page proposal-page-main">
@@ -1965,11 +2201,15 @@ function renderProposal() {
         <h3>Resumo do evento</h3>
       </div>
       <div class="proposal-grid">
-        <div><span>Tipo</span>${escapeHtml(fields.eventType.value.trim() || "Evento")}</div>
+        <div><span>Formato</span>${escapeHtml(fields.eventType.value.trim() || "Evento")}</div>
         <div><span>Duração</span>${getDuration()}h</div>
         <div><span>Validade</span>${escapeHtml(fields.validity.value.trim() || "7 dias")}</div>
         <div><span>Emissão</span>${escapeHtml(getTodayLabel())}</div>
         <div class="proposal-grid-wide"><span>Motivo</span>${escapeHtml(reason || "A definir")}</div>
+      </div>
+      <div class="proposal-note">
+        <span>Experiência proposta</span>
+        ${escapeHtml(fields.eventType.value.trim() || "Evento")} para ${getGuestCount()} pessoa(s), com duração estimada de ${getDuration()}h. Inclui: ${escapeHtml(includedSummary)}.
       </div>
 
       ${
@@ -2025,6 +2265,7 @@ function renderProposal() {
         <div><span>Subtotal</span><strong>${formatMoney(totals.subtotal)}</strong></div>
         <div><span>Taxa de serviço 12%</span><strong>${formatMoney(totals.serviceFee)}</strong></div>
         <div><span>Privatização</span><strong>${formatMoney(totals.privatization.amount)}</strong></div>
+        ${totals.adjustment ? `<div><span>${escapeHtml(totals.adjustmentLabel)}</span><strong>${formatMoney(totals.adjustment)}</strong></div>` : ""}
         <div><span>Total estimado</span><strong>${formatMoney(totals.total)}</strong></div>
       </div>
 
@@ -2277,20 +2518,27 @@ function bindEvents() {
   document.querySelector("#recoverMagicLinkBtn").addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);
-  document.querySelector("#refreshConfirmedBtn").addEventListener("click", loadProposalHistory);
-  document.querySelector("#refreshRequestsBtn").addEventListener("click", loadQuoteRequests);
+  document.querySelector("#refreshPipelineBtn").addEventListener("click", async () => {
+    await loadProposalHistory();
+    await loadQuoteRequests();
+  });
   document.querySelector("#copyClientFormLinkBtn").addEventListener("click", copyClientFormLink);
   nodes.historyList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (!button) return;
     openSavedProposal(button.dataset.proposalId);
   });
-  nodes.confirmedEventsList.addEventListener("click", (event) => {
+  nodes.pipelineBoard.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
-    if (!button) return;
-    openSavedProposal(button.dataset.proposalId);
-  });
-  nodes.quoteRequestList.addEventListener("click", (event) => {
+    if (button) {
+      openSavedProposal(button.dataset.proposalId);
+      return;
+    }
+    const paidButton = event.target.closest("button[data-mark-paid]");
+    if (paidButton) {
+      updateProposalStatus(paidButton.dataset.markPaid, "confirmado");
+      return;
+    }
     const useButton = event.target.closest("button[data-use-request]");
     if (useButton) {
       applyQuoteRequest(useButton.dataset.useRequest);
@@ -2298,6 +2546,13 @@ function bindEvents() {
     }
     const markButton = event.target.closest("button[data-mark-request]");
     if (markButton) markQuoteRequestAnalyzed(markButton.dataset.markRequest);
+  });
+  nodes.pipelineBoard.addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-pipeline-status-id]");
+    if (!select) return;
+    const { pipelineStatusKind, pipelineStatusId } = select.dataset;
+    if (pipelineStatusKind === "proposal") updateProposalStatus(pipelineStatusId, select.value);
+    if (pipelineStatusKind === "request") updateQuoteRequest(pipelineStatusId, { status: select.value });
   });
 }
 

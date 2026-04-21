@@ -51,6 +51,9 @@ create index if not exists propostas_data_evento_idx
   on public.propostas (data_evento)
   where data_evento is not null;
 
+create index if not exists propostas_status_updated_at_idx
+  on public.propostas (status, updated_at desc);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql

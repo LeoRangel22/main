@@ -17,13 +17,18 @@ const fields = {
   email: document.querySelector("#requestClientEmail"),
   phone: document.querySelector("#requestClientPhone"),
   company: document.querySelector("#requestCompany"),
+  clientType: document.querySelector("#requestClientType"),
+  budgetRange: document.querySelector("#requestBudgetRange"),
+  leadSource: document.querySelector("#requestLeadSource"),
   moment: document.querySelector("#requestMoment"),
   profile: document.querySelector("#requestProfile"),
   eventType: document.querySelector("#requestEventType"),
   date: document.querySelector("#requestEventDate"),
   dateFlex: document.querySelector("#requestDateFlex"),
+  dateIsFlexible: document.querySelector("#requestDateIsFlexible"),
   timeRange: document.querySelector("#requestTimeRange"),
   time: document.querySelector("#requestEventTime"),
+  timeIsFlexible: document.querySelector("#requestTimeIsFlexible"),
   guests: document.querySelector("#requestGuestCount"),
   guestOutput: document.querySelector("#requestGuestOutput"),
   duration: document.querySelector("#requestDuration"),
@@ -33,6 +38,7 @@ const fields = {
 };
 
 const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")];
+const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
 const stepOrder = ["moment", "profile", "recommendation", "eventDetails", "briefing", "contact"];
 
@@ -59,8 +65,37 @@ const profileLabels = {
   birthday: "Aniversário / celebração",
   relationship: "Lançamento / relacionamento com clientes",
   experience: "Experiência gastronômica",
-  travel: "Agência / grupo turístico",
+  travel: "Grupo turístico / receptivo",
   suggestion: "Me ajudem a definir",
+};
+
+const clientTypeLabels = {
+  agency: "Agência",
+  company: "Empresa",
+  person: "Pessoa física",
+};
+
+const budgetRangeLabels = {
+  "up-to-15": "Até R$ 15 mil",
+  "15-30": "R$ 15 mil a R$ 30 mil",
+  "30-60": "R$ 30 mil a R$ 60 mil",
+  "above-60": "Acima de R$ 60 mil",
+  undefined: "Ainda não definido",
+};
+
+const leadSourceLabels = {
+  indication: "Indicação",
+  "google-social": "Google / Instagram",
+  "agency-partner": "Agência / parceiro",
+  "already-know": "Já conheço o restaurante",
+  bondinho: "Parque Bondinho",
+  other: "Outro",
+};
+
+const flexibilityLabels = {
+  yes: "Sim",
+  no: "Não",
+  maybe: "Ainda avaliando",
 };
 
 const timeRangeLabels = {
@@ -291,10 +326,19 @@ function getSelectedProfileLabels() {
   return [...selectedProfiles].map((profile) => profileLabels[profile]).filter(Boolean);
 }
 
+function getSelectedPreferenceLabels() {
+  return preferenceChips.filter((chip) => chip.checked).map((chip) => chip.value);
+}
+
+function getSelectedExtraLabels() {
+  return extraChips.filter((chip) => chip.checked).map((chip) => chip.value);
+}
+
 function getRecommendedFormatIds() {
   const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
   const profiles = fields.profile.value.split(",").filter(Boolean);
   if (fields.moment.value === "weekday-lunch") return base;
+  if (fields.clientType.value === "agency") return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
   if (profiles.includes("travel")) return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
   if (profiles.includes("corporate")) return prioritize(base, ["coffee", "breakfast", "workshop"]);
   if (profiles.includes("relationship")) return prioritize(base, ["welcome", "cocktail", "workshop"]);
@@ -389,7 +433,9 @@ function handleFormatClick(event) {
 function getSnapshot(referenceCode) {
   const selectedTime = fields.time.value || "";
   const selectedPreferences = getSelectedPreferenceLabels();
+  const selectedExtras = getSelectedExtraLabels();
   const preferenceText = fields.preferences.value.trim();
+  const selectedOccasions = getSelectedProfileLabels().join(", ");
   return {
     referencia: referenceCode,
     cliente: {
@@ -397,22 +443,32 @@ function getSnapshot(referenceCode) {
       email: fields.email.value.trim(),
       whatsapp: fields.phone.value.trim(),
       empresa: fields.company.value.trim(),
+      tipoCliente: clientTypeLabels[fields.clientType.value] || "",
     },
     evento: {
       momento: momentLabels[fields.moment.value] || "",
-      perfil: getSelectedProfileLabels().join(", "),
+      ocasiao: selectedOccasions,
+      perfil: selectedOccasions,
       tipo: fields.eventType.value,
       data: fields.date.value,
       dataFlexivel: fields.dateFlex.value.trim(),
+      dataFlexivelStatus: flexibilityLabels[fields.dateIsFlexible.value] || "",
       faixaHorario: timeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
+      horarioFlexivel: flexibilityLabels[fields.timeIsFlexible.value] || "",
       convidados: Math.max(1, Math.floor(toNumber(fields.guests.value) || 1)),
       duracao: toNumber(fields.duration.value),
       motivo: fields.reason.value.trim(),
       preferencias: [selectedPreferences.length ? `Preferências marcadas: ${selectedPreferences.join(", ")}` : "", preferenceText]
         .filter(Boolean)
         .join("\n"),
+      extras: selectedExtras.join(", "),
       observacoes: fields.notes.value.trim(),
+    },
+    qualificacao: {
+      tipoCliente: clientTypeLabels[fields.clientType.value] || "",
+      origem: leadSourceLabels[fields.leadSource.value] || "",
+      faixaInvestimento: budgetRangeLabels[fields.budgetRange.value] || "",
     },
     origem: "formulario",
     enviadoEm: new Date().toISOString(),
@@ -433,7 +489,20 @@ function getPayload(snapshot) {
     duracao: snapshot.evento.duracao,
     motivo_evento: snapshot.evento.motivo || null,
     preferencias: snapshot.evento.preferencias || null,
-    observacoes: snapshot.evento.observacoes || null,
+    observacoes:
+      [
+        snapshot.evento.extras ? `Extras: ${snapshot.evento.extras}` : "",
+        snapshot.qualificacao?.tipoCliente ? `Tipo de cliente: ${snapshot.qualificacao.tipoCliente}` : "",
+        snapshot.qualificacao?.origem ? `Origem: ${snapshot.qualificacao.origem}` : "",
+        snapshot.qualificacao?.faixaInvestimento
+          ? `Faixa de investimento: ${snapshot.qualificacao.faixaInvestimento}`
+          : "",
+        snapshot.evento.dataFlexivelStatus ? `Data flexível: ${snapshot.evento.dataFlexivelStatus}` : "",
+        snapshot.evento.horarioFlexivel ? `Horário flexível: ${snapshot.evento.horarioFlexivel}` : "",
+        snapshot.evento.observacoes || "",
+      ]
+        .filter(Boolean)
+        .join("\n") || null,
     origem: "formulario",
     proposta_id: null,
     snapshot,
@@ -444,9 +513,12 @@ function validateSnapshot(snapshot) {
   clearAllStepValidity();
   const required = [
     [fields.moment, Boolean(snapshot.evento.momento), "moment"],
+    [fields.clientType, Boolean(snapshot.cliente.tipoCliente), "profile"],
     [fields.profile, Boolean(snapshot.evento.perfil), "profile"],
     [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
     [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
+    [fields.budgetRange, Boolean(snapshot.qualificacao.faixaInvestimento), "contact"],
+    [fields.leadSource, Boolean(snapshot.qualificacao.origem), "contact"],
     [fields.name, Boolean(snapshot.cliente.nome), "contact"],
     [fields.email, Boolean(snapshot.cliente.email), "contact"],
     [fields.phone, Boolean(snapshot.cliente.whatsapp), "contact"],
@@ -458,7 +530,7 @@ function validateSnapshot(snapshot) {
 
   const firstInvalid = required.find(([, valid]) => !valid);
   if (firstInvalid) {
-    setStatus("Falta só escolher momento, perfil, experiência, período e contato para seguirmos.", "error");
+    setStatus("Falta só escolher momento, qualificação, formato, período e contato para seguirmos.", "error");
     scrollToStep(firstInvalid[2], true);
     return false;
   }
@@ -512,6 +584,7 @@ async function submitRequest(event) {
 
   form.reset();
   fields.moment.value = "";
+  fields.clientType.value = "";
   fields.profile.value = "";
   fields.eventType.value = "";
   selectedProfiles.clear();
@@ -545,5 +618,6 @@ fields.email.addEventListener("blur", () => {
   setStepValidity("contact", true);
 });
 preferenceChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
+extraChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
 updateProgress();
 form.addEventListener("submit", submitRequest);
