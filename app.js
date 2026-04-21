@@ -446,6 +446,7 @@ const state = {
   session: null,
   proposals: [],
   quoteRequests: [],
+  activeProposalId: "",
   activeQuoteRequestId: "",
   guided: {
     event: "",
@@ -509,6 +510,7 @@ const nodes = {
   supabaseStatus: document.querySelector("#supabaseStatus"),
   authStatus: document.querySelector("#authStatus"),
   historyList: document.querySelector("#historyList"),
+  confirmedEventsList: document.querySelector("#confirmedEventsList"),
   quoteRequestList: document.querySelector("#quoteRequestList"),
   clientFormLink: document.querySelector("#clientFormLink"),
 };
@@ -1291,7 +1293,7 @@ function getProposalSnapshot() {
   };
 }
 
-function getProposalRow(snapshot) {
+function getProposalRow(snapshot, status = "rascunho") {
   const user = state.session?.user;
   return {
     responsavel_id: user?.id || null,
@@ -1308,7 +1310,7 @@ function getProposalRow(snapshot) {
     taxa_servico: snapshot.totals.serviceFee,
     privatizacao: snapshot.totals.privatizationAmount,
     total: snapshot.totals.total,
-    status: "rascunho",
+    status,
     solicitacao_id: state.activeQuoteRequestId || null,
     snapshot,
   };
@@ -1376,6 +1378,8 @@ function renderHistory() {
     .map((proposal) => {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
       const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
+      const statusLabel = getProposalStatusLabel(proposal.status);
+      const statusClass = proposal.status === "confirmado" ? " confirmed" : "";
       return `
         <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
           <strong>
@@ -1383,7 +1387,52 @@ function renderHistory() {
             <span>${formatMoney(proposal.total)}</span>
           </strong>
           <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</small>
-          <small>Salva em ${escapeHtml(formatSavedAt(proposal.created_at))}</small>
+          <small><span class="status-chip${statusClass}">${escapeHtml(statusLabel)}</span>Salva em ${escapeHtml(formatSavedAt(proposal.created_at))}</small>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function getProposalStatusLabel(status) {
+  const labels = {
+    rascunho: "Rascunho",
+    confirmado: "Sinal pago",
+  };
+  return labels[status] || status || "Rascunho";
+}
+
+function renderConfirmedEvents() {
+  if (!nodes.confirmedEventsList) return;
+
+  if (!state.supabase) {
+    nodes.confirmedEventsList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
+    return;
+  }
+
+  if (!state.session) {
+    nodes.confirmedEventsList.innerHTML = `<p>Entre com o e-mail da equipe para carregar eventos confirmados.</p>`;
+    return;
+  }
+
+  const confirmed = state.proposals.filter((proposal) => proposal.status === "confirmado");
+  if (!confirmed.length) {
+    nodes.confirmedEventsList.innerHTML = `<p>Nenhum evento confirmado ainda.</p>`;
+    return;
+  }
+
+  nodes.confirmedEventsList.innerHTML = confirmed
+    .map((proposal) => {
+      const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
+      const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
+      return `
+        <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
+          <strong>
+            <span>${escapeHtml(proposal.cliente_nome || "Cliente")}</span>
+            <span>${formatMoney(proposal.total)}</span>
+          </strong>
+          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</small>
+          <small><span class="status-chip confirmed">Sinal pago</span>Confirmado em ${escapeHtml(formatSavedAt(proposal.updated_at || proposal.created_at))}</small>
         </button>
       `;
     })
@@ -1420,6 +1469,8 @@ function renderQuoteRequests() {
       const timeLabel = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "Horário a definir";
       const statusLabel = getRequestStatusLabel(request.status);
       const eventSnapshot = request.snapshot?.evento || {};
+      const referenceCode = request.snapshot?.referencia || "";
+      const statusText = [referenceCode, statusLabel].filter(Boolean).join(" · ");
       const detailParts = [
         request.tipo_evento || "Evento",
         dateLabel,
@@ -1431,7 +1482,7 @@ function renderQuoteRequests() {
         <div class="request-item">
           <strong>
             <span>${escapeHtml(request.cliente_nome || "Cliente")}</span>
-            <span>${escapeHtml(statusLabel)}</span>
+            <span>${escapeHtml(statusText)}</span>
           </strong>
           <small>${detailParts.map((part) => escapeHtml(part)).join(" · ")}</small>
           ${consultParts.length ? `<small>${consultParts.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
@@ -1481,6 +1532,7 @@ async function loadQuoteRequests() {
 function buildNotesFromRequest(request) {
   const eventSnapshot = request.snapshot?.evento || {};
   const lines = [];
+  if (request.snapshot?.referencia) lines.push(`Referência do formulário: ${request.snapshot.referencia}`);
   if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
   if (eventSnapshot.momento) lines.push(`Momento informado: ${eventSnapshot.momento}`);
   if (eventSnapshot.perfil) lines.push(`Perfil do evento: ${eventSnapshot.perfil}`);
@@ -1498,6 +1550,7 @@ async function applyQuoteRequest(requestId) {
   if (!request) return;
 
   state.activeQuoteRequestId = request.id;
+  state.activeProposalId = "";
   fields.clientName.value = request.cliente_nome || "";
   fields.clientEmail.value = request.cliente_email || "";
   fields.clientPhone.value = request.cliente_whatsapp || "";
@@ -1547,6 +1600,7 @@ async function initSupabase() {
     renderSupabaseStatus("Supabase ainda nao configurado.");
     updateAuthUI();
     renderHistory();
+    renderConfirmedEvents();
     renderQuoteRequests();
     return;
   }
@@ -1555,6 +1609,7 @@ async function initSupabase() {
     renderSupabaseStatus("Biblioteca do Supabase nao carregou. Verifique a internet deste navegador.");
     updateAuthUI();
     renderHistory();
+    renderConfirmedEvents();
     renderQuoteRequests();
     return;
   }
@@ -1583,6 +1638,7 @@ async function initSupabase() {
         state.proposals = [];
         state.quoteRequests = [];
         renderHistory();
+        renderConfirmedEvents();
         renderQuoteRequests();
       }
     });
@@ -1595,6 +1651,7 @@ async function initSupabase() {
         showToast("E-mail sem acesso ao app da equipe.");
         updateAuthUI();
         renderHistory();
+        renderConfirmedEvents();
         renderQuoteRequests();
       } else {
         await loadProposalHistory();
@@ -1602,6 +1659,7 @@ async function initSupabase() {
       }
     } else {
       renderHistory();
+      renderConfirmedEvents();
       renderQuoteRequests();
     }
   } catch (error) {
@@ -1611,6 +1669,7 @@ async function initSupabase() {
     renderSupabaseStatus("Nao foi possivel conectar. Confira URL e anon key.");
     updateAuthUI();
     renderHistory();
+    renderConfirmedEvents();
     renderQuoteRequests();
   }
 }
@@ -1713,37 +1772,51 @@ async function logoutSupabase() {
   state.session = null;
   state.proposals = [];
   state.quoteRequests = [];
+  state.activeProposalId = "";
   updateAuthUI();
   renderHistory();
+  renderConfirmedEvents();
   renderQuoteRequests();
 }
 
-async function saveCurrentProposal() {
+function upsertProposalState(proposal) {
+  const existingIndex = state.proposals.findIndex((item) => item.id === proposal.id);
+  if (existingIndex >= 0) {
+    state.proposals = state.proposals.map((item) => (item.id === proposal.id ? proposal : item));
+  } else {
+    state.proposals = [proposal, ...state.proposals];
+  }
+  state.proposals = state.proposals.slice(0, 60);
+}
+
+async function saveCurrentProposal(status) {
   if (!state.supabase) {
     showToast("Conecte o Supabase para salvar no historico.");
-    return;
+    return null;
   }
 
   if (!state.session) {
     showToast("Entre com o e-mail da equipe antes de salvar.");
-    return;
+    return null;
   }
 
   const snapshot = getProposalSnapshot();
-  const row = getProposalRow(snapshot);
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .insert(row)
-    .select("*")
-    .single();
+  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const nextStatus = status || activeProposal?.status || "rascunho";
+  const row = getProposalRow(snapshot, nextStatus);
+  const query = state.activeProposalId
+    ? state.supabase.from("propostas").update(row).eq("id", state.activeProposalId)
+    : state.supabase.from("propostas").insert(row);
+  const { data, error } = await query.select("*").single();
 
   if (error) {
     console.warn("Falha ao salvar proposta.", error);
     showToast("Nao foi possivel salvar. Confira o schema no Supabase.");
-    return;
+    return null;
   }
 
-  state.proposals = [data, ...state.proposals].slice(0, 20);
+  state.activeProposalId = data.id;
+  upsertProposalState(data);
   if (state.activeQuoteRequestId) {
     await updateQuoteRequest(
       state.activeQuoteRequestId,
@@ -1752,12 +1825,19 @@ async function saveCurrentProposal() {
     );
   }
   renderHistory();
-  showToast("Proposta salva no historico.");
+  renderConfirmedEvents();
+  showToast(nextStatus === "confirmado" ? "Evento marcado como sinal pago." : "Proposta salva no historico.");
+  return data;
+}
+
+async function confirmCurrentEvent() {
+  await saveCurrentProposal("confirmado");
 }
 
 async function loadProposalHistory() {
   if (!state.supabase || !state.session) {
     renderHistory();
+    renderConfirmedEvents();
     return;
   }
 
@@ -1765,7 +1845,7 @@ async function loadProposalHistory() {
     .from("propostas")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(60);
 
   if (error) {
     console.warn("Falha ao carregar historico.", error);
@@ -1775,6 +1855,7 @@ async function loadProposalHistory() {
 
   state.proposals = data || [];
   renderHistory();
+  renderConfirmedEvents();
 }
 
 function applyProposalSnapshot(snapshot) {
@@ -1821,6 +1902,8 @@ function applyProposalSnapshot(snapshot) {
 function openSavedProposal(proposalId) {
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
+  state.activeProposalId = proposal.id;
+  state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
   applyProposalSnapshot(proposal.snapshot);
 }
 
@@ -2175,7 +2258,8 @@ function bindEvents() {
 
   document.querySelector("#printBtn").addEventListener("click", () => window.print());
   document.querySelector("#emailBtn").addEventListener("click", openEmail);
-  document.querySelector("#saveProposalBtn").addEventListener("click", saveCurrentProposal);
+  document.querySelector("#saveProposalBtn").addEventListener("click", () => saveCurrentProposal());
+  document.querySelector("#confirmEventBtn").addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn").addEventListener("click", copyProposal);
   document.querySelector("#whatsappBtn").addEventListener("click", openWhatsApp);
   document.querySelector("#resetPricesBtn").addEventListener("click", resetPrices);
@@ -2192,9 +2276,15 @@ function bindEvents() {
   document.querySelector("#recoverMagicLinkBtn").addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);
+  document.querySelector("#refreshConfirmedBtn").addEventListener("click", loadProposalHistory);
   document.querySelector("#refreshRequestsBtn").addEventListener("click", loadQuoteRequests);
   document.querySelector("#copyClientFormLinkBtn").addEventListener("click", copyClientFormLink);
   nodes.historyList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-proposal-id]");
+    if (!button) return;
+    openSavedProposal(button.dataset.proposalId);
+  });
+  nodes.confirmedEventsList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (!button) return;
     openSavedProposal(button.dataset.proposalId);

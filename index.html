@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-lunch" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-confirmados" />
   </head>
   <body class="auth-locked">
     <main class="app-shell">
@@ -100,6 +100,16 @@
             </div>
             <div class="request-list" id="quoteRequestList">
               <p>Entre com Supabase para ver os formulários recebidos.</p>
+            </div>
+          </div>
+          <div class="confirmed-events-panel">
+            <div class="history-heading">
+              <span>Eventos confirmados</span>
+              <button class="secondary" id="refreshConfirmedBtn" type="button">Atualizar</button>
+            </div>
+            <p>Propostas com sinal pago ficam aqui para acompanhamento da equipe.</p>
+            <div class="confirmed-events-list" id="confirmedEventsList">
+              <p>Entre com Supabase para ver eventos confirmados.</p>
             </div>
           </div>
         </section>
@@ -350,6 +360,7 @@
             <div class="send-actions">
               <button class="primary" id="emailBtn" type="button">Enviar por e-mail</button>
               <button class="secondary" id="saveProposalBtn" type="button">Salvar no historico</button>
+              <button class="secondary" id="confirmEventBtn" type="button">Marcar sinal pago</button>
               <button class="secondary" id="copyBtn" type="button">Copiar proposta</button>
               <button class="secondary" id="whatsappBtn" type="button">Abrir WhatsApp</button>
             </div>
@@ -473,6 +484,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-lunch"></script>
+    <script src="./app.js?v=20260421-confirmados"></script>
   </body>
 </html>

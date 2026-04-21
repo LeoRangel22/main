@@ -111,6 +111,7 @@ button:hover {
 .auth-locked .team-context,
 .auth-locked .request-panel,
 .auth-locked .request-inbox,
+.auth-locked .confirmed-events-panel,
 .auth-locked .quote-layout,
 .auth-locked .prices-editor,
 .auth-locked .proposal-paper {
@@ -329,7 +330,8 @@ textarea[aria-invalid="true"] {
 }
 
 .request-panel,
-.request-inbox {
+.request-inbox,
+.confirmed-events-panel {
   background: rgba(255, 255, 255, 0.46);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -363,7 +365,15 @@ textarea[aria-invalid="true"] {
   overflow: auto;
 }
 
-.request-list p {
+.confirmed-events-panel > p {
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.35;
+  margin: -4px 0 12px;
+}
+
+.request-list p,
+.confirmed-events-list p {
   color: var(--muted);
   font-weight: 700;
   margin: 0;
@@ -867,6 +877,13 @@ textarea {
   overflow: auto;
 }
 
+.confirmed-events-list {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow: auto;
+}
+
 .history-list p {
   color: var(--muted);
   font-weight: 700;
@@ -900,6 +917,24 @@ textarea {
   color: var(--muted);
   font-weight: 700;
   line-height: 1.3;
+}
+
+.status-chip {
+  align-items: center;
+  background: var(--surface);
+  border-radius: 999px;
+  color: var(--verde);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin-right: 6px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.status-chip.confirmed {
+  background: rgba(24, 58, 45, 0.1);
+  color: var(--verde-escuro);
 }
 
 .prices-editor {
@@ -1616,13 +1651,33 @@ td:nth-child(9) {
 
 .public-form-actions p {
   color: var(--muted);
+  display: grid;
+  gap: 4px;
   font-weight: 800;
   line-height: 1.35;
   margin: 0;
 }
 
 .public-form-actions p[data-status="success"] {
+  background: rgba(24, 58, 45, 0.08);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
   color: var(--verde);
+  padding: 12px 14px;
+}
+
+.public-form-actions p[data-status="success"] strong {
+  color: var(--verde-escuro);
+  font-size: 1rem;
+}
+
+.public-form-actions p[data-status="success"] b {
+  color: var(--verde-escuro);
+}
+
+.public-form-actions p a {
+  color: var(--verde-escuro);
+  font-weight: 900;
 }
 
 .public-form-actions p[data-status="error"] {
