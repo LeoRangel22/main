@@ -1,14 +1,14 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v1" />
+    <title>OrÃ§amentos de Eventos | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v2" />
   </head>
-  <body class="auth-locked">
+  <body class="auth-locked" data-page="app">
     <main class="app-shell">
-      <section class="workspace" aria-label="Gerador de orçamento">
+      <section class="workspace" aria-label="Gerador de orÃ§amento">
         <header class="topbar">
           <div class="brand-lockup">
             <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
@@ -18,8 +18,8 @@
             </div>
           </div>
           <div class="topbar-actions">
-            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário do cliente</a>
-            <button class="secondary" id="resetPricesBtn" type="button">Restaurar preços</button>
+            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">FormulÃ¡rio do cliente</a>
+            <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
             <button class="primary" id="printBtn" type="button">Criar PDF</button>
           </div>
         </header>
@@ -31,7 +31,7 @@
           </div>
           <div class="team-access">
             <div class="team-auth team-primary">
-              <p>Acesso exclusivo da equipe Embaixada Carioca. Entre com um e-mail autorizado para liberar orçamentos, preços, propostas e histórico.</p>
+              <p>Acesso exclusivo da equipe Embaixada Carioca. Entre com um e-mail autorizado para liberar orÃ§amentos, preÃ§os, propostas e histÃ³rico.</p>
               <div class="team-email-presets" aria-label="E-mails autorizados">
                 <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
                 <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
@@ -61,16 +61,16 @@
             <div class="team-context">
               <div class="team-ready">
                 <span>Sistema pronto</span>
-                <strong>O app já está conectado ao histórico da equipe.</strong>
-                <p>A conexão técnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
+                <strong>O app jÃ¡ estÃ¡ conectado ao histÃ³rico da equipe.</strong>
+                <p>A conexÃ£o tÃ©cnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
               </div>
               <ul class="team-checklist">
-                <li>Clientes enviam pedidos pelo formulário externo.</li>
+                <li>Clientes enviam pedidos pelo formulÃ¡rio externo.</li>
                 <li>A equipe qualifica, ajusta valores e gera a proposta.</li>
-                <li>Cada evento fica em uma única etapa clara do funil.</li>
+                <li>Cada evento fica em uma Ãºnica etapa clara do funil.</li>
               </ul>
               <details class="team-advanced">
-                <summary>Configuração técnica</summary>
+                <summary>ConfiguraÃ§Ã£o tÃ©cnica</summary>
                 <div class="supabase-config-grid">
                   <label>
                     Supabase URL
@@ -80,20 +80,20 @@
                     Supabase anon key
                     <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
                   </label>
-                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexÃ£o</button>
                 </div>
-                <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+                <div class="team-status" id="supabaseStatus">ConexÃ£o pronta.</div>
               </details>
             </div>
           </div>
           <div class="request-panel">
             <div>
-              <p>Formulário externo para clientes</p>
-              <strong id="clientFormLink">Carregando link do formulário...</strong>
+              <p>FormulÃ¡rio externo para clientes</p>
+              <strong id="clientFormLink">Carregando link do formulÃ¡rio...</strong>
             </div>
             <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
           </div>
-          <div class="owner-metrics" aria-label="Visão de gestão">
+          <div class="owner-metrics" aria-label="VisÃ£o de gestÃ£o">
             <div>
               <span>Leads</span>
               <strong id="metricLeads">0</strong>
@@ -107,7 +107,7 @@
               <strong id="metricConfirmed">0</strong>
             </div>
             <div>
-              <span>Ticket médio</span>
+              <span>Ticket mÃ©dio</span>
               <strong id="metricAverageTicket">R$ 0,00</strong>
             </div>
           </div>
@@ -116,7 +116,7 @@
               <span>Pipeline de eventos</span>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p>Solicitação, negociação, sinal e operação em uma visão simples.</p>
+            <p>SolicitaÃ§Ã£o, negociaÃ§Ã£o, sinal e operaÃ§Ã£o em uma visÃ£o simples.</p>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
@@ -152,7 +152,7 @@
                   <input id="eventDate" type="date" />
                 </label>
                 <label>
-                  Horário
+                  HorÃ¡rio
                   <input id="eventTime" type="time" step="900" value="18:00" />
                 </label>
                 <label>
@@ -160,7 +160,7 @@
                   <input id="guestCount" type="number" min="1" step="1" value="30" />
                 </label>
                 <label>
-                  Duração
+                  DuraÃ§Ã£o
                   <select id="eventDuration">
                     <option value="1">1h</option>
                     <option value="1.5">1h30</option>
@@ -178,7 +178,7 @@
                 <label>
                   Ajuste comercial
                   <input id="manualAdjustment" type="text" inputmode="decimal" placeholder="Ex.: -500 ou 750" />
-                  <small>Use valor negativo para desconto ou positivo para acréscimo.</small>
+                  <small>Use valor negativo para desconto ou positivo para acrÃ©scimo.</small>
                 </label>
                 <label>
                   Motivo do ajuste
@@ -186,15 +186,15 @@
                 </label>
               </div>
               <label>
-                Observações
-                <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
+                ObservaÃ§Ãµes
+                <textarea id="notes" rows="3" placeholder="PreferÃªncias, restriÃ§Ãµes, horÃ¡rios, detalhes de montagem..."></textarea>
               </label>
             </div>
 
             <div class="form-section">
               <div class="section-heading">
                 <span>02</span>
-                <h2>Configuração do evento</h2>
+                <h2>ConfiguraÃ§Ã£o do evento</h2>
               </div>
               <div class="guided-flow">
                 <div class="flow-status" id="flowStatus">
@@ -202,7 +202,7 @@
                 </div>
 
                 <div class="flow-block">
-                  <p>Etapa 3 — Tipo de evento</p>
+                  <p>Etapa 3 â€” Tipo de evento</p>
                   <div class="choice-grid" id="flowEventOptions">
                     <button type="button" data-flow-event="coquetel">
                       <strong>1. Coquetel</strong>
@@ -213,42 +213,42 @@
                       <span>Filtra os workshops para escolher PT ou EN.</span>
                     </button>
                     <button type="button" data-flow-event="cafe">
-                      <strong>3. Café da Manhã / Coffee Break</strong>
-                      <span>Filtra os pacotes de café.</span>
+                      <strong>3. CafÃ© da ManhÃ£ / Coffee Break</strong>
+                      <span>Filtra os pacotes de cafÃ©.</span>
                     </button>
                     <button type="button" data-flow-event="almoco">
-                      <strong>4. Almoço Carioca</strong>
-                      <span>Prioriza início do almoço em dias úteis.</span>
+                      <strong>4. AlmoÃ§o Carioca</strong>
+                      <span>Prioriza inÃ­cio do almoÃ§o em dias Ãºteis.</span>
                     </button>
                     <button type="button" data-flow-event="welcome">
                       <strong>5. Welcome Drink</strong>
-                      <span>Filtra as opções de recepção.</span>
+                      <span>Filtra as opÃ§Ãµes de recepÃ§Ã£o.</span>
                     </button>
                   </div>
                 </div>
 
                 <div class="flow-block is-hidden" id="coquetelChoices">
-                  <p>Etapa 4 — Bebidas</p>
+                  <p>Etapa 4 â€” Bebidas</p>
                   <div class="choice-grid compact" id="flowBeverageOptions">
                     <button type="button" data-select-package="coquetel-caipirinha">
                       <strong>1. Coquetel Caipirinha</strong>
-                      <span>Caipirinhas de limão, refrigerantes e água mineral.</span>
+                      <span>Caipirinhas de limÃ£o, refrigerantes e Ã¡gua mineral.</span>
                     </button>
                     <button type="button" data-select-package="coquetel-carioca">
                       <strong>2. Coquetel Carioca</strong>
-                      <span>Caipirinhas variadas, chope, sucos, refrigerantes e água.</span>
+                      <span>Caipirinhas variadas, chope, sucos, refrigerantes e Ã¡gua.</span>
                     </button>
                   </div>
 
-                  <p>Etapa 5 — Comidas</p>
+                  <p>Etapa 5 â€” Comidas</p>
                   <div class="choice-grid compact" id="flowFoodOptions">
                     <button type="button" data-select-package="brasileiro-i">
                       <strong>1. Brasileiro I</strong>
-                      <span>Pastéis de carne e queijo, aipim frito.</span>
+                      <span>PastÃ©is de carne e queijo, aipim frito.</span>
                     </button>
                     <button type="button" data-select-package="brasileiro-ii">
                       <strong>2. Brasileiro II</strong>
-                      <span>Caldinho, pastéis, aipim, bolinho, barquete e prato quente.</span>
+                      <span>Caldinho, pastÃ©is, aipim, bolinho, barquete e prato quente.</span>
                     </button>
                     <button type="button" data-select-package="none-food">
                       <strong>3. Nenhum</strong>
@@ -266,7 +266,7 @@
             <div class="form-section">
               <div class="section-heading">
                 <span>03</span>
-                <h2>Itens do orçamento</h2>
+                <h2>Itens do orÃ§amento</h2>
               </div>
               <div class="filters">
                 <label>
@@ -286,15 +286,15 @@
             <div class="form-section">
               <div class="section-heading">
                 <span>04</span>
-                <h2>Cálculo e privatização</h2>
+                <h2>CÃ¡lculo e privatizaÃ§Ã£o</h2>
               </div>
               <div class="calculation-flow">
                 <label>
-                  Etapa 10 — Motivo do evento
+                  Etapa 10 â€” Motivo do evento
                   <textarea
                     id="eventReason"
                     rows="3"
-                    placeholder="Confraternização, aniversário, evento corporativo..."
+                    placeholder="ConfraternizaÃ§Ã£o, aniversÃ¡rio, evento corporativo..."
                   ></textarea>
                 </label>
 
@@ -303,53 +303,37 @@
                 <div class="privatization-panel">
                   <div>
                     <p class="flow-kicker">Regra aplicada</p>
-                    <strong id="privatizationTitle">Informe data e horário</strong>
+                    <strong id="privatizationTitle">Informe data e horÃ¡rio</strong>
                     <span id="privatizationDescription">
-                      A regra de privatização será calculada conforme dia, horário, convidados e duração.
+                      A regra de privatizaÃ§Ã£o serÃ¡ calculada conforme dia, horÃ¡rio, convidados e duraÃ§Ã£o.
                     </span>
                   </div>
                   <div class="choice-grid compact is-hidden" id="optionalPrivatizationControls">
                     <button type="button" data-privatization-choice="yes">
                       <strong>Sim</strong>
-                      <span>Incluir exclusividade do espaço.</span>
+                      <span>Incluir exclusividade do espaÃ§o.</span>
                     </button>
                     <button type="button" data-privatization-choice="no">
-                      <strong>Não</strong>
-                      <span>Seguir sem privatização opcional.</span>
+                      <strong>NÃ£o</strong>
+                      <span>Seguir sem privatizaÃ§Ã£o opcional.</span>
                     </button>
                   </div>
                 </div>
 
-                <details class="rules-editor">
-                  <summary>Tabela de privatização por dia</summary>
-                  <div class="privatization-rules-wrap">
-                    <table class="privatization-rules-table">
-                      <thead>
-                        <tr>
-                          <th>Dia</th>
-                          <th>Abertura</th>
-                          <th>Pico início</th>
-                          <th>Pico fim</th>
-                          <th>Fechamento</th>
-                          <th>Pico parcial</th>
-                          <th>Pico total</th>
-                          <th>Fora pico</th>
-                        </tr>
-                      </thead>
-                      <tbody id="privatizationRulesTable"></tbody>
-                    </table>
-                  </div>
-                </details>
+                <p class="pricing-admin-link">
+                  Valores e regras de privatizaÃ§Ã£o ficam em
+                  <a href="./valores.html">Valores e produtos</a>.
+                </p>
               </div>
             </div>
 
             <div class="form-section">
               <div class="section-heading">
                 <span>05</span>
-                <h2>Condições gerais</h2>
+                <h2>CondiÃ§Ãµes gerais</h2>
               </div>
               <label>
-                Texto incluído na proposta
+                Texto incluÃ­do na proposta
                 <textarea id="generalTerms" rows="14"></textarea>
               </label>
             </div>
@@ -359,7 +343,7 @@
             <img
               class="venue-image"
               src="./assets/venue.jpg"
-              alt="Área externa da Embaixada Carioca com vista para o Pão de Açúcar"
+              alt="Ãrea externa da Embaixada Carioca com vista para o PÃ£o de AÃ§Ãºcar"
               onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1200&q=80';"
             />
             <div class="summary-brand">
@@ -372,15 +356,15 @@
                 <span>Total com taxa</span>
                 <strong id="grandTotal">R$ 0,00</strong>
               </div>
-              <div class="total-meta" id="totalMeta">Selecione itens para montar o orçamento.</div>
+              <div class="total-meta" id="totalMeta">Selecione itens para montar o orÃ§amento.</div>
             </div>
             <div class="selected-items" id="selectedItems"></div>
             <div class="send-actions">
-              <button class="primary" id="emailBtn" type="button">Enviar por e-mail</button>
+              <button class="primary" id="emailBtn" type="button">PDF + e-mail</button>
               <button class="secondary" id="saveProposalBtn" type="button">Salvar proposta enviada</button>
               <button class="secondary" id="confirmEventBtn" type="button">Marcar sinal pago</button>
               <button class="secondary" id="copyBtn" type="button">Copiar proposta</button>
-              <button class="secondary" id="whatsappBtn" type="button">Abrir WhatsApp</button>
+              <button class="secondary" id="whatsappBtn" type="button">PDF + WhatsApp</button>
             </div>
             <div class="history-panel" aria-label="Historico de propostas">
               <div class="history-heading">
@@ -392,96 +376,7 @@
               </div>
             </div>
           </aside>
-        </section>
-
-        <section class="prices-editor" aria-label="Preços ajustáveis">
-          <div class="section-heading">
-            <span>06</span>
-            <h2>Preços ajustáveis</h2>
-          </div>
-          <p>Edite os valores abaixo. As alterações ficam salvas neste navegador.</p>
-          <div class="item-builder" aria-label="Criar novo item de orçamento">
-            <div>
-              <h3>Criar novo item</h3>
-              <p>Cadastre pacotes extras, opcionais ou novas versões de cardápio.</p>
-            </div>
-            <div class="builder-grid">
-              <label>
-                Código
-                <input id="newCodigo" type="text" placeholder="Ex.: C5" />
-              </label>
-              <label>
-                Tipo
-                <input id="newTipo" type="text" list="categoryOptions" placeholder="Ex.: Opcionais" />
-                <datalist id="categoryOptions"></datalist>
-              </label>
-              <label>
-                Nome
-                <input id="newNome" type="text" placeholder="Nome do item" />
-              </label>
-              <label>
-                Fórmula
-                <select id="newFormula">
-                  <option value="durationPerPerson">Por pessoa + duração</option>
-                  <option value="serviceIncluded90PerPerson">1h30 por pessoa, taxa inclusa</option>
-                  <option value="perPersonFixed">Por pessoa fixo</option>
-                  <option value="fixedPlusPerPerson">Fixo + por pessoa</option>
-                  <option value="fixedCoversMinimum">Fixo inclui mínimo</option>
-                  <option value="fixedTotal">Valor fixo total</option>
-                </select>
-              </label>
-              <label class="builder-wide">
-                Descrição
-                <textarea id="newDescricao" rows="2" placeholder="O que está incluído"></textarea>
-              </label>
-              <label>
-                1h
-                <input id="newPreco1h" type="text" inputmode="decimal" placeholder="0" />
-              </label>
-              <label>
-                2h
-                <input id="newPreco2h" type="text" inputmode="decimal" placeholder="0" />
-              </label>
-              <label>
-                1/2h extra
-                <input id="newPrecoExtra" type="text" inputmode="decimal" placeholder="0" />
-              </label>
-              <label>
-                Preço fixo
-                <input id="newPrecoFixo" type="text" inputmode="decimal" placeholder="0" />
-              </label>
-              <label>
-                Adicional
-                <input id="newValorAdicional" type="text" inputmode="decimal" placeholder="0" />
-              </label>
-              <label>
-                Mínimo
-                <input id="newMinimo" type="number" min="0" step="1" value="20" />
-              </label>
-              <button class="primary" id="addItemBtn" type="button">Adicionar item</button>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Tipo</th>
-                  <th>Nome</th>
-                  <th>1h</th>
-                  <th>2h</th>
-                  <th>1/2h extra</th>
-                  <th>Preço fixo</th>
-                  <th>Adicional</th>
-                  <th>Mínimo</th>
-                  <th>Fórmula</th>
-                </tr>
-              </thead>
-              <tbody id="pricesTable"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
+        </section></section>
 
       <section class="proposal-paper" id="proposalPaper" aria-label="Proposta pronta">
         <div class="proposal-header">
@@ -502,6 +397,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-eventos-v1"></script>
+    <script src="./app.js?v=20260421-eventos-v2"></script>
   </body>
 </html>

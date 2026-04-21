@@ -144,6 +144,7 @@ summary:focus-visible {
 .auth-locked .pipeline-panel,
 .auth-locked .quote-layout,
 .auth-locked .prices-editor,
+.auth-locked .values-layout,
 .auth-locked .proposal-paper {
   display: none;
 }
@@ -211,9 +212,35 @@ summary:focus-visible {
 
 .topbar-actions,
 .send-actions {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.pricing-admin-link {
+  background: var(--verde-claro);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-weight: 900;
+  line-height: 1.4;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.pricing-admin-link a {
+  color: inherit;
+}
+
+.values-layout {
+  display: grid;
+  gap: 32px;
+  padding-top: 8px;
+}
+
+.compact-team {
+  padding-bottom: 24px;
 }
 
 .team-panel {
@@ -1974,6 +2001,12 @@ input[type="range"] {
 
 .preference-chips input {
   accent-color: var(--verde-escuro);
+  appearance: auto;
+  flex: 0 0 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  width: 18px;
 }
 
 .contact-promise {

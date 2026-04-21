@@ -798,11 +798,11 @@ function getServiceFee() {
 }
 
 function getManualAdjustment() {
-  return toNumber(fields.manualAdjustment.value) || 0;
+  return toNumber(fields.manualAdjustment?.value) || 0;
 }
 
 function getManualAdjustmentLabel() {
-  return fields.manualAdjustmentLabel.value.trim() || (getManualAdjustment() < 0 ? "Desconto comercial" : "Ajuste comercial");
+  return fields.manualAdjustmentLabel?.value.trim() || (getManualAdjustment() < 0 ? "Desconto comercial" : "Ajuste comercial");
 }
 
 function timeToMinutes(value) {
@@ -995,9 +995,11 @@ function scrollToItems() {
 
 function renderCategoryFilter() {
   const categories = [...new Set(state.prices.map((item) => item.tipoEvento))].sort();
-  fields.categoryFilter.innerHTML = `<option value="">Todas</option>${categories
-    .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
-    .join("")}`;
+  if (fields.categoryFilter) {
+    fields.categoryFilter.innerHTML = `<option value="">Todas</option>${categories
+      .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+      .join("")}`;
+  }
   if (nodes.categoryOptions) {
     nodes.categoryOptions.innerHTML = categories
       .map((category) => `<option value="${escapeHtml(category)}"></option>`)
@@ -1080,8 +1082,8 @@ function clearGuidedFlow() {
 }
 
 function getFilteredPrices() {
-  const query = fields.searchPrice.value.trim().toLowerCase();
-  const category = fields.categoryFilter.value;
+  const query = fields.searchPrice?.value.trim().toLowerCase() || "";
+  const category = fields.categoryFilter?.value || "";
   return state.prices.filter((item) => {
     const haystack = `${item.codigo} ${item.tipoEvento} ${item.nome} ${item.descricao}`.toLowerCase();
     return (!query || haystack.includes(query)) && (!category || item.tipoEvento === category);
@@ -1089,6 +1091,7 @@ function getFilteredPrices() {
 }
 
 function renderPriceList() {
+  if (!nodes.priceList) return;
   const items = getFilteredPrices();
   if (!items.length) {
     nodes.priceList.innerHTML = `<p>Nenhum item encontrado.</p>`;
@@ -1119,6 +1122,7 @@ function renderPriceList() {
 }
 
 function renderPricesTable() {
+  if (!nodes.pricesTable) return;
   nodes.pricesTable.innerHTML = state.prices
     .map(
       (item) => `
@@ -1158,6 +1162,7 @@ function renderPricesTable() {
 }
 
 function renderSummary() {
+  if (!nodes.grandTotal || !nodes.proposalTotal || !nodes.totalMeta || !nodes.selectedItems) return;
   const selected = getSelectedItems();
   const totals = getQuoteTotals();
   nodes.grandTotal.textContent = formatMoney(totals.total);
@@ -1184,6 +1189,7 @@ function renderSummary() {
 }
 
 function renderCalculation() {
+  if (!nodes.calculationBreakdown) return;
   const totals = getQuoteTotals();
   const privatization = totals.privatization;
 
@@ -1215,13 +1221,16 @@ function renderCalculation() {
     </div>
   `;
 
-  nodes.privatizationTitle.textContent = privatization.title;
-  nodes.privatizationDescription.textContent = privatization.description;
-  nodes.optionalPrivatizationControls.classList.toggle("is-hidden", !privatization.optional);
-  setChoiceState(nodes.optionalPrivatizationControls, state.privatizationChoice, "privatizationChoice");
+  if (nodes.privatizationTitle) nodes.privatizationTitle.textContent = privatization.title;
+  if (nodes.privatizationDescription) nodes.privatizationDescription.textContent = privatization.description;
+  if (nodes.optionalPrivatizationControls) {
+    nodes.optionalPrivatizationControls.classList.toggle("is-hidden", !privatization.optional);
+    setChoiceState(nodes.optionalPrivatizationControls, state.privatizationChoice, "privatizationChoice");
+  }
 }
 
 function renderPrivatizationRulesTable() {
+  if (!nodes.privatizationRulesTable) return;
   nodes.privatizationRulesTable.innerHTML = state.privatizationRules
     .map(
       (rule, index) => `
@@ -1388,6 +1397,7 @@ function getProposalRow(snapshot, status = "proposta_enviada") {
 }
 
 function renderSupabaseStatus(message, connected = false) {
+  if (!nodes.supabaseStatus) return;
   nodes.supabaseStatus.textContent = message;
   nodes.supabaseStatus.style.borderLeftColor = connected ? "var(--verde)" : "var(--verde-2)";
 }
@@ -1408,6 +1418,7 @@ function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
   const recoverButton = document.querySelector("#recoverMagicLinkBtn");
+  if (!loginButton || !logoutButton || !recoverButton || !nodes.authStatus || !fields.loginEmail || !fields.magicLinkUrl) return;
   const isConnected = Boolean(state.supabase);
   const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
 
@@ -1430,6 +1441,7 @@ function updateAuthUI() {
 }
 
 function renderHistory() {
+  if (!nodes.historyList) return;
   if (!state.supabase) {
     nodes.historyList.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     return;
@@ -1507,6 +1519,7 @@ function getClientFormUrl() {
 }
 
 function renderClientFormLink() {
+  if (!nodes.clientFormLink) return;
   nodes.clientFormLink.textContent = getClientFormUrl();
 }
 
@@ -1824,6 +1837,10 @@ async function updateProposalStatus(proposalId, nextStatus) {
 }
 
 async function initSupabase() {
+  if (!fields.supabaseUrl || !fields.supabaseAnonKey) {
+    updateAuthUI();
+    return;
+  }
   const config = loadSupabaseConfig();
   fields.supabaseUrl.value = config.url;
   fields.supabaseAnonKey.value = config.anonKey;
@@ -2158,6 +2175,7 @@ function formatSavedAt(value) {
 }
 
 function renderProposal() {
+  if (!nodes.proposalContent) return;
   const selected = getSelectedItems();
   const notes = fields.notes.value.trim();
   const reason = fields.eventReason.value.trim();
@@ -2311,12 +2329,24 @@ function showToast(message) {
 function openEmail() {
   const email = fields.clientEmail.value.trim();
   const subject = encodeURIComponent("Proposta de evento - Embaixada Carioca");
-  const body = encodeURIComponent(buildProposalText());
+  const body = encodeURIComponent(
+    [
+      "Olá,",
+      "",
+      "Segue a proposta comercial da Embaixada Carioca em PDF.",
+      "",
+      "Ficamos à disposição para ajustar qualquer detalhe.",
+    ].join("\n"),
+  );
   if (!email) {
     showToast("Preencha o e-mail do cliente para abrir a mensagem.");
     return;
   }
-  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+  showToast("Salve a proposta como PDF e anexe no e-mail que será aberto.");
+  window.print();
+  window.setTimeout(() => {
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+  }, 650);
 }
 
 async function copyProposal() {
@@ -2343,9 +2373,15 @@ async function copyClientFormLink() {
 
 function openWhatsApp() {
   const phone = fields.clientPhone.value.replace(/\D/g, "");
-  const text = encodeURIComponent(buildProposalText());
+  const text = encodeURIComponent(
+    "Olá! Segue a proposta comercial da Embaixada Carioca em PDF. Ficamos à disposição para ajustar qualquer detalhe.",
+  );
   const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-  window.open(url, "_blank", "noopener");
+  showToast("Salve a proposta como PDF e anexe na conversa do WhatsApp.");
+  window.print();
+  window.setTimeout(() => {
+    window.open(url, "_blank", "noopener");
+  }, 650);
 }
 
 function resetPrices() {
@@ -2404,7 +2440,7 @@ function createNewItem() {
   savePrices();
   saveSelectedIds();
   renderCategoryFilter();
-  fields.categoryFilter.value = tipo;
+  if (fields.categoryFilter) fields.categoryFilter.value = tipo;
   clearNewItemForm();
   renderAll();
   showToast("Item criado e adicionado ao orçamento.");
@@ -2412,6 +2448,7 @@ function createNewItem() {
 
 function bindEvents() {
   Object.values(fields).forEach((field) => {
+    if (!field) return;
     const refreshFormOutputs = () => {
       renderPriceList();
       renderSummary();
@@ -2422,28 +2459,28 @@ function bindEvents() {
     field.addEventListener("change", refreshFormOutputs);
   });
 
-  fields.categoryFilter.addEventListener("change", renderPriceList);
-  fields.eventDuration.addEventListener("change", renderAll);
+  fields.categoryFilter?.addEventListener("change", renderPriceList);
+  fields.eventDuration?.addEventListener("change", renderAll);
 
-  nodes.flowEventOptions.addEventListener("click", (event) => {
+  nodes.flowEventOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-flow-event]");
     if (!button) return;
     applyGuidedEvent(button.dataset.flowEvent);
   });
 
-  nodes.flowBeverageOptions.addEventListener("click", (event) => {
+  nodes.flowBeverageOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-select-package]");
     if (!button) return;
     applyGuidedPackage(button.dataset.selectPackage);
   });
 
-  nodes.flowFoodOptions.addEventListener("click", (event) => {
+  nodes.flowFoodOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-select-package]");
     if (!button) return;
     applyGuidedPackage(button.dataset.selectPackage);
   });
 
-  nodes.optionalPrivatizationControls.addEventListener("click", (event) => {
+  nodes.optionalPrivatizationControls?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-privatization-choice]");
     if (!button) return;
     state.privatizationChoice = button.dataset.privatizationChoice;
@@ -2452,7 +2489,7 @@ function bindEvents() {
     renderProposal();
   });
 
-  nodes.privatizationRulesTable.addEventListener("input", (event) => {
+  nodes.privatizationRulesTable?.addEventListener("input", (event) => {
     const { ruleIndex, ruleField } = event.target.dataset;
     if (ruleIndex === undefined || !ruleField) return;
     const rule = state.privatizationRules[Number(ruleIndex)];
@@ -2464,9 +2501,9 @@ function bindEvents() {
     renderProposal();
   });
 
-  fields.generalTerms.addEventListener("input", saveGeneralTerms);
+  fields.generalTerms?.addEventListener("input", saveGeneralTerms);
 
-  nodes.priceList.addEventListener("change", (event) => {
+  nodes.priceList?.addEventListener("change", (event) => {
     const id = event.target.dataset.selectId;
     if (!id) return;
     if (event.target.checked) state.selectedIds.add(id);
@@ -2476,7 +2513,7 @@ function bindEvents() {
     renderProposal();
   });
 
-  nodes.pricesTable.addEventListener("input", (event) => {
+  nodes.pricesTable?.addEventListener("input", (event) => {
     const { priceId, field } = event.target.dataset;
     if (!priceId || !field) return;
     const item = state.prices.find((price) => price.id === priceId);
@@ -2488,7 +2525,7 @@ function bindEvents() {
     renderProposal();
   });
 
-  nodes.pricesTable.addEventListener("change", (event) => {
+  nodes.pricesTable?.addEventListener("change", (event) => {
     const { priceId, field } = event.target.dataset;
     if (!priceId || field !== "formula") return;
     const item = state.prices.find((price) => price.id === priceId);
@@ -2498,37 +2535,37 @@ function bindEvents() {
     renderAll();
   });
 
-  document.querySelector("#printBtn").addEventListener("click", () => window.print());
-  document.querySelector("#emailBtn").addEventListener("click", openEmail);
-  document.querySelector("#saveProposalBtn").addEventListener("click", () => saveCurrentProposal());
-  document.querySelector("#confirmEventBtn").addEventListener("click", confirmCurrentEvent);
-  document.querySelector("#copyBtn").addEventListener("click", copyProposal);
-  document.querySelector("#whatsappBtn").addEventListener("click", openWhatsApp);
-  document.querySelector("#resetPricesBtn").addEventListener("click", resetPrices);
-  document.querySelector("#clearFlowBtn").addEventListener("click", clearGuidedFlow);
-  document.querySelector("#addItemBtn").addEventListener("click", createNewItem);
-  document.querySelector("#saveSupabaseConfigBtn").addEventListener("click", configureSupabaseFromForm);
-  document.querySelector("#loginBtn").addEventListener("click", loginWithEmail);
+  document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
+  document.querySelector("#emailBtn")?.addEventListener("click", openEmail);
+  document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
+  document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
+  document.querySelector("#copyBtn")?.addEventListener("click", copyProposal);
+  document.querySelector("#whatsappBtn")?.addEventListener("click", openWhatsApp);
+  document.querySelector("#resetPricesBtn")?.addEventListener("click", resetPrices);
+  document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
+  document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);
+  document.querySelector("#saveSupabaseConfigBtn")?.addEventListener("click", configureSupabaseFromForm);
+  document.querySelector("#loginBtn")?.addEventListener("click", loginWithEmail);
   document.querySelectorAll("[data-team-email]").forEach((button) => {
     button.addEventListener("click", () => {
       fields.loginEmail.value = button.dataset.teamEmail;
       fields.loginEmail.focus();
     });
   });
-  document.querySelector("#recoverMagicLinkBtn").addEventListener("click", recoverMagicLinkSession);
-  document.querySelector("#logoutBtn").addEventListener("click", logoutSupabase);
-  document.querySelector("#refreshHistoryBtn").addEventListener("click", loadProposalHistory);
-  document.querySelector("#refreshPipelineBtn").addEventListener("click", async () => {
+  document.querySelector("#recoverMagicLinkBtn")?.addEventListener("click", recoverMagicLinkSession);
+  document.querySelector("#logoutBtn")?.addEventListener("click", logoutSupabase);
+  document.querySelector("#refreshHistoryBtn")?.addEventListener("click", loadProposalHistory);
+  document.querySelector("#refreshPipelineBtn")?.addEventListener("click", async () => {
     await loadProposalHistory();
     await loadQuoteRequests();
   });
-  document.querySelector("#copyClientFormLinkBtn").addEventListener("click", copyClientFormLink);
-  nodes.historyList.addEventListener("click", (event) => {
+  document.querySelector("#copyClientFormLinkBtn")?.addEventListener("click", copyClientFormLink);
+  nodes.historyList?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (!button) return;
     openSavedProposal(button.dataset.proposalId);
   });
-  nodes.pipelineBoard.addEventListener("click", (event) => {
+  nodes.pipelineBoard?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (button) {
       openSavedProposal(button.dataset.proposalId);
@@ -2547,7 +2584,7 @@ function bindEvents() {
     const markButton = event.target.closest("button[data-mark-request]");
     if (markButton) markQuoteRequestAnalyzed(markButton.dataset.markRequest);
   });
-  nodes.pipelineBoard.addEventListener("change", (event) => {
+  nodes.pipelineBoard?.addEventListener("change", (event) => {
     const select = event.target.closest("select[data-pipeline-status-id]");
     if (!select) return;
     const { pipelineStatusKind, pipelineStatusId } = select.dataset;
@@ -2559,7 +2596,7 @@ function bindEvents() {
 renderCategoryFilter();
 renderPrivatizationRulesTable();
 renderClientFormLink();
-fields.generalTerms.value = loadGeneralTerms();
+if (fields.generalTerms) fields.generalTerms.value = loadGeneralTerms();
 bindEvents();
 renderAll();
 initSupabase();

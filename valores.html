@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Valores e Produtos | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v2" />
+  </head>
+  <body class="auth-locked" data-page="values">
+    <main class="app-shell">
+      <section class="workspace" aria-label="Valores e produtos">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
+            <div>
+              <p class="eyebrow">Embaixada Carioca</p>
+              <h1>Valores e produtos</h1>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <a class="button-link secondary" href="./index.html">Sistema de eventos</a>
+            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário do cliente</a>
+            <button class="secondary" id="resetPricesBtn" type="button">Restaurar preços</button>
+          </div>
+        </header>
+
+        <section class="team-panel compact-team" aria-label="Acesso da equipe">
+          <div class="section-heading">
+            <span>Equipe</span>
+            <h2>Acesso autorizado</h2>
+          </div>
+          <div class="team-access">
+            <div class="team-auth team-primary">
+              <p>Entre com um e-mail autorizado para editar produtos, preços e custos de privatização.</p>
+              <div class="team-email-presets" aria-label="E-mails autorizados">
+                <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
+                <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
+              </div>
+              <div class="login-row">
+                <label>
+                  E-mail da equipe
+                  <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
+                </label>
+                <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
+                <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
+              </div>
+              <div class="team-status" id="authStatus">Aguardando login.</div>
+              <details class="magic-link-recovery">
+                <summary>Problema com magic link?</summary>
+                <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
+                <div class="login-row">
+                  <label>
+                    URL do magic link
+                    <input id="magicLinkUrl" type="url" placeholder="Cole a URL completa do magic link" autocomplete="off" />
+                  </label>
+                  <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
+                </div>
+              </details>
+            </div>
+            <div class="team-context">
+              <div class="team-ready">
+                <span>Manutenção comercial</span>
+                <strong>Use esta tela para cadastrar produtos e atualizar regras.</strong>
+                <p>As alterações ficam salvas neste navegador e alimentam a montagem da proposta no sistema de eventos.</p>
+              </div>
+              <details class="team-advanced">
+                <summary>Configuração técnica</summary>
+                <div class="supabase-config-grid">
+                  <label>
+                    Supabase URL
+                    <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
+                  </label>
+                  <label>
+                    Supabase anon key
+                    <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
+                  </label>
+                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+                </div>
+                <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="values-layout">
+          <section class="prices-editor" aria-label="Preços ajustáveis">
+            <div class="section-heading">
+              <span>01</span>
+              <h2>Produtos e preços</h2>
+            </div>
+            <p>Edite valores, mínimos e fórmulas. As alterações serão usadas na criação das propostas neste navegador.</p>
+            <div class="item-builder" aria-label="Criar novo item de orçamento">
+              <div>
+                <h3>Criar novo item</h3>
+                <p>Cadastre pacotes extras, opcionais ou novas versões de cardápio.</p>
+              </div>
+              <div class="builder-grid">
+                <label>
+                  Código
+                  <input id="newCodigo" type="text" placeholder="Ex.: C5" />
+                </label>
+                <label>
+                  Tipo
+                  <input id="newTipo" type="text" list="categoryOptions" placeholder="Ex.: Opcionais" />
+                  <datalist id="categoryOptions"></datalist>
+                </label>
+                <label>
+                  Nome
+                  <input id="newNome" type="text" placeholder="Nome do item" />
+                </label>
+                <label>
+                  Fórmula
+                  <select id="newFormula">
+                    <option value="durationPerPerson">Por pessoa + duração</option>
+                    <option value="serviceIncluded90PerPerson">1h30 por pessoa, taxa inclusa</option>
+                    <option value="perPersonFixed">Por pessoa fixo</option>
+                    <option value="fixedPlusPerPerson">Fixo + por pessoa</option>
+                    <option value="fixedCoversMinimum">Fixo inclui mínimo</option>
+                    <option value="fixedTotal">Valor fixo total</option>
+                  </select>
+                </label>
+                <label class="builder-wide">
+                  Descrição
+                  <textarea id="newDescricao" rows="2" placeholder="O que está incluído"></textarea>
+                </label>
+                <label>
+                  1h
+                  <input id="newPreco1h" type="text" inputmode="decimal" placeholder="0" />
+                </label>
+                <label>
+                  2h
+                  <input id="newPreco2h" type="text" inputmode="decimal" placeholder="0" />
+                </label>
+                <label>
+                  1/2h extra
+                  <input id="newPrecoExtra" type="text" inputmode="decimal" placeholder="0" />
+                </label>
+                <label>
+                  Preço fixo
+                  <input id="newPrecoFixo" type="text" inputmode="decimal" placeholder="0" />
+                </label>
+                <label>
+                  Adicional
+                  <input id="newValorAdicional" type="text" inputmode="decimal" placeholder="0" />
+                </label>
+                <label>
+                  Mínimo
+                  <input id="newMinimo" type="number" min="0" step="1" value="20" />
+                </label>
+                <button class="primary" id="addItemBtn" type="button">Adicionar item</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th>Nome</th>
+                    <th>1h</th>
+                    <th>2h</th>
+                    <th>1/2h extra</th>
+                    <th>Preço fixo</th>
+                    <th>Adicional</th>
+                    <th>Mínimo</th>
+                    <th>Fórmula</th>
+                  </tr>
+                </thead>
+                <tbody id="pricesTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="prices-editor" aria-label="Custos de privatização">
+            <div class="section-heading">
+              <span>02</span>
+              <h2>Custos de privatização</h2>
+            </div>
+            <p>Atualize abertura, pico, fechamento e valores aplicados automaticamente na proposta.</p>
+            <div class="privatization-rules-wrap">
+              <table class="privatization-rules-table">
+                <thead>
+                  <tr>
+                    <th>Dia</th>
+                    <th>Abertura</th>
+                    <th>Pico início</th>
+                    <th>Pico fim</th>
+                    <th>Fechamento</th>
+                    <th>Pico parcial</th>
+                    <th>Pico total</th>
+                    <th>Fora pico</th>
+                  </tr>
+                </thead>
+                <tbody id="privatizationRulesTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./app.js?v=20260421-eventos-v2"></script>
+  </body>
+</html>
