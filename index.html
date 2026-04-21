@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-aaa-form" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v1" />
   </head>
   <body class="auth-locked">
     <main class="app-shell">
@@ -14,7 +14,7 @@
             <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
             <div>
               <p class="eyebrow">Embaixada Carioca</p>
-              <h1>Orçamentos de eventos</h1>
+              <h1>Sistema de eventos</h1>
             </div>
           </div>
           <div class="topbar-actions">
@@ -66,8 +66,8 @@
               </div>
               <ul class="team-checklist">
                 <li>Clientes enviam pedidos pelo formulário externo.</li>
-                <li>A equipe revisa, ajusta valores e gera a proposta.</li>
-                <li>As propostas salvas ficam no histórico compartilhado.</li>
+                <li>A equipe qualifica, ajusta valores e gera a proposta.</li>
+                <li>Cada evento fica em uma única etapa clara do funil.</li>
               </ul>
               <details class="team-advanced">
                 <summary>Configuração técnica</summary>
@@ -93,23 +93,32 @@
             </div>
             <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
           </div>
-          <div class="request-inbox">
-            <div class="history-heading">
-              <span>Solicitações recebidas</span>
-              <button class="secondary" id="refreshRequestsBtn" type="button">Atualizar</button>
+          <div class="owner-metrics" aria-label="Visão de gestão">
+            <div>
+              <span>Leads</span>
+              <strong id="metricLeads">0</strong>
             </div>
-            <div class="request-list" id="quoteRequestList">
-              <p>Entre com Supabase para ver os formulários recebidos.</p>
+            <div>
+              <span>Propostas</span>
+              <strong id="metricProposals">0</strong>
+            </div>
+            <div>
+              <span>Eventos</span>
+              <strong id="metricConfirmed">0</strong>
+            </div>
+            <div>
+              <span>Ticket médio</span>
+              <strong id="metricAverageTicket">R$ 0,00</strong>
             </div>
           </div>
-          <div class="confirmed-events-panel">
+          <div class="pipeline-panel">
             <div class="history-heading">
-              <span>Eventos confirmados</span>
-              <button class="secondary" id="refreshConfirmedBtn" type="button">Atualizar</button>
+              <span>Pipeline de eventos</span>
+              <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p>Propostas com sinal pago ficam aqui para acompanhamento da equipe.</p>
-            <div class="confirmed-events-list" id="confirmedEventsList">
-              <p>Entre com Supabase para ver eventos confirmados.</p>
+            <p>Solicitação, negociação, sinal e operação em uma visão simples.</p>
+            <div class="pipeline-board" id="pipelineBoard">
+              <p>Entre com Supabase para ver o funil.</p>
             </div>
           </div>
         </section>
@@ -165,6 +174,15 @@
                 <label>
                   Validade
                   <input id="validity" type="text" value="7 dias" />
+                </label>
+                <label>
+                  Ajuste comercial
+                  <input id="manualAdjustment" type="text" inputmode="decimal" placeholder="Ex.: -500 ou 750" />
+                  <small>Use valor negativo para desconto ou positivo para acréscimo.</small>
+                </label>
+                <label>
+                  Motivo do ajuste
+                  <input id="manualAdjustmentLabel" type="text" placeholder="Ex.: desconto comercial" />
                 </label>
               </div>
               <label>
@@ -359,7 +377,7 @@
             <div class="selected-items" id="selectedItems"></div>
             <div class="send-actions">
               <button class="primary" id="emailBtn" type="button">Enviar por e-mail</button>
-              <button class="secondary" id="saveProposalBtn" type="button">Salvar no historico</button>
+              <button class="secondary" id="saveProposalBtn" type="button">Salvar proposta enviada</button>
               <button class="secondary" id="confirmEventBtn" type="button">Marcar sinal pago</button>
               <button class="secondary" id="copyBtn" type="button">Copiar proposta</button>
               <button class="secondary" id="whatsappBtn" type="button">Abrir WhatsApp</button>
@@ -484,6 +502,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-aaa-form"></script>
+    <script src="./app.js?v=20260421-eventos-v1"></script>
   </body>
 </html>
