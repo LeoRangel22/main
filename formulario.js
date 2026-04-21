@@ -59,6 +59,7 @@ const profileLabels = {
   birthday: "Aniversário / celebração",
   relationship: "Lançamento / relacionamento com clientes",
   experience: "Experiência gastronômica",
+  travel: "Agência / grupo turístico",
   suggestion: "Me ajudem a definir",
 };
 
@@ -90,7 +91,7 @@ const formats = {
     description: "Ideal para pausas corporativas e eventos curtos com praticidade.",
     badge: "Muito pedido por grupos corporativos",
     visual: "Pausa",
-    group: "A partir de 20 pessoas",
+    group: "A partir de 30 pessoas",
   },
   lunch: {
     label: "Almoço Carioca",
@@ -122,7 +123,7 @@ const formats = {
   },
   custom: {
     label: "Evento sob medida",
-    description: "Para demandas personalizadas com proposta construída pela equipe.",
+    description: "Para demandas personalizadas, roteiros de agências e propostas institucionais.",
     badge: "Sob consulta",
     visual: "Especial",
     group: "Sob consulta",
@@ -294,6 +295,7 @@ function getRecommendedFormatIds() {
   const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
   const profiles = fields.profile.value.split(",").filter(Boolean);
   if (fields.moment.value === "weekday-lunch") return base;
+  if (profiles.includes("travel")) return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
   if (profiles.includes("corporate")) return prioritize(base, ["coffee", "breakfast", "workshop"]);
   if (profiles.includes("relationship")) return prioritize(base, ["welcome", "cocktail", "workshop"]);
   if (profiles.includes("experience")) return prioritize(base, ["workshop", "cocktail", "welcome"]);
@@ -495,7 +497,7 @@ async function submitRequest(event) {
   if (!validateSnapshot(snapshot)) return;
 
   submitButton.disabled = true;
-  setStatus("Enviando solicitação...", "neutral");
+  setStatus("Enviando solicitação…", "neutral");
 
   const client = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
   const { error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot));
