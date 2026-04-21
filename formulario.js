@@ -132,6 +132,29 @@ function setStatus(message, type = "neutral") {
   statusNode.dataset.status = type;
 }
 
+function createReferenceCode() {
+  const now = new Date();
+  const datePart = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
+  const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `EC-${datePart}-${randomPart}`;
+}
+
+function renderSuccessStatus(referenceCode) {
+  statusNode.dataset.status = "success";
+  statusNode.innerHTML = `
+    <strong>Solicitação enviada. Obrigado!</strong>
+    <span>Sua referência é <b>${referenceCode}</b>. Nossa equipe vai analisar os dados e preparar sua proposta.</span>
+    <span>Em caso de dúvida, fale com <a href="mailto:eventos@embaixadacarioca.com.br">eventos@embaixadacarioca.com.br</a> ou <a href="https://wa.me/5521971426007" target="_blank" rel="noopener">21 97142-6007</a>.</span>
+  `;
+  window.requestAnimationFrame(() => {
+    statusNode.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
 function fillGuestOptions() {
   const values = [];
   for (let guests = 1; guests <= 300; guests += 1) values.push(guests);
@@ -294,9 +317,10 @@ function handleFormatClick(event) {
   selectFormat(button.dataset.formatId);
 }
 
-function getSnapshot() {
+function getSnapshot(referenceCode) {
   const selectedTime = fields.time.value || "";
   return {
+    referencia: referenceCode,
     cliente: {
       nome: fields.name.value.trim(),
       email: fields.email.value.trim(),
@@ -394,7 +418,8 @@ async function submitRequest(event) {
     return;
   }
 
-  const snapshot = getSnapshot();
+  const referenceCode = createReferenceCode();
+  const snapshot = getSnapshot(referenceCode);
   if (!validateSnapshot(snapshot)) return;
 
   submitButton.disabled = true;
@@ -420,7 +445,7 @@ async function submitRequest(event) {
   fillGuestOptions();
   fillTimeOptions("");
   renderRecommendations();
-  setStatus("Solicitação enviada. A equipe vai preparar a proposta e entrar em contato.", "success");
+  renderSuccessStatus(referenceCode);
 }
 
 fillGuestOptions();
