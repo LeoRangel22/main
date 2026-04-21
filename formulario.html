@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260420-mobile" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-lunch" />
   </head>
   <body class="public-form-body">
     <main class="public-form-shell">
@@ -47,6 +47,10 @@
                 <strong>Manhã em dia de semana</strong>
                 <span>Ideal para café da manhã, brunch, coffee break e encontros corporativos.</span>
               </button>
+              <button type="button" data-choice-group="moment" data-choice-value="weekday-lunch">
+                <strong>Início do almoço</strong>
+                <span>Foco em Almoço Carioca de 2ª a 6ª, com chegada entre 11h e 12h30.</span>
+              </button>
               <button type="button" data-choice-group="moment" data-choice-value="late-afternoon">
                 <strong>Fim de tarde</strong>
                 <span>Excelente para welcome drink, networking e confraternizações.</span>
@@ -62,6 +66,7 @@
             </div>
             <div class="commercial-windows" aria-label="Janelas recomendadas">
               <span>Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.</span>
+              <span>Início do almoço de 2ª a 6ª: Almoço Carioca.</span>
               <span>Após 17h de domingo a 5ª: welcome drink e coquetéis.</span>
               <span>Das 19h às 21h: encontros elegantes, leves e objetivos.</span>
             </div>
@@ -129,6 +134,7 @@
                 <select id="requestDuration">
                   <option value="">A definir</option>
                   <option value="1">1h</option>
+                  <option value="1.5">1h30</option>
                   <option value="2">2h</option>
                   <option value="2.5">2h30</option>
                   <option value="3">3h</option>
@@ -201,6 +207,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260420-mobile"></script>
+    <script src="./formulario.js?v=20260421-lunch"></script>
   </body>
 </html>

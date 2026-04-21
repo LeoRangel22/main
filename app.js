@@ -265,6 +265,38 @@ const initialPrices = [
     idioma: "",
     formula: "perPersonFixed",
   },
+  {
+    id: "almoco-carioca-bebida-livre",
+    codigo: "5",
+    tipoEvento: "Almoço Carioca",
+    nome: "Almoço Carioca - Bebida Livre",
+    descricao:
+      "Dias úteis, principalmente início do almoço. Entrada com pasteizinhos e caldinho de feijão, feijoada premiada, caipirinhas de 3 tipos, chope Heineken, 3 sucos naturais, refrigerantes, água e café espresso. Valor de 1h30 com taxa de serviço inclusa; finais de semana e feriados sob acréscimo de 30%.",
+    preco1h: "",
+    preco2h: 300,
+    precoMeiaHoraExtra: 75,
+    precoFixo: "",
+    valorAdicional: "",
+    minimo: 2,
+    idioma: "",
+    formula: "serviceIncluded90PerPerson",
+  },
+  {
+    id: "almoco-carioca-duas-bebidas",
+    codigo: "5",
+    tipoEvento: "Almoço Carioca",
+    nome: "Almoço Carioca - 2 Bebidas por Pessoa",
+    descricao:
+      "Dias úteis, principalmente início do almoço. Entrada com pasteizinhos e caldinho de feijão, feijoada premiada, bebidas limitadas a 2 por pessoa, sucos naturais, refrigerantes, água e café espresso. Valor de 1h30 com taxa de serviço inclusa; finais de semana e feriados sob acréscimo de 30%.",
+    preco1h: "",
+    preco2h: 250,
+    precoMeiaHoraExtra: 50,
+    precoFixo: "",
+    valorAdicional: "",
+    minimo: 2,
+    idioma: "",
+    formula: "serviceIncluded90PerPerson",
+  },
 ];
 
 const guidedEvents = {
@@ -282,6 +314,11 @@ const guidedEvents = {
     label: "Café da Manhã / Coffee Break",
     category: "Café da Manhã / Coffee Break",
     status: "Café da Manhã / Coffee Break selecionado. Marque abaixo o pacote desejado e confirme participantes.",
+  },
+  almoco: {
+    label: "Almoço Carioca",
+    category: "Almoço Carioca",
+    status: "Almoço Carioca selecionado. Ideal para início do almoço em dias úteis; escolha bebida livre ou 2 bebidas por pessoa.",
   },
   welcome: {
     label: "Welcome Drink",
@@ -493,7 +530,7 @@ function loadPrices() {
 
 function mergeCatalogLabels(prices) {
   const catalogById = new Map(initialPrices.map((item) => [item.id, item]));
-  return prices.map((item) => {
+  const merged = prices.map((item) => {
     const catalogItem = catalogById.get(item.id);
     if (!catalogItem) return item;
     return {
@@ -505,6 +542,11 @@ function mergeCatalogLabels(prices) {
       idioma: catalogItem.idioma,
     };
   });
+  const existingIds = new Set(merged.map((item) => item.id));
+  initialPrices.forEach((item) => {
+    if (!existingIds.has(item.id)) merged.push(clonePrices([item])[0]);
+  });
+  return merged;
 }
 
 function loadSelectedIds() {
@@ -621,6 +663,11 @@ function getHalfHourBlocks(duration) {
   return Math.ceil((duration - 2) / 0.5);
 }
 
+function getHalfHourBlocksAfter(duration, includedDuration) {
+  if (duration <= includedDuration) return 0;
+  return Math.ceil((duration - includedDuration) / 0.5);
+}
+
 function calculateItem(item) {
   const guests = getGuestCount();
   const billableGuests = getBillableGuests(item);
@@ -637,6 +684,18 @@ function calculateItem(item) {
     unitPrice = duration <= 1 ? base1h : base2h + halfBlocks * extra;
     total = unitPrice * billableGuests;
     detail = `${billableGuests} pessoas faturadas x ${formatMoney(unitPrice)} por pessoa (${duration}h)`;
+  }
+
+  if (item.formula === "serviceIncluded90PerPerson") {
+    const baseGross = toNumber(item.preco2h);
+    const extraGross = toNumber(item.precoMeiaHoraExtra);
+    const halfBlocks = getHalfHourBlocksAfter(duration, 1.5);
+    const grossUnitPrice = baseGross + halfBlocks * extraGross;
+    unitPrice = grossUnitPrice / (1 + SERVICE_RATE);
+    total = unitPrice * billableGuests;
+    detail = `${billableGuests} pessoas faturadas x ${formatMoney(
+      grossUnitPrice,
+    )} por pessoa com taxa inclusa (${duration}h)`;
   }
 
   if (item.formula === "perPersonFixed") {
@@ -838,6 +897,7 @@ function getTotal() {
 function getFormulaLabel(formula) {
   const labels = {
     durationPerPerson: "Por pessoa + duração",
+    serviceIncluded90PerPerson: "1h30 por pessoa, taxa inclusa",
     perPersonFixed: "Por pessoa fixo",
     fixedPlusPerPerson: "Fixo + por pessoa",
     fixedCoversMinimum: "Fixo inclui mínimo",
@@ -897,6 +957,12 @@ function applyGuidedEvent(eventKey) {
   fields.searchPrice.value = "";
   nodes.flowStatus.textContent = config.status;
   nodes.coquetelChoices.classList.toggle("is-hidden", eventKey !== "coquetel");
+
+  if (eventKey === "almoco") {
+    fields.eventTime.value = "11:30";
+    fields.eventDuration.value = "1.5";
+    if (getGuestCount() < 2) fields.guestCount.value = "2";
+  }
 
   setChoiceState(nodes.flowEventOptions, eventKey, "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
@@ -1008,7 +1074,14 @@ function renderPricesTable() {
         <td><input data-price-id="${escapeHtml(item.id)}" data-field="minimo" inputmode="numeric" value="${escapeHtml(item.minimo)}" /></td>
         <td>
           <select data-price-id="${escapeHtml(item.id)}" data-field="formula">
-            ${["durationPerPerson", "perPersonFixed", "fixedPlusPerPerson", "fixedCoversMinimum", "fixedTotal"]
+            ${[
+              "durationPerPerson",
+              "serviceIncluded90PerPerson",
+              "perPersonFixed",
+              "fixedPlusPerPerson",
+              "fixedCoversMinimum",
+              "fixedTotal",
+            ]
               .map(
                 (formula) =>
                   `<option value="${formula}" ${item.formula === formula ? "selected" : ""}>${getFormulaLabel(
