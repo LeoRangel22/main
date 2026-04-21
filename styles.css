@@ -142,6 +142,7 @@ summary:focus-visible {
 .auth-locked .request-panel,
 .auth-locked .owner-metrics,
 .auth-locked .pipeline-panel,
+.auth-locked .help-panel,
 .auth-locked .quote-layout,
 .auth-locked .prices-editor,
 .auth-locked .values-layout,
@@ -387,7 +388,8 @@ textarea[aria-invalid="true"] {
 }
 
 .request-panel,
-.pipeline-panel {
+.pipeline-panel,
+.help-panel {
   background: rgba(255, 255, 255, 0.46);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -466,7 +468,8 @@ textarea[aria-invalid="true"] {
 .pipeline-board {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  grid-auto-columns: minmax(230px, 1fr);
+  grid-auto-flow: column;
   overflow-x: auto;
   padding-bottom: 4px;
 }
@@ -511,8 +514,17 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-column-list {
+  align-content: start;
   display: grid;
   gap: 10px;
+  min-height: 84px;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.pipeline-column-list.is-drop-target {
+  background: rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px rgba(24, 58, 45, 0.18);
 }
 
 .pipeline-card {
@@ -522,6 +534,14 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 8px;
   padding: 12px;
+}
+
+.pipeline-card[draggable="true"] {
+  cursor: grab;
+}
+
+.pipeline-card.is-dragging {
+  opacity: 0.58;
 }
 
 .pipeline-card-title {
@@ -550,6 +570,10 @@ textarea[aria-invalid="true"] {
 .pipeline-status-control select {
   min-height: 36px;
   padding: 6px 8px;
+}
+
+.danger-light {
+  color: var(--danger);
 }
 
 .request-item {
@@ -1109,6 +1133,53 @@ textarea {
 .status-chip.confirmed {
   background: rgba(24, 58, 45, 0.1);
   color: var(--verde-escuro);
+}
+
+.status-chip.canceled {
+  background: rgba(157, 67, 47, 0.14);
+  color: var(--danger);
+}
+
+.help-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.help-panel details {
+  border-bottom: 1px solid var(--line);
+  padding: 0 0 12px;
+}
+
+.help-panel details:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.help-panel summary {
+  color: var(--verde-escuro);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.help-panel ol,
+.faq-list {
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.45;
+  margin: 10px 0 0;
+}
+
+.help-panel ol {
+  padding-left: 22px;
+}
+
+.faq-list {
+  display: grid;
+  gap: 8px;
+}
+
+.faq-list p {
+  margin: 0;
 }
 
 .prices-editor {

@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OrÃ§amentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v2" />
+    <title>Orçamentos de Eventos | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v3" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
-      <section class="workspace" aria-label="Gerador de orÃ§amento">
+      <section class="workspace" aria-label="Gerador de orçamento">
         <header class="topbar">
           <div class="brand-lockup">
             <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
@@ -18,7 +18,7 @@
             </div>
           </div>
           <div class="topbar-actions">
-            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">FormulÃ¡rio do cliente</a>
+            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário do cliente</a>
             <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
             <button class="primary" id="printBtn" type="button">Criar PDF</button>
           </div>
@@ -31,7 +31,7 @@
           </div>
           <div class="team-access">
             <div class="team-auth team-primary">
-              <p>Acesso exclusivo da equipe Embaixada Carioca. Entre com um e-mail autorizado para liberar orÃ§amentos, preÃ§os, propostas e histÃ³rico.</p>
+              <p>Acesso exclusivo da equipe Embaixada Carioca. Entre com um e-mail autorizado para liberar orçamentos, preços, propostas e histórico.</p>
               <div class="team-email-presets" aria-label="E-mails autorizados">
                 <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
                 <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
@@ -61,16 +61,16 @@
             <div class="team-context">
               <div class="team-ready">
                 <span>Sistema pronto</span>
-                <strong>O app jÃ¡ estÃ¡ conectado ao histÃ³rico da equipe.</strong>
-                <p>A conexÃ£o tÃ©cnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
+                <strong>O app já está conectado ao histórico da equipe.</strong>
+                <p>A conexão técnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
               </div>
               <ul class="team-checklist">
-                <li>Clientes enviam pedidos pelo formulÃ¡rio externo.</li>
+                <li>Clientes enviam pedidos pelo formulário externo.</li>
                 <li>A equipe qualifica, ajusta valores e gera a proposta.</li>
-                <li>Cada evento fica em uma Ãºnica etapa clara do funil.</li>
+                <li>Cada evento fica em uma única etapa clara do funil.</li>
               </ul>
               <details class="team-advanced">
-                <summary>ConfiguraÃ§Ã£o tÃ©cnica</summary>
+                <summary>Configuração técnica</summary>
                 <div class="supabase-config-grid">
                   <label>
                     Supabase URL
@@ -80,20 +80,20 @@
                     Supabase anon key
                     <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
                   </label>
-                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexÃ£o</button>
+                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
                 </div>
-                <div class="team-status" id="supabaseStatus">ConexÃ£o pronta.</div>
+                <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
               </details>
             </div>
           </div>
           <div class="request-panel">
             <div>
-              <p>FormulÃ¡rio externo para clientes</p>
-              <strong id="clientFormLink">Carregando link do formulÃ¡rio...</strong>
+              <p>Formulário externo para clientes</p>
+              <strong id="clientFormLink">Carregando link do formulário...</strong>
             </div>
             <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
           </div>
-          <div class="owner-metrics" aria-label="VisÃ£o de gestÃ£o">
+          <div class="owner-metrics" aria-label="Visão de gestão">
             <div>
               <span>Leads</span>
               <strong id="metricLeads">0</strong>
@@ -107,7 +107,7 @@
               <strong id="metricConfirmed">0</strong>
             </div>
             <div>
-              <span>Ticket mÃ©dio</span>
+              <span>Ticket médio</span>
               <strong id="metricAverageTicket">R$ 0,00</strong>
             </div>
           </div>
@@ -116,11 +116,33 @@
               <span>Pipeline de eventos</span>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p>SolicitaÃ§Ã£o, negociaÃ§Ã£o, sinal e operaÃ§Ã£o em uma visÃ£o simples.</p>
+            <p>Arraste os cards entre as etapas ou use o seletor de etapa dentro de cada card.</p>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
           </div>
+          <section class="help-panel" aria-label="Manual e perguntas frequentes">
+            <details open>
+              <summary>Manual rápido do sistema</summary>
+              <ol>
+                <li>O cliente envia o formulário externo e entra como Lead recebido.</li>
+                <li>A equipe abre o lead, revisa os dados e salva a proposta enviada.</li>
+                <li>Enquanto conversa com o cliente, mova o card para Negociação ou Aguardando sinal.</li>
+                <li>Após o pagamento do sinal, use Marcar sinal pago para confirmar o evento.</li>
+                <li>Depois do evento, avance para Realizado e finalize em Pós-venda.</li>
+              </ol>
+            </details>
+            <details>
+              <summary>FAQ da equipe</summary>
+              <div class="faq-list">
+                <p><strong>Posso confirmar sem sinal?</strong> Não. Use Aguardando sinal até o pagamento ser feito.</p>
+                <p><strong>Como cancelo um lead?</strong> Clique em Cancelar no card e escolha um motivo.</p>
+                <p><strong>Onde altero preços?</strong> Em Valores e produtos, no topo da tela.</p>
+                <p><strong>Como envio por WhatsApp?</strong> Use PDF + WhatsApp, salve o PDF e anexe na conversa aberta.</p>
+                <p><strong>Quando usar Pré-evento?</strong> Quando o evento já estiver confirmado e pronto para execução.</p>
+              </div>
+            </details>
+          </section>
         </section>
 
         <section class="quote-layout">
@@ -152,7 +174,7 @@
                   <input id="eventDate" type="date" />
                 </label>
                 <label>
-                  HorÃ¡rio
+                  Horário
                   <input id="eventTime" type="time" step="900" value="18:00" />
                 </label>
                 <label>
@@ -160,7 +182,7 @@
                   <input id="guestCount" type="number" min="1" step="1" value="30" />
                 </label>
                 <label>
-                  DuraÃ§Ã£o
+                  Duração
                   <select id="eventDuration">
                     <option value="1">1h</option>
                     <option value="1.5">1h30</option>
@@ -178,7 +200,7 @@
                 <label>
                   Ajuste comercial
                   <input id="manualAdjustment" type="text" inputmode="decimal" placeholder="Ex.: -500 ou 750" />
-                  <small>Use valor negativo para desconto ou positivo para acrÃ©scimo.</small>
+                  <small>Use valor negativo para desconto ou positivo para acréscimo.</small>
                 </label>
                 <label>
                   Motivo do ajuste
@@ -186,15 +208,15 @@
                 </label>
               </div>
               <label>
-                ObservaÃ§Ãµes
-                <textarea id="notes" rows="3" placeholder="PreferÃªncias, restriÃ§Ãµes, horÃ¡rios, detalhes de montagem..."></textarea>
+                Observações
+                <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
               </label>
             </div>
 
             <div class="form-section">
               <div class="section-heading">
                 <span>02</span>
-                <h2>ConfiguraÃ§Ã£o do evento</h2>
+                <h2>Configuração do evento</h2>
               </div>
               <div class="guided-flow">
                 <div class="flow-status" id="flowStatus">
@@ -202,7 +224,7 @@
                 </div>
 
                 <div class="flow-block">
-                  <p>Etapa 3 â€” Tipo de evento</p>
+                  <p>Etapa 3 — Tipo de evento</p>
                   <div class="choice-grid" id="flowEventOptions">
                     <button type="button" data-flow-event="coquetel">
                       <strong>1. Coquetel</strong>
@@ -213,42 +235,42 @@
                       <span>Filtra os workshops para escolher PT ou EN.</span>
                     </button>
                     <button type="button" data-flow-event="cafe">
-                      <strong>3. CafÃ© da ManhÃ£ / Coffee Break</strong>
-                      <span>Filtra os pacotes de cafÃ©.</span>
+                      <strong>3. Café da Manhã / Coffee Break</strong>
+                      <span>Filtra os pacotes de café.</span>
                     </button>
                     <button type="button" data-flow-event="almoco">
-                      <strong>4. AlmoÃ§o Carioca</strong>
-                      <span>Prioriza inÃ­cio do almoÃ§o em dias Ãºteis.</span>
+                      <strong>4. Almoço Carioca</strong>
+                      <span>Prioriza início do almoço em dias úteis.</span>
                     </button>
                     <button type="button" data-flow-event="welcome">
                       <strong>5. Welcome Drink</strong>
-                      <span>Filtra as opÃ§Ãµes de recepÃ§Ã£o.</span>
+                      <span>Filtra as opções de recepção.</span>
                     </button>
                   </div>
                 </div>
 
                 <div class="flow-block is-hidden" id="coquetelChoices">
-                  <p>Etapa 4 â€” Bebidas</p>
+                  <p>Etapa 4 — Bebidas</p>
                   <div class="choice-grid compact" id="flowBeverageOptions">
                     <button type="button" data-select-package="coquetel-caipirinha">
                       <strong>1. Coquetel Caipirinha</strong>
-                      <span>Caipirinhas de limÃ£o, refrigerantes e Ã¡gua mineral.</span>
+                      <span>Caipirinhas de limão, refrigerantes e água mineral.</span>
                     </button>
                     <button type="button" data-select-package="coquetel-carioca">
                       <strong>2. Coquetel Carioca</strong>
-                      <span>Caipirinhas variadas, chope, sucos, refrigerantes e Ã¡gua.</span>
+                      <span>Caipirinhas variadas, chope, sucos, refrigerantes e água.</span>
                     </button>
                   </div>
 
-                  <p>Etapa 5 â€” Comidas</p>
+                  <p>Etapa 5 — Comidas</p>
                   <div class="choice-grid compact" id="flowFoodOptions">
                     <button type="button" data-select-package="brasileiro-i">
                       <strong>1. Brasileiro I</strong>
-                      <span>PastÃ©is de carne e queijo, aipim frito.</span>
+                      <span>Pastéis de carne e queijo, aipim frito.</span>
                     </button>
                     <button type="button" data-select-package="brasileiro-ii">
                       <strong>2. Brasileiro II</strong>
-                      <span>Caldinho, pastÃ©is, aipim, bolinho, barquete e prato quente.</span>
+                      <span>Caldinho, pastéis, aipim, bolinho, barquete e prato quente.</span>
                     </button>
                     <button type="button" data-select-package="none-food">
                       <strong>3. Nenhum</strong>
@@ -266,7 +288,7 @@
             <div class="form-section">
               <div class="section-heading">
                 <span>03</span>
-                <h2>Itens do orÃ§amento</h2>
+                <h2>Itens do orçamento</h2>
               </div>
               <div class="filters">
                 <label>
@@ -286,15 +308,15 @@
             <div class="form-section">
               <div class="section-heading">
                 <span>04</span>
-                <h2>CÃ¡lculo e privatizaÃ§Ã£o</h2>
+                <h2>Cálculo e privatização</h2>
               </div>
               <div class="calculation-flow">
                 <label>
-                  Etapa 10 â€” Motivo do evento
+                  Etapa 10 — Motivo do evento
                   <textarea
                     id="eventReason"
                     rows="3"
-                    placeholder="ConfraternizaÃ§Ã£o, aniversÃ¡rio, evento corporativo..."
+                    placeholder="Confraternização, aniversário, evento corporativo..."
                   ></textarea>
                 </label>
 
@@ -303,25 +325,25 @@
                 <div class="privatization-panel">
                   <div>
                     <p class="flow-kicker">Regra aplicada</p>
-                    <strong id="privatizationTitle">Informe data e horÃ¡rio</strong>
+                    <strong id="privatizationTitle">Informe data e horário</strong>
                     <span id="privatizationDescription">
-                      A regra de privatizaÃ§Ã£o serÃ¡ calculada conforme dia, horÃ¡rio, convidados e duraÃ§Ã£o.
+                      A regra de privatização será calculada conforme dia, horário, convidados e duração.
                     </span>
                   </div>
                   <div class="choice-grid compact is-hidden" id="optionalPrivatizationControls">
                     <button type="button" data-privatization-choice="yes">
                       <strong>Sim</strong>
-                      <span>Incluir exclusividade do espaÃ§o.</span>
+                      <span>Incluir exclusividade do espaço.</span>
                     </button>
                     <button type="button" data-privatization-choice="no">
-                      <strong>NÃ£o</strong>
-                      <span>Seguir sem privatizaÃ§Ã£o opcional.</span>
+                      <strong>Não</strong>
+                      <span>Seguir sem privatização opcional.</span>
                     </button>
                   </div>
                 </div>
 
                 <p class="pricing-admin-link">
-                  Valores e regras de privatizaÃ§Ã£o ficam em
+                  Valores e regras de privatização ficam em
                   <a href="./valores.html">Valores e produtos</a>.
                 </p>
               </div>
@@ -330,10 +352,10 @@
             <div class="form-section">
               <div class="section-heading">
                 <span>05</span>
-                <h2>CondiÃ§Ãµes gerais</h2>
+                <h2>Condições gerais</h2>
               </div>
               <label>
-                Texto incluÃ­do na proposta
+                Texto incluído na proposta
                 <textarea id="generalTerms" rows="14"></textarea>
               </label>
             </div>
@@ -343,7 +365,7 @@
             <img
               class="venue-image"
               src="./assets/venue.jpg"
-              alt="Ãrea externa da Embaixada Carioca com vista para o PÃ£o de AÃ§Ãºcar"
+              alt="Área externa da Embaixada Carioca com vista para o Pão de Açúcar"
               onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1200&q=80';"
             />
             <div class="summary-brand">
@@ -356,7 +378,7 @@
                 <span>Total com taxa</span>
                 <strong id="grandTotal">R$ 0,00</strong>
               </div>
-              <div class="total-meta" id="totalMeta">Selecione itens para montar o orÃ§amento.</div>
+              <div class="total-meta" id="totalMeta">Selecione itens para montar o orçamento.</div>
             </div>
             <div class="selected-items" id="selectedItems"></div>
             <div class="send-actions">
@@ -397,6 +419,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-eventos-v2"></script>
+    <script src="./app.js?v=20260421-eventos-v3"></script>
   </body>
 </html>
