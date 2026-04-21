@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v4" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v5" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -158,8 +158,9 @@
               <label>
                 Quantidade de convidados
                 <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
-                <input id="requestGuestCount" name="convidados" type="number" inputmode="numeric" min="1" max="300" step="1" value="30" required />
-                <small>Use uma estimativa. A equipe ajusta a proposta depois, se necessário.</small>
+                <input id="requestGuestSlider" type="range" min="2" max="100" step="1" value="30" aria-label="Escolha rápida de convidados" />
+                <input id="requestGuestCount" name="convidados" type="number" inputmode="numeric" min="2" max="500" step="1" value="30" required />
+                <small>Use o slider até 99+. Para grupos maiores, digite o número exato até 500.</small>
               </label>
               <label>
                 Período desejado
@@ -326,6 +327,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260421-eventos-v4"></script>
+    <script src="./formulario.js?v=20260421-eventos-v5"></script>
   </body>
 </html>

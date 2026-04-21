@@ -28,6 +28,7 @@ const fields = {
   dateIsFlexible: document.querySelector("#requestDateIsFlexible"),
   timeRange: document.querySelector("#requestTimeRange"),
   time: document.querySelector("#requestEventTime"),
+  guestSlider: document.querySelector("#requestGuestSlider"),
   guests: document.querySelector("#requestGuestCount"),
   guestOutput: document.querySelector("#requestGuestOutput"),
   duration: document.querySelector("#requestDuration"),
@@ -224,12 +225,27 @@ function renderSuccessStatus(referenceCode) {
 
 function fillGuestOptions() {
   fields.guests.value = "30";
-  updateGuestOutput();
+  if (fields.guestSlider) fields.guestSlider.value = "30";
+  updateGuestOutput("number");
 }
 
-function updateGuestOutput() {
-  const guests = Math.max(1, Math.floor(toNumber(fields.guests.value) || 1));
-  fields.guestOutput.textContent = `${guests} ${guests === 1 ? "pessoa" : "pessoas"}`;
+function updateGuestOutput(source = "number") {
+  const sliderMax = 100;
+  if (source === "slider" && fields.guestSlider) {
+    const sliderGuests = Math.floor(toNumber(fields.guestSlider.value) || 30);
+    fields.guests.value = String(sliderGuests >= sliderMax ? sliderMax : sliderGuests);
+  }
+
+  let guests = Math.floor(toNumber(fields.guests.value) || 30);
+  guests = Math.min(500, Math.max(2, guests));
+  fields.guests.value = String(guests);
+
+  if (fields.guestSlider) {
+    fields.guestSlider.value = String(guests >= 100 ? 100 : guests);
+  }
+
+  const outputLabel = guests >= 100 ? "99+ pessoas" : `${guests} ${guests === 1 ? "pessoa" : "pessoas"}`;
+  fields.guestOutput.textContent = outputLabel;
 }
 
 function fillTimeOptions(range = fields.timeRange.value) {
@@ -452,7 +468,7 @@ function getSnapshot(referenceCode) {
       dataFlexivelStatus: flexibilityLabels[fields.dateIsFlexible.value] || "",
       faixaHorario: timeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
-      convidados: Math.max(1, Math.floor(toNumber(fields.guests.value) || 1)),
+      convidados: Math.min(500, Math.max(2, Math.floor(toNumber(fields.guests.value) || 30))),
       duracao: toNumber(fields.duration.value),
       motivo: fields.reason.value.trim(),
       preferencias: [selectedPreferences.length ? `Preferências marcadas: ${selectedPreferences.join(", ")}` : "", preferenceText]
@@ -609,6 +625,7 @@ fields.phone.addEventListener("input", () => {
   setStepValidity("contact", true);
 });
 fields.guests.addEventListener("input", updateGuestOutput);
+fields.guestSlider?.addEventListener("input", () => updateGuestOutput("slider"));
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   setStepValidity("contact", true);
