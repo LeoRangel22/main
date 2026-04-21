@@ -28,7 +28,6 @@ const fields = {
   dateIsFlexible: document.querySelector("#requestDateIsFlexible"),
   timeRange: document.querySelector("#requestTimeRange"),
   time: document.querySelector("#requestEventTime"),
-  timeIsFlexible: document.querySelector("#requestTimeIsFlexible"),
   guests: document.querySelector("#requestGuestCount"),
   guestOutput: document.querySelector("#requestGuestOutput"),
   duration: document.querySelector("#requestDuration"),
@@ -100,10 +99,8 @@ const flexibilityLabels = {
 
 const timeRangeLabels = {
   morning: "Manhã",
-  lunch: "Almoço",
-  "late-afternoon": "Fim de tarde",
+  afternoon: "Tarde",
   night: "Noite",
-  flexible: "Flexível",
 };
 
 const formats = {
@@ -175,17 +172,15 @@ const recommendationRules = {
 
 const preferredTimeRangeByMoment = {
   "weekday-morning": "morning",
-  "weekday-lunch": "lunch",
-  "late-afternoon": "late-afternoon",
+  "weekday-lunch": "afternoon",
+  "late-afternoon": "afternoon",
   night: "night",
 };
 
 const timeOptionsByRange = {
   morning: ["08:30", "09:00", "09:30", "10:00", "10:30"],
-  lunch: ["11:00", "11:30", "12:00", "12:30"],
-  "late-afternoon": ["17:00", "17:30", "18:00", "18:30"],
+  afternoon: ["11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "17:00", "17:30", "18:00", "18:30"],
   night: ["19:00", "19:30", "20:00"],
-  flexible: [""],
 };
 
 function setStatus(message, type = "neutral") {
@@ -239,10 +234,6 @@ function updateGuestOutput() {
 
 function fillTimeOptions(range = fields.timeRange.value) {
   const times = timeOptionsByRange[range] || [];
-  if (range === "flexible") {
-    fields.time.innerHTML = '<option value="">A definir</option>';
-    return;
-  }
   const options = ['<option value="">Selecione</option>'];
   times.forEach((time) => options.push(`<option value="${time}">${time.replace(":", "h")}</option>`));
   fields.time.innerHTML = options.join("");
@@ -416,6 +407,12 @@ function handleChoiceClick(event) {
     if (choiceValue === "weekday-lunch") {
       fields.time.value = "11:30";
       fields.duration.value = "1.5";
+    } else if (choiceValue === "weekday-morning") {
+      fields.time.value = "09:00";
+    } else if (choiceValue === "late-afternoon") {
+      fields.time.value = "17:00";
+    } else if (choiceValue === "night") {
+      fields.time.value = "19:00";
     }
   }
 
@@ -455,7 +452,6 @@ function getSnapshot(referenceCode) {
       dataFlexivelStatus: flexibilityLabels[fields.dateIsFlexible.value] || "",
       faixaHorario: timeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
-      horarioFlexivel: flexibilityLabels[fields.timeIsFlexible.value] || "",
       convidados: Math.max(1, Math.floor(toNumber(fields.guests.value) || 1)),
       duracao: toNumber(fields.duration.value),
       motivo: fields.reason.value.trim(),
@@ -498,7 +494,6 @@ function getPayload(snapshot) {
           ? `Faixa de investimento: ${snapshot.qualificacao.faixaInvestimento}`
           : "",
         snapshot.evento.dataFlexivelStatus ? `Data flexível: ${snapshot.evento.dataFlexivelStatus}` : "",
-        snapshot.evento.horarioFlexivel ? `Horário flexível: ${snapshot.evento.horarioFlexivel}` : "",
         snapshot.evento.observacoes || "",
       ]
         .filter(Boolean)
@@ -517,6 +512,7 @@ function validateSnapshot(snapshot) {
     [fields.profile, Boolean(snapshot.evento.perfil), "profile"],
     [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
     [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
+    [fields.time, Boolean(snapshot.evento.horario), "eventDetails"],
     [fields.budgetRange, Boolean(snapshot.qualificacao.faixaInvestimento), "contact"],
     [fields.leadSource, Boolean(snapshot.qualificacao.origem), "contact"],
     [fields.name, Boolean(snapshot.cliente.nome), "contact"],

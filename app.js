@@ -18,66 +18,56 @@ const paymentTerms = [
 const funnelStages = [
   {
     id: "lead_recebido",
-    title: "Lead recebido",
-    description: "Novo pedido aguardando triagem.",
+    row: "commercial",
+    title: "Lead",
+    description: "Novo pedido. Identifique se é cliente direto, agência receptiva/DMC ou agência de marketing/eventos.",
     statuses: ["lead_recebido"],
   },
   {
-    id: "qualificado",
-    title: "Qualificado",
-    description: "Lead revisado pela equipe.",
-    statuses: ["qualificado"],
-  },
-  {
     id: "proposta_enviada",
-    title: "Proposta enviada",
-    description: "Proposta formal em análise.",
+    row: "commercial",
+    title: "Proposta enviada / aguardando resposta",
+    description: "Proposta enviada ao cliente, aguardando retorno.",
     statuses: ["proposta_enviada"],
   },
   {
     id: "negociacao",
-    title: "Negociação",
+    row: "commercial",
+    title: "Em negociação",
     description: "Ajustes comerciais em andamento.",
     statuses: ["negociacao"],
   },
   {
-    id: "aguardando_sinal",
-    title: "Aguardando sinal",
-    description: "Aprovado, falta pagamento do sinal.",
-    statuses: ["aguardando_sinal"],
-  },
-  {
     id: "confirmado",
-    title: "Confirmado",
-    description: "Sinal pago e reserva confirmada.",
+    row: "operation",
+    title: "Sinal recebido",
+    description: "Venda concluída. Sinal pago e reserva confirmada.",
     statuses: ["confirmado"],
   },
   {
+    id: "pagamento_final",
+    row: "operation",
+    title: "Aguardando pagamento final",
+    description: "Cobrança do saldo final até 5 dias antes.",
+    statuses: ["pagamento_final"],
+  },
+  {
     id: "planejamento",
-    title: "Planejamento",
-    description: "Detalhes operacionais e pagamento final.",
+    row: "operation",
+    title: "Planejamento Evento",
+    description: "Detalhes operacionais para execução.",
     statuses: ["planejamento"],
   },
   {
-    id: "pronto",
-    title: "Pré-evento",
-    description: "Tudo pronto para execução.",
-    statuses: ["pronto"],
-  },
-  {
-    id: "realizado",
-    title: "Realizado",
-    description: "Evento executado.",
-    statuses: ["realizado"],
-  },
-  {
     id: "pos_venda",
+    row: "operation",
     title: "Pós-venda",
-    description: "Follow-up e relacionamento.",
+    description: "Finalizado. Follow-up e relacionamento.",
     statuses: ["pos_venda"],
   },
   {
     id: "cancelado",
+    row: "archive",
     title: "Cancelados",
     description: "Leads e propostas encerrados.",
     statuses: ["cancelado"],
@@ -87,18 +77,16 @@ const funnelStages = [
 const proposalStatusOptions = [
   "proposta_enviada",
   "negociacao",
-  "aguardando_sinal",
   "confirmado",
+  "pagamento_final",
   "planejamento",
-  "pronto",
-  "realizado",
   "pos_venda",
   "cancelado",
 ];
 
-const requestStatusOptions = ["lead_recebido", "qualificado", "cancelado"];
+const requestStatusOptions = ["lead_recebido", "cancelado"];
 
-const operationStatuses = new Set(["confirmado", "planejamento", "pronto", "realizado", "pos_venda"]);
+const operationStatuses = new Set(["confirmado", "pagamento_final", "planejamento", "pos_venda"]);
 
 const cancelReasons = [
   "Cliente sem retorno",
@@ -1532,8 +1520,9 @@ function renderHistory() {
 function normalizeRequestStatus(status) {
   const legacy = {
     novo: "lead_recebido",
-    em_cotacao: "qualificado",
-    analisado: "qualificado",
+    em_cotacao: "lead_recebido",
+    analisado: "lead_recebido",
+    qualificado: "lead_recebido",
     proposta_gerada: "proposta_enviada",
   };
   return legacy[status] || status || "lead_recebido";
@@ -1542,21 +1531,22 @@ function normalizeRequestStatus(status) {
 function normalizeProposalStatus(status) {
   const legacy = {
     rascunho: "proposta_enviada",
+    qualificado: "proposta_enviada",
+    aguardando_sinal: "negociacao",
+    pronto: "planejamento",
+    realizado: "pos_venda",
   };
   return legacy[status] || status || "proposta_enviada";
 }
 
 function getProposalStatusLabel(status) {
   const labels = {
-    lead_recebido: "Lead recebido",
-    qualificado: "Qualificado",
-    proposta_enviada: "Proposta enviada",
-    negociacao: "Negociação",
-    aguardando_sinal: "Aguardando sinal",
-    confirmado: "Confirmado",
-    planejamento: "Planejamento",
-    pronto: "Pré-evento",
-    realizado: "Evento realizado",
+    lead_recebido: "Lead",
+    proposta_enviada: "Proposta enviada / aguardando resposta",
+    negociacao: "Em negociação",
+    confirmado: "Sinal recebido",
+    pagamento_final: "Aguardando pagamento final",
+    planejamento: "Planejamento Evento",
     pos_venda: "Pós-venda",
     cancelado: "Cancelado",
   };
@@ -1585,6 +1575,41 @@ function getPipelineStage(status) {
   return funnelStages.find((stage) => stage.statuses.includes(normalized))?.id || "lead_recebido";
 }
 
+function getLeadSegment(request) {
+  const qualification = request.snapshot?.qualificacao || {};
+  const eventSnapshot = request.snapshot?.evento || {};
+  const text = [
+    qualification.tipoCliente,
+    qualification.origem,
+    qualification.faixaInvestimento,
+    request.cliente_nome,
+    request.cliente_empresa,
+    request.tipo_evento,
+    eventSnapshot.ocasiao,
+    eventSnapshot.formato,
+    eventSnapshot.observacoes,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const agencySignals = /\b(agencia|agency|dmc|receptiv|turismo|operadora|travel|tour|incoming|marketing|producao|ativacao)\b/;
+
+  if (!agencySignals.test(text)) {
+    return qualification.tipoCliente || "Cliente direto";
+  }
+
+  if (/\b(dmc|receptiv|turismo|operadora|travel|tour|incoming)\b/.test(text)) {
+    return "Agência turismo/receptivo/DMC";
+  }
+  if (/\b(marketing|eventos|producao|ativacao|activation)\b/.test(text)) {
+    return "Agência marketing/eventos";
+  }
+  if (text.includes("agencia") || text.includes("agency")) return "Agência a classificar";
+  return qualification.tipoCliente || "Cliente direto";
+}
+
 function getPipelineItems() {
   const linkedRequests = new Set(state.proposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
   const requestItems = state.quoteRequests
@@ -1606,7 +1631,7 @@ function getPipelineItems() {
         total: null,
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
-        meta: [qualification.tipoCliente, qualification.faixaInvestimento, qualification.origem].filter(Boolean),
+        meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
       };
     });
@@ -1652,8 +1677,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
 function getProposalTransitionOptions(currentStatus) {
   const status = normalizeProposalStatus(currentStatus);
   if (status === "cancelado") return ["cancelado"];
-  if (operationStatuses.has(status)) return ["confirmado", "planejamento", "pronto", "realizado", "pos_venda", "cancelado"];
-  return ["proposta_enviada", "negociacao", "aguardando_sinal", "cancelado"];
+  return ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "pos_venda"];
 }
 
 function renderStatusSelect(item) {
@@ -1702,12 +1726,27 @@ function renderPipelineCard(item) {
                    ? ""
                    : `<button class="secondary" type="button" data-mark-paid="${escapeHtml(item.id)}">Marcar sinal pago</button>`
                }`
-            : `<button class="primary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir proposta</button>
-               <button class="secondary" type="button" data-mark-request="${escapeHtml(item.id)}">Qualificar</button>`
+            : `<button class="primary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir proposta</button>`
         }
         ${item.status === "cancelado" ? "" : `<button class="secondary danger-light" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`}
       </div>
     </article>
+  `;
+}
+
+function renderPipelineStage(stage, items) {
+  const stageItems = items.filter((item) => item.stage === stage.id);
+  return `
+    <section class="pipeline-column">
+      <div class="pipeline-column-heading">
+        <span>${escapeHtml(stage.title)}</span>
+        <strong>${stageItems.length}</strong>
+      </div>
+      <p>${escapeHtml(stage.description)}</p>
+      <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
+        ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
+      </div>
+    </section>
   `;
 }
 
@@ -1728,22 +1767,18 @@ function renderPipeline() {
   const items = getPipelineItems();
   renderPipelineMetrics(items);
 
-  nodes.pipelineBoard.innerHTML = funnelStages
-    .map((stage) => {
-      const stageItems = items.filter((item) => item.stage === stage.id);
-      return `
-        <section class="pipeline-column">
-          <div class="pipeline-column-heading">
-            <span>${escapeHtml(stage.title)}</span>
-            <strong>${stageItems.length}</strong>
-          </div>
-          <p>${escapeHtml(stage.description)}</p>
-          <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
-            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
-          </div>
-        </section>
-      `;
-    })
+  const rows = [
+    { id: "commercial", title: "Comercial", stages: funnelStages.filter((stage) => stage.row === "commercial") },
+    { id: "operation", title: "Operação", stages: funnelStages.filter((stage) => stage.row === "operation") },
+    { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
+  ];
+
+  nodes.pipelineBoard.innerHTML = rows
+    .map((row) => `
+      <div class="pipeline-row pipeline-row-${escapeHtml(row.id)}" aria-label="${escapeHtml(row.title)}">
+        ${row.stages.map((stage) => renderPipelineStage(stage, items)).join("")}
+      </div>
+    `)
     .join("");
 }
 
@@ -1789,9 +1824,8 @@ function buildNotesFromRequest(request) {
   if (request.tipo_evento) lines.push(`Formato escolhido: ${request.tipo_evento}`);
   if (eventSnapshot.dataFlexivel) lines.push(`Janela de data flexível: ${eventSnapshot.dataFlexivel}`);
   if (eventSnapshot.dataFlexivelStatus) lines.push(`Data é flexível: ${eventSnapshot.dataFlexivelStatus}`);
-  if (eventSnapshot.faixaHorario) lines.push(`Faixa de horário: ${eventSnapshot.faixaHorario}`);
-  if (eventSnapshot.horario) lines.push(`Horário aproximado: ${eventSnapshot.horario}`);
-  if (eventSnapshot.horarioFlexivel) lines.push(`Horário é flexível: ${eventSnapshot.horarioFlexivel}`);
+  if (eventSnapshot.faixaHorario) lines.push(`Período do dia: ${eventSnapshot.faixaHorario}`);
+  if (eventSnapshot.horario) lines.push(`Horário de chegada: ${eventSnapshot.horario}`);
   if (eventSnapshot.extras) lines.push(`Extras: ${eventSnapshot.extras}`);
   if (request.preferencias) lines.push(`Preferências de A&B: ${request.preferencias}`);
   if (request.observacoes) lines.push(`Briefing do cliente: ${request.observacoes}`);
@@ -1816,13 +1850,12 @@ async function applyQuoteRequest(requestId) {
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
 
-  await updateQuoteRequest(request.id, { status: "qualificado" }, false);
   renderAll();
   showToast("Solicitação carregada para revisão.");
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
-  await updateQuoteRequest(requestId, { status: "qualificado" });
+  await updateQuoteRequest(requestId, { status: "lead_recebido" });
 }
 
 async function updateQuoteRequest(requestId, changes, shouldToast = true) {
@@ -1855,17 +1888,14 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
   if (current === "cancelado") return { ok: false, message: "Este evento está cancelado. Reative manualmente em uma nova proposta." };
   if (next === "cancelado") return { ok: false, message: "Use o botão Cancelar para registrar o motivo." };
   if (next === "confirmado") return { ok: true };
+  if (next === "pagamento_final" && !operationStatuses.has(current)) {
+    return { ok: false, message: "Sem sinal recebido, o evento não pode entrar em pagamento final." };
+  }
   if (next === "planejamento" && !operationStatuses.has(current)) {
-    return { ok: false, message: "Sem sinal pago, o evento não pode entrar em planejamento." };
+    return { ok: false, message: "Sem sinal recebido, o evento não pode entrar em planejamento." };
   }
-  if (next === "pronto" && !["confirmado", "planejamento", "pronto"].includes(current)) {
-    return { ok: false, message: "Só eventos confirmados podem ficar prontos para execução." };
-  }
-  if (next === "realizado" && current !== "pronto") {
-    return { ok: false, message: "Evento realizado só pode vir de pronto para execução." };
-  }
-  if (next === "pos_venda" && current !== "realizado") {
-    return { ok: false, message: "Pós-venda só pode vir depois de evento realizado." };
+  if (next === "pos_venda" && !operationStatuses.has(current)) {
+    return { ok: false, message: "Pós-venda só pode ser usado depois do sinal recebido." };
   }
   return { ok: true };
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v3" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v4" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -66,7 +66,7 @@
               </div>
               <ul class="team-checklist">
                 <li>Clientes enviam pedidos pelo formulário externo.</li>
-                <li>A equipe qualifica, ajusta valores e gera a proposta.</li>
+                <li>A equipe revisa, ajusta valores e gera a proposta.</li>
                 <li>Cada evento fica em uma única etapa clara do funil.</li>
               </ul>
               <details class="team-advanced">
@@ -116,7 +116,7 @@
               <span>Pipeline de eventos</span>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p>Arraste os cards entre as etapas ou use o seletor de etapa dentro de cada card.</p>
+            <p>Primeira linha comercial; segunda linha operação. Arraste os cards entre as etapas ou use o seletor dentro de cada card.</p>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
@@ -127,19 +127,19 @@
               <ol>
                 <li>O cliente envia o formulário externo e entra como Lead recebido.</li>
                 <li>A equipe abre o lead, revisa os dados e salva a proposta enviada.</li>
-                <li>Enquanto conversa com o cliente, mova o card para Negociação ou Aguardando sinal.</li>
-                <li>Após o pagamento do sinal, use Marcar sinal pago para confirmar o evento.</li>
-                <li>Depois do evento, avance para Realizado e finalize em Pós-venda.</li>
+                <li>Enquanto conversa com o cliente, mova o card para Em negociação.</li>
+                <li>Após o pagamento do sinal, use Marcar sinal pago para levar para Sinal recebido.</li>
+                <li>Depois siga para Aguardando pagamento final, Planejamento Evento e finalize em Pós-venda.</li>
               </ol>
             </details>
             <details>
               <summary>FAQ da equipe</summary>
               <div class="faq-list">
-                <p><strong>Posso confirmar sem sinal?</strong> Não. Use Aguardando sinal até o pagamento ser feito.</p>
+                <p><strong>Posso marcar Sinal recebido sem pagamento?</strong> Não. Esta etapa significa venda concluída com sinal pago.</p>
                 <p><strong>Como cancelo um lead?</strong> Clique em Cancelar no card e escolha um motivo.</p>
                 <p><strong>Onde altero preços?</strong> Em Valores e produtos, no topo da tela.</p>
                 <p><strong>Como envio por WhatsApp?</strong> Use PDF + WhatsApp, salve o PDF e anexe na conversa aberta.</p>
-                <p><strong>Quando usar Pré-evento?</strong> Quando o evento já estiver confirmado e pronto para execução.</p>
+                <p><strong>Quando usar Aguardando pagamento final?</strong> Quando o sinal já foi recebido e falta cobrar o saldo, idealmente até 5 dias antes.</p>
               </div>
             </details>
           </section>
@@ -419,6 +419,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-eventos-v3"></script>
+    <script src="./app.js?v=20260421-eventos-v4"></script>
   </body>
 </html>
