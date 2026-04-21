@@ -467,11 +467,26 @@ textarea[aria-invalid="true"] {
 
 .pipeline-board {
   display: grid;
-  gap: 12px;
-  grid-auto-columns: minmax(230px, 1fr);
-  grid-auto-flow: column;
-  overflow-x: auto;
+  gap: 16px;
+  overflow: visible;
   padding-bottom: 4px;
+}
+
+.pipeline-row {
+  display: grid;
+  gap: 12px;
+}
+
+.pipeline-row-commercial {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.pipeline-row-operation {
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+}
+
+.pipeline-row-archive {
+  grid-template-columns: minmax(220px, 360px);
 }
 
 .pipeline-column {
@@ -480,7 +495,7 @@ textarea[aria-invalid="true"] {
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  min-width: 220px;
+  min-width: 0;
   padding: 12px;
 }
 
@@ -2171,6 +2186,11 @@ input[type="range"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .pipeline-row-commercial,
+  .pipeline-row-operation {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
   .choice-card-grid,
   .format-grid,
   .profile-grid {
@@ -2216,6 +2236,9 @@ input[type="range"] {
   .fields-grid,
   .filters,
   .owner-metrics,
+  .pipeline-row-commercial,
+  .pipeline-row-operation,
+  .pipeline-row-archive,
   .choice-grid,
   .choice-grid.compact,
   .choice-card-grid,

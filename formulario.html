@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v3" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v4" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -158,7 +158,7 @@
               <label>
                 Quantidade de convidados
                 <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
-                <input id="requestGuestCount" name="convidados" type="range" min="1" max="300" step="1" value="30" required />
+                <input id="requestGuestCount" name="convidados" type="number" inputmode="numeric" min="1" max="300" step="1" value="30" required />
                 <small>Use uma estimativa. A equipe ajusta a proposta depois, se necessário.</small>
               </label>
               <label>
@@ -166,26 +166,16 @@
                 <select id="requestTimeRange" name="periodo_desejado" autocomplete="off" required>
                   <option value="">Selecione</option>
                   <option value="morning">Manhã</option>
-                  <option value="lunch">Almoço</option>
-                  <option value="late-afternoon">Fim de tarde</option>
+                  <option value="afternoon">Tarde</option>
                   <option value="night">Noite</option>
-                  <option value="flexible">Flexível</option>
                 </select>
               </label>
               <label>
-                Chegada aproximada
-                <select id="requestEventTime" name="horario_aproximado" autocomplete="off">
-                  <option value="">Selecione uma faixa</option>
+                Horário de chegada
+                <select id="requestEventTime" name="horario_chegada" autocomplete="off" required>
+                  <option value="">Selecione o período</option>
                 </select>
-              </label>
-              <label>
-                O horário é flexível?
-                <select id="requestTimeIsFlexible" name="horario_e_flexivel" autocomplete="off">
-                  <option value="">Selecione</option>
-                  <option value="yes">Sim</option>
-                  <option value="no">Não</option>
-                  <option value="maybe">Ainda avaliando</option>
-                </select>
+                <small>O horário acordado orienta a operação. Atrasos podem gerar hora extra ou manter o término original.</small>
               </label>
               <label>
                 Duração estimada
@@ -228,10 +218,15 @@
             </fieldset>
             <fieldset class="preference-chips">
               <legend>Extras de produção</legend>
-              <label><input type="checkbox" name="extras_evento" value="DJ / música" data-extra-chip />DJ / música</label>
-              <label><input type="checkbox" name="extras_evento" value="Decoração" data-extra-chip />Decoração</label>
+              <label><input type="checkbox" name="extras_evento" value="DJ" data-extra-chip />DJ</label>
+              <label><input type="checkbox" name="extras_evento" value="Trio de Jazz/Bossa Nova" data-extra-chip />Trio de Jazz/Bossa Nova</label>
               <label><input type="checkbox" name="extras_evento" value="Foto" data-extra-chip />Foto</label>
-              <label><input type="checkbox" name="extras_evento" value="Experiência personalizada" data-extra-chip />Experiência personalizada</label>
+              <label><input type="checkbox" name="extras_evento" value="Filmagem" data-extra-chip />Filmagem</label>
+              <label><input type="checkbox" name="extras_evento" value="TV" data-extra-chip />TV</label>
+              <label><input type="checkbox" name="extras_evento" value="Som com Microfone" data-extra-chip />Som com Microfone</label>
+              <label><input type="checkbox" name="extras_evento" value="Som Ambiente" data-extra-chip />Som Ambiente</label>
+              <label><input type="checkbox" name="extras_evento" value="Decoração" data-extra-chip />Decoração</label>
+              <label><input type="checkbox" name="extras_evento" value="Banners" data-extra-chip />Banners</label>
             </fieldset>
             <label>
               Preferências de alimentos e bebidas
@@ -331,6 +326,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260421-eventos-v3"></script>
+    <script src="./formulario.js?v=20260421-eventos-v4"></script>
   </body>
 </html>
