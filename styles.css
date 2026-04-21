@@ -4,6 +4,7 @@
   --verde: #335d4a;
   --verde-escuro: #183a2d;
   --verde-2: #cbded4;
+  --verde-claro: #edf4ef;
   --amarelo: #f59b1e;
   --areia: #ede2c9;
   --cinza-1: #485156;
@@ -62,6 +63,35 @@ button:disabled {
 
 button:hover {
   transform: translateY(-1px);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(245, 155, 30, 0.72);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  background: var(--verde-escuro);
+  border-radius: 8px;
+  color: var(--white);
+  font-weight: 900;
+  left: 16px;
+  padding: 10px 14px;
+  position: fixed;
+  text-decoration: none;
+  top: 12px;
+  transform: translateY(-160%);
+  transition: transform 160ms ease;
+  z-index: 20;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 .button-link {
@@ -460,6 +490,7 @@ textarea[aria-invalid="true"] {
 .section-heading h2 {
   font-size: 1.12rem;
   margin: 0;
+  text-wrap: balance;
 }
 
 .fields-grid,
@@ -1477,6 +1508,7 @@ td:nth-child(9) {
   line-height: 0.95;
   margin: 0;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .public-form-hero-copy span {
@@ -1525,6 +1557,7 @@ td:nth-child(9) {
   font-size: 2rem;
   line-height: 1;
   margin: 4px 0 0;
+  text-wrap: balance;
 }
 
 .public-form-intro p:not(.eyebrow) {
@@ -1837,6 +1870,14 @@ input[type="range"] {
   padding: 12px 14px;
 }
 
+.contact-assurance {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: -6px 0 0;
+}
+
 .public-form-actions {
   align-items: center;
   border-top: 1px solid var(--line);
@@ -2013,6 +2054,20 @@ input[type="range"] {
     max-width: 26ch;
   }
 
+  .public-form-trust {
+    display: grid;
+    grid-template-columns: 1fr;
+    max-width: 300px;
+  }
+
+  .public-form-trust b {
+    display: block;
+    line-height: 1.18;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
   .public-form-panel {
     margin: 0;
     max-width: none;
@@ -2112,6 +2167,17 @@ input[type="range"] {
   .public-form-intro {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
 
