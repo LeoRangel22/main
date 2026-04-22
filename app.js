@@ -1869,6 +1869,7 @@ function getPipelineItems() {
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: proposal.snapshot?.referencia || "",
       clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
+      hasSignalProof: Boolean(proposal.snapshot?.pagamentoSinal?.comprovante?.nome),
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
     };
@@ -1924,6 +1925,7 @@ function renderPipelineCard(item) {
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
+  const proofBadge = item.hasSignalProof ? `<small class="pipeline-signal-proof">Comprovante</small>` : "";
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
@@ -1960,7 +1962,10 @@ function renderPipelineCard(item) {
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
       <div class="pipeline-card-bottom-row">
-        ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : "<span></span>"}
+        <span class="pipeline-card-meta-group">
+          ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : ""}
+          ${proofBadge}
+        </span>
         ${actionButtons}
       </div>
       ${cancelInfo}
