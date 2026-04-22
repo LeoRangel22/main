@@ -764,6 +764,36 @@ function createSignalPaymentInfo(amount, date, banks) {
   };
 }
 
+function readSignalProofFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
+    const maxSize = 6 * 1024 * 1024;
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    if (file.size > maxSize) {
+      reject(new Error("O comprovante pode ter no máximo 6 MB."));
+      return;
+    }
+    if (!allowedTypes.includes(file.type)) {
+      reject(new Error("Anexe PDF ou imagem nos formatos JPG, PNG ou WEBP."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        nome: file.name,
+        tipo: file.type,
+        tamanho: file.size,
+        dataUrl: reader.result,
+      });
+    };
+    reader.onerror = () => reject(new Error("Não foi possível ler o comprovante."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function showSignalPaymentDialog(defaultAmount = 0) {
   return new Promise((resolve) => {
     const backdrop = document.createElement("div");
@@ -782,6 +812,10 @@ function showSignalPaymentDialog(defaultAmount = 0) {
         <label>
           Data do pagamento
           <input name="date" type="date" value="${escapeHtml(getTodayInputValue())}" />
+        </label>
+        <label>
+          Comprovante bancário <span class="optional-label">opcional</span>
+          <input name="proof" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" />
         </label>
         <fieldset>
           <legend>Banco de recebimento</legend>
@@ -809,22 +843,41 @@ function showSignalPaymentDialog(defaultAmount = 0) {
     const form = backdrop.querySelector("form");
     const amountInput = form.querySelector('input[name="amount"]');
     const dateInput = form.querySelector('input[name="date"]');
+    const proofInput = form.querySelector('input[name="proof"]');
     const errorNode = form.querySelector(".signal-error");
+    let amountChecked = false;
+    let dateChecked = false;
     const close = (value) => {
       backdrop.remove();
       resolve(value);
     };
 
+    amountInput.addEventListener("click", () => {
+      amountChecked = true;
+    });
+    amountInput.addEventListener("input", () => {
+      amountChecked = true;
+    });
+    dateInput.addEventListener("click", () => {
+      dateChecked = true;
+    });
+    dateInput.addEventListener("change", () => {
+      dateChecked = true;
+    });
     backdrop.addEventListener("click", (event) => {
       if (event.target === backdrop) close(null);
     });
     backdrop.querySelector("[data-signal-cancel]").addEventListener("click", () => close(null));
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const amount = toNumber(amountInput.value);
       const date = dateInput.value;
       const banks = [...form.querySelectorAll('input[name="bank"]:checked')].map((input) => input.value);
 
+      if (!amountChecked || !dateChecked) {
+        errorNode.textContent = "Clique no valor e na data para conferir antes de confirmar.";
+        return;
+      }
       if (!amount || amount <= 0) {
         errorNode.textContent = "Informe o valor recebido.";
         amountInput.focus();
@@ -840,7 +893,14 @@ function showSignalPaymentDialog(defaultAmount = 0) {
         return;
       }
 
-      close(createSignalPaymentInfo(amount, date, banks));
+      try {
+        const proof = await readSignalProofFile(proofInput.files?.[0] || null);
+        const info = createSignalPaymentInfo(amount, date, banks);
+        if (proof) info.comprovante = proof;
+        close(info);
+      } catch (error) {
+        errorNode.textContent = error.message;
+      }
     });
 
     document.body.appendChild(backdrop);
@@ -1846,6 +1906,13 @@ function renderPipelineCard(item) {
     item.status === "cancelado"
       ? ""
       : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`;
+  const actionButtons = `
+    <span class="pipeline-card-actions">
+      ${cancelButton}
+      ${renderStatusSelect(item)}
+      ${openButton}
+    </span>
+  `;
   return `
     <article
       class="pipeline-card"
@@ -1857,9 +1924,7 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
-        ${cancelButton}
-        ${renderStatusSelect(item)}
-        ${openButton}
+        ${actionButtons}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
