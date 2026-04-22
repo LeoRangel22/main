@@ -702,8 +702,9 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-kicker {
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
 }
 
@@ -718,7 +719,15 @@ textarea[aria-invalid="true"] {
   color: var(--muted) !important;
   font-weight: 500 !important;
   letter-spacing: 0;
-  max-width: 96px;
+  max-width: none;
+}
+
+.pipeline-card-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .pipeline-card-kicker .pipeline-status-control {
@@ -727,7 +736,7 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-kicker .pipeline-status-control summary {
   font-size: 0.58rem;
-  min-height: 18px;
+  min-height: 19px;
   padding: 2px 6px;
 }
 
@@ -750,10 +759,11 @@ textarea[aria-invalid="true"] {
 
 .pipeline-open-button {
   flex: 0 0 auto;
-  font-size: 0.74rem;
-  margin-left: auto;
-  min-height: 24px;
-  padding: 0 8px;
+  font-size: 0.58rem;
+  line-height: 1;
+  margin-left: 0;
+  min-height: 19px;
+  padding: 2px 7px;
 }
 
 .pipeline-card small {
@@ -966,6 +976,13 @@ label.pipeline-status-control:focus-within select {
   color: var(--muted);
   font-size: 0.86rem;
   margin: 0;
+}
+
+.optional-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: none;
 }
 
 .signal-modal fieldset {
@@ -1579,6 +1596,7 @@ textarea {
 .pipeline-stage-chip {
   flex: 0 0 auto;
   font-size: 0.58rem;
+  margin-right: 0;
   min-height: 18px;
   padding: 2px 6px;
 }
@@ -1586,7 +1604,7 @@ textarea {
 .pipeline-cancel-chip {
   flex: 0 0 auto;
   font-size: 0.58rem;
-  min-height: 18px;
+  min-height: 19px;
   padding: 2px 6px;
 }
 
