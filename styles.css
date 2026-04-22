@@ -679,8 +679,8 @@ textarea[aria-invalid="true"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  padding: 7px 8px;
+  gap: 3px;
+  padding: 6px 8px;
 }
 
 .pipeline-card[draggable="true"] {
@@ -698,7 +698,7 @@ textarea[aria-invalid="true"] {
   align-items: start;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .pipeline-card-kicker {
@@ -726,7 +726,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-actions {
   align-items: center;
   display: inline-flex;
-  gap: 3px;
+  gap: 4px;
   justify-content: flex-end;
   margin-left: auto;
 }
@@ -736,9 +736,10 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-kicker .pipeline-status-control summary {
-  font-size: 0.56rem;
-  min-height: 18px;
-  padding: 1px 6px;
+  font-size: 0.58rem;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 7px;
 }
 
 .pipeline-card-title strong,
@@ -760,18 +761,19 @@ textarea[aria-invalid="true"] {
 
 .pipeline-open-button {
   flex: 0 0 auto;
-  font-size: 0.56rem;
+  font-size: 0.58rem;
+  height: 20px;
   line-height: 1;
   margin-left: 0;
-  min-height: 18px;
-  padding: 1px 6px;
+  min-height: 20px;
+  padding: 0 7px;
 }
 
 .pipeline-card small {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 750;
-  line-height: 1.12;
+  line-height: 1.08;
 }
 
 .pipeline-card-event-line {
@@ -846,9 +848,10 @@ textarea[aria-invalid="true"] {
   flex: 0 0 auto;
   font-size: 0.58rem !important;
   font-weight: 900 !important;
+  height: 20px;
   line-height: 1;
-  min-height: 18px;
-  padding: 2px 6px;
+  min-height: 20px;
+  padding: 0 7px;
   text-decoration: none;
 }
 
@@ -1665,9 +1668,10 @@ textarea {
 
 .pipeline-cancel-chip {
   flex: 0 0 auto;
-  font-size: 0.56rem;
-  min-height: 18px;
-  padding: 1px 6px;
+  font-size: 0.58rem;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 7px;
   text-transform: none;
 }
 
