@@ -1913,19 +1913,75 @@ function formatMonthYear(date) {
   return `${month} ${date.getFullYear()}`.toUpperCase();
 }
 
+function formatShortDayMonth(date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+function formatPeriodRange(start, endExclusive) {
+  return `${formatShortDayMonth(start)} a ${formatShortDayMonth(addDays(endExclusive, -1))}`;
+}
+
+function formatMonthToYesterday(start, referenceDate) {
+  const yesterday = addDays(startOfDay(referenceDate), -1);
+  if (yesterday < start) return "1 até ontem";
+  return `1 a ${yesterday.getDate()}`;
+}
+
 function getPeriodRanges(referenceDate = new Date()) {
   const today = startOfDay(referenceDate);
   const currentWeekStart = startOfWeek(today);
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+  const lastWeekStart = addDays(currentWeekStart, -7);
+  const nextWeekStart = addDays(currentWeekStart, 7);
+  const nextWeekEnd = addDays(currentWeekStart, 14);
   return [
-    { label: "Semana passada", start: addDays(currentWeekStart, -7), end: currentWeekStart, source: "sold" },
-    { label: "Semana atual", start: currentWeekStart, end: addDays(currentWeekStart, 7), source: "sold" },
-    { label: "Próxima semana", start: addDays(currentWeekStart, 7), end: addDays(currentWeekStart, 14), source: "sold" },
-    { label: "No mês", start: currentMonthStart, end: nextMonthStart, source: "realized" },
-    { label: formatMonthYear(currentMonthStart), start: currentMonthStart, end: nextMonthStart, source: "sold" },
-    { label: formatMonthYear(nextMonthStart), start: nextMonthStart, end: nextMonthEnd, source: "sold" },
+    {
+      label: "Semana passada",
+      detail: formatPeriodRange(lastWeekStart, currentWeekStart),
+      start: lastWeekStart,
+      end: currentWeekStart,
+      source: "sold",
+    },
+    {
+      label: "Semana atual",
+      detail: formatPeriodRange(currentWeekStart, nextWeekStart),
+      start: currentWeekStart,
+      end: nextWeekStart,
+      source: "sold",
+    },
+    {
+      label: "Próxima semana",
+      detail: formatPeriodRange(nextWeekStart, nextWeekEnd),
+      start: nextWeekStart,
+      end: nextWeekEnd,
+      source: "sold",
+    },
+    {
+      label: "No mês",
+      detail: formatMonthToYesterday(currentMonthStart, today),
+      start: currentMonthStart,
+      end: today,
+      source: "realized",
+    },
+    {
+      label: formatMonthYear(currentMonthStart),
+      detail: formatPeriodRange(currentMonthStart, nextMonthStart),
+      start: currentMonthStart,
+      end: nextMonthStart,
+      source: "sold",
+    },
+    {
+      label: formatMonthYear(nextMonthStart),
+      detail: formatPeriodRange(nextMonthStart, nextMonthEnd),
+      start: nextMonthStart,
+      end: nextMonthEnd,
+      source: "sold",
+    },
   ];
 }
 
@@ -1946,6 +2002,7 @@ function renderPeriodMetrics(items) {
       return `
         <div class="period-metric-card">
           <span>${escapeHtml(period.label)}</span>
+          <small>${escapeHtml(period.detail)}</small>
           <dl>
             <div><dt>Eventos</dt><dd>${periodItems.length}</dd></div>
             <div><dt>Valor</dt><dd>${formatMoney(total)}</dd></div>
