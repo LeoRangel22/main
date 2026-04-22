@@ -1908,17 +1908,24 @@ function startOfWeek(date) {
   return addDays(start, offset);
 }
 
+function formatMonthYear(date) {
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+  return `${month} ${date.getFullYear()}`.toUpperCase();
+}
+
 function getPeriodRanges(referenceDate = new Date()) {
   const today = startOfDay(referenceDate);
   const currentWeekStart = startOfWeek(today);
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 1);
   return [
-    { label: "Semana passada", start: addDays(currentWeekStart, -7), end: currentWeekStart },
-    { label: "Semana atual", start: currentWeekStart, end: addDays(currentWeekStart, 7) },
-    { label: "Próxima semana", start: addDays(currentWeekStart, 7), end: addDays(currentWeekStart, 14) },
-    { label: "No mês", start: currentMonthStart, end: nextMonthStart },
-    { label: "Mês que vem", start: nextMonthStart, end: new Date(today.getFullYear(), today.getMonth() + 2, 1) },
+    { label: "Semana passada", start: addDays(currentWeekStart, -7), end: currentWeekStart, source: "sold" },
+    { label: "Semana atual", start: currentWeekStart, end: addDays(currentWeekStart, 7), source: "sold" },
+    { label: "Próxima semana", start: addDays(currentWeekStart, 7), end: addDays(currentWeekStart, 14), source: "sold" },
+    { label: "No mês", start: currentMonthStart, end: nextMonthStart, source: "realized" },
+    { label: formatMonthYear(currentMonthStart), start: currentMonthStart, end: nextMonthStart, source: "sold" },
+    { label: formatMonthYear(nextMonthStart), start: nextMonthStart, end: nextMonthEnd, source: "sold" },
   ];
 }
 
@@ -1928,10 +1935,12 @@ function renderPeriodMetrics(items) {
     .filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)))
     .map((item) => ({ ...item, eventDate: parseLocalIsoDate(item.date) }))
     .filter((item) => item.eventDate);
+  const realizedEvents = soldEvents.filter((item) => normalizeProposalStatus(item.status) === "pos_venda");
 
   nodes.periodMetrics.innerHTML = getPeriodRanges()
     .map((period) => {
-      const periodItems = soldEvents.filter((item) => item.eventDate >= period.start && item.eventDate < period.end);
+      const sourceItems = period.source === "realized" ? realizedEvents : soldEvents;
+      const periodItems = sourceItems.filter((item) => item.eventDate >= period.start && item.eventDate < period.end);
       const total = periodItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
       const average = periodItems.length ? total / periodItems.length : 0;
       return `

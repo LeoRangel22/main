@@ -641,7 +641,7 @@ textarea[aria-invalid="true"] {
 .period-metrics {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .period-metric-card {
