@@ -654,8 +654,9 @@ textarea[aria-invalid="true"] {
   background: var(--verde-escuro);
   border-radius: 8px;
   color: var(--white);
-  min-width: 30px;
-  padding: 3px 8px;
+  line-height: 1.05;
+  min-width: 26px;
+  padding: 1px 7px;
   text-align: center;
 }
 
@@ -678,8 +679,8 @@ textarea[aria-invalid="true"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 6px;
-  padding: 9px 10px;
+  gap: 4px;
+  padding: 7px 8px;
 }
 
 .pipeline-card[draggable="true"] {
@@ -704,7 +705,7 @@ textarea[aria-invalid="true"] {
   align-items: center;
   display: grid;
   gap: 3px;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
 }
 
@@ -725,7 +726,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-actions {
   align-items: center;
   display: inline-flex;
-  gap: 4px;
+  gap: 3px;
   justify-content: flex-end;
   margin-left: auto;
 }
@@ -735,9 +736,9 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-kicker .pipeline-status-control summary {
-  font-size: 0.58rem;
-  min-height: 19px;
-  padding: 2px 6px;
+  font-size: 0.56rem;
+  min-height: 18px;
+  padding: 1px 6px;
 }
 
 .pipeline-card-title strong,
@@ -759,18 +760,18 @@ textarea[aria-invalid="true"] {
 
 .pipeline-open-button {
   flex: 0 0 auto;
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   line-height: 1;
   margin-left: 0;
-  min-height: 19px;
-  padding: 2px 7px;
+  min-height: 18px;
+  padding: 1px 6px;
 }
 
 .pipeline-card small {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 750;
-  line-height: 1.22;
+  line-height: 1.12;
 }
 
 .pipeline-card-event-line {
@@ -817,7 +818,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-bottom-row {
   align-items: center;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -835,15 +836,24 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
-.pipeline-signal-proof {
-  background: rgba(24, 58, 45, 0.1);
+.pipeline-top-action,
+.pipeline-proof-download {
+  background: var(--surface);
   border-radius: 8px;
   color: var(--verde) !important;
+  cursor: pointer;
+  display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.62rem !important;
+  font-size: 0.58rem !important;
   font-weight: 900 !important;
+  line-height: 1;
+  min-height: 18px;
   padding: 2px 6px;
-  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.pipeline-proof-download {
+  background: rgba(24, 58, 45, 0.1);
 }
 
 .pipeline-card-status-row {
@@ -1655,9 +1665,14 @@ textarea {
 
 .pipeline-cancel-chip {
   flex: 0 0 auto;
-  font-size: 0.58rem;
-  min-height: 19px;
-  padding: 2px 6px;
+  font-size: 0.56rem;
+  min-height: 18px;
+  padding: 1px 6px;
+  text-transform: none;
+}
+
+.pipeline-card-actions .pipeline-status-control summary {
+  text-transform: none;
 }
 
 .status-chip.confirmed {

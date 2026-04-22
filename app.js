@@ -1870,6 +1870,7 @@ function getPipelineItems() {
       reference: proposal.snapshot?.referencia || "",
       clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
       hasSignalProof: Boolean(proposal.snapshot?.pagamentoSinal?.comprovante?.nome),
+      signalProof: proposal.snapshot?.pagamentoSinal?.comprovante || null,
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
     };
@@ -1925,11 +1926,19 @@ function renderPipelineCard(item) {
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
-  const proofBadge = item.hasSignalProof ? `<small class="pipeline-signal-proof">Comprovante</small>` : "";
+  const proofLink =
+    item.hasSignalProof && item.signalProof?.dataUrl
+      ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.signalProof.dataUrl)}" download="${escapeHtml(item.signalProof.nome || "comprovante-sinal")}">Comprovante</a>`
+      : "";
+  const signalButton =
+    item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
+      ? `<button class="pipeline-top-action" type="button" data-mark-paid="${escapeHtml(item.id)}">Sinal Pago!</button>`
+      : "";
+  const topAction = proofLink || signalButton;
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
-      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">ABRIR</button>`
+      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}">ABRIR</button>`;
   const cancelButton =
     item.status === "cancelado"
       ? ""
@@ -1952,6 +1961,7 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
+        ${topAction}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
@@ -1964,16 +1974,10 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-bottom-row">
         <span class="pipeline-card-meta-group">
           ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : ""}
-          ${proofBadge}
         </span>
         ${actionButtons}
       </div>
       ${cancelInfo}
-      ${
-        item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
-          ? `<div class="request-actions"><button class="secondary" type="button" data-mark-paid="${escapeHtml(item.id)}">Marcar sinal pago</button></div>`
-          : ""
-      }
     </article>
   `;
 }
