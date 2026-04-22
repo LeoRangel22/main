@@ -856,8 +856,10 @@ textarea[aria-invalid="true"] {
 
 .pipeline-top-action,
 .pipeline-proof-download {
+  align-items: center;
   background: var(--surface);
   border-radius: 8px;
+  box-sizing: border-box;
   color: var(--verde) !important;
   cursor: pointer;
   display: inline-flex;
@@ -865,6 +867,7 @@ textarea[aria-invalid="true"] {
   font-size: 0.58rem !important;
   font-weight: 900 !important;
   height: 20px;
+  justify-content: center;
   line-height: 1;
   min-height: 20px;
   padding: 0 7px;
@@ -1692,6 +1695,16 @@ textarea {
 }
 
 .pipeline-card-actions .pipeline-status-control summary {
+  align-items: center;
+  box-sizing: border-box;
+  display: inline-flex;
+  font-size: 0.58rem;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 20px;
+  padding: 0 7px;
   text-transform: none;
 }
 
