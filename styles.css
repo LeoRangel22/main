@@ -20,6 +20,8 @@
   --danger: #9d432f;
   --white: #ffffff;
   --shadow: 0 18px 45px rgba(24, 58, 45, 0.14);
+  --shadow-soft: 0 12px 34px rgba(24, 58, 45, 0.08);
+  --panel: rgba(255, 255, 255, 0.74);
 }
 
 * {
@@ -29,7 +31,9 @@
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--paper);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(203, 222, 212, 0.52), transparent 32rem),
+    linear-gradient(180deg, #f8fbf9 0%, var(--paper) 42%, #eef4f0 100%);
   font-family:
     Catamaran, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -166,12 +170,15 @@ summary:focus-visible {
 
 .topbar {
   align-items: start;
-  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  border: 1px solid rgba(24, 58, 45, 0.13);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(300px, 1fr) minmax(360px, 0.75fr) minmax(190px, 220px);
   margin: 0 0 16px;
-  padding: 0 0 14px;
+  padding: 12px;
 }
 
 .brand-lockup {
@@ -203,9 +210,9 @@ summary:focus-visible {
 }
 
 .topbar h1 {
-  font-size: 3.25rem;
+  font-size: clamp(2.25rem, 4vw, 3rem);
   font-weight: 900;
-  line-height: 0.88;
+  line-height: 0.9;
   margin: 4px 0 0;
   max-width: 520px;
 }
@@ -290,8 +297,8 @@ summary:focus-visible {
 .team-config,
 .team-auth,
 .team-context {
-  background: rgba(255, 255, 255, 0.46);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(24, 58, 45, 0.13);
   border-radius: 8px;
   display: grid;
   gap: 10px;
@@ -336,7 +343,8 @@ summary:focus-visible {
 
 .topbar-team-auth {
   align-content: start;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(24, 58, 45, 0.12);
   gap: 2px;
   padding: 5px 8px;
 }
@@ -510,9 +518,10 @@ textarea[aria-invalid="true"] {
 .request-panel,
 .pipeline-panel,
 .help-panel {
-  background: rgba(255, 255, 255, 0.46);
-  border: 1px solid var(--line);
+  background: var(--panel);
+  border: 1px solid rgba(24, 58, 45, 0.13);
   border-radius: 8px;
+  box-shadow: var(--shadow-soft);
   padding: 16px;
 }
 
@@ -613,10 +622,12 @@ textarea[aria-invalid="true"] {
 .owner-metrics div {
   background: var(--verde-escuro);
   border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(24, 58, 45, 0.1);
   color: var(--white);
   display: grid;
   gap: 2px;
   min-width: 0;
+  min-height: 54px;
   padding: 8px 10px;
 }
 
@@ -688,6 +699,7 @@ textarea[aria-invalid="true"] {
 .period-metric-card {
   background: var(--verde-escuro);
   border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(24, 58, 45, 0.08);
   color: var(--white);
   display: grid;
   gap: 6px;
@@ -770,8 +782,8 @@ textarea[aria-invalid="true"] {
 
 .pipeline-column {
   align-self: start;
-  background: rgba(238, 244, 240, 0.7);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(24, 58, 45, 0.13);
   border-radius: 8px;
   display: grid;
   gap: 8px;
@@ -872,11 +884,18 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card {
   background: var(--white);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(24, 58, 45, 0.12);
   border-radius: 8px;
   display: grid;
   gap: 3px;
   padding: 6px 8px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.pipeline-card:hover {
+  border-color: rgba(24, 58, 45, 0.28);
+  box-shadow: 0 10px 24px rgba(24, 58, 45, 0.08);
+  transform: translateY(-1px);
 }
 
 .pipeline-card[draggable="true"] {
@@ -1372,12 +1391,14 @@ label.pipeline-status-control:focus-within select {
 
 .form-section,
 .prices-editor {
-  border-bottom: 1px solid var(--line);
-  padding: 0 0 26px;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  padding: 18px;
 }
 
 .form-section + .form-section {
-  padding-top: 28px;
+  margin-top: 16px;
 }
 
 .section-heading {
@@ -1447,7 +1468,7 @@ label.pipeline-status-control:focus-within select {
 }
 
 .flow-status {
-  background: var(--verde-2);
+  background: linear-gradient(90deg, rgba(203, 222, 212, 0.92), rgba(238, 244, 240, 0.72));
   border-left: 4px solid var(--verde);
   border-radius: 8px;
   color: var(--verde-escuro);
@@ -1480,20 +1501,22 @@ label.pipeline-status-control:focus-within select {
 }
 
 .choice-grid button {
-  background: var(--white);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(24, 58, 45, 0.12);
   color: var(--ink);
   display: grid;
   gap: 5px;
   min-height: 96px;
   padding: 14px;
   text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .choice-grid button:hover,
 .choice-grid button.is-active {
   background: var(--verde-escuro);
   border-color: var(--verde-escuro);
+  box-shadow: 0 10px 24px rgba(24, 58, 45, 0.1);
   color: var(--white);
 }
 
@@ -2582,6 +2605,10 @@ td:nth-child(9) {
 }
 
 .public-form-panel {
+  background: rgba(255, 255, 255, 0.46);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
   margin: 0 auto;
   max-width: 1080px;
   padding: 28px;
@@ -2685,10 +2712,12 @@ td:nth-child(9) {
 }
 
 .consult-step {
-  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
   display: grid;
   gap: 16px;
-  padding-bottom: 24px;
+  padding: 18px;
   scroll-margin-top: 18px;
 }
 
@@ -2719,8 +2748,8 @@ td:nth-child(9) {
 
 .choice-card-grid button,
 .format-card {
-  background: var(--white);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.12);
   border-radius: 8px;
   color: var(--ink);
   display: grid;
@@ -2730,6 +2759,7 @@ td:nth-child(9) {
   overflow-wrap: anywhere;
   padding: 16px;
   text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .profile-grid button {
@@ -2760,6 +2790,7 @@ td:nth-child(9) {
 .format-card.is-selected {
   background: var(--verde-escuro);
   border-color: var(--verde-escuro);
+  box-shadow: 0 12px 28px rgba(24, 58, 45, 0.12);
   color: var(--white);
 }
 
