@@ -609,6 +609,7 @@ const nodes = {
   metricConfirmed: document.querySelector("#metricConfirmed"),
   metricAverageTicket: document.querySelector("#metricAverageTicket"),
   clientFormLink: document.querySelector("#clientFormLink"),
+  signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -742,6 +743,28 @@ function formatMultilineHtml(value) {
 
 function formatMoney(value) {
   return currency.format(value || 0);
+}
+
+function formatSignalPaymentDate(value) {
+  return value ? formatDateFromIso(value) : "Data não informada";
+}
+
+function renderSignalPaymentInfo(signal) {
+  if (!nodes.signalPaymentInfo) return;
+  if (!signal) {
+    nodes.signalPaymentInfo.classList.add("is-hidden");
+    nodes.signalPaymentInfo.innerHTML = "";
+    return;
+  }
+
+  const banks = Array.isArray(signal.bancos) ? signal.bancos.join(", ") : signal.banco || "Banco não informado";
+  const proof = signal.comprovante?.nome ? `Comprovante anexado: ${signal.comprovante.nome}` : "Sem comprovante anexado";
+  nodes.signalPaymentInfo.classList.remove("is-hidden");
+  nodes.signalPaymentInfo.innerHTML = `
+    <span>Sinal registrado</span>
+    <strong>${formatMoney(signal.valor)} · ${escapeHtml(formatSignalPaymentDate(signal.data))} · ${escapeHtml(banks)}</strong>
+    <small>${escapeHtml(proof)}</small>
+  `;
 }
 
 function getTodayInputValue() {
@@ -1818,6 +1841,7 @@ function getPipelineItems() {
         total: null,
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
+        clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
       };
@@ -1844,6 +1868,7 @@ function getPipelineItems() {
       total: proposal.total || 0,
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: proposal.snapshot?.referencia || "",
+      clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
     };
@@ -1898,6 +1923,7 @@ function renderPipelineCard(item) {
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
+  const clientTypeLine = item.clientType || item.meta[0] || "";
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
@@ -1924,7 +1950,6 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
-        ${actionButtons}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
@@ -1934,7 +1959,10 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
-      ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
+      <div class="pipeline-card-bottom-row">
+        ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : "<span></span>"}
+        ${actionButtons}
+      </div>
       ${cancelInfo}
       ${
         item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
@@ -2059,6 +2087,7 @@ async function applyQuoteRequest(requestId) {
   fields.eventDuration.value = String(request.duracao || 2);
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
+  renderSignalPaymentInfo(null);
 
   renderAll();
   showToast("Solicitação carregada para revisão.");
@@ -2215,6 +2244,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   upsertProposalState(data);
   renderHistory();
   renderPipeline();
+  if (state.activeProposalId === proposalId) renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null);
   showToast(nextStatus === "confirmado" ? "Sinal pago: evento confirmado." : "Etapa atualizada.");
 }
 
@@ -2495,6 +2525,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   }
   renderHistory();
   renderPipeline();
+  renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null);
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
@@ -2547,6 +2578,7 @@ function applyProposalSnapshot(snapshot) {
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
+  renderSignalPaymentInfo(snapshot.pagamentoSinal);
 
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
     state.prices = snapshot.prices;
