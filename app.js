@@ -3060,6 +3060,21 @@ function renderProposal() {
   const reason = fields.eventReason.value.trim();
   const terms = fields.generalTerms.value.trim();
   const totals = getQuoteTotals();
+  const repeatedHeader = `
+    <div class="proposal-header proposal-header-repeat" aria-hidden="true">
+      <div class="proposal-lockup">
+        <img class="brand-logo print-logo" src="./assets/logo-embaixada.svg" alt="" />
+        <div>
+          <p>Embaixada Carioca</p>
+          <h2>Proposta comercial</h2>
+        </div>
+      </div>
+      <div class="proposal-total-box">
+        <span>Total estimado</span>
+        <strong>${formatMoney(totals.total)}</strong>
+      </div>
+    </div>
+  `;
   const includedSummary = selected.length
     ? selected.map((item) => item.nome).join(", ")
     : "Itens a definir pela equipe.";
@@ -3118,7 +3133,8 @@ function renderProposal() {
     </section>
 
     <section class="proposal-page proposal-page-details">
-      <div class="proposal-section-title">
+      ${repeatedHeader}
+      <div class="proposal-section-title proposal-details-title">
         <span>03</span>
         <h3>Itens selecionados</h3>
       </div>
