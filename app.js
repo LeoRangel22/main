@@ -1933,6 +1933,7 @@ function formatMonthToYesterday(start, referenceDate) {
 function getPeriodRanges(referenceDate = new Date()) {
   const today = startOfDay(referenceDate);
   const currentWeekStart = startOfWeek(today);
+  const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 1);
@@ -1959,6 +1960,13 @@ function getPeriodRanges(referenceDate = new Date()) {
       detail: formatPeriodRange(nextWeekStart, nextWeekEnd),
       start: nextWeekStart,
       end: nextWeekEnd,
+      source: "sold",
+    },
+    {
+      label: formatMonthYear(previousMonthStart),
+      detail: formatPeriodRange(previousMonthStart, currentMonthStart),
+      start: previousMonthStart,
+      end: currentMonthStart,
       source: "sold",
     },
     {
@@ -2001,8 +2009,7 @@ function renderPeriodMetrics(items) {
       const average = periodItems.length ? total / periodItems.length : 0;
       return `
         <div class="period-metric-card">
-          <span>${escapeHtml(period.label)}</span>
-          <small>${escapeHtml(period.detail)}</small>
+          <span>${escapeHtml(period.label)} - ${escapeHtml(period.detail)}</span>
           <dl>
             <div><dt>Eventos</dt><dd>${periodItems.length}</dd></div>
             <div><dt>Valor</dt><dd>${formatMoney(total)}</dd></div>
@@ -2935,6 +2942,42 @@ function renderAll() {
   renderProposal();
 }
 
+function startNewProposal() {
+  const hasDraft =
+    state.activeProposalId ||
+    state.activeQuoteRequestId ||
+    fields.clientName.value.trim() ||
+    state.selectedIds.size;
+  if (hasDraft && !window.confirm("Começar uma nova proposta e limpar os dados atuais da tela?")) return;
+
+  state.activeProposalId = "";
+  state.activeQuoteRequestId = "";
+  state.selectedIds.clear();
+  state.guided = { event: "", beverageId: "", foodId: "" };
+  state.privatizationChoice = "";
+  saveSelectedIds();
+
+  fields.clientName.value = "";
+  fields.clientEmail.value = "";
+  fields.clientPhone.value = "";
+  fields.eventType.value = "";
+  fields.eventDate.value = "";
+  fields.eventTime.value = "18:00";
+  fields.guestCount.value = "30";
+  fields.eventDuration.value = "2";
+  fields.validity.value = "14 dias";
+  fields.manualAdjustment.value = "";
+  fields.manualAdjustmentLabel.value = "";
+  fields.eventReason.value = "";
+  fields.notes.value = "";
+  fields.searchPrice.value = "";
+  fields.categoryFilter.value = "";
+  renderSignalPaymentInfo(null);
+  renderAll();
+  scrollToClientData();
+  showToast("Nova proposta pronta para preencher.");
+}
+
 function showToast(message) {
   const existing = document.querySelector(".toast");
   if (existing) existing.remove();
@@ -3156,6 +3199,7 @@ function bindEvents() {
 
   document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
   document.querySelector("#emailBtn")?.addEventListener("click", openEmail);
+  document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposal);
