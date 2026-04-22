@@ -571,8 +571,8 @@ textarea[aria-invalid="true"] {
 
 .owner-metrics {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
 .owner-metrics div {
@@ -581,19 +581,25 @@ textarea[aria-invalid="true"] {
   color: var(--white);
   display: grid;
   gap: 2px;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 8px 10px;
 }
 
 .owner-metrics span {
   color: var(--verde-2);
-  font-size: 0.76rem;
+  font-size: 0.66rem;
   font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
 .owner-metrics strong {
   color: var(--white);
-  font-size: 1.32rem;
+  font-size: 1.18rem;
   line-height: 1;
 }
 

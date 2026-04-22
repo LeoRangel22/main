@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v31" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v32" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -73,22 +73,38 @@
         </header>
 
         <section class="team-panel" aria-label="Equipe e historico">
-          <div class="owner-metrics" aria-label="Visão de gestão">
+          <div class="owner-metrics" aria-label="Resumo do funil">
             <div>
-              <span>Leads</span>
-              <strong id="metricLeads">0</strong>
+              <span>Lead</span>
+              <strong id="metricStageLead">0</strong>
             </div>
             <div>
-              <span>Propostas</span>
-              <strong id="metricProposals">0</strong>
+              <span>Sem resposta</span>
+              <strong id="metricStageSemResposta">0</strong>
             </div>
             <div>
-              <span>Eventos</span>
-              <strong id="metricConfirmed">0</strong>
+              <span>Negociação</span>
+              <strong id="metricStageNegociacao">0</strong>
             </div>
             <div>
-              <span>Ticket médio</span>
-              <strong id="metricAverageTicket">R$ 0,00</strong>
+              <span>Sinal</span>
+              <strong id="metricStageSinal">0</strong>
+            </div>
+            <div>
+              <span>PG restante</span>
+              <strong id="metricStagePgRestante">0</strong>
+            </div>
+            <div>
+              <span>Planejamento</span>
+              <strong id="metricStagePlanejamento">0</strong>
+            </div>
+            <div>
+              <span>48h</span>
+              <strong id="metricStage48h">0</strong>
+            </div>
+            <div>
+              <span>Pós-venda</span>
+              <strong id="metricStagePosVenda">0</strong>
             </div>
           </div>
           <div class="pipeline-panel">
@@ -96,7 +112,7 @@
               <span>Funil de eventos</span>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p class="pipeline-stage-line">LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL RECEBIDO / Aguardando Planejamento / Eventos Hoje e Amanhã / POS VENDA</p>
+            <p class="pipeline-stage-line">LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</p>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
@@ -401,6 +417,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v31"></script>
+    <script src="./app.js?v=20260422-eventos-v32"></script>
   </body>
 </html>
