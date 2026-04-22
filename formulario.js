@@ -193,7 +193,7 @@ function setStatus(message, type = "neutral") {
 function updateProgress(stepName = "moment") {
   const index = Math.max(0, stepOrder.indexOf(stepName));
   const percent = ((index + 1) / stepOrder.length) * 100;
-  if (progressText) progressText.textContent = `Etapa ${index + 1} de ${stepOrder.length}`;
+  if (progressText) progressText.textContent = `Pergunta ${index + 1} de ${stepOrder.length} - Tempo estimado 2 minutos`;
   if (progressBar) progressBar.style.width = `${percent}%`;
   progressSteps.forEach((step, stepIndex) => {
     step.toggleAttribute("data-active", stepIndex === index);

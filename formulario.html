@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v9" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v10" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -38,17 +38,19 @@
             <h2>Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.</h2>
             <p>Um fluxo breve para orientar empresas, agências e celebrações privadas com a atenção que o Morro da Urca merece.</p>
           </div>
-          <ol class="public-form-steps" aria-label="Etapas do pedido">
-            <li><span>01</span>Momento</li>
-            <li><span>02</span>Qualificação</li>
-            <li><span>03</span>Formato</li>
-            <li><span>04</span>Viabilidade</li>
-            <li><span>05</span>Extras</li>
-            <li><span>06</span>Contato</li>
-          </ol>
-          <div class="form-progress" aria-label="Progresso do formulário">
-            <span id="formProgressText">Etapa 1 de 6</span>
-            <div><i id="formProgressBar"></i></div>
+          <div class="public-form-progress-panel">
+            <ol class="public-form-steps" aria-label="Etapas do pedido">
+              <li><span>01</span>Momento</li>
+              <li><span>02</span>Qualificação</li>
+              <li><span>03</span>Formato</li>
+              <li><span>04</span>Viabilidade</li>
+              <li><span>05</span>Extras</li>
+              <li><span>06</span>Contato</li>
+            </ol>
+            <div class="form-progress" aria-label="Progresso do formulário">
+              <span id="formProgressText">Pergunta 1 de 6 - Tempo estimado 2 minutos</span>
+              <div><i id="formProgressBar"></i></div>
+            </div>
           </div>
         </div>
         <form id="clientQuoteForm" class="client-quote-form">
@@ -328,6 +330,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260421-eventos-v9"></script>
+    <script src="./formulario.js?v=20260421-eventos-v10"></script>
   </body>
 </html>
