@@ -2562,20 +2562,6 @@ td:nth-child(9) {
   position: relative;
 }
 
-.public-form-body::before {
-  background: url("./assets/venue.jpg") center / cover no-repeat;
-  border-radius: 8px 0 0 0;
-  bottom: 0;
-  content: "";
-  height: 190px;
-  opacity: 0.08;
-  pointer-events: none;
-  position: fixed;
-  right: 0;
-  width: 280px;
-  z-index: 0;
-}
-
 .public-form-shell {
   min-height: 100vh;
   position: relative;
