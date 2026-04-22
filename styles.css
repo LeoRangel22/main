@@ -2875,45 +2875,92 @@ input[type="range"] {
 }
 
 .preference-chips {
-  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(238, 244, 240, 0.78), rgba(255, 255, 255, 0.88));
+  border: 1px solid rgba(24, 58, 45, 0.16);
   border-radius: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
-  padding: 14px;
+  padding: 14px 14px 15px;
 }
 
 .preference-chips legend {
   color: var(--verde);
   font-size: 0.78rem;
   font-weight: 900;
-  padding: 0 6px;
+  padding: 0 8px;
   text-transform: uppercase;
 }
 
 .preference-chips label {
   align-items: center;
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.1);
   border-radius: 8px;
+  color: var(--verde-escuro);
   cursor: pointer;
   display: inline-flex;
   flex-direction: row;
   gap: 8px;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 900;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 11px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .preference-chips input {
   accent-color: var(--verde-escuro);
-  appearance: auto;
-  flex: 0 0 18px;
-  height: 18px;
+  appearance: none;
+  background: var(--white);
+  border: 1.5px solid rgba(24, 58, 45, 0.42);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px var(--white);
+  flex: 0 0 15px;
+  height: 15px;
   min-height: 0;
   padding: 0;
-  width: 18px;
+  width: 15px;
+}
+
+.preference-chips label:hover {
+  border-color: rgba(24, 58, 45, 0.26);
+  transform: translateY(-1px);
+}
+
+.preference-chips label:has(input:checked) {
+  background: var(--verde-escuro);
+  border-color: var(--verde-escuro);
+  color: var(--white);
+}
+
+.preference-chips input:checked {
+  background: var(--amarelo);
+  border-color: var(--amarelo);
+}
+
+.briefing-text-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.briefing-text-grid textarea {
+  min-height: 94px;
+}
+
+.contact-fields-grid {
+  background: rgba(238, 244, 240, 0.52);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.contact-reassurance {
+  display: grid;
+  gap: 8px;
 }
 
 .contact-promise {
@@ -2931,7 +2978,7 @@ input[type="range"] {
   font-size: 0.92rem;
   font-weight: 800;
   line-height: 1.35;
-  margin: -6px 0 0;
+  margin: 0;
 }
 
 .public-form-actions {
@@ -3075,6 +3122,7 @@ input[type="range"] {
   .fields-grid,
   .filters,
   .event-details-grid,
+  .briefing-text-grid,
   .owner-metrics,
   .period-metrics,
   .pipeline-row-commercial,

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v46" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v47" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -202,6 +202,7 @@
               <span>05</span>
               <h2 id="briefingTitle">O toque final</h2>
             </div>
+            <p class="step-support">Selecione o que ajuda a equipe a montar uma proposta mais precisa. Se não souber, deixe em branco.</p>
             <label>
               Motivo do evento
               <textarea
@@ -211,7 +212,7 @@
                 placeholder="Ex.: comemorar 10 anos da empresa, premiar a equipe de vendas, receber clientes especiais…"
               ></textarea>
             </label>
-            <fieldset class="preference-chips">
+            <fieldset class="preference-chips premium-chips">
               <legend>O que não pode faltar?</legend>
               <label><input type="checkbox" name="preferencias_chips" value="Open bar" data-preference-chip />Open bar</label>
               <label><input type="checkbox" name="preferencias_chips" value="Menu degustação" data-preference-chip />Menu degustação</label>
@@ -220,7 +221,7 @@
               <label><input type="checkbox" name="preferencias_chips" value="Restrições alimentares" data-preference-chip />Restrições alimentares</label>
               <label><input type="checkbox" name="preferencias_chips" value="Experiência interativa" data-preference-chip />Experiência interativa</label>
             </fieldset>
-            <fieldset class="preference-chips">
+            <fieldset class="preference-chips premium-chips">
               <legend>Extras de produção</legend>
               <label><input type="checkbox" name="extras_evento" value="DJ" data-extra-chip />DJ</label>
               <label><input type="checkbox" name="extras_evento" value="Trio de Jazz/Bossa Nova" data-extra-chip />Trio de Jazz/Bossa Nova</label>
@@ -232,24 +233,26 @@
               <label><input type="checkbox" name="extras_evento" value="Decoração" data-extra-chip />Decoração</label>
               <label><input type="checkbox" name="extras_evento" value="Banners" data-extra-chip />Banners</label>
             </fieldset>
-            <label>
-              Preferências de alimentos e bebidas
-              <textarea
-                id="requestPreferences"
-                name="preferencias"
-                rows="3"
-                placeholder="Conte estilos, bebidas preferidas ou restrições que a equipe deve considerar…"
-              ></textarea>
-            </label>
-            <label>
-              Há algo importante que devemos considerar para montar sua proposta?
-              <textarea
-                id="requestNotes"
-                name="observacoes"
-                rows="3"
-                placeholder="Qualquer detalhe ajuda: acessibilidade, surpresa para convidados, necessidades técnicas, perfil do grupo…"
-              ></textarea>
-            </label>
+            <div class="briefing-text-grid">
+              <label>
+                Preferências de alimentos e bebidas
+                <textarea
+                  id="requestPreferences"
+                  name="preferencias"
+                  rows="3"
+                  placeholder="Conte estilos, bebidas preferidas ou restrições que a equipe deve considerar…"
+                ></textarea>
+              </label>
+              <label>
+                Há algo importante que devemos considerar para montar sua proposta?
+                <textarea
+                  id="requestNotes"
+                  name="observacoes"
+                  rows="3"
+                  placeholder="Qualquer detalhe ajuda: acessibilidade, surpresa para convidados, necessidades técnicas, perfil do grupo…"
+                ></textarea>
+              </label>
+            </div>
           </section>
 
           <section class="consult-step" id="contactStep" aria-labelledby="contactTitle">
@@ -257,7 +260,7 @@
               <span>06</span>
               <h2 id="contactTitle">Contato</h2>
             </div>
-            <div class="fields-grid">
+            <div class="fields-grid contact-fields-grid">
               <label>
                 Faixa de investimento
                 <select id="requestBudgetRange" name="faixa_investimento" autocomplete="off" required>
@@ -317,8 +320,10 @@
                 <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Empresa ou agência…" />
               </label>
             </div>
-            <p class="contact-promise">Nossa equipe responde em até 24h úteis com uma proposta sob medida.</p>
-            <p class="contact-assurance">Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.</p>
+            <div class="contact-reassurance">
+              <p class="contact-promise">Nossa equipe responde em até 24h úteis com uma proposta sob medida.</p>
+              <p class="contact-assurance">Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.</p>
+            </div>
           </section>
 
           <div class="public-form-actions">
@@ -330,6 +335,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260422-eventos-v46"></script>
+    <script src="./formulario.js?v=20260422-eventos-v47"></script>
   </body>
 </html>
