@@ -621,38 +621,41 @@ textarea[aria-invalid="true"] {
 }
 
 .owner-metrics .metric-stage-lead {
-  background: #9d3024;
+  background: #9f2f24;
 }
 
 .owner-metrics .metric-stage-sem-resposta {
-  background: #c95f1d;
+  background: #c65a18;
 }
 
 .owner-metrics .metric-stage-negociacao {
-  background: #d89a18;
+  background: #d28a16;
 }
 
 .owner-metrics .metric-stage-sinal {
-  background: #d7e7bd;
+  background: #2f6f45;
   color: var(--verde-escuro);
 }
 
 .owner-metrics .metric-stage-pg-restante {
-  background: #c95f1d;
+  background: #6c8b4d;
 }
 
-.owner-metrics .metric-stage-planejamento,
+.owner-metrics .metric-stage-planejamento {
+  background: #427c82;
+}
+
 .owner-metrics .metric-stage-48h {
-  background: #d89a18;
+  background: #285e78;
 }
 
 .owner-metrics .metric-stage-pos-venda {
-  background: #1f5f83;
+  background: #204d77;
 }
 
 .owner-metrics span {
-  color: var(--verde-2);
-  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1.1;
@@ -663,17 +666,17 @@ textarea[aria-invalid="true"] {
 }
 
 .owner-metrics .metric-stage-sinal span {
-  color: var(--verde);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .owner-metrics strong {
   color: var(--white);
-  font-size: 1.18rem;
+  font-size: 1.28rem;
   line-height: 1;
 }
 
 .owner-metrics .metric-stage-sinal strong {
-  color: var(--verde-escuro);
+  color: var(--white);
 }
 
 .period-metrics {
