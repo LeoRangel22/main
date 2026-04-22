@@ -704,7 +704,7 @@ textarea[aria-invalid="true"] {
   align-items: center;
   display: grid;
   gap: 3px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -812,6 +812,13 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-name-row {
   align-items: center;
+}
+
+.pipeline-card-bottom-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .pipeline-card-meta {
@@ -1031,6 +1038,33 @@ label.pipeline-status-control:focus-within select {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.signal-summary {
+  background: rgba(24, 58, 45, 0.08);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+}
+
+.signal-summary span {
+  color: var(--verde);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.signal-summary strong {
+  color: var(--verde-escuro);
+  font-size: 0.98rem;
+}
+
+.signal-summary small {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .eyebrow {
