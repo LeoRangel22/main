@@ -1527,7 +1527,7 @@ function buildProposalText() {
     `Horário: ${getEventTimeLabel()}`,
     `Convidados: ${getGuestCount()}`,
     `Duração: ${getDuration()}h`,
-    `Validade: ${fields.validity.value.trim() || "7 dias"}`,
+    `Validade: ${fields.validity.value.trim() || "14 dias"}`,
   ];
 
   if (reason) lines.push(`Motivo: ${reason}`);
@@ -2606,7 +2606,7 @@ function applyProposalSnapshot(snapshot) {
   fields.eventTime.value = snapshot.event?.time || "18:00";
   fields.guestCount.value = snapshot.event?.guests || 30;
   fields.eventDuration.value = String(snapshot.event?.duration || 2);
-  fields.validity.value = snapshot.event?.validity || "7 dias";
+  fields.validity.value = snapshot.event?.validity || "14 dias";
   fields.manualAdjustment.value = snapshot.event?.manualAdjustment || snapshot.totals?.adjustment || "";
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
   fields.eventReason.value = snapshot.event?.reason || "";
@@ -2708,8 +2708,8 @@ function renderProposal() {
       <div class="proposal-grid">
         <div><span>Formato</span>${escapeHtml(fields.eventType.value.trim() || "Evento")}</div>
         <div><span>Duração</span>${getDuration()}h</div>
-        <div><span>Validade</span>${escapeHtml(fields.validity.value.trim() || "7 dias")}</div>
-        <div><span>Emissão</span>${escapeHtml(getTodayLabel())}</div>
+        <div><span>Validade</span>${escapeHtml(fields.validity.value.trim() || "14 dias")}</div>
+        <div><span>Data da proposta</span>${escapeHtml(getTodayLabel())}</div>
         <div class="proposal-grid-wide"><span>Motivo</span>${escapeHtml(reason || "A definir")}</div>
       </div>
       <div class="proposal-note">
