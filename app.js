@@ -755,12 +755,19 @@ function renderSignalPaymentInfo(signal) {
   }
 
   const banks = Array.isArray(signal.bancos) ? signal.bancos.join(", ") : signal.banco || "Banco não informado";
-  const proof = signal.comprovante?.nome ? `Comprovante anexado: ${signal.comprovante.nome}` : "Sem comprovante anexado";
+  const proofName = signal.comprovante?.nome || "";
+  const proof = proofName
+    ? `Comprovante anexado: ${
+        signal.comprovante?.dataUrl
+          ? `<a href="${escapeHtml(signal.comprovante.dataUrl)}" download="${escapeHtml(proofName)}">${escapeHtml(proofName)}</a>`
+          : escapeHtml(proofName)
+      }`
+    : "Sem comprovante anexado";
   nodes.signalPaymentInfo.classList.remove("is-hidden");
   nodes.signalPaymentInfo.innerHTML = `
     <span>Sinal registrado</span>
     <strong>${formatMoney(signal.valor)} · ${escapeHtml(formatSignalPaymentDate(signal.data))} · ${escapeHtml(banks)}</strong>
-    <small>${escapeHtml(proof)}</small>
+    <small>${proof}</small>
   `;
 }
 
