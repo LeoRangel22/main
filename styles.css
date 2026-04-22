@@ -133,13 +133,11 @@ summary:focus-visible {
 
 .auth-locked .workspace {
   margin: 0 auto;
-  max-width: 980px;
+  max-width: 1280px;
   min-height: 100vh;
 }
 
 .auth-locked .topbar-actions,
-.auth-locked .team-context,
-.auth-locked .request-panel,
 .auth-locked .owner-metrics,
 .auth-locked .pipeline-panel,
 .auth-locked .help-panel,
@@ -156,21 +154,21 @@ summary:focus-visible {
   max-width: 760px;
 }
 
-.auth-locked .team-access {
-  grid-template-columns: 1fr;
+.auth-locked .topbar {
+  grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1fr);
 }
 
-.auth-locked .team-auth {
+.auth-locked .topbar-team-auth {
   background: var(--white);
   box-shadow: var(--shadow);
 }
 
 .topbar {
-  align-items: center;
+  align-items: start;
   border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(330px, 1fr) minmax(460px, 0.95fr) minmax(250px, 300px);
   margin: 0 0 24px;
   padding: 0 0 22px;
 }
@@ -211,12 +209,36 @@ summary:focus-visible {
   max-width: 760px;
 }
 
-.topbar-actions,
 .send-actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.topbar-actions {
+  align-self: start;
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.topbar-actions .button-link,
+.topbar-actions button {
+  min-height: 42px;
+  width: 100%;
+}
+
+.topbar-action-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(84px, 0.34fr);
+}
+
+.copy-link-small {
+  font-size: 0.82rem;
+  line-height: 1.05;
+  padding: 0 10px;
 }
 
 .pricing-admin-link {
@@ -306,6 +328,41 @@ summary:focus-visible {
   padding: 0 12px;
 }
 
+.topbar-team-auth {
+  align-content: start;
+  background: rgba(255, 255, 255, 0.5);
+  gap: 8px;
+  padding: 10px;
+}
+
+.topbar-team-auth .section-heading h2 {
+  font-size: 1.08rem;
+}
+
+.topbar-team-auth .team-email-presets button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.topbar-team-auth .compact-login-row {
+  gap: 8px;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+}
+
+.topbar-team-auth input,
+.topbar-team-auth button {
+  min-height: 38px;
+}
+
+.topbar-team-auth button {
+  padding: 0 12px;
+}
+
+.topbar-team-auth .team-status {
+  font-size: 0.82rem;
+  padding: 8px 10px;
+}
+
 .magic-link-recovery {
   border-top: 1px solid var(--line);
   display: grid;
@@ -319,6 +376,20 @@ summary:focus-visible {
   color: var(--verde);
   cursor: pointer;
   font-weight: 900;
+}
+
+.topbar-recovery {
+  gap: 8px;
+  margin-top: 0;
+  padding-top: 8px;
+}
+
+.topbar-recovery p {
+  font-size: 0.82rem;
+}
+
+.compact-config-grid {
+  grid-template-columns: minmax(170px, 0.9fr) minmax(190px, 1fr) auto;
 }
 
 .team-ready {
@@ -2281,6 +2352,11 @@ input[type="range"] {
 }
 
 @media (max-width: 1080px) {
+  .topbar,
+  .auth-locked .topbar {
+    grid-template-columns: 1fr;
+  }
+
   .quote-layout {
     grid-template-columns: 1fr;
   }
@@ -2288,13 +2364,14 @@ input[type="range"] {
   .team-grid,
   .team-access,
   .supabase-config-grid,
-  .login-row {
+  .login-row,
+  .topbar-team-auth .compact-login-row,
+  .compact-config-grid {
     grid-template-columns: 1fr;
   }
 
-  .request-panel {
-    align-items: stretch;
-    flex-direction: column;
+  .topbar-actions {
+    max-width: 420px;
   }
 
   .summary-panel {
@@ -2340,7 +2417,6 @@ input[type="range"] {
 
   .topbar {
     align-items: start;
-    flex-direction: column;
   }
 
   .brand-lockup {
@@ -2360,8 +2436,8 @@ input[type="range"] {
     width: 100%;
   }
 
-  .topbar-actions button {
-    flex: 1 1 150px;
+  .topbar-action-row {
+    grid-template-columns: minmax(0, 1fr) minmax(88px, 0.45fr);
   }
 
   .button-link {
