@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v51" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v52" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -137,7 +137,7 @@
                 <p><strong>Posso marcar Sinal recebido sem pagamento?</strong> Não. Esta etapa significa venda concluída com sinal pago.</p>
                 <p><strong>Como cancelo um lead?</strong> Clique em Cancelar no card e escolha um motivo.</p>
                 <p><strong>Onde altero preços?</strong> Em Valores e produtos, no topo da tela.</p>
-                <p><strong>Como envio por WhatsApp?</strong> Use PDF + WhatsApp, salve o PDF e anexe na conversa aberta.</p>
+                <p><strong>Como envio por WhatsApp?</strong> Use Link + WhatsApp. O sistema salva a proposta, gera o link e abre a conversa com a mensagem pronta.</p>
                 <p><strong>Quando usar Aguardando pagamento restante?</strong> Quando o sinal já foi recebido e falta cobrar o saldo, idealmente até 5 dias antes.</p>
               </div>
             </details>
@@ -385,11 +385,12 @@
               <button class="secondary" id="newProposalBtn" type="button">Nova proposta</button>
               <button class="primary" id="saveProposalBtn" type="button">Salvar proposta enviada</button>
               <button class="primary" id="printBtn" type="button">Criar PDF</button>
-              <button class="primary" id="emailBtn" type="button">PDF + e-mail</button>
+              <button class="primary" id="emailBtn" type="button">Link + e-mail</button>
               <button class="secondary" id="confirmEventBtn" type="button">Marcar sinal pago</button>
-              <button class="secondary" id="copyBtn" type="button">Copiar proposta</button>
-              <button class="secondary" id="whatsappBtn" type="button">PDF + WhatsApp</button>
+              <button class="secondary" id="copyBtn" type="button">Copiar link</button>
+              <button class="secondary" id="whatsappBtn" type="button">Link + WhatsApp</button>
             </div>
+            <p class="proposal-link-hint">O link é gerado automaticamente ao enviar por e-mail, WhatsApp ou copiar.</p>
             <div class="history-panel" aria-label="Historico de propostas">
               <div class="history-heading">
                 <span>Historico</span>
@@ -422,6 +423,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v51"></script>
+    <script src="./app.js?v=20260422-eventos-v52"></script>
   </body>
 </html>

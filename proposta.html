@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Proposta de Evento | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v52" />
+  </head>
+  <body class="public-proposal-body">
+    <main class="public-proposal-shell">
+      <section class="public-proposal-hero">
+        <img src="./assets/venue.jpg" alt="Embaixada Carioca no Morro da Urca" />
+        <div class="public-proposal-hero-copy">
+          <img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" />
+          <p>Proposta comercial</p>
+          <h1 id="proposalPublicTitle">Seu evento no Morro da Urca</h1>
+          <span id="proposalPublicSubtitle">Carregando proposta...</span>
+        </div>
+      </section>
+
+      <section class="public-proposal-card" id="publicProposalCard" aria-live="polite">
+        <p class="public-proposal-loading">Abrindo sua proposta...</p>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./proposta.js?v=20260422-eventos-v52"></script>
+  </body>
+</html>

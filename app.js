@@ -8,6 +8,7 @@ const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
 const CANONICAL_APP_URL = "https://leorangel22.github.io/main/";
 const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
+const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
 const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SERVICE_RATE = 0.12;
 const paymentTerms = [
@@ -2032,6 +2033,7 @@ function getPipelineItems() {
         time: request.horario_evento || "",
         guests: request.convidados || eventSnapshot.convidados || 1,
         total: null,
+        createdAt: request.created_at,
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
         clientType: getLeadSegment(request),
@@ -2059,6 +2061,7 @@ function getPipelineItems() {
       time: proposal.horario_evento || "",
       guests: proposal.convidados || 1,
       total: proposal.total || 0,
+      createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: proposal.snapshot?.referencia || "",
       clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
@@ -2067,6 +2070,8 @@ function getPipelineItems() {
       hasRemainingPayment: Boolean(proposal.snapshot?.pagamentoRestante),
       hasRemainingProof: Boolean(proposal.snapshot?.pagamentoRestante?.comprovante?.nome),
       remainingProof: proposal.snapshot?.pagamentoRestante?.comprovante || null,
+      clientResponse: proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao || "",
+      clientMessage: proposal.cliente_mensagem || proposal.snapshot?.clienteResposta?.mensagem || "",
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
     };
@@ -2272,6 +2277,26 @@ function renderStatusSelect(item) {
   `;
 }
 
+function getLeadAgeInfo(item) {
+  if (item.kind !== "request" || item.status !== "lead_recebido" || !item.createdAt) return null;
+  const created = new Date(item.createdAt);
+  const elapsed = Date.now() - created.getTime();
+  if (!Number.isFinite(elapsed) || elapsed < 0) return null;
+  const hours = Math.floor(elapsed / 36e5);
+  const label = hours < 1 ? "Recebido há menos de 1h" : `Recebido há ${hours}h`;
+  const level = hours >= 48 ? "critical" : hours >= 24 ? "danger" : hours >= 12 ? "warning" : "fresh";
+  return { label, level };
+}
+
+function getClientResponseLabel(response) {
+  const labels = {
+    confirmar: "Cliente confirmou",
+    alteracao: "Cliente pediu alteração",
+    cancelar: "Cliente cancelou",
+  };
+  return labels[response] || "";
+}
+
 function renderPipelineCard(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -2281,6 +2306,13 @@ function renderPipelineCard(item) {
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
+  const leadAge = getLeadAgeInfo(item);
+  const leadAgeBadge = leadAge
+    ? `<small class="lead-age-badge lead-age-${escapeHtml(leadAge.level)}">${escapeHtml(leadAge.label)}</small>`
+    : "";
+  const clientResponseLine = item.clientResponse
+    ? `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`
+    : "";
   const signalProofLink =
     item.hasSignalProof && item.signalProof?.dataUrl
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.signalProof.dataUrl)}" download="${escapeHtml(item.signalProof.nome || "comprovante-sinal")}">Comprovante</a>`
@@ -2324,6 +2356,7 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
+        ${leadAgeBadge}
         ${topAction}
       </div>
       <div class="pipeline-card-event-row">
@@ -2334,6 +2367,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
+      ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
         <span class="pipeline-card-meta-group">
           ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : ""}
@@ -3257,27 +3291,47 @@ function showToast(message) {
   window.setTimeout(() => toast.remove(), 2600);
 }
 
-function openEmail() {
+function getPublicProposalUrl(proposal) {
+  const token = proposal?.public_token;
+  return token ? `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}` : "";
+}
+
+async function ensureProposalLink() {
+  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
+  const saved = await saveCurrentProposal(status);
+  if (!saved) return "";
+  const url = getPublicProposalUrl(saved);
+  if (!url) {
+    showToast("Rode o schema atualizado no Supabase para gerar links públicos.");
+    return "";
+  }
+  return url;
+}
+
+async function openEmail() {
   const email = fields.clientEmail.value.trim();
+  if (!email) {
+    showToast("Preencha o e-mail do cliente para abrir a mensagem.");
+    return;
+  }
+  const proposalUrl = await ensureProposalLink();
+  if (!proposalUrl) return;
   const subject = encodeURIComponent("Proposta de evento - Embaixada Carioca");
   const body = encodeURIComponent(
     [
       "Olá,",
       "",
-      "Segue a proposta comercial da Embaixada Carioca em PDF.",
+      "Segue o link da proposta comercial da Embaixada Carioca:",
+      proposalUrl,
       "",
-      "Ficamos à disposição para ajustar qualquer detalhe.",
+      "Pelo link você pode confirmar, cancelar ou solicitar ajustes de data, horário e convidados.",
+      "",
+      "Ficamos à disposição.",
     ].join("\n"),
   );
-  if (!email) {
-    showToast("Preencha o e-mail do cliente para abrir a mensagem.");
-    return;
-  }
-  showToast("Salve a proposta como PDF e anexe no e-mail que será aberto.");
-  window.print();
-  window.setTimeout(() => {
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-  }, 650);
+  showToast("Link da proposta gerado. Abrindo e-mail.");
+  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
 }
 
 async function copyProposal() {
@@ -3287,6 +3341,18 @@ async function copyProposal() {
     showToast("Proposta copiada.");
   } catch (error) {
     console.warn("Falha ao copiar via clipboard.", error);
+    showToast("Não foi possível copiar automaticamente.");
+  }
+}
+
+async function copyProposalLink() {
+  const proposalUrl = await ensureProposalLink();
+  if (!proposalUrl) return;
+  try {
+    await navigator.clipboard.writeText(proposalUrl);
+    showToast("Link da proposta copiado.");
+  } catch (error) {
+    console.warn("Falha ao copiar link da proposta.", error);
     showToast("Não foi possível copiar automaticamente.");
   }
 }
@@ -3302,17 +3368,16 @@ async function copyClientFormLink() {
   }
 }
 
-function openWhatsApp() {
+async function openWhatsApp() {
   const phone = fields.clientPhone.value.replace(/\D/g, "");
+  const proposalUrl = await ensureProposalLink();
+  if (!proposalUrl) return;
   const text = encodeURIComponent(
-    "Olá! Segue a proposta comercial da Embaixada Carioca em PDF. Ficamos à disposição para ajustar qualquer detalhe.",
+    `Olá! Segue a proposta comercial da Embaixada Carioca: ${proposalUrl}\n\nPelo link você pode confirmar, cancelar ou solicitar ajustes de data, horário e convidados.`,
   );
   const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-  showToast("Salve a proposta como PDF e anexe na conversa do WhatsApp.");
-  window.print();
-  window.setTimeout(() => {
-    window.open(url, "_blank", "noopener");
-  }, 650);
+  showToast("Link da proposta gerado. Abrindo WhatsApp.");
+  window.open(url, "_blank", "noopener");
 }
 
 function resetPrices() {
@@ -3471,7 +3536,7 @@ function bindEvents() {
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
-  document.querySelector("#copyBtn")?.addEventListener("click", copyProposal);
+  document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
   document.querySelector("#whatsappBtn")?.addEventListener("click", openWhatsApp);
   document.querySelector("#resetPricesBtn")?.addEventListener("click", resetPrices);
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
