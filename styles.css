@@ -703,6 +703,17 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
+.period-metric-card > small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: -2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .period-metric-card dl {
   display: grid;
   gap: 5px;
