@@ -801,6 +801,7 @@ textarea[aria-invalid="true"] {
   position: absolute;
   right: 0;
   top: 0;
+  z-index: 0;
 }
 
 .pipeline-stage-lead_recebido {
@@ -860,28 +861,36 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-stage-confirmado .pipeline-column-heading strong {
-  background: var(--stage-color);
-  color: var(--stage-text);
+  background: rgba(255, 255, 255, 0.24);
+  color: inherit;
 }
 
 .pipeline-column-heading {
   align-items: center;
+  color: var(--stage-text, var(--white));
   display: flex;
+  height: 1cm;
   justify-content: space-between;
   gap: 10px;
+  left: 0;
+  padding: 0 9px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 1;
 }
 
 .pipeline-column-heading span {
-  color: var(--verde-escuro);
+  color: inherit;
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.05;
 }
 
 .pipeline-column-heading strong {
-  background: var(--stage-color, var(--verde-escuro));
+  background: rgba(255, 255, 255, 0.24);
   border-radius: 8px;
-  color: var(--stage-text, var(--white));
+  color: inherit;
   line-height: 1.05;
   min-width: 26px;
   padding: 1px 7px;
