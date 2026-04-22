@@ -823,6 +823,23 @@ textarea[aria-invalid="true"] {
   color: var(--white);
 }
 
+.reports-toolbar {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.reports-toolbar > button {
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.reports-body {
+  display: grid;
+  gap: 12px;
+}
+
 .custom-report {
   align-items: end;
   display: grid;
@@ -2328,9 +2345,22 @@ textarea {
   gap: 10px;
 }
 
+.help-panel .reports-panel {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 12px;
+}
+
 .help-panel details {
   border-bottom: 1px solid var(--line);
   padding: 0 0 12px;
+}
+
+.help-panel details.reports-panel {
+  display: block;
 }
 
 .help-panel details:last-child {
@@ -2342,6 +2372,28 @@ textarea {
   color: var(--verde-escuro);
   cursor: pointer;
   font-weight: 900;
+}
+
+.help-panel .reports-panel summary {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.help-panel .reports-panel summary span {
+  color: var(--amarelo);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.help-panel .reports-panel summary strong {
+  color: var(--verde-escuro);
+  font-size: 1rem;
+}
+
+.help-panel .reports-panel[open] summary {
+  margin-bottom: 12px;
 }
 
 .help-panel ol,
@@ -3812,6 +3864,10 @@ input[type="range"] {
   .report-presets {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-toolbar {
+    grid-template-columns: 1fr;
   }
 
   .report-summary dl {
