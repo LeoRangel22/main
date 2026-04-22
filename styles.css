@@ -773,12 +773,18 @@ textarea[aria-invalid="true"] {
   color: var(--verde-escuro) !important;
   font-size: 0.82rem !important;
   font-weight: 900 !important;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .pipeline-card-name {
   color: var(--verde-escuro) !important;
   font-size: 0.9rem !important;
   font-weight: 900 !important;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline-card-event-row {
@@ -794,7 +800,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-meta {
-  font-weight: 650 !important;
+  font-weight: 600 !important;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -919,6 +925,90 @@ label.pipeline-status-control:focus-within select {
   font-size: 0.84rem;
   min-height: 30px;
   padding: 0 10px;
+}
+
+.signal-modal-backdrop {
+  align-items: center;
+  background: rgba(11, 33, 25, 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 90;
+}
+
+.signal-modal {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 22px 55px rgba(11, 33, 25, 0.2);
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  padding: 20px;
+  width: min(420px, 100%);
+}
+
+.signal-modal h3 {
+  color: var(--verde-escuro);
+  font-size: 1.15rem;
+  line-height: 1.1;
+  margin: 4px 0;
+}
+
+.signal-modal p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.signal-modal fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 10px;
+}
+
+.signal-modal legend {
+  color: var(--verde);
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.signal-bank-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.signal-bank-options label {
+  align-items: center;
+  background: var(--surface);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.signal-bank-options input {
+  accent-color: var(--verde-escuro);
+  height: 16px;
+  width: 16px;
+}
+
+.signal-error {
+  color: #9a3412;
+  min-height: 16px;
+}
+
+.signal-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .eyebrow {
