@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v8" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v9" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -17,82 +17,60 @@
               <h1>Sistema de eventos</h1>
             </div>
           </div>
+          <div class="team-auth team-primary topbar-team-auth">
+            <div class="team-auth-heading">
+              <div class="section-heading">
+                <span>Equipe</span>
+                <h2>Acesso da equipe</h2>
+              </div>
+              <div class="team-email-presets" aria-label="E-mails autorizados">
+                <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
+                <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
+              </div>
+            </div>
+            <div class="login-row compact-login-row">
+              <label>
+                E-mail da equipe
+                <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
+              </label>
+              <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
+              <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
+            </div>
+            <div class="team-status" id="authStatus">Aguardando login.</div>
+            <details class="magic-link-recovery topbar-recovery">
+              <summary>Problema com magic link ou conexão?</summary>
+              <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
+              <div class="login-row compact-login-row">
+                <label>
+                  URL do magic link
+                  <input id="magicLinkUrl" type="url" placeholder="Cole a URL completa do magic link" autocomplete="off" />
+                </label>
+                <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
+              </div>
+              <div class="supabase-config-grid compact-config-grid">
+                <label>
+                  Supabase URL
+                  <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
+                </label>
+                <label>
+                  Supabase anon key
+                  <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
+                </label>
+                <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+              </div>
+              <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+            </details>
+          </div>
           <div class="topbar-actions">
-            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário do cliente</a>
             <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
+            <div class="topbar-action-row">
+              <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário Cliente</a>
+              <button class="secondary copy-link-small" id="copyClientFormLinkBtn" type="button">Copiar link</button>
+            </div>
           </div>
         </header>
 
         <section class="team-panel" aria-label="Equipe e historico">
-          <div class="team-access">
-            <div class="team-auth team-primary">
-              <div class="team-auth-heading">
-                <div class="section-heading">
-                  <span>Equipe</span>
-                  <h2>Acesso da equipe</h2>
-                </div>
-                <div class="team-email-presets" aria-label="E-mails autorizados">
-                  <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
-                  <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
-                </div>
-              </div>
-              <div class="login-row">
-                <label>
-                  E-mail da equipe
-                  <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
-                </label>
-                <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
-                <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
-              </div>
-              <div class="team-status" id="authStatus">Aguardando login.</div>
-              <details class="magic-link-recovery">
-                <summary>Problema com magic link?</summary>
-                <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
-                <div class="login-row">
-                  <label>
-                    URL do magic link
-                    <input id="magicLinkUrl" type="url" placeholder="Cole a URL completa do magic link" autocomplete="off" />
-                  </label>
-                  <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
-                </div>
-              </details>
-            </div>
-
-            <div class="team-context">
-              <div class="team-ready">
-                <span>Sistema pronto</span>
-                <strong>O app já está conectado ao histórico da equipe.</strong>
-                <p>A conexão técnica fica salva no navegador. No dia a dia, basta entrar pelo e-mail da equipe.</p>
-              </div>
-              <ul class="team-checklist">
-                <li>Clientes enviam pedidos pelo formulário externo.</li>
-                <li>A equipe revisa, ajusta valores e gera a proposta.</li>
-                <li>Cada evento fica em uma única etapa clara do funil.</li>
-              </ul>
-              <details class="team-advanced">
-                <summary>Configuração técnica</summary>
-                <div class="supabase-config-grid">
-                  <label>
-                    Supabase URL
-                    <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
-                  </label>
-                  <label>
-                    Supabase anon key
-                    <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
-                  </label>
-                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
-                </div>
-                <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
-              </details>
-            </div>
-          </div>
-          <div class="request-panel">
-            <div>
-              <p>Formulário externo para clientes</p>
-              <strong id="clientFormLink">Carregando link do formulário...</strong>
-            </div>
-            <button class="secondary" id="copyClientFormLinkBtn" type="button">Copiar link</button>
-          </div>
           <div class="owner-metrics" aria-label="Visão de gestão">
             <div>
               <span>Leads</span>
@@ -420,6 +398,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-eventos-v8"></script>
+    <script src="./app.js?v=20260421-eventos-v9"></script>
   </body>
 </html>
