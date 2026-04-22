@@ -17,6 +17,15 @@ const paymentTerms = [
 ];
 const signalPaymentBanks = ["Itaú", "Santander", "Nubank", "Stone"];
 
+const operationalChecklistItems = [
+  { id: "saldo_agendado", label: "Pagamento restante alinhado" },
+  { id: "cardapio_confirmado", label: "Cardápio e bebidas confirmados" },
+  { id: "extras_confirmados", label: "Extras de produção confirmados" },
+  { id: "responsavel_dia", label: "Contato responsável no dia definido" },
+  { id: "operacao_avisada", label: "Operação avisada" },
+  { id: "observacoes_revisadas", label: "Observações críticas revisadas" },
+];
+
 const funnelStages = [
   {
     id: "lead_recebido",
@@ -571,6 +580,10 @@ const fields = {
   newNome: document.querySelector("#newNome"),
   newFormula: document.querySelector("#newFormula"),
   newDescricao: document.querySelector("#newDescricao"),
+  newResumoComercial: document.querySelector("#newResumoComercial"),
+  newPrioridadeComercial: document.querySelector("#newPrioridadeComercial"),
+  newHorariosRecomendados: document.querySelector("#newHorariosRecomendados"),
+  newProdutoAtivo: document.querySelector("#newProdutoAtivo"),
   newPreco1h: document.querySelector("#newPreco1h"),
   newPreco2h: document.querySelector("#newPreco2h"),
   newPrecoExtra: document.querySelector("#newPrecoExtra"),
@@ -590,6 +603,7 @@ const fields = {
 const nodes = {
   priceList: document.querySelector("#priceList"),
   pricesTable: document.querySelector("#pricesTable"),
+  commercialLibrarySummary: document.querySelector("#commercialLibrarySummary"),
   categoryOptions: document.querySelector("#categoryOptions"),
   flowStatus: document.querySelector("#flowStatus"),
   coquetelChoices: document.querySelector("#coquetelChoices"),
@@ -619,10 +633,13 @@ const nodes = {
   metricStage48h: document.querySelector("#metricStage48h"),
   metricStagePosVenda: document.querySelector("#metricStagePosVenda"),
   periodMetrics: document.querySelector("#periodMetrics"),
+  actionList: document.querySelector("#actionList"),
+  actionCenterMeta: document.querySelector("#actionCenterMeta"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
+  operationalChecklist: document.querySelector("#operationalChecklist"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -633,11 +650,11 @@ const currency = new Intl.NumberFormat("pt-BR", {
 function loadPrices() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (Array.isArray(saved) && saved.length) return mergeCatalogLabels(saved);
+    if (Array.isArray(saved) && saved.length) return mergeCatalogLabels(saved).map(normalizeCatalogItem);
   } catch (error) {
     console.warn("Nao foi possivel carregar precos salvos.", error);
   }
-  return clonePrices(initialPrices);
+  return clonePrices(initialPrices).map(normalizeCatalogItem);
 }
 
 function mergeCatalogLabels(prices) {
@@ -652,6 +669,10 @@ function mergeCatalogLabels(prices) {
       nome: catalogItem.nome,
       descricao: catalogItem.descricao,
       idioma: catalogItem.idioma,
+      commercialSummary: item.commercialSummary || catalogItem.commercialSummary || catalogItem.descricao,
+      priority: item.priority || getDefaultCommercialPriority(catalogItem),
+      recommendedWindows: item.recommendedWindows || getDefaultRecommendedWindows(catalogItem),
+      active: item.active !== false,
     };
   });
   const existingIds = new Set(merged.map((item) => item.id));
@@ -659,6 +680,32 @@ function mergeCatalogLabels(prices) {
     if (!existingIds.has(item.id)) merged.push(clonePrices([item])[0]);
   });
   return merged;
+}
+
+function getDefaultCommercialPriority(item) {
+  const type = String(item.tipoEvento || "").toLowerCase();
+  if (type.includes("coquetel") || type.includes("welcome") || type.includes("café") || type.includes("coffee")) return "alta";
+  if (type.includes("snacks")) return "baixa";
+  return "media";
+}
+
+function getDefaultRecommendedWindows(item) {
+  const type = String(item.tipoEvento || "").toLowerCase();
+  if (type.includes("café") || type.includes("coffee")) return "Manhã de 2ª a 6ª";
+  if (type.includes("almoço")) return "Início do almoço em dias úteis";
+  if (type.includes("welcome") || type.includes("coquetel")) return "Após 17h e 19h-21h";
+  if (type.includes("workshop")) return "Manhã, fim de tarde ou noite";
+  return "Sob consulta";
+}
+
+function normalizeCatalogItem(item) {
+  return {
+    ...item,
+    commercialSummary: item.commercialSummary || item.descricao || "",
+    priority: item.priority || getDefaultCommercialPriority(item),
+    recommendedWindows: item.recommendedWindows || getDefaultRecommendedWindows(item),
+    active: item.active !== false,
+  };
 }
 
 function loadSelectedIds() {
@@ -797,6 +844,74 @@ function renderSignalPaymentInfo(signal, remainingPayment = null) {
     ${renderPaymentSummaryLine("Sinal registrado", signal)}
     ${renderPaymentSummaryLine("Pagamento restante registrado", remainingPayment)}
   `;
+}
+
+function getActiveProposal() {
+  return state.proposals.find((item) => item.id === state.activeProposalId) || null;
+}
+
+function shouldShowOperationalChecklist(proposal) {
+  if (!proposal) return false;
+  const status = normalizeProposalStatus(proposal.status);
+  return Boolean(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
+}
+
+function renderOperationalChecklist(proposal = getActiveProposal()) {
+  if (!nodes.operationalChecklist) return;
+  if (!shouldShowOperationalChecklist(proposal)) {
+    nodes.operationalChecklist.classList.add("is-hidden");
+    nodes.operationalChecklist.innerHTML = "";
+    return;
+  }
+  const checklist = proposal.snapshot?.operationalChecklist || {};
+  const progress = getChecklistProgress(proposal.snapshot || {});
+  nodes.operationalChecklist.classList.remove("is-hidden");
+  nodes.operationalChecklist.innerHTML = `
+    <div class="checklist-heading">
+      <span>Checklist pós-sinal</span>
+      <strong>${progress.done}/${progress.total} concluídos</strong>
+    </div>
+    <div class="checklist-items">
+      ${operationalChecklistItems
+        .map(
+          (item) => `
+            <label>
+              <input type="checkbox" data-checklist-id="${escapeHtml(item.id)}" ${checklist[item.id] ? "checked" : ""} />
+              ${escapeHtml(item.label)}
+            </label>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function updateOperationalChecklist(checklistId, checked) {
+  const proposal = getActiveProposal();
+  if (!proposal || !state.supabase || !state.session) return;
+  const snapshot = {
+    ...(proposal.snapshot || {}),
+    operationalChecklist: {
+      ...(proposal.snapshot?.operationalChecklist || {}),
+      [checklistId]: checked,
+    },
+  };
+  const { data, error } = await state.supabase
+    .from("propostas")
+    .update({ snapshot })
+    .eq("id", proposal.id)
+    .select("*")
+    .single();
+  if (error) {
+    console.warn("Falha ao atualizar checklist operacional.", error);
+    showToast("Não foi possível salvar o checklist.");
+    renderOperationalChecklist(proposal);
+    return;
+  }
+  upsertProposalState(data);
+  renderOperationalChecklist(data);
+  renderPipeline();
+  showToast("Checklist atualizado.");
 }
 
 function getTodayInputValue() {
@@ -1527,8 +1642,9 @@ function getFilteredPrices() {
   const query = fields.searchPrice?.value.trim().toLowerCase() || "";
   const category = fields.categoryFilter?.value || "";
   return state.prices.filter((item) => {
-    const haystack = `${item.codigo} ${item.tipoEvento} ${item.nome} ${item.descricao}`.toLowerCase();
-    return (!query || haystack.includes(query)) && (!category || item.tipoEvento === category);
+    const haystack = `${item.codigo} ${item.tipoEvento} ${item.nome} ${item.descricao} ${item.commercialSummary} ${item.recommendedWindows}`.toLowerCase();
+    const visible = item.active !== false || state.selectedIds.has(item.id);
+    return visible && (!query || haystack.includes(query)) && (!category || item.tipoEvento === category);
   });
 }
 
@@ -1552,8 +1668,10 @@ function renderPriceList() {
               <strong>${escapeHtml(item.nome)}</strong>
               <span class="chip">${escapeHtml(item.tipoEvento)}</span>
               ${item.idioma ? `<span class="chip">${escapeHtml(item.idioma)}</span>` : ""}
+              <span class="chip">${escapeHtml(item.priority === "alta" ? "Prioridade alta" : item.priority === "baixa" ? "Prioridade baixa" : "Prioridade média")}</span>
             </span>
-            <p>${escapeHtml(item.descricao)}</p>
+            <p>${escapeHtml(item.commercialSummary || item.descricao)}</p>
+            <p><strong>Indicado:</strong> ${escapeHtml(item.recommendedWindows || "Sob consulta")}</p>
             <p>${escapeHtml(calc.detail)}</p>
           </span>
           <span class="item-cost">${formatMoney(calc.total)}</span>
@@ -1569,9 +1687,19 @@ function renderPricesTable() {
     .map(
       (item) => `
       <tr>
+        <td><input type="checkbox" data-price-id="${escapeHtml(item.id)}" data-field="active" ${item.active !== false ? "checked" : ""} /></td>
         <td>${escapeHtml(item.codigo)}</td>
         <td>${escapeHtml(item.tipoEvento)}</td>
         <td>${escapeHtml(item.nome)}</td>
+        <td>
+          <select data-price-id="${escapeHtml(item.id)}" data-field="priority">
+            <option value="alta" ${item.priority === "alta" ? "selected" : ""}>Alta</option>
+            <option value="media" ${item.priority === "media" ? "selected" : ""}>Média</option>
+            <option value="baixa" ${item.priority === "baixa" ? "selected" : ""}>Baixa</option>
+          </select>
+        </td>
+        <td><input data-price-id="${escapeHtml(item.id)}" data-field="recommendedWindows" value="${escapeHtml(item.recommendedWindows || "")}" /></td>
+        <td><textarea data-price-id="${escapeHtml(item.id)}" data-field="commercialSummary" rows="2">${escapeHtml(item.commercialSummary || item.descricao)}</textarea></td>
         <td><input data-price-id="${escapeHtml(item.id)}" data-field="preco1h" inputmode="decimal" value="${escapeHtml(item.preco1h)}" /></td>
         <td><input data-price-id="${escapeHtml(item.id)}" data-field="preco2h" inputmode="decimal" value="${escapeHtml(item.preco2h)}" /></td>
         <td><input data-price-id="${escapeHtml(item.id)}" data-field="precoMeiaHoraExtra" inputmode="decimal" value="${escapeHtml(item.precoMeiaHoraExtra)}" /></td>
@@ -1603,6 +1731,20 @@ function renderPricesTable() {
     .join("");
 }
 
+function renderCommercialLibrarySummary() {
+  if (!nodes.commercialLibrarySummary) return;
+  const activeItems = state.prices.filter((item) => item.active !== false);
+  const customItems = state.prices.filter((item) => item.custom);
+  const highPriorityItems = activeItems.filter((item) => item.priority === "alta");
+  const categories = new Set(activeItems.map((item) => item.tipoEvento).filter(Boolean));
+  nodes.commercialLibrarySummary.innerHTML = `
+    <div><span>Produtos ativos</span><strong>${activeItems.length}</strong></div>
+    <div><span>Prioridade alta</span><strong>${highPriorityItems.length}</strong></div>
+    <div><span>Categorias</span><strong>${categories.size}</strong></div>
+    <div><span>Itens criados</span><strong>${customItems.length}</strong></div>
+  `;
+}
+
 function renderSummary() {
   if (!nodes.grandTotal || !nodes.proposalTotal || !nodes.totalMeta || !nodes.selectedItems) return;
   const selected = getSelectedItems();
@@ -1622,6 +1764,7 @@ function renderSummary() {
               <span>${escapeHtml(item.nome)}</span>
               <span>${formatMoney(item.calc.total)}</span>
             </strong>
+            <small>${escapeHtml(item.commercialSummary || item.descricao)}</small>
             <small>${escapeHtml(item.calc.detail)}</small>
           </div>
         `,
@@ -1763,6 +1906,7 @@ function getProposalSnapshot() {
   const totals = getQuoteTotals();
   const selected = getSelectedItems();
   const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
+  const activeProposal = getActiveProposal();
   return {
     version: 1,
     referencia: activeRequest?.snapshot?.referencia || "",
@@ -1801,6 +1945,9 @@ function getProposalSnapshot() {
       tipoEvento: item.tipoEvento,
       nome: item.nome,
       descricao: item.descricao,
+      commercialSummary: item.commercialSummary || item.descricao,
+      priority: item.priority || "media",
+      recommendedWindows: item.recommendedWindows || "",
       formula: item.formula,
       calc: item.calc,
     })),
@@ -1812,6 +1959,7 @@ function getProposalSnapshot() {
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
     paymentTerms,
+    operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
     proposalText: buildProposalText(),
   };
 }
@@ -2043,6 +2191,7 @@ function getPipelineItems() {
         createdAt: request.created_at,
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
+        snapshot: request.snapshot || {},
         clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
@@ -2071,6 +2220,7 @@ function getPipelineItems() {
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: proposal.snapshot?.referencia || "",
+      snapshot: proposal.snapshot || {},
       clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
       hasSignalProof: Boolean(proposal.snapshot?.pagamentoSinal?.comprovante?.nome),
       signalProof: proposal.snapshot?.pagamentoSinal?.comprovante || null,
@@ -2449,6 +2599,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   nodes.metricStage48h.textContent = String(counts.quarentaOito);
   nodes.metricStagePosVenda.textContent = String(counts.posVenda);
   renderPeriodMetrics(items);
+  renderActionTasks(items);
   renderDashboardReports(items);
 }
 
@@ -2484,6 +2635,131 @@ function getLeadAgeInfo(item) {
   const label = hours < 1 ? "Recebido há menos de 1h" : `Recebido há ${hours}h`;
   const level = hours >= 48 ? "critical" : hours >= 24 ? "danger" : hours >= 12 ? "warning" : "fresh";
   return { label, level };
+}
+
+function getHoursSince(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  const elapsed = Date.now() - date.getTime();
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 0;
+  return Math.floor(elapsed / 36e5);
+}
+
+function getChecklistProgress(snapshot = {}) {
+  const checklist = snapshot.operationalChecklist || {};
+  const done = operationalChecklistItems.filter((item) => checklist[item.id]).length;
+  return { done, total: operationalChecklistItems.length };
+}
+
+function getActionPriorityClass(priority) {
+  if (priority >= 90) return "critical";
+  if (priority >= 70) return "danger";
+  if (priority >= 45) return "warning";
+  return "normal";
+}
+
+function getActionTasks(items = getPipelineItems()) {
+  const today = startOfDay(new Date());
+  const next48h = addDays(today, 2);
+  const tasks = [];
+  items.forEach((item) => {
+    const status = getReportStatus(item);
+    const hours = getHoursSince(item.updatedAt || item.createdAt);
+    const eventDate = parseLocalIsoDate(item.date);
+    const base = {
+      item,
+      meta: `${item.date ? formatDateFromIso(item.date) : "Data a definir"} · ${item.time ? String(item.time).slice(0, 5) : "Horário a definir"} · ${item.guests || 0} pax`,
+    };
+
+    if (item.kind === "request" && status === "lead_recebido") {
+      const age = getLeadAgeInfo(item);
+      tasks.push({
+        ...base,
+        title: "Responder lead",
+        note: age?.label || "Novo pedido recebido",
+        priority: age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
+      });
+    }
+
+    if (item.kind === "proposal" && status === "proposta_enviada") {
+      tasks.push({
+        ...base,
+        title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Follow-up da proposta",
+        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : `Sem resposta há ${hours || 0}h`,
+        priority: item.clientResponse === "confirmar" ? 92 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
+      });
+    }
+
+    if (item.kind === "proposal" && status === "negociacao") {
+      tasks.push({
+        ...base,
+        title: "Avançar negociação",
+        note: item.clientResponse === "alteracao" ? "Cliente pediu ajuste na proposta." : "Ajuste comercial em andamento.",
+        priority: item.clientResponse === "alteracao" ? 74 : 50,
+      });
+    }
+
+    if (item.kind === "proposal" && status === "confirmado") {
+      tasks.push({
+        ...base,
+        title: "Cobrar pagamento restante",
+        note: "Sinal recebido. Falta registrar saldo.",
+        priority: 72,
+      });
+    }
+
+    if (item.kind === "proposal" && ["pagamento_final", "planejamento"].includes(status)) {
+      const progress = getChecklistProgress(item.snapshot || {});
+      if (progress.done < progress.total) {
+        tasks.push({
+          ...base,
+          title: "Concluir checklist operacional",
+          note: `${progress.done}/${progress.total} itens concluídos.`,
+          priority: status === "planejamento" ? 58 : 44,
+        });
+      }
+    }
+
+    if (item.kind === "proposal" && isSoldReportItem(item) && eventDate && eventDate >= today && eventDate <= next48h) {
+      tasks.push({
+        ...base,
+        title: "Revisar evento 48h",
+        note: "Confirmar detalhes finais antes da execução.",
+        priority: 88,
+      });
+    }
+  });
+
+  return tasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
+}
+
+function renderActionTasks(items = getPipelineItems()) {
+  if (!nodes.actionList) return;
+  const tasks = getActionTasks(items);
+  if (nodes.actionCenterMeta) nodes.actionCenterMeta.textContent = `${tasks.length} ação(ões) prioritária(s).`;
+  if (!tasks.length) {
+    nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora.</p>`;
+    return;
+  }
+  nodes.actionList.innerHTML = tasks
+    .map((task) => {
+      const item = task.item;
+      const actionButton =
+        item.kind === "proposal"
+          ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
+          : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+      return `
+        <article class="action-task action-${getActionPriorityClass(task.priority)}">
+          <div>
+            <span>${escapeHtml(task.title)}</span>
+            <strong>${escapeHtml(item.name || "Cliente")}</strong>
+            <small>${escapeHtml(task.meta)} · ${escapeHtml(task.note)}</small>
+          </div>
+          ${actionButton}
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function getClientResponseLabel(response) {
@@ -2707,6 +2983,7 @@ async function applyQuoteRequest(requestId) {
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
   renderSignalPaymentInfo(null, null);
+  renderOperationalChecklist(null);
 
   renderAll();
   showToast("Solicitação carregada para revisão.");
@@ -2880,7 +3157,10 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   upsertProposalState(data);
   renderHistory();
   renderPipeline();
-  if (state.activeProposalId === proposalId) renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
+  if (state.activeProposalId === proposalId) {
+    renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
+    renderOperationalChecklist(data);
+  }
   showToast(
     nextStatus === "confirmado"
       ? "Sinal pago: evento confirmado."
@@ -3184,6 +3464,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderHistory();
   renderPipeline();
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
+  renderOperationalChecklist(data);
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
@@ -3237,9 +3518,10 @@ function applyProposalSnapshot(snapshot) {
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
+  renderOperationalChecklist(getActiveProposal());
 
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
-    state.prices = snapshot.prices;
+    state.prices = snapshot.prices.map(normalizeCatalogItem);
     savePrices();
   }
 
@@ -3391,7 +3673,7 @@ function renderProposal() {
                     (item) => `
                   <tr>
                     <td><strong>${escapeHtml(item.nome)}</strong></td>
-                    <td>${escapeHtml(item.descricao)}<br /><small>${escapeHtml(item.calc.detail)}</small></td>
+                    <td>${escapeHtml(item.commercialSummary || item.descricao)}<br /><small>${escapeHtml(item.calc.detail)}</small></td>
                     <td class="proposal-value">${formatMoney(item.calc.total)}</td>
                   </tr>
                 `,
@@ -3438,6 +3720,7 @@ function renderProposal() {
 function renderAll() {
   renderPriceList();
   renderPricesTable();
+  renderCommercialLibrarySummary();
   renderSummary();
   renderCalculation();
   renderProposal();
@@ -3474,6 +3757,7 @@ function startNewProposal() {
   fields.searchPrice.value = "";
   fields.categoryFilter.value = "";
   renderSignalPaymentInfo(null, null);
+  renderOperationalChecklist(null);
   renderAll();
   scrollToClientData();
   showToast("Nova proposta pronta para preencher.");
@@ -3593,6 +3877,10 @@ function clearNewItemForm() {
   fields.newTipo.value = "";
   fields.newNome.value = "";
   fields.newDescricao.value = "";
+  if (fields.newResumoComercial) fields.newResumoComercial.value = "";
+  if (fields.newPrioridadeComercial) fields.newPrioridadeComercial.value = "media";
+  if (fields.newHorariosRecomendados) fields.newHorariosRecomendados.value = "";
+  if (fields.newProdutoAtivo) fields.newProdutoAtivo.checked = true;
   fields.newPreco1h.value = "";
   fields.newPreco2h.value = "";
   fields.newPrecoExtra.value = "";
@@ -3618,6 +3906,10 @@ function createNewItem() {
     tipoEvento: tipo,
     nome,
     descricao,
+    commercialSummary: fields.newResumoComercial?.value.trim() || descricao,
+    priority: fields.newPrioridadeComercial?.value || "media",
+    recommendedWindows: fields.newHorariosRecomendados?.value.trim() || getDefaultRecommendedWindows({ tipoEvento: tipo }),
+    active: fields.newProdutoAtivo?.checked !== false,
     preco1h: fields.newPreco1h.value.trim(),
     preco2h: fields.newPreco2h.value.trim(),
     precoMeiaHoraExtra: fields.newPrecoExtra.value.trim(),
@@ -3712,19 +4004,20 @@ function bindEvents() {
     if (!priceId || !field) return;
     const item = state.prices.find((price) => price.id === priceId);
     if (!item) return;
-    item[field] = event.target.value;
+    item[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
     savePrices();
     renderPriceList();
+    renderCommercialLibrarySummary();
     renderSummary();
     renderProposal();
   });
 
   nodes.pricesTable?.addEventListener("change", (event) => {
     const { priceId, field } = event.target.dataset;
-    if (!priceId || field !== "formula") return;
+    if (!priceId || !["formula", "priority", "active"].includes(field)) return;
     const item = state.prices.find((price) => price.id === priceId);
     if (!item) return;
-    item.formula = event.target.value;
+    item[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
     savePrices();
     renderAll();
   });
@@ -3773,6 +4066,20 @@ function bindEvents() {
     }
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
+  nodes.actionList?.addEventListener("click", (event) => {
+    const proposalButton = event.target.closest("button[data-proposal-id]");
+    if (proposalButton) {
+      openSavedProposal(proposalButton.dataset.proposalId);
+      return;
+    }
+    const requestButton = event.target.closest("button[data-use-request]");
+    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
+  nodes.operationalChecklist?.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("input[data-checklist-id]");
+    if (!checkbox) return;
+    updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   document.querySelector("#copyClientFormLinkBtn")?.addEventListener("click", copyClientFormLink);
   nodes.historyList?.addEventListener("click", (event) => {

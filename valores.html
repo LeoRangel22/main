@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v55" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v56" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -123,6 +123,26 @@
                   Descrição
                   <textarea id="newDescricao" rows="2" placeholder="O que está incluído"></textarea>
                 </label>
+                <label class="builder-wide">
+                  Resumo comercial
+                  <textarea id="newResumoComercial" rows="2" placeholder="Texto mais vendável para a proposta. Se ficar vazio, usa a descrição."></textarea>
+                </label>
+                <label>
+                  Prioridade
+                  <select id="newPrioridadeComercial">
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                    <option value="baixa">Baixa</option>
+                  </select>
+                </label>
+                <label>
+                  Horários indicados
+                  <input id="newHorariosRecomendados" type="text" placeholder="Ex.: manhã 2ª a 6ª" />
+                </label>
+                <label class="builder-checkbox">
+                  <input id="newProdutoAtivo" type="checkbox" checked />
+                  Produto ativo
+                </label>
                 <label>
                   1h
                   <input id="newPreco1h" type="text" inputmode="decimal" placeholder="0" />
@@ -150,13 +170,25 @@
                 <button class="primary" id="addItemBtn" type="button">Adicionar item</button>
               </div>
             </div>
+            <section class="commercial-library" aria-label="Biblioteca comercial">
+              <div class="section-heading">
+                <span>Biblioteca</span>
+                <h3>Uso comercial dos produtos</h3>
+              </div>
+              <p>Controle quais produtos aparecem no orçamento e ajuste resumo, prioridade e horários recomendados sem mexer na lógica de cálculo.</p>
+              <div class="library-summary" id="commercialLibrarySummary"></div>
+            </section>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
+                    <th>Ativo</th>
                     <th>Código</th>
                     <th>Tipo</th>
                     <th>Nome</th>
+                    <th>Prioridade</th>
+                    <th>Horários</th>
+                    <th>Resumo comercial</th>
                     <th>1h</th>
                     <th>2h</th>
                     <th>1/2h extra</th>
@@ -200,6 +232,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v55"></script>
+    <script src="./app.js?v=20260422-eventos-v56"></script>
   </body>
 </html>

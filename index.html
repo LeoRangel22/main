@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v55" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v56" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -108,6 +108,18 @@
             </div>
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
+          <section class="action-center" aria-label="Ações de hoje">
+            <div class="action-center-heading">
+              <div>
+                <span>Ações de hoje</span>
+                <strong>O que precisa de atenção agora</strong>
+              </div>
+              <small id="actionCenterMeta">Atualiza com o funil.</small>
+            </div>
+            <div class="action-list" id="actionList">
+              <p>Entre com Supabase para ver ações.</p>
+            </div>
+          </section>
           <div class="pipeline-panel">
             <div class="pipeline-stage-header">
               <div>
@@ -266,6 +278,7 @@
                 </label>
               </div>
               <div class="signal-summary is-hidden" id="signalPaymentInfo"></div>
+              <div class="operational-checklist is-hidden" id="operationalChecklist"></div>
               <label>
                 Observações
                 <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
@@ -482,6 +495,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v55"></script>
+    <script src="./app.js?v=20260422-eventos-v56"></script>
   </body>
 </html>
