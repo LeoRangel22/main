@@ -768,6 +768,18 @@ textarea[aria-invalid="true"] {
   font-weight: 900 !important;
 }
 
+.pipeline-card-value {
+  color: var(--verde-escuro) !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+}
+
+.pipeline-card-name {
+  color: var(--verde-escuro) !important;
+  font-size: 0.9rem !important;
+  font-weight: 900 !important;
+}
+
 .pipeline-card-event-row {
   align-items: center;
 }
@@ -777,6 +789,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-meta {
+  font-weight: 650 !important;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
