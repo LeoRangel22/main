@@ -1041,6 +1041,10 @@ function scrollToItems() {
   nodes.priceList?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function scrollToClientData() {
+  document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function renderCategoryFilter() {
   const categories = [...new Set(state.prices.map((item) => item.tipoEvento))].sort();
   if (fields.categoryFilter) {
@@ -1718,6 +1722,7 @@ function renderPipelineCard(item) {
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
   const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
+  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   return `
     <article
       class="pipeline-card"
@@ -1730,7 +1735,8 @@ function renderPipelineCard(item) {
         <strong>${escapeHtml(item.name)}</strong>
         <span>${escapeHtml(valueLabel)}</span>
       </div>
-      <small>${escapeHtml(item.type)} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)} · ${item.guests} pessoa(s)</small>
+      <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
+      <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small>${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       <div class="pipeline-card-status-row">
         <small><span class="status-chip${statusClass}">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.reference || "Sem referência")}</small>
@@ -1872,6 +1878,7 @@ async function applyQuoteRequest(requestId) {
 
   renderAll();
   showToast("Solicitação carregada para revisão.");
+  scrollToClientData();
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
@@ -2351,6 +2358,7 @@ function openSavedProposal(proposalId) {
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
   applyProposalSnapshot(proposal.snapshot);
+  scrollToClientData();
 }
 
 function formatDateFromIso(value) {
