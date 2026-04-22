@@ -596,7 +596,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-row-commercial {
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, minmax(200px, 1fr));
 }
 
 .pipeline-row-operation {
@@ -616,6 +616,25 @@ textarea[aria-invalid="true"] {
   gap: 10px;
   min-width: 0;
   padding: 12px;
+}
+
+.pipeline-stage-confirmado {
+  background: linear-gradient(180deg, rgba(245, 155, 30, 0.16), rgba(238, 244, 240, 0.78));
+  border-color: rgba(245, 155, 30, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(245, 155, 30, 0.18);
+}
+
+.pipeline-stage-confirmado .pipeline-column-heading span::before {
+  color: var(--amarelo);
+  content: "Linha de chegada · ";
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pipeline-stage-confirmado .pipeline-column-heading strong {
+  background: var(--amarelo);
+  color: var(--verde-escuro);
 }
 
 .pipeline-column-heading {

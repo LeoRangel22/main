@@ -39,9 +39,9 @@ const funnelStages = [
   },
   {
     id: "confirmado",
-    row: "operation",
+    row: "commercial",
     title: "Sinal recebido",
-    description: "Venda concluída. Sinal pago e reserva confirmada.",
+    description: "Linha de chegada comercial: venda concluída e reserva confirmada.",
     statuses: ["confirmado"],
   },
   {
@@ -57,6 +57,13 @@ const funnelStages = [
     title: "Planejamento Evento",
     description: "Detalhes operacionais para execução.",
     statuses: ["planejamento"],
+  },
+  {
+    id: "evento_proximo",
+    row: "operation",
+    title: "Evento hoje / amanhã",
+    description: "Operação em atenção máxima para execução.",
+    statuses: ["evento_proximo"],
   },
   {
     id: "pos_venda",
@@ -80,13 +87,14 @@ const proposalStatusOptions = [
   "confirmado",
   "pagamento_final",
   "planejamento",
+  "evento_proximo",
   "pos_venda",
   "cancelado",
 ];
 
 const requestStatusOptions = ["lead_recebido", "cancelado"];
 
-const operationStatuses = new Set(["confirmado", "pagamento_final", "planejamento", "pos_venda"]);
+const operationStatuses = new Set(["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"]);
 
 const cancelReasons = [
   "Cliente sem retorno",
@@ -1535,6 +1543,8 @@ function normalizeProposalStatus(status) {
     qualificado: "proposta_enviada",
     aguardando_sinal: "negociacao",
     pronto: "planejamento",
+    pre_evento: "evento_proximo",
+    evento_hoje_amanha: "evento_proximo",
     realizado: "pos_venda",
   };
   return legacy[status] || status || "proposta_enviada";
@@ -1548,6 +1558,7 @@ function getProposalStatusLabel(status) {
     confirmado: "Sinal recebido",
     pagamento_final: "Aguardando pagamento final",
     planejamento: "Planejamento Evento",
+    evento_proximo: "Evento hoje / amanhã",
     pos_venda: "Pós-venda",
     cancelado: "Cancelado",
   };
@@ -1681,7 +1692,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
 function getProposalTransitionOptions(currentStatus) {
   const status = normalizeProposalStatus(currentStatus);
   if (status === "cancelado") return ["cancelado"];
-  return ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "pos_venda"];
+  return ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"];
 }
 
 function renderStatusSelect(item) {
@@ -1746,7 +1757,7 @@ function renderPipelineCard(item) {
 function renderPipelineStage(stage, items) {
   const stageItems = items.filter((item) => item.stage === stage.id);
   return `
-    <section class="pipeline-column">
+    <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}">
       <div class="pipeline-column-heading">
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
@@ -1903,8 +1914,11 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
   if (next === "planejamento" && !operationStatuses.has(current)) {
     return { ok: false, message: "Sem sinal recebido, o evento não pode entrar em planejamento." };
   }
-  if (next === "pos_venda" && !operationStatuses.has(current)) {
-    return { ok: false, message: "Pós-venda só pode ser usado depois do sinal recebido." };
+  if (next === "evento_proximo" && !operationStatuses.has(current)) {
+    return { ok: false, message: "Sem sinal recebido, o evento não pode entrar em evento hoje/amanhã." };
+  }
+  if (next === "pos_venda" && current !== "evento_proximo" && current !== "pos_venda") {
+    return { ok: false, message: "Pós-venda vem depois da etapa Evento hoje/amanhã." };
   }
   return { ok: true };
 }
