@@ -128,6 +128,157 @@ create table if not exists public.solicitacoes_cotacao (
 alter table public.propostas
   add column if not exists solicitacao_id uuid;
 
+alter table public.propostas
+  add column if not exists public_token uuid not null default gen_random_uuid(),
+  add column if not exists cliente_resposta text,
+  add column if not exists cliente_resposta_em timestamptz,
+  add column if not exists cliente_mensagem text,
+  add column if not exists cliente_solicitacao jsonb;
+
+create unique index if not exists propostas_public_token_idx
+  on public.propostas (public_token);
+
+create or replace function public.get_public_proposal(proposal_token uuid)
+returns table (
+  id uuid,
+  created_at timestamptz,
+  cliente_nome text,
+  cliente_email text,
+  tipo_evento text,
+  data_evento date,
+  horario_evento time,
+  convidados integer,
+  duracao numeric,
+  subtotal numeric,
+  taxa_servico numeric,
+  privatizacao numeric,
+  total numeric,
+  status text,
+  snapshot jsonb,
+  cliente_resposta text,
+  cliente_resposta_em timestamptz,
+  cliente_mensagem text,
+  cliente_solicitacao jsonb
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    p.id,
+    p.created_at,
+    p.cliente_nome,
+    p.cliente_email,
+    p.tipo_evento,
+    p.data_evento,
+    p.horario_evento,
+    p.convidados,
+    p.duracao,
+    p.subtotal,
+    p.taxa_servico,
+    p.privatizacao,
+    p.total,
+    p.status,
+    p.snapshot,
+    p.cliente_resposta,
+    p.cliente_resposta_em,
+    p.cliente_mensagem,
+    p.cliente_solicitacao
+  from public.propostas p
+  where p.public_token = proposal_token
+  limit 1;
+$$;
+
+create or replace function public.respond_public_proposal(
+  proposal_token uuid,
+  action text,
+  requested_date date default null,
+  requested_time time default null,
+  requested_guests integer default null,
+  message text default null
+)
+returns table (
+  ok boolean,
+  status text,
+  cliente_resposta text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  normalized_action text := lower(trim(coalesce(action, '')));
+  clean_message text := nullif(trim(coalesce(message, '')), '');
+  response_payload jsonb;
+  next_status text;
+  new_snapshot jsonb;
+begin
+  if normalized_action not in ('confirmar', 'cancelar', 'alteracao') then
+    raise exception 'Acao invalida.';
+  end if;
+
+  if requested_guests is not null and requested_guests < 1 then
+    raise exception 'Numero de convidados invalido.';
+  end if;
+
+  if normalized_action in ('cancelar', 'alteracao') and length(coalesce(clean_message, '')) < 3 then
+    raise exception 'Mensagem obrigatoria.';
+  end if;
+
+  response_payload := jsonb_strip_nulls(jsonb_build_object(
+    'acao', normalized_action,
+    'data', requested_date,
+    'horario', requested_time,
+    'convidados', requested_guests,
+    'mensagem', clean_message,
+    'registradoEm', now()
+  ));
+
+  next_status := case
+    when normalized_action = 'cancelar' then 'cancelado'
+    else 'negociacao'
+  end;
+
+  select jsonb_set(coalesce(p.snapshot, '{}'::jsonb), '{clienteResposta}', response_payload, true)
+    into new_snapshot
+  from public.propostas p
+  where p.public_token = proposal_token;
+
+  if new_snapshot is null then
+    raise exception 'Proposta nao encontrada.';
+  end if;
+
+  if normalized_action = 'cancelar' then
+    new_snapshot := jsonb_set(
+      new_snapshot,
+      '{cancelamento}',
+      jsonb_build_object(
+        'motivo', coalesce(clean_message, 'Cancelado pelo cliente'),
+        'canceladoEm', now(),
+        'canceladoPor', 'cliente'
+      ),
+      true
+    );
+  end if;
+
+  update public.propostas
+    set
+      status = next_status,
+      cliente_resposta = normalized_action,
+      cliente_resposta_em = now(),
+      cliente_mensagem = clean_message,
+      cliente_solicitacao = response_payload,
+      snapshot = new_snapshot
+    where public_token = proposal_token;
+
+  return query select true, next_status, normalized_action;
+end;
+$$;
+
+grant execute on function public.get_public_proposal(uuid) to anon, authenticated;
+grant execute on function public.respond_public_proposal(uuid, text, date, time, integer, text) to anon, authenticated;
+
 create index if not exists solicitacoes_cotacao_created_at_idx
   on public.solicitacoes_cotacao (created_at desc);
 

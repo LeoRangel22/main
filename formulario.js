@@ -216,7 +216,7 @@ function renderSuccessStatus(referenceCode) {
   statusNode.dataset.status = "success";
   statusNode.innerHTML = `
     <strong>Solicitação enviada. Obrigado!</strong>
-    <span>Sua referência é <b>${referenceCode}</b>. O departamento de eventos da Embaixada Carioca vai analisar os detalhes e responder em até 24h úteis.</span>
+    <span>Sua referência é <b>${referenceCode}</b>. O departamento de eventos da Embaixada Carioca vai analisar os detalhes e responder em até 2 dias úteis.</span>
     <span>Se quiser acrescentar algo, fale com <a href="mailto:eventos@embaixadacarioca.com.br">eventos@embaixadacarioca.com.br</a> ou <a href="https://wa.me/5521971426007" target="_blank" rel="noopener">21 97142-6007</a>.</span>
   `;
   window.requestAnimationFrame(() => {
