@@ -1747,11 +1747,11 @@ function renderPipelineCard(item) {
         ${openButton}
       </div>
       <div class="pipeline-card-title">
-        <strong>${escapeHtml(item.name)}</strong>
-        <span>${escapeHtml(valueLabel)}</span>
+        <strong class="pipeline-card-event-line">${escapeHtml(eventLine)}</strong>
+        <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
       </div>
       <div class="pipeline-card-event-row">
-        <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
+        <small class="pipeline-card-name">${escapeHtml(item.name)}</small>
       </div>
       <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
