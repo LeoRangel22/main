@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v54" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v55" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -108,63 +108,6 @@
             </div>
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
-          <section class="reports-panel" aria-label="Relatórios de eventos">
-            <div class="reports-header">
-              <div>
-                <span>Relatórios</span>
-                <h2>Visões rápidas para venda e operação</h2>
-              </div>
-              <button class="secondary" id="refreshReportsBtn" type="button">Atualizar</button>
-            </div>
-            <div class="report-presets" aria-label="Relatórios predefinidos">
-              <button type="button" data-report-preset="lastMonth">Mês passado</button>
-              <button type="button" data-report-preset="currentMonth">Mês atual</button>
-              <button type="button" data-report-preset="awaitingResponse">Propostas a responder</button>
-              <button type="button" data-report-preset="negotiation">Em negociação</button>
-              <button type="button" data-report-preset="approvedAwaitingSignal">Aprovadas aguardando sinal</button>
-              <button type="button" data-report-preset="signalAwaitingFinal">Sinal pago aguardando restante</button>
-              <button type="button" data-report-preset="awaitingPlanning">Aguardando planejamento</button>
-              <button type="button" data-report-preset="next48h">Próximas 48h</button>
-              <button type="button" data-report-preset="currentWeek">Semana 2ª a domingo</button>
-            </div>
-            <div class="custom-report">
-              <label>
-                De
-                <input id="reportStartDate" type="date" />
-              </label>
-              <label>
-                Até
-                <input id="reportEndDate" type="date" />
-              </label>
-              <label>
-                Etapa
-                <select id="reportStatusFilter">
-                  <option value="">Todas</option>
-                  <option value="lead_recebido">Lead</option>
-                  <option value="proposta_enviada">Sem resposta</option>
-                  <option value="negociacao">Negociação</option>
-                  <option value="confirmado">Sinal recebido</option>
-                  <option value="pagamento_final">PG restante</option>
-                  <option value="planejamento">Planejamento</option>
-                  <option value="evento_proximo">48h</option>
-                  <option value="pos_venda">Pós-venda</option>
-                  <option value="cancelado">Cancelado</option>
-                </select>
-              </label>
-              <label>
-                Tipo
-                <select id="reportKindFilter">
-                  <option value="">Leads e propostas</option>
-                  <option value="request">Leads</option>
-                  <option value="proposal">Propostas/eventos</option>
-                </select>
-              </label>
-              <button class="primary" id="applyCustomReportBtn" type="button">Gerar</button>
-            </div>
-            <div class="report-output" id="reportOutput">
-              <p>Entre com Supabase para ver relatórios.</p>
-            </div>
-          </section>
           <div class="pipeline-panel">
             <div class="pipeline-stage-header">
               <div>
@@ -178,7 +121,66 @@
             </div>
           </div>
           <section class="help-panel" aria-label="Manual e perguntas frequentes">
-            <details open>
+            <details class="reports-panel">
+              <summary>
+                <span>Relatórios</span>
+                <strong>Visões rápidas para venda e operação</strong>
+              </summary>
+              <div class="reports-body">
+                <div class="reports-toolbar">
+                  <div class="report-presets" aria-label="Relatórios predefinidos">
+                    <button type="button" data-report-preset="lastMonth">Mês passado</button>
+                    <button type="button" data-report-preset="currentMonth">Mês atual</button>
+                    <button type="button" data-report-preset="awaitingResponse">Propostas a responder</button>
+                    <button type="button" data-report-preset="negotiation">Em negociação</button>
+                    <button type="button" data-report-preset="approvedAwaitingSignal">Aprovadas aguardando sinal</button>
+                    <button type="button" data-report-preset="signalAwaitingFinal">Sinal pago aguardando restante</button>
+                    <button type="button" data-report-preset="awaitingPlanning">Aguardando planejamento</button>
+                    <button type="button" data-report-preset="next48h">Próximas 48h</button>
+                    <button type="button" data-report-preset="currentWeek">Semana 2ª a domingo</button>
+                  </div>
+                  <button class="secondary" id="refreshReportsBtn" type="button">Atualizar</button>
+                </div>
+                <div class="custom-report">
+                  <label>
+                    De
+                    <input id="reportStartDate" type="date" />
+                  </label>
+                  <label>
+                    Até
+                    <input id="reportEndDate" type="date" />
+                  </label>
+                  <label>
+                    Etapa
+                    <select id="reportStatusFilter">
+                      <option value="">Todas</option>
+                      <option value="lead_recebido">Lead</option>
+                      <option value="proposta_enviada">Sem resposta</option>
+                      <option value="negociacao">Negociação</option>
+                      <option value="confirmado">Sinal recebido</option>
+                      <option value="pagamento_final">PG restante</option>
+                      <option value="planejamento">Planejamento</option>
+                      <option value="evento_proximo">48h</option>
+                      <option value="pos_venda">Pós-venda</option>
+                      <option value="cancelado">Cancelado</option>
+                    </select>
+                  </label>
+                  <label>
+                    Tipo
+                    <select id="reportKindFilter">
+                      <option value="">Leads e propostas</option>
+                      <option value="request">Leads</option>
+                      <option value="proposal">Propostas/eventos</option>
+                    </select>
+                  </label>
+                  <button class="primary" id="applyCustomReportBtn" type="button">Gerar</button>
+                </div>
+                <div class="report-output" id="reportOutput">
+                  <p>Entre com Supabase para ver relatórios.</p>
+                </div>
+              </div>
+            </details>
+            <details>
               <summary>Manual rápido do sistema</summary>
               <ol>
                 <li>O cliente envia o formulário externo e entra como Lead recebido.</li>
@@ -480,6 +482,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v54"></script>
+    <script src="./app.js?v=20260422-eventos-v55"></script>
   </body>
 </html>
