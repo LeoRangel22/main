@@ -761,7 +761,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-row-operation {
-  grid-template-columns: repeat(3, minmax(190px, 1fr));
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
 }
 
 .pipeline-row-archive {
@@ -1035,6 +1035,16 @@ textarea[aria-invalid="true"] {
   background: #ffb447;
 }
 
+.pipeline-final-payment-action {
+  background: #2f7f7f;
+  color: var(--white) !important;
+  min-width: 86px;
+}
+
+.pipeline-final-payment-action:hover {
+  background: #236a6a;
+}
+
 .pipeline-card-status-row {
   align-items: start;
   display: flex;
@@ -1245,6 +1255,24 @@ label.pipeline-status-control:focus-within select {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.payment-mismatch {
+  background: rgba(245, 155, 30, 0.12);
+  border-left: 4px solid var(--amarelo);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.payment-mismatch strong {
+  color: var(--verde-escuro);
+  font-size: 0.86rem;
+}
+
+.payment-mismatch textarea {
+  min-height: 84px;
 }
 
 .signal-summary {
