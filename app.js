@@ -1743,15 +1743,15 @@ function renderPipelineCard(item) {
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small>${escapeHtml(item.reference || "Sem referência")}</small>
         ${cancelButton}
+        ${renderStatusSelect(item)}
+        ${openButton}
       </div>
       <div class="pipeline-card-title">
         <strong>${escapeHtml(item.name)}</strong>
         <span>${escapeHtml(valueLabel)}</span>
-        ${openButton}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
-        ${renderStatusSelect(item)}
       </div>
       <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}

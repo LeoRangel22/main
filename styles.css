@@ -720,6 +720,16 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
+.pipeline-card-kicker .pipeline-status-control {
+  margin-left: 0;
+}
+
+.pipeline-card-kicker .pipeline-status-control summary {
+  font-size: 0.58rem;
+  min-height: 18px;
+  padding: 2px 6px;
+}
+
 .pipeline-card-title strong,
 .pipeline-card-title span {
   color: var(--verde-escuro);
@@ -740,6 +750,7 @@ textarea[aria-invalid="true"] {
 .pipeline-open-button {
   flex: 0 0 auto;
   font-size: 0.74rem;
+  margin-left: auto;
   min-height: 24px;
   padding: 0 8px;
 }
