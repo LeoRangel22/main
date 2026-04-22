@@ -638,6 +638,7 @@ const nodes = {
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
+  availabilityAlert: document.querySelector("#availabilityAlert"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
 };
@@ -1376,6 +1377,85 @@ function getEventWindow() {
 
 function rangesOverlap(startA, endA, startB, endB) {
   return startA < endB && endA > startB;
+}
+
+function getDraftAvailabilityWindow() {
+  if (!fields.eventDate?.value || !fields.eventTime?.value) return null;
+  const start = timeToMinutes(fields.eventTime.value);
+  if (start === null) return null;
+  return {
+    date: fields.eventDate.value,
+    start,
+    end: start + getDuration() * 60,
+  };
+}
+
+function isAvailabilityRelevantStatus(status) {
+  return !["cancelado", "pos_venda"].includes(normalizeProposalStatus(status));
+}
+
+function isSameDraftItem(item) {
+  if (item.kind === "proposal" && state.activeProposalId && item.id === state.activeProposalId) return true;
+  if (item.kind === "request" && state.activeQuoteRequestId && item.id === state.activeQuoteRequestId) return true;
+  return false;
+}
+
+function getAvailabilityConflicts() {
+  const draft = getDraftAvailabilityWindow();
+  if (!draft) return [];
+  return getPipelineItems()
+    .filter((item) => {
+      if (isSameDraftItem(item) || !isAvailabilityRelevantStatus(item.status)) return false;
+      if (!item.date || item.date !== draft.date || !item.time) return false;
+      const start = timeToMinutes(String(item.time).slice(0, 5));
+      if (start === null) return false;
+      const end = start + (Number(item.duration) || 2) * 60;
+      return rangesOverlap(draft.start, draft.end, start, end);
+    })
+    .map((item) => ({
+      ...item,
+      severity: operationStatuses.has(normalizeProposalStatus(item.status)) ? "danger" : "warning",
+    }))
+    .sort((a, b) => (a.severity === "danger" ? -1 : 1) - (b.severity === "danger" ? -1 : 1));
+}
+
+function renderAvailabilityAlert() {
+  if (!nodes.availabilityAlert) return;
+  const draft = getDraftAvailabilityWindow();
+  if (!draft) {
+    nodes.availabilityAlert.className = "availability-alert is-hidden";
+    nodes.availabilityAlert.innerHTML = "";
+    return;
+  }
+
+  const conflicts = getAvailabilityConflicts();
+  if (!conflicts.length) {
+    nodes.availabilityAlert.className = "availability-alert availability-ok";
+    nodes.availabilityAlert.innerHTML = `
+      <strong>Agenda sem conflito aparente</strong>
+      <span>Não há lead, proposta ou evento no mesmo horário cadastrado no funil.</span>
+    `;
+    return;
+  }
+
+  const hasSoldConflict = conflicts.some((item) => item.severity === "danger");
+  nodes.availabilityAlert.className = `availability-alert ${hasSoldConflict ? "availability-danger" : "availability-warning"}`;
+  nodes.availabilityAlert.innerHTML = `
+    <strong>${hasSoldConflict ? "Conflito com evento vendido" : "Atenção: possível disputa de agenda"}</strong>
+    <span>${conflicts.length} item(ns) no mesmo dia e horário. Confirme disponibilidade antes de avançar.</span>
+    <div>
+      ${conflicts
+        .slice(0, 3)
+        .map(
+          (item) => `
+            <small>
+              ${escapeHtml(getProposalStatusLabel(item.status))} · ${escapeHtml(item.name || "Cliente")} · ${escapeHtml(String(item.time).slice(0, 5))} · ${escapeHtml(String(item.guests || 0))} pax
+            </small>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function getRuleForEventDate() {
@@ -2187,6 +2267,7 @@ function getPipelineItems() {
         date: request.data_evento || "",
         time: request.horario_evento || "",
         guests: request.convidados || eventSnapshot.convidados || 1,
+        duration: Number(request.duracao || eventSnapshot.duracao || 2),
         total: null,
         createdAt: request.created_at,
         updatedAt: request.updated_at || request.created_at,
@@ -2216,6 +2297,7 @@ function getPipelineItems() {
       date: proposal.data_evento || "",
       time: proposal.horario_evento || "",
       guests: proposal.convidados || 1,
+      duration: Number(proposal.duracao || proposal.snapshot?.event?.duration || 2),
       total: proposal.total || 0,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
@@ -2730,6 +2812,32 @@ function getActionTasks(items = getPipelineItems()) {
     }
   });
 
+  const scheduleItems = items.filter((item) => {
+    if (!item.date || !item.time || !isAvailabilityRelevantStatus(item.status)) return false;
+    return item.kind === "proposal" || item.kind === "request";
+  });
+  for (let index = 0; index < scheduleItems.length; index += 1) {
+    for (let nextIndex = index + 1; nextIndex < scheduleItems.length; nextIndex += 1) {
+      const first = scheduleItems[index];
+      const second = scheduleItems[nextIndex];
+      if (first.date !== second.date) continue;
+      const firstStart = timeToMinutes(String(first.time).slice(0, 5));
+      const secondStart = timeToMinutes(String(second.time).slice(0, 5));
+      if (firstStart === null || secondStart === null) continue;
+      const firstEnd = firstStart + (Number(first.duration) || 2) * 60;
+      const secondEnd = secondStart + (Number(second.duration) || 2) * 60;
+      if (!rangesOverlap(firstStart, firstEnd, secondStart, secondEnd)) continue;
+      const hasSoldConflict = operationStatuses.has(normalizeProposalStatus(first.status)) || operationStatuses.has(normalizeProposalStatus(second.status));
+      tasks.push({
+        item: first.kind === "proposal" ? first : second,
+        title: hasSoldConflict ? "Conflito de agenda" : "Checar disputa de agenda",
+        meta: `${formatDateFromIso(first.date)} · ${String(first.time).slice(0, 5)} · ${first.guests || 0} pax`,
+        note: `${first.name || "Cliente"} e ${second.name || "Cliente"} no mesmo horário.`,
+        priority: hasSoldConflict ? 96 : 64,
+      });
+    }
+  }
+
   return tasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
 }
 
@@ -2899,6 +3007,7 @@ function renderPipeline() {
 
   const items = getPipelineItems();
   renderPipelineMetrics(items);
+  renderAvailabilityAlert();
 
   const rows = [
     { id: "commercial", title: "Comercial", stages: funnelStages.filter((stage) => stage.row === "commercial") },
@@ -3721,6 +3830,7 @@ function renderAll() {
   renderPriceList();
   renderPricesTable();
   renderCommercialLibrarySummary();
+  renderAvailabilityAlert();
   renderSummary();
   renderCalculation();
   renderProposal();
@@ -3937,6 +4047,7 @@ function bindEvents() {
     if (!field) return;
     const refreshFormOutputs = () => {
       renderPriceList();
+      renderAvailabilityAlert();
       renderSummary();
       renderCalculation();
       renderProposal();
