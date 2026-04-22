@@ -1123,6 +1123,13 @@ label.pipeline-status-control:focus-within select {
   font-weight: 700;
 }
 
+.signal-summary a {
+  color: var(--verde);
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .eyebrow {
   color: var(--verde);
   font-size: 0.78rem;
