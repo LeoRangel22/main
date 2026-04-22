@@ -2290,7 +2290,7 @@ function getLeadAgeInfo(item) {
 
 function getClientResponseLabel(response) {
   const labels = {
-    confirmar: "Cliente confirmou",
+    confirmar: "Cliente aprovou a proposta",
     alteracao: "Cliente pediu alteração",
     cancelar: "Cliente cancelou",
   };
@@ -3325,7 +3325,7 @@ async function openEmail() {
       "Segue o link da proposta comercial da Embaixada Carioca:",
       proposalUrl,
       "",
-      "Pelo link você pode confirmar, cancelar ou solicitar ajustes de data, horário e convidados.",
+      "Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados.",
       "",
       "Ficamos à disposição.",
     ].join("\n"),
@@ -3373,7 +3373,7 @@ async function openWhatsApp() {
   const proposalUrl = await ensureProposalLink();
   if (!proposalUrl) return;
   const text = encodeURIComponent(
-    `Olá! Segue a proposta comercial da Embaixada Carioca: ${proposalUrl}\n\nPelo link você pode confirmar, cancelar ou solicitar ajustes de data, horário e convidados.`,
+    `Olá! Segue a proposta comercial da Embaixada Carioca: ${proposalUrl}\n\nPelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados.`,
   );
   const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   showToast("Link da proposta gerado. Abrindo WhatsApp.");

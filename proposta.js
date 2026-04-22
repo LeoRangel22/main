@@ -62,7 +62,7 @@ function getStatusLabel(value) {
 
 function getActionLabel(value) {
   const labels = {
-    confirmar: "Proposta confirmada pelo cliente",
+    confirmar: "Proposta aprovada pelo cliente",
     cancelar: "Cancelamento solicitado pelo cliente",
     alteracao: "Alteração solicitada pelo cliente",
   };
@@ -167,9 +167,9 @@ function renderProposal(proposal) {
 
     <div class="public-proposal-actions">
       <h3>Como deseja seguir?</h3>
-      <p>Você pode confirmar a proposta, solicitar um ajuste ou cancelar este pedido. A equipe de eventos recebe sua resposta automaticamente.</p>
+      <p>Você pode aprovar a proposta, solicitar um ajuste ou cancelar este pedido. A reserva é confirmada após o pagamento do sinal.</p>
       <div class="public-proposal-buttons">
-        <button class="primary" type="button" data-public-action="confirmar">Confirmar proposta</button>
+        <button class="primary" type="button" data-public-action="confirmar">Aprovar proposta</button>
         <button class="secondary" type="button" data-public-action="alteracao">Solicitar alteração</button>
         <button class="secondary danger-light" type="button" data-public-action="cancelar">Cancelar</button>
       </div>
@@ -213,7 +213,7 @@ function openResponseForm(action) {
   form.hidden = false;
   if (action === "confirmar") {
     message.placeholder = "Se quiser, deixe uma observação para a equipe.";
-    setMessage("Confirme abaixo para avisar a equipe que deseja seguir com a proposta.", "neutral");
+    setMessage("Envie abaixo para avisar a equipe que deseja seguir com a proposta. A reserva é confirmada após o sinal.", "neutral");
   } else if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
     setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
