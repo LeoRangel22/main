@@ -620,6 +620,36 @@ textarea[aria-invalid="true"] {
   padding: 8px 10px;
 }
 
+.owner-metrics .metric-stage-lead {
+  background: #9d3024;
+}
+
+.owner-metrics .metric-stage-sem-resposta {
+  background: #c95f1d;
+}
+
+.owner-metrics .metric-stage-negociacao {
+  background: #d89a18;
+}
+
+.owner-metrics .metric-stage-sinal {
+  background: #d7e7bd;
+  color: var(--verde-escuro);
+}
+
+.owner-metrics .metric-stage-pg-restante {
+  background: #c95f1d;
+}
+
+.owner-metrics .metric-stage-planejamento,
+.owner-metrics .metric-stage-48h {
+  background: #d89a18;
+}
+
+.owner-metrics .metric-stage-pos-venda {
+  background: #1f5f83;
+}
+
 .owner-metrics span {
   color: var(--verde-2);
   font-size: 0.66rem;
@@ -632,10 +662,18 @@ textarea[aria-invalid="true"] {
   text-transform: uppercase;
 }
 
+.owner-metrics .metric-stage-sinal span {
+  color: var(--verde);
+}
+
 .owner-metrics strong {
   color: var(--white);
   font-size: 1.18rem;
   line-height: 1;
+}
+
+.owner-metrics .metric-stage-sinal strong {
+  color: var(--verde-escuro);
 }
 
 .period-metrics {
