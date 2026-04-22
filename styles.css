@@ -550,11 +550,16 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-panel > .pipeline-stage-line {
-  color: var(--verde);
-  font-size: 0.82rem;
+  background: var(--verde-escuro);
+  border-radius: 8px;
+  color: var(--white);
+  font-size: 0.78rem;
   font-weight: 900;
+  line-height: 1.15;
   letter-spacing: 0;
   margin: -2px 0 10px;
+  padding: 10px 12px;
+  text-transform: none;
 }
 
 .pipeline-board p,
