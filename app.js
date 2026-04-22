@@ -2347,6 +2347,21 @@ function renderPipelineCard(item) {
 
 function renderPipelineStage(stage, items) {
   const stageItems = items.filter((item) => item.stage === stage.id);
+  if (stage.row === "archive") {
+    return `
+      <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)} pipeline-column-collapsible">
+        <details>
+          <summary class="pipeline-column-heading pipeline-column-summary">
+            <span>${escapeHtml(stage.title)}</span>
+            <strong>${stageItems.length}</strong>
+          </summary>
+          <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
+            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
+          </div>
+        </details>
+      </section>
+    `;
+  }
   return `
     <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}">
       <div class="pipeline-column-heading">
