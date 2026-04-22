@@ -1808,6 +1808,45 @@ label.pipeline-status-control:focus-within select {
   text-underline-offset: 2px;
 }
 
+.availability-alert {
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+}
+
+.availability-alert strong {
+  color: var(--verde-escuro);
+  font-size: 0.9rem;
+}
+
+.availability-alert span,
+.availability-alert small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.availability-alert div {
+  display: grid;
+  gap: 3px;
+}
+
+.availability-ok {
+  background: rgba(47, 111, 69, 0.08);
+  border: 1px solid rgba(47, 111, 69, 0.18);
+}
+
+.availability-warning {
+  background: rgba(242, 185, 75, 0.18);
+  border: 1px solid rgba(219, 139, 27, 0.24);
+}
+
+.availability-danger {
+  background: rgba(199, 71, 63, 0.12);
+  border: 1px solid rgba(199, 71, 63, 0.28);
+}
+
 .operational-checklist {
   background: rgba(47, 111, 69, 0.08);
   border: 1px solid rgba(47, 111, 69, 0.18);
