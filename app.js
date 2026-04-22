@@ -1732,14 +1732,14 @@ function renderPipelineCard(item) {
       data-pipeline-card-status="${escapeHtml(item.status)}"
     >
       <div class="pipeline-card-title">
-        <strong>${escapeHtml(item.name)}</strong>
+        <strong><span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.name)}</strong>
         <span>${escapeHtml(valueLabel)}</span>
       </div>
       <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
       <small>${escapeHtml(item.type)}</small>
-      ${item.meta.length ? `<small>${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
+      ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       <div class="pipeline-card-status-row">
-        <small><span class="status-chip${statusClass}">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.reference || "Sem referência")}</small>
+        <small>${escapeHtml(item.reference || "Sem referência")}</small>
         ${renderStatusSelect(item)}
       </div>
       ${cancelInfo}

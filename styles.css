@@ -698,6 +698,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-title {
+  align-items: start;
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -711,6 +712,13 @@ textarea[aria-invalid="true"] {
   overflow-wrap: anywhere;
 }
 
+.pipeline-card-title strong {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pipeline-card small {
   color: var(--muted);
   font-size: 0.78rem;
@@ -722,6 +730,12 @@ textarea[aria-invalid="true"] {
   color: var(--verde) !important;
   font-size: 0.82rem !important;
   font-weight: 900 !important;
+}
+
+.pipeline-card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline-card-status-row {
@@ -1403,6 +1417,12 @@ textarea {
   margin-right: 6px;
   padding: 4px 8px;
   text-transform: uppercase;
+}
+
+.pipeline-stage-chip {
+  flex: 0 0 auto;
+  font-size: 0.64rem;
+  padding: 3px 7px;
 }
 
 .status-chip.confirmed {
