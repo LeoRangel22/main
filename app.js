@@ -1463,6 +1463,7 @@ function updateAuthUI() {
   const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
 
   document.body.classList.toggle("auth-locked", !isLoggedIn);
+  document.body.classList.toggle("auth-connected", isLoggedIn);
 
   loginButton.disabled = !isConnected || isLoggedIn;
   recoverButton.disabled = !isConnected || isLoggedIn;

@@ -241,6 +241,11 @@ summary:focus-visible {
   padding: 0 10px;
 }
 
+.copy-link-small.primary {
+  background: var(--verde-escuro);
+  color: var(--white);
+}
+
 .pricing-admin-link {
   background: var(--verde-claro);
   border-left: 4px solid var(--verde);
@@ -363,6 +368,31 @@ summary:focus-visible {
   padding: 8px 10px;
 }
 
+.team-session-row {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.team-session-row .team-status {
+  align-content: center;
+  display: grid;
+}
+
+.team-session-row #logoutBtn {
+  min-width: 70px;
+}
+
+.auth-connected .topbar-team-auth .team-email-presets,
+.auth-connected .topbar-team-auth > .compact-login-row {
+  display: none;
+}
+
+.auth-connected .topbar-team-auth {
+  gap: 6px;
+}
+
 .magic-link-recovery {
   border-top: 1px solid var(--line);
   display: grid;
@@ -384,8 +414,12 @@ summary:focus-visible {
   padding-top: 8px;
 }
 
-.topbar-recovery p {
+.topbar-recovery summary {
   font-size: 0.82rem;
+}
+
+.topbar-recovery p {
+  font-size: 0.76rem;
 }
 
 .compact-config-grid {

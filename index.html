@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v10" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v11" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -34,9 +34,11 @@
                 <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
               </label>
               <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
+            </div>
+            <div class="team-session-row">
+              <div class="team-status" id="authStatus">Aguardando login.</div>
               <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
             </div>
-            <div class="team-status" id="authStatus">Aguardando login.</div>
             <details class="magic-link-recovery topbar-recovery">
               <summary>Problema com magic link ou conexão?</summary>
               <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
@@ -65,7 +67,7 @@
             <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
             <div class="topbar-action-row">
               <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário Cliente</a>
-              <button class="secondary copy-link-small" id="copyClientFormLinkBtn" type="button">Copiar link</button>
+              <button class="primary copy-link-small" id="copyClientFormLinkBtn" type="button">Copiar link</button>
             </div>
           </div>
         </header>
@@ -398,6 +400,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260421-eventos-v10"></script>
+    <script src="./app.js?v=20260421-eventos-v11"></script>
   </body>
 </html>
