@@ -139,6 +139,7 @@ summary:focus-visible {
 
 .auth-locked .topbar-actions,
 .auth-locked .owner-metrics,
+.auth-locked .period-metrics,
 .auth-locked .pipeline-panel,
 .auth-locked .help-panel,
 .auth-locked .quote-layout,
@@ -601,6 +602,70 @@ textarea[aria-invalid="true"] {
   color: var(--white);
   font-size: 1.18rem;
   line-height: 1;
+}
+
+.period-metrics {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.period-metric-card {
+  background: var(--verde-escuro);
+  border-radius: 8px;
+  color: var(--white);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.period-metric-card > span {
+  color: var(--verde-2);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.period-metric-card dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.period-metric-card dl div {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.period-metric-card dt,
+.period-metric-card dd {
+  margin: 0;
+}
+
+.period-metric-card dt {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.period-metric-card dd {
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline-board {
@@ -2782,7 +2847,8 @@ input[type="range"] {
     grid-column: 1 / -1;
   }
 
-  .owner-metrics {
+  .owner-metrics,
+  .period-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2836,6 +2902,7 @@ input[type="range"] {
   .filters,
   .event-details-grid,
   .owner-metrics,
+  .period-metrics,
   .pipeline-row-commercial,
   .pipeline-row-operation,
   .pipeline-row-archive,

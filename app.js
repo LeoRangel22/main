@@ -605,6 +605,7 @@ const nodes = {
   metricStagePlanejamento: document.querySelector("#metricStagePlanejamento"),
   metricStage48h: document.querySelector("#metricStage48h"),
   metricStagePosVenda: document.querySelector("#metricStagePosVenda"),
+  periodMetrics: document.querySelector("#periodMetrics"),
   clientFormLink: document.querySelector("#clientFormLink"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
 };
@@ -1883,6 +1884,70 @@ function getPipelineItems() {
   return [...requestItems, ...proposalItems].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 }
 
+function parseLocalIsoDate(value) {
+  if (!value) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date, amount) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function startOfWeek(date) {
+  const start = startOfDay(date);
+  const day = start.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  return addDays(start, offset);
+}
+
+function getPeriodRanges(referenceDate = new Date()) {
+  const today = startOfDay(referenceDate);
+  const currentWeekStart = startOfWeek(today);
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  return [
+    { label: "Semana passada", start: addDays(currentWeekStart, -7), end: currentWeekStart },
+    { label: "Semana atual", start: currentWeekStart, end: addDays(currentWeekStart, 7) },
+    { label: "Próxima semana", start: addDays(currentWeekStart, 7), end: addDays(currentWeekStart, 14) },
+    { label: "No mês", start: currentMonthStart, end: nextMonthStart },
+    { label: "Mês que vem", start: nextMonthStart, end: new Date(today.getFullYear(), today.getMonth() + 2, 1) },
+  ];
+}
+
+function renderPeriodMetrics(items) {
+  if (!nodes.periodMetrics) return;
+  const soldEvents = items
+    .filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)))
+    .map((item) => ({ ...item, eventDate: parseLocalIsoDate(item.date) }))
+    .filter((item) => item.eventDate);
+
+  nodes.periodMetrics.innerHTML = getPeriodRanges()
+    .map((period) => {
+      const periodItems = soldEvents.filter((item) => item.eventDate >= period.start && item.eventDate < period.end);
+      const total = periodItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+      const average = periodItems.length ? total / periodItems.length : 0;
+      return `
+        <div class="period-metric-card">
+          <span>${escapeHtml(period.label)}</span>
+          <dl>
+            <div><dt>Eventos</dt><dd>${periodItems.length}</dd></div>
+            <div><dt>Valor</dt><dd>${formatMoney(total)}</dd></div>
+            <div><dt>TKT médio</dt><dd>${formatMoney(average)}</dd></div>
+          </dl>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderPipelineMetrics(items = getPipelineItems()) {
   if (!nodes.metricStageLead) return;
   const counts = {
@@ -1917,6 +1982,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   nodes.metricStagePlanejamento.textContent = String(counts.planejamento);
   nodes.metricStage48h.textContent = String(counts.quarentaOito);
   nodes.metricStagePosVenda.textContent = String(counts.posVenda);
+  renderPeriodMetrics(items);
 }
 
 function getProposalTransitionOptions(currentStatus) {
