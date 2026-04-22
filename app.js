@@ -540,6 +540,7 @@ const state = {
   quoteRequests: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
+  activeReportPreset: "currentMonth",
   guided: {
     event: "",
     beverageId: "",
@@ -580,6 +581,10 @@ const fields = {
   supabaseAnonKey: document.querySelector("#supabaseAnonKey"),
   loginEmail: document.querySelector("#loginEmail"),
   magicLinkUrl: document.querySelector("#magicLinkUrl"),
+  reportStartDate: document.querySelector("#reportStartDate"),
+  reportEndDate: document.querySelector("#reportEndDate"),
+  reportStatusFilter: document.querySelector("#reportStatusFilter"),
+  reportKindFilter: document.querySelector("#reportKindFilter"),
 };
 
 const nodes = {
@@ -614,6 +619,8 @@ const nodes = {
   metricStage48h: document.querySelector("#metricStage48h"),
   metricStagePosVenda: document.querySelector("#metricStagePosVenda"),
   periodMetrics: document.querySelector("#periodMetrics"),
+  reportOutput: document.querySelector("#reportOutput"),
+  reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
 };
@@ -2217,6 +2224,196 @@ function renderPeriodMetrics(items) {
     .join("");
 }
 
+function toDateInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function getReportStatus(item) {
+  return item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
+}
+
+function isSoldReportItem(item) {
+  return item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status));
+}
+
+function getReportDefinitions(referenceDate = new Date()) {
+  const today = startOfDay(referenceDate);
+  const currentWeekStart = startOfWeek(today);
+  const nextWeekStart = addDays(currentWeekStart, 7);
+  const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const next48h = addDays(today, 2);
+  return {
+    lastMonth: {
+      title: "Mês passado",
+      detail: formatPeriodRange(previousMonthStart, currentMonthStart),
+      filter: (item) => isSoldReportItem(item) && item.eventDate >= previousMonthStart && item.eventDate < currentMonthStart,
+    },
+    currentMonth: {
+      title: "Mês atual",
+      detail: formatPeriodRange(currentMonthStart, nextMonthStart),
+      filter: (item) => isSoldReportItem(item) && item.eventDate >= currentMonthStart && item.eventDate < nextMonthStart,
+    },
+    awaitingResponse: {
+      title: "Propostas a responder",
+      detail: "Sem resposta do cliente",
+      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "proposta_enviada",
+    },
+    negotiation: {
+      title: "Propostas em negociação",
+      detail: "Ajustes comerciais em andamento",
+      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "negociacao",
+    },
+    approvedAwaitingSignal: {
+      title: "Aprovadas aguardando sinal",
+      detail: "Cliente quer seguir; falta registrar sinal",
+      filter: (item) =>
+        item.kind === "proposal" &&
+        item.clientResponse === "confirmar" &&
+        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)),
+    },
+    signalAwaitingFinal: {
+      title: "Sinal pago aguardando restante",
+      detail: "Venda concluída; saldo ainda pendente",
+      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado",
+    },
+    awaitingPlanning: {
+      title: "Eventos aguardando planejamento",
+      detail: "Pagamento restante registrado; operação deve preparar",
+      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "planejamento",
+    },
+    next48h: {
+      title: "Eventos próximas 48h",
+      detail: `${formatShortDayMonth(today)} a ${formatShortDayMonth(next48h)}`,
+      filter: (item) =>
+        isSoldReportItem(item) &&
+        item.eventDate &&
+        item.eventDate >= today &&
+        item.eventDate <= next48h,
+    },
+    currentWeek: {
+      title: "Eventos da semana",
+      detail: formatPeriodRange(currentWeekStart, nextWeekStart),
+      filter: (item) => isSoldReportItem(item) && item.eventDate >= currentWeekStart && item.eventDate < nextWeekStart,
+    },
+  };
+}
+
+function getReportItems(items) {
+  return items.map((item) => ({ ...item, eventDate: parseLocalIsoDate(item.date) }));
+}
+
+function getCustomReportConfig() {
+  const start = fields.reportStartDate?.value ? parseLocalIsoDate(fields.reportStartDate.value) : null;
+  const end = fields.reportEndDate?.value ? addDays(parseLocalIsoDate(fields.reportEndDate.value), 1) : null;
+  const status = fields.reportStatusFilter?.value || "";
+  const kind = fields.reportKindFilter?.value || "";
+  const detailParts = [
+    start ? `desde ${formatDateFromIso(fields.reportStartDate.value)}` : "",
+    end ? `até ${formatDateFromIso(fields.reportEndDate.value)}` : "",
+    status ? getProposalStatusLabel(status) : "Todas as etapas",
+    kind ? (kind === "request" ? "Leads" : "Propostas/eventos") : "Leads e propostas",
+  ].filter(Boolean);
+  return {
+    title: "Relatório customizado",
+    detail: detailParts.join(" · "),
+    filter: (item) => {
+      if (kind && item.kind !== kind) return false;
+      if (status && getReportStatus(item) !== status) return false;
+      if (start || end) {
+        if (!item.eventDate) return false;
+        if (start && item.eventDate < start) return false;
+        if (end && item.eventDate >= end) return false;
+      }
+      return true;
+    },
+  };
+}
+
+function getActiveReportConfig() {
+  if (state.activeReportPreset === "custom") return getCustomReportConfig();
+  return getReportDefinitions()[state.activeReportPreset] || getReportDefinitions().currentMonth;
+}
+
+function renderReportItem(item) {
+  const openButton =
+    item.kind === "proposal"
+      ? `<button class="primary report-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
+      : `<button class="primary report-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+  return `
+    <article class="report-item">
+      <div>
+        <strong>${escapeHtml(item.name || "Cliente")}</strong>
+        <span>${escapeHtml(item.type || "Evento")} · ${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data a definir")} · ${escapeHtml(item.time ? String(item.time).slice(0, 5) : "Horário a definir")} · ${escapeHtml(String(item.guests || 0))} pax</span>
+        <small>${escapeHtml(getProposalStatusLabel(getReportStatus(item)))}${item.clientType ? ` · ${escapeHtml(item.clientType)}` : ""}</small>
+      </div>
+      <div>
+        <b>${item.total ? formatMoney(item.total) : "Sem valor"}</b>
+        ${openButton}
+      </div>
+    </article>
+  `;
+}
+
+function renderDashboardReports(items = getPipelineItems()) {
+  if (!nodes.reportOutput) return;
+  const prepared = getReportItems(items);
+  const config = getActiveReportConfig();
+  const reportItems = prepared
+    .filter(config.filter)
+    .sort((a, b) => {
+      const dateA = a.eventDate?.getTime() || new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const dateB = b.eventDate?.getTime() || new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  const proposalItems = reportItems.filter((item) => item.kind === "proposal");
+  const soldItems = reportItems.filter(isSoldReportItem);
+  const total = proposalItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const average = proposalItems.length ? total / proposalItems.length : 0;
+
+  nodes.reportPresets?.querySelectorAll("[data-report-preset]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.reportPreset === state.activeReportPreset);
+  });
+
+  nodes.reportOutput.innerHTML = `
+    <div class="report-summary">
+      <div>
+        <span>${escapeHtml(config.title)}</span>
+        <strong>${escapeHtml(config.detail || "Visão rápida")}</strong>
+      </div>
+      <dl>
+        <div><dt>Total</dt><dd>${reportItems.length}</dd></div>
+        <div><dt>Eventos</dt><dd>${soldItems.length}</dd></div>
+        <div><dt>Valor</dt><dd>${formatMoney(total)}</dd></div>
+        <div><dt>TKT médio</dt><dd>${formatMoney(average)}</dd></div>
+      </dl>
+    </div>
+    <div class="report-list">
+      ${reportItems.length ? reportItems.slice(0, 14).map(renderReportItem).join("") : `<p>Nenhum item neste relatório.</p>`}
+    </div>
+  `;
+}
+
+function selectReportPreset(preset) {
+  state.activeReportPreset = preset;
+  renderDashboardReports(getPipelineItems());
+}
+
+function applyCustomReport() {
+  state.activeReportPreset = "custom";
+  renderDashboardReports(getPipelineItems());
+}
+
+function initializeReportDefaults() {
+  const today = startOfDay(new Date());
+  const weekStart = startOfWeek(today);
+  if (fields.reportStartDate && !fields.reportStartDate.value) fields.reportStartDate.value = toDateInputValue(weekStart);
+  if (fields.reportEndDate && !fields.reportEndDate.value) fields.reportEndDate.value = toDateInputValue(addDays(weekStart, 6));
+}
+
 function renderPipelineMetrics(items = getPipelineItems()) {
   if (!nodes.metricStageLead) return;
   const counts = {
@@ -2252,6 +2449,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   nodes.metricStage48h.textContent = String(counts.quarentaOito);
   nodes.metricStagePosVenda.textContent = String(counts.posVenda);
   renderPeriodMetrics(items);
+  renderDashboardReports(items);
 }
 
 function getProposalTransitionOptions(currentStatus) {
@@ -3556,6 +3754,26 @@ function bindEvents() {
     await loadProposalHistory();
     await loadQuoteRequests();
   });
+  document.querySelector("#refreshReportsBtn")?.addEventListener("click", async () => {
+    await loadProposalHistory();
+    await loadQuoteRequests();
+    renderDashboardReports(getPipelineItems());
+  });
+  document.querySelector("#applyCustomReportBtn")?.addEventListener("click", applyCustomReport);
+  nodes.reportPresets?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-report-preset]");
+    if (!button) return;
+    selectReportPreset(button.dataset.reportPreset);
+  });
+  nodes.reportOutput?.addEventListener("click", (event) => {
+    const proposalButton = event.target.closest("button[data-proposal-id]");
+    if (proposalButton) {
+      openSavedProposal(proposalButton.dataset.proposalId);
+      return;
+    }
+    const requestButton = event.target.closest("button[data-use-request]");
+    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
   document.querySelector("#copyClientFormLinkBtn")?.addEventListener("click", copyClientFormLink);
   nodes.historyList?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-proposal-id]");
@@ -3640,6 +3858,7 @@ function bindEvents() {
 renderCategoryFilter();
 renderPrivatizationRulesTable();
 renderClientFormLink();
+initializeReportDefaults();
 if (fields.generalTerms) fields.generalTerms.value = loadGeneralTerms();
 bindEvents();
 renderAll();
