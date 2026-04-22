@@ -1723,6 +1723,14 @@ function renderPipelineCard(item) {
   const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
+  const openButton =
+    item.kind === "proposal"
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
+      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+  const cancelButton =
+    item.status === "cancelado"
+      ? ""
+      : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`;
   return `
     <article
       class="pipeline-card"
@@ -1734,10 +1742,12 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small>${escapeHtml(item.reference || "Sem referência")}</small>
+        ${cancelButton}
       </div>
       <div class="pipeline-card-title">
         <strong>${escapeHtml(item.name)}</strong>
         <span>${escapeHtml(valueLabel)}</span>
+        ${openButton}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
@@ -1746,19 +1756,11 @@ function renderPipelineCard(item) {
       <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       ${cancelInfo}
-      <div class="request-actions">
-        ${
-          item.kind === "proposal"
-            ? `<button class="primary" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir proposta</button>
-               ${
-                 operationStatuses.has(item.status) || item.status === "cancelado"
-                   ? ""
-                   : `<button class="secondary" type="button" data-mark-paid="${escapeHtml(item.id)}">Marcar sinal pago</button>`
-               }`
-            : `<button class="primary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir proposta</button>`
-        }
-        ${item.status === "cancelado" ? "" : `<button class="secondary danger-light" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`}
-      </div>
+      ${
+        item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
+          ? `<div class="request-actions"><button class="secondary" type="button" data-mark-paid="${escapeHtml(item.id)}">Marcar sinal pago</button></div>`
+          : ""
+      }
     </article>
   `;
 }
