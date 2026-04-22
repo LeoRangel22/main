@@ -247,16 +247,16 @@ summary:focus-visible {
 .team-panel {
   border-bottom: 1px solid var(--line);
   display: grid;
-  gap: 18px;
-  margin-bottom: 24px;
-  padding-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
 }
 
 .team-grid,
 .team-access {
   display: grid;
-  gap: 18px;
-  grid-template-columns: 1.15fr 0.85fr;
+  gap: 12px;
+  grid-template-columns: minmax(420px, 0.9fr) minmax(360px, 1.1fr);
 }
 
 .team-config,
@@ -266,8 +266,20 @@ summary:focus-visible {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
+}
+
+.team-auth-heading {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: space-between;
+}
+
+.team-auth-heading .section-heading {
+  margin: 0;
 }
 
 .team-config p,
@@ -311,7 +323,7 @@ summary:focus-visible {
 
 .team-ready {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .team-ready span {
@@ -322,7 +334,7 @@ summary:focus-visible {
 }
 
 .team-ready strong {
-  font-size: 1.18rem;
+  font-size: 1rem;
   line-height: 1.1;
 }
 
@@ -473,6 +485,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-row {
+  align-items: start;
   display: grid;
   gap: 12px;
 }
@@ -490,6 +503,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-column {
+  align-self: start;
   background: rgba(238, 244, 240, 0.7);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1056,6 +1070,10 @@ textarea {
 
 .send-actions button {
   flex: 1 1 130px;
+}
+
+.send-actions #printBtn {
+  flex-basis: 100%;
 }
 
 .history-panel {
