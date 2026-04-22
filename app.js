@@ -14,6 +14,7 @@ const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
   "50% restante até 72 horas antes do evento.",
 ];
+const signalPaymentBanks = ["Itaú", "Santander", "Nubank", "Stone"];
 
 const funnelStages = [
   {
@@ -26,8 +27,8 @@ const funnelStages = [
   {
     id: "proposta_enviada",
     row: "commercial",
-    title: "Proposta enviada / aguardando resposta",
-    description: "Proposta enviada ao cliente, aguardando retorno.",
+    title: "Proposta sem resposta",
+    description: "Proposta enviada ao cliente, ainda sem retorno.",
     statuses: ["proposta_enviada"],
   },
   {
@@ -743,6 +744,111 @@ function formatMoney(value) {
   return currency.format(value || 0);
 }
 
+function getTodayInputValue() {
+  const date = new Date();
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function getSignalDefaultAmount(total) {
+  return roundCurrency((Number(total) || 0) * 0.5);
+}
+
+function createSignalPaymentInfo(amount, date, banks) {
+  return {
+    valor: roundCurrency(amount),
+    data: date,
+    bancos: banks,
+    registradoEm: new Date().toISOString(),
+    registradoPor: state.session?.user?.email || "",
+  };
+}
+
+function showSignalPaymentDialog(defaultAmount = 0) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "signal-modal-backdrop";
+    backdrop.innerHTML = `
+      <form class="signal-modal" novalidate>
+        <div>
+          <span class="eyebrow">Sinal recebido</span>
+          <h3>Registrar pagamento do sinal</h3>
+          <p>Confirme valor, data e banco antes de mover o evento para venda concluída.</p>
+        </div>
+        <label>
+          Valor recebido
+          <input name="amount" type="text" inputmode="decimal" value="${escapeHtml(defaultAmount.toFixed(2).replace(".", ","))}" />
+        </label>
+        <label>
+          Data do pagamento
+          <input name="date" type="date" value="${escapeHtml(getTodayInputValue())}" />
+        </label>
+        <fieldset>
+          <legend>Banco de recebimento</legend>
+          <div class="signal-bank-options">
+            ${signalPaymentBanks
+              .map(
+                (bank) => `
+                  <label>
+                    <input type="checkbox" name="bank" value="${escapeHtml(bank)}" />
+                    <span>${escapeHtml(bank)}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+          </div>
+        </fieldset>
+        <small class="signal-error" aria-live="polite"></small>
+        <div class="signal-modal-actions">
+          <button class="secondary" type="button" data-signal-cancel>Cancelar</button>
+          <button class="primary" type="submit">Confirmar sinal</button>
+        </div>
+      </form>
+    `;
+
+    const form = backdrop.querySelector("form");
+    const amountInput = form.querySelector('input[name="amount"]');
+    const dateInput = form.querySelector('input[name="date"]');
+    const errorNode = form.querySelector(".signal-error");
+    const close = (value) => {
+      backdrop.remove();
+      resolve(value);
+    };
+
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) close(null);
+    });
+    backdrop.querySelector("[data-signal-cancel]").addEventListener("click", () => close(null));
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const amount = toNumber(amountInput.value);
+      const date = dateInput.value;
+      const banks = [...form.querySelectorAll('input[name="bank"]:checked')].map((input) => input.value);
+
+      if (!amount || amount <= 0) {
+        errorNode.textContent = "Informe o valor recebido.";
+        amountInput.focus();
+        return;
+      }
+      if (!date) {
+        errorNode.textContent = "Informe a data do pagamento.";
+        dateInput.focus();
+        return;
+      }
+      if (!banks.length) {
+        errorNode.textContent = "Marque pelo menos um banco para confirmar.";
+        return;
+      }
+
+      close(createSignalPaymentInfo(amount, date, banks));
+    });
+
+    document.body.appendChild(backdrop);
+    amountInput.focus();
+    amountInput.select();
+  });
+}
+
 function getGuestCount() {
   return Math.max(1, Math.floor(toNumber(fields.guestCount.value) || 1));
 }
@@ -1381,6 +1487,7 @@ function getProposalSnapshot() {
       name: fields.clientName.value.trim(),
       email: fields.clientEmail.value.trim(),
       phone: fields.clientPhone.value.trim(),
+      company: activeRequest?.empresa || activeRequest?.cliente_empresa || activeRequest?.snapshot?.cliente?.empresa || "",
     },
     event: {
       type: fields.eventType.value.trim(),
@@ -1557,7 +1664,7 @@ function normalizeProposalStatus(status) {
 function getProposalStatusLabel(status) {
   const labels = {
     lead_recebido: "Lead",
-    proposta_enviada: "Proposta enviada / aguardando resposta",
+    proposta_enviada: "Proposta sem resposta",
     negociacao: "Em negociação",
     confirmado: "Sinal recebido",
     pagamento_final: "Aguardando pagamento final",
@@ -1643,6 +1750,7 @@ function getPipelineItems() {
         status,
         stage: getPipelineStage(status),
         name: request.cliente_nome || "Cliente",
+        company: request.empresa || request.cliente_empresa || request.snapshot?.cliente?.empresa || "",
         type: request.tipo_evento || eventSnapshot.tipo || "Evento",
         date: request.data_evento || "",
         time: request.horario_evento || "",
@@ -1663,6 +1771,12 @@ function getPipelineItems() {
       status,
       stage: getPipelineStage(status),
       name: proposal.cliente_nome || "Cliente",
+      company:
+        proposal.empresa ||
+        proposal.cliente_empresa ||
+        proposal.snapshot?.client?.company ||
+        proposal.snapshot?.cliente?.empresa ||
+        "",
       type: proposal.tipo_evento || "Evento",
       date: proposal.data_evento || "",
       time: proposal.horario_evento || "",
@@ -1722,7 +1836,8 @@ function renderPipelineCard(item) {
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
   const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
-  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax - ${item.type}`;
+  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
+  const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
@@ -1748,11 +1863,12 @@ function renderPipelineCard(item) {
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
-      </div>
-      <div class="pipeline-card-name-row">
-        <small class="pipeline-card-name">${escapeHtml(item.name)}</small>
         <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
       </div>
+      <div class="pipeline-card-name-row">
+        <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
+      </div>
+      <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       ${cancelInfo}
       ${
@@ -1988,7 +2104,7 @@ async function cancelPipelineItem(kind, id) {
   showToast("Cancelamento registrado.");
 }
 
-async function updateProposalStatus(proposalId, nextStatus) {
+async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   if (!state.supabase || !state.session) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
@@ -1999,9 +2115,28 @@ async function updateProposalStatus(proposalId, nextStatus) {
     return;
   }
 
+  const normalizedNext = normalizeProposalStatus(nextStatus);
+  let paymentSignal = signalInfo;
+  if (normalizedNext === "confirmado" && !proposal.snapshot?.pagamentoSinal) {
+    paymentSignal = paymentSignal || (await showSignalPaymentDialog(getSignalDefaultAmount(proposal.total)));
+    if (!paymentSignal) {
+      showToast("Sinal não registrado. A etapa não foi alterada.");
+      renderPipeline();
+      return;
+    }
+  }
+
+  const changes = { status: nextStatus };
+  if (normalizedNext === "confirmado" && paymentSignal) {
+    changes.snapshot = {
+      ...(proposal.snapshot || {}),
+      pagamentoSinal: paymentSignal,
+    };
+  }
+
   const { data, error } = await state.supabase
     .from("propostas")
-    .update({ status: nextStatus })
+    .update(changes)
     .eq("id", proposalId)
     .select("*")
     .single();
@@ -2244,7 +2379,7 @@ function upsertProposalState(proposal) {
   state.proposals = state.proposals.slice(0, 60);
 }
 
-async function saveCurrentProposal(status) {
+async function saveCurrentProposal(status, signalInfo = null) {
   if (!state.supabase) {
     showToast("Conecte o Supabase para salvar no historico.");
     return null;
@@ -2258,6 +2393,21 @@ async function saveCurrentProposal(status) {
   const snapshot = getProposalSnapshot();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const nextStatus = status || activeProposal?.status || "proposta_enviada";
+  const normalizedNext = normalizeProposalStatus(nextStatus);
+  let paymentSignal = signalInfo;
+
+  if (normalizedNext === "confirmado" && !activeProposal?.snapshot?.pagamentoSinal) {
+    paymentSignal = paymentSignal || (await showSignalPaymentDialog(getSignalDefaultAmount(snapshot.totals.total)));
+    if (!paymentSignal) {
+      showToast("Sinal não registrado. O evento continua sem confirmação.");
+      return null;
+    }
+  }
+
+  if (normalizedNext === "confirmado") {
+    snapshot.pagamentoSinal = paymentSignal || activeProposal?.snapshot?.pagamentoSinal || null;
+  }
+
   const row = getProposalRow(snapshot, nextStatus);
   const query = state.activeProposalId
     ? state.supabase.from("propostas").update(row).eq("id", state.activeProposalId)
