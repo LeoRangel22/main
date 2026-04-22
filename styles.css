@@ -641,6 +641,41 @@ textarea[aria-invalid="true"] {
   padding: 6px 8px;
 }
 
+label.pipeline-status-control {
+  align-items: flex-end;
+  display: flex;
+  font-size: 0;
+  justify-content: flex-end;
+  min-height: 28px;
+  position: relative;
+}
+
+label.pipeline-status-control::before {
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--verde);
+  content: "Mudar";
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+label.pipeline-status-control select {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: min(240px, 78vw);
+  z-index: 4;
+}
+
+label.pipeline-status-control:hover select,
+label.pipeline-status-control:focus-within select {
+  display: block;
+}
+
 .danger-light {
   color: var(--danger);
 }
