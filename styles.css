@@ -821,11 +821,29 @@ textarea[aria-invalid="true"] {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.pipeline-card-meta-group {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pipeline-card-meta {
   font-weight: 600 !important;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-signal-proof {
+  background: rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  color: var(--verde) !important;
+  flex: 0 0 auto;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  padding: 2px 6px;
+  text-transform: uppercase;
 }
 
 .pipeline-card-status-row {
