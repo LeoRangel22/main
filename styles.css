@@ -682,7 +682,7 @@ textarea[aria-invalid="true"] {
 .period-metrics {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .period-metric-card {
@@ -703,17 +703,6 @@ textarea[aria-invalid="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.period-metric-card > small {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.58rem;
-  font-weight: 800;
-  line-height: 1;
-  margin-top: -2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1761,8 +1750,30 @@ textarea {
   flex: 1 1 130px;
 }
 
-.send-actions #printBtn {
+.send-actions #newProposalBtn,
+.send-actions #saveProposalBtn {
   flex-basis: 100%;
+}
+
+.send-actions #newProposalBtn {
+  background: var(--white);
+  border: 1px solid var(--verde);
+  color: var(--verde-escuro);
+}
+
+.send-actions #saveProposalBtn {
+  background: #2f6f45;
+  color: var(--white);
+}
+
+.send-actions #saveProposalBtn:hover {
+  background: var(--verde-escuro);
+}
+
+.send-actions #printBtn,
+.send-actions #emailBtn,
+.send-actions #whatsappBtn {
+  font-weight: 900;
 }
 
 .history-panel {
