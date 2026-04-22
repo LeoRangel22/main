@@ -597,10 +597,14 @@ const nodes = {
   authStatus: document.querySelector("#authStatus"),
   historyList: document.querySelector("#historyList"),
   pipelineBoard: document.querySelector("#pipelineBoard"),
-  metricLeads: document.querySelector("#metricLeads"),
-  metricProposals: document.querySelector("#metricProposals"),
-  metricConfirmed: document.querySelector("#metricConfirmed"),
-  metricAverageTicket: document.querySelector("#metricAverageTicket"),
+  metricStageLead: document.querySelector("#metricStageLead"),
+  metricStageSemResposta: document.querySelector("#metricStageSemResposta"),
+  metricStageNegociacao: document.querySelector("#metricStageNegociacao"),
+  metricStageSinal: document.querySelector("#metricStageSinal"),
+  metricStagePgRestante: document.querySelector("#metricStagePgRestante"),
+  metricStagePlanejamento: document.querySelector("#metricStagePlanejamento"),
+  metricStage48h: document.querySelector("#metricStage48h"),
+  metricStagePosVenda: document.querySelector("#metricStagePosVenda"),
   clientFormLink: document.querySelector("#clientFormLink"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
 };
@@ -1873,18 +1877,39 @@ function getPipelineItems() {
 }
 
 function renderPipelineMetrics(items = getPipelineItems()) {
-  if (!nodes.metricLeads) return;
-  const proposalItems = items.filter((item) => item.kind === "proposal");
-  const confirmedItems = proposalItems.filter((item) => operationStatuses.has(item.status));
-  const averageBase = confirmedItems.length ? confirmedItems : proposalItems;
-  const averageTicket = averageBase.length
-    ? averageBase.reduce((sum, item) => sum + (Number(item.total) || 0), 0) / averageBase.length
-    : 0;
+  if (!nodes.metricStageLead) return;
+  const counts = {
+    lead: 0,
+    semResposta: 0,
+    negociacao: 0,
+    sinal: 0,
+    pgRestante: 0,
+    planejamento: 0,
+    quarentaOito: 0,
+    posVenda: 0,
+  };
 
-  nodes.metricLeads.textContent = String(state.quoteRequests.length);
-  nodes.metricProposals.textContent = String(proposalItems.length);
-  nodes.metricConfirmed.textContent = String(confirmedItems.length);
-  nodes.metricAverageTicket.textContent = formatMoney(averageTicket);
+  items.forEach((item) => {
+    const status = item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
+    if (item.kind === "request" && status === "lead_recebido") counts.lead += 1;
+    if (item.kind !== "proposal") return;
+    if (status === "proposta_enviada") counts.semResposta += 1;
+    if (status === "negociacao") counts.negociacao += 1;
+    if (status === "confirmado") counts.sinal += 1;
+    if (status === "pagamento_final") counts.pgRestante += 1;
+    if (status === "planejamento") counts.planejamento += 1;
+    if (status === "evento_proximo") counts.quarentaOito += 1;
+    if (status === "pos_venda") counts.posVenda += 1;
+  });
+
+  nodes.metricStageLead.textContent = String(counts.lead);
+  nodes.metricStageSemResposta.textContent = String(counts.semResposta);
+  nodes.metricStageNegociacao.textContent = String(counts.negociacao);
+  nodes.metricStageSinal.textContent = String(counts.sinal);
+  nodes.metricStagePgRestante.textContent = String(counts.pgRestante);
+  nodes.metricStagePlanejamento.textContent = String(counts.planejamento);
+  nodes.metricStage48h.textContent = String(counts.quarentaOito);
+  nodes.metricStagePosVenda.textContent = String(counts.posVenda);
 }
 
 function getProposalTransitionOptions(currentStatus) {
