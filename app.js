@@ -2023,7 +2023,7 @@ function renderPipelineCard(item) {
       : "";
   const signalButton =
     item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
-      ? `<button class="pipeline-top-action" type="button" data-mark-paid="${escapeHtml(item.id)}">Sinal Pago!</button>`
+      ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}">Sinal Pago!</button>`
       : "";
   const topAction = proofLink || signalButton;
   const openButton =
