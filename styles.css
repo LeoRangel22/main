@@ -550,17 +550,51 @@ textarea[aria-invalid="true"] {
   margin: -4px 0 12px;
 }
 
-.pipeline-panel > .pipeline-stage-line {
+.pipeline-stage-header {
+  align-items: center;
   background: var(--verde-escuro);
   border-radius: 8px;
   color: var(--white);
-  font-size: 0.78rem;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: -2px 0 12px;
+  padding: 8px 10px;
+}
+
+.pipeline-stage-header div {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pipeline-stage-header span {
+  color: var(--verde-2);
+  font-size: 0.68rem;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pipeline-stage-header strong {
+  color: var(--white);
+  font-size: 0.72rem;
+  font-weight: 900;
   letter-spacing: 0;
-  margin: -2px 0 10px;
-  padding: 10px 12px;
-  text-transform: none;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.pipeline-stage-header button {
+  background: var(--areia);
+  color: var(--verde-escuro);
+  flex: 0 0 auto;
+  font-size: 0.64rem;
+  min-height: 24px;
+  padding: 0 9px;
 }
 
 .pipeline-board p,
@@ -947,6 +981,17 @@ textarea[aria-invalid="true"] {
 
 .pipeline-proof-download {
   background: rgba(24, 58, 45, 0.1);
+}
+
+.pipeline-signal-action {
+  background: var(--amarelo);
+  color: var(--verde-escuro) !important;
+  font-weight: 900 !important;
+  min-width: 74px;
+}
+
+.pipeline-signal-action:hover {
+  background: #ffb447;
 }
 
 .pipeline-card-status-row {

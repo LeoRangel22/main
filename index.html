@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v36" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v37" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -109,11 +109,13 @@
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <div class="pipeline-panel">
-            <div class="history-heading">
-              <span>Funil de eventos</span>
+            <div class="pipeline-stage-header">
+              <div>
+                <span>Funil de eventos</span>
+                <strong>LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</strong>
+              </div>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
-            <p class="pipeline-stage-line">LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</p>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
@@ -418,6 +420,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v36"></script>
+    <script src="./app.js?v=20260422-eventos-v37"></script>
   </body>
 </html>
