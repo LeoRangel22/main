@@ -1722,7 +1722,7 @@ function renderPipelineCard(item) {
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
   const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
-  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
+  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax - ${item.type}`;
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
@@ -1746,14 +1746,13 @@ function renderPipelineCard(item) {
         ${renderStatusSelect(item)}
         ${openButton}
       </div>
-      <div class="pipeline-card-title">
-        <strong class="pipeline-card-event-line">${escapeHtml(eventLine)}</strong>
+      <div class="pipeline-card-event-row">
+        <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
+      </div>
+      <div class="pipeline-card-name-row">
+        <small class="pipeline-card-name">${escapeHtml(item.name)}</small>
         <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
       </div>
-      <div class="pipeline-card-event-row">
-        <small class="pipeline-card-name">${escapeHtml(item.name)}</small>
-      </div>
-      <small>${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       ${cancelInfo}
       ${

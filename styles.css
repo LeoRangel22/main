@@ -699,6 +699,7 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-kicker,
 .pipeline-card-event-row,
+.pipeline-card-name-row,
 .pipeline-card-title {
   align-items: start;
   display: flex;
@@ -786,6 +787,10 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-event-row .pipeline-status-control {
   margin-left: auto;
+}
+
+.pipeline-card-name-row {
+  align-items: center;
 }
 
 .pipeline-card-meta {
