@@ -1856,7 +1856,7 @@ function renderPipelineCard(item) {
     >
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
-        <small>${escapeHtml(item.reference || "Sem referência")}</small>
+        <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
         ${cancelButton}
         ${renderStatusSelect(item)}
         ${openButton}
@@ -1868,7 +1868,7 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-name-row">
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
-      <small>${escapeHtml(item.type)}</small>
+      <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
       ${item.meta.length ? `<small class="pipeline-card-meta">${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
       ${cancelInfo}
       ${
@@ -1888,7 +1888,6 @@ function renderPipelineStage(stage, items) {
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
       </div>
-      <p>${escapeHtml(stage.description)}</p>
       <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
         ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
       </div>
