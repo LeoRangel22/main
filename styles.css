@@ -1969,9 +1969,9 @@ td:nth-child(9) {
 .public-form-intro {
   align-items: end;
   border-bottom: 1px solid var(--line);
-  display: flex;
+  display: grid;
   gap: 20px;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
   margin-bottom: 24px;
   padding-bottom: 18px;
 }
@@ -1992,10 +1992,16 @@ td:nth-child(9) {
   overflow-wrap: anywhere;
 }
 
+.public-form-progress-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
 .public-form-steps {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2009,8 +2015,10 @@ td:nth-child(9) {
   display: flex;
   font-weight: 900;
   gap: 8px;
+  justify-content: center;
   min-height: 38px;
   padding: 0 12px;
+  text-align: center;
 }
 
 .public-form-steps li[data-active],
@@ -2026,7 +2034,6 @@ td:nth-child(9) {
 
 .form-progress {
   display: grid;
-  flex: 1 1 100%;
   gap: 8px;
 }
 
@@ -2034,7 +2041,6 @@ td:nth-child(9) {
   color: var(--verde);
   font-size: 0.78rem;
   font-weight: 900;
-  text-transform: uppercase;
 }
 
 .form-progress div {
@@ -2544,6 +2550,7 @@ input[type="range"] {
     align-items: start;
     display: grid;
     gap: 16px;
+    grid-template-columns: 1fr;
   }
 
   .public-form-intro h2 {
@@ -2557,16 +2564,14 @@ input[type="range"] {
   }
 
   .public-form-steps {
-    background: rgba(247, 250, 248, 0.96);
-    border-bottom: 1px solid var(--line);
-    flex-wrap: nowrap;
+    background: transparent;
+    border-bottom: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 0;
-    overflow-x: auto;
-    padding: 8px 0 10px;
-    position: sticky;
+    overflow: visible;
+    padding: 0;
+    position: static;
     scrollbar-width: none;
-    top: 0;
-    z-index: 5;
   }
 
   .public-form-steps::-webkit-scrollbar {
@@ -2574,7 +2579,9 @@ input[type="range"] {
   }
 
   .public-form-steps li {
-    flex: 0 0 auto;
+    font-size: 0.92rem;
+    min-height: 38px;
+    padding: 0 8px;
   }
 
   .consult-step {
