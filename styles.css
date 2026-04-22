@@ -592,8 +592,48 @@ textarea[aria-invalid="true"] {
   line-height: 1.3;
 }
 
+.pipeline-card-status-row {
+  align-items: start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .pipeline-status-control {
+  flex: 0 0 auto;
+  margin-left: auto;
+  position: relative;
+}
+
+.pipeline-status-control summary {
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--verde);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+  list-style: none;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.pipeline-status-control summary::-webkit-details-marker {
+  display: none;
+}
+
+.pipeline-status-control[open] {
+  min-width: min(260px, 100%);
+}
+
+.pipeline-status-control label {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 14px 28px rgba(24, 58, 45, 0.12);
+  display: grid;
   gap: 4px;
+  margin-top: 6px;
+  padding: 8px;
 }
 
 .pipeline-status-control select {
@@ -694,6 +734,36 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.event-details-grid {
+  align-items: start;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.event-details-grid label {
+  gap: 6px;
+}
+
+.event-details-grid label:nth-child(1),
+.event-details-grid label:nth-child(2),
+.event-details-grid label:nth-child(3) {
+  grid-column: span 2;
+}
+
+.event-details-grid label:nth-child(4) {
+  grid-column: span 3;
+}
+
+.event-details-grid label:nth-child(5),
+.event-details-grid label:nth-child(6),
+.event-details-grid label:nth-child(7) {
+  grid-column: span 1;
+}
+
+.event-details-grid input,
+.event-details-grid select {
+  min-height: 48px;
 }
 
 .filters {
@@ -2061,9 +2131,9 @@ td:nth-child(9) {
 .guest-range-output {
   color: var(--verde-escuro);
   display: inline-block;
-  font-size: 1.8rem;
+  font-size: 1.35rem;
   font-weight: 900;
-  margin: 6px 0;
+  margin: 2px 0;
 }
 
 input[type="range"] {
@@ -2200,6 +2270,18 @@ input[type="range"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .event-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-details-grid label:nth-child(n) {
+    grid-column: span 1;
+  }
+
+  .event-details-grid label:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
   .owner-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2253,6 +2335,7 @@ input[type="range"] {
 
   .fields-grid,
   .filters,
+  .event-details-grid,
   .owner-metrics,
   .pipeline-row-commercial,
   .pipeline-row-operation,
@@ -2267,6 +2350,10 @@ input[type="range"] {
   .proposal-grid,
   .proposal-totals {
     grid-template-columns: 1fr;
+  }
+
+  .event-details-grid label:nth-child(n) {
+    grid-column: auto;
   }
 
   .builder-wide {

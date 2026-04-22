@@ -1578,6 +1578,9 @@ function getPipelineStage(status) {
 function getLeadSegment(request) {
   const qualification = request.snapshot?.qualificacao || {};
   const eventSnapshot = request.snapshot?.evento || {};
+  if (qualification.tipoCliente === "Agência de turismo receptivo / DMC") return qualification.tipoCliente;
+  if (qualification.tipoCliente === "Agência de marketing / eventos") return qualification.tipoCliente;
+
   const text = [
     qualification.tipoCliente,
     qualification.origem,
@@ -1683,14 +1686,17 @@ function getProposalTransitionOptions(currentStatus) {
 function renderStatusSelect(item) {
   const options = item.kind === "request" ? requestStatusOptions : getProposalTransitionOptions(item.status);
   return `
-    <label class="pipeline-status-control">
-      Mudar etapa
-      <select data-pipeline-status-kind="${escapeHtml(item.kind)}" data-pipeline-status-id="${escapeHtml(item.id)}">
-        ${options
-          .map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${escapeHtml(getProposalStatusLabel(status))}</option>`)
-          .join("")}
-      </select>
-    </label>
+    <details class="pipeline-status-control">
+      <summary>Mudar</summary>
+      <label>
+        Etapa
+        <select data-pipeline-status-kind="${escapeHtml(item.kind)}" data-pipeline-status-id="${escapeHtml(item.id)}">
+          ${options
+            .map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${escapeHtml(getProposalStatusLabel(status))}</option>`)
+            .join("")}
+        </select>
+      </label>
+    </details>
   `;
 }
 
@@ -1714,9 +1720,11 @@ function renderPipelineCard(item) {
       </div>
       <small>${escapeHtml(item.type)} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)} · ${item.guests} pessoa(s)</small>
       ${item.meta.length ? `<small>${item.meta.map((part) => escapeHtml(part)).join(" · ")}</small>` : ""}
-      <small><span class="status-chip${statusClass}">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.reference || "Sem referência")}</small>
+      <div class="pipeline-card-status-row">
+        <small><span class="status-chip${statusClass}">${escapeHtml(getProposalStatusLabel(item.status))}</span>${escapeHtml(item.reference || "Sem referência")}</small>
+        ${renderStatusSelect(item)}
+      </div>
       ${cancelInfo}
-      ${renderStatusSelect(item)}
       <div class="request-actions">
         ${
           item.kind === "proposal"

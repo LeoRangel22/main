@@ -70,7 +70,8 @@ const profileLabels = {
 };
 
 const clientTypeLabels = {
-  agency: "Agência",
+  "agency-tourism": "Agência de turismo receptivo / DMC",
+  "agency-marketing": "Agência de marketing / eventos",
   company: "Empresa",
   person: "Pessoa física",
 };
@@ -345,7 +346,8 @@ function getRecommendedFormatIds() {
   const base = recommendationRules[fields.moment.value] || recommendationRules.evaluating;
   const profiles = fields.profile.value.split(",").filter(Boolean);
   if (fields.moment.value === "weekday-lunch") return base;
-  if (fields.clientType.value === "agency") return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
+  if (fields.clientType.value === "agency-tourism") return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
+  if (fields.clientType.value === "agency-marketing") return prioritize(base, ["welcome", "cocktail", "workshop", "custom"]);
   if (profiles.includes("travel")) return prioritize(base, ["lunch", "welcome", "breakfast", "cocktail", "custom"]);
   if (profiles.includes("corporate")) return prioritize(base, ["coffee", "breakfast", "workshop"]);
   if (profiles.includes("relationship")) return prioritize(base, ["welcome", "cocktail", "workshop"]);

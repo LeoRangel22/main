@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v5" />
+    <link rel="stylesheet" href="./styles.css?v=20260421-eventos-v7" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -100,7 +100,8 @@
             </div>
             <p class="step-support">Essas respostas ajudam a equipe a priorizar o atendimento e montar uma proposta mais certeira.</p>
             <div class="choice-card-grid client-type-grid" id="clientTypeChoices" aria-label="Tipo de cliente">
-              <button type="button" data-choice-group="clientType" data-choice-value="agency"><strong>Agência</strong><span>Turismo, receptivo, DMC ou produção.</span></button>
+              <button type="button" data-choice-group="clientType" data-choice-value="agency-tourism"><strong>Agência de turismo receptivo / DMC</strong><span>Grupos turísticos, roteiros, operadores e experiências no Rio.</span></button>
+              <button type="button" data-choice-group="clientType" data-choice-value="agency-marketing"><strong>Agência de marketing / eventos</strong><span>Ativações, produção, relacionamento, lançamentos e brand experience.</span></button>
               <button type="button" data-choice-group="clientType" data-choice-value="company"><strong>Empresa</strong><span>RH, marketing, diretoria ou relacionamento.</span></button>
               <button type="button" data-choice-group="clientType" data-choice-value="person"><strong>Pessoa física</strong><span>Celebrações, aniversários e encontros privados.</span></button>
             </div>
@@ -130,7 +131,7 @@
               <span>04</span>
               <h2 id="eventDetailsTitle">Detalhes do evento</h2>
             </div>
-            <div class="fields-grid">
+            <div class="fields-grid event-details-grid">
               <label>
                 Data desejada
                 <input id="requestEventDate" name="data_desejada" type="date" autocomplete="off" />
@@ -327,6 +328,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260421-eventos-v5"></script>
+    <script src="./formulario.js?v=20260421-eventos-v7"></script>
   </body>
 </html>
