@@ -615,7 +615,7 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 10px;
+  padding: 9px;
 }
 
 .pipeline-stage-confirmado {
@@ -646,6 +646,7 @@ textarea[aria-invalid="true"] {
 
 .pipeline-column-heading span {
   color: var(--verde-escuro);
+  font-size: 0.98rem;
   font-weight: 900;
 }
 
@@ -656,14 +657,6 @@ textarea[aria-invalid="true"] {
   min-width: 30px;
   padding: 3px 8px;
   text-align: center;
-}
-
-.pipeline-column > p {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 800;
-  line-height: 1.25;
-  margin: -4px 0 0;
 }
 
 .pipeline-column-list {
@@ -710,15 +703,22 @@ textarea[aria-invalid="true"] {
 .pipeline-card-kicker {
   align-items: center;
   justify-content: flex-start;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
 .pipeline-card-kicker small {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-card-reference {
+  color: var(--muted) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0;
+  max-width: 96px;
 }
 
 .pipeline-card-kicker .pipeline-status-control {
@@ -785,6 +785,11 @@ textarea[aria-invalid="true"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-card-type {
+  color: var(--verde) !important;
+  font-weight: 850 !important;
 }
 
 .pipeline-card-event-row {
