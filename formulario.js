@@ -212,6 +212,12 @@ function createReferenceCode() {
   return `EC-${datePart}-${randomPart}`;
 }
 
+function getTodayInputValue() {
+  const date = new Date();
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
 function renderSuccessStatus(referenceCode) {
   statusNode.dataset.status = "success";
   statusNode.innerHTML = `
@@ -376,8 +382,11 @@ function renderRecommendations() {
   const ids = getRecommendedFormatIds();
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
   if (fields.eventType.value && !ids.includes(selectedFormatId)) fields.eventType.value = "";
+  if (!fields.eventType.value && fields.profile.value && ids.length) {
+    fields.eventType.value = formats[ids[0]].label;
+  }
   const moment = momentLabels[fields.moment.value];
-  recommendationIntro.textContent = `Baseado no que nos contou, estas experiências combinam melhor com ${moment.toLowerCase()}.`;
+  recommendationIntro.textContent = `Baseado no que nos contou, já deixamos a opção mais indicada selecionada para ${moment.toLowerCase()}. Você pode trocar se preferir.`;
   recommendationList.innerHTML = ids
     .map((id, index) => {
       const item = formats[id];
@@ -524,6 +533,7 @@ function getPayload(snapshot) {
 
 function validateSnapshot(snapshot) {
   clearAllStepValidity();
+  const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
   const required = [
     [fields.moment, Boolean(snapshot.evento.momento), "moment"],
     [fields.clientType, Boolean(snapshot.cliente.tipoCliente), "profile"],
@@ -546,6 +556,15 @@ function validateSnapshot(snapshot) {
   if (firstInvalid) {
     setStatus("Falta só escolher momento, qualificação, formato, período e contato para seguirmos.", "error");
     scrollToStep(firstInvalid[2], true);
+    return false;
+  }
+
+  if (!hasEventDateOrWindow) {
+    setStatus("Informe uma data desejada ou uma janela aproximada para a equipe avaliar disponibilidade.", "error");
+    setStepValidity("eventDetails", false);
+    setFieldValidity(fields.date, false);
+    setFieldValidity(fields.dateFlex, false);
+    scrollToStep("eventDetails", true);
     return false;
   }
 
@@ -613,7 +632,7 @@ async function submitRequest(event) {
 fillGuestOptions();
 fillTimeOptions("");
 renderRecommendations();
-fields.date.min = new Date().toISOString().slice(0, 10);
+fields.date.min = getTodayInputValue();
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
 fields.timeRange.addEventListener("change", () => {
@@ -631,6 +650,16 @@ fields.guestSlider?.addEventListener("input", () => updateGuestOutput("slider"))
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   setStepValidity("contact", true);
+});
+fields.date.addEventListener("input", () => {
+  setFieldValidity(fields.date, true);
+  setFieldValidity(fields.dateFlex, true);
+  setStepValidity("eventDetails", true);
+});
+fields.dateFlex.addEventListener("input", () => {
+  setFieldValidity(fields.date, true);
+  setFieldValidity(fields.dateFlex, true);
+  setStepValidity("eventDetails", true);
 });
 preferenceChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
 extraChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
