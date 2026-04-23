@@ -578,7 +578,7 @@ function validateSnapshot(snapshot) {
   }
 
   if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
-    setStatus("Revise o WhatsApp com DDD. Ex.: 21 99999-9999.", "error");
+    setStatus("Revise o celular/Whatsapp com DDD. Ex.: 21 99999-9999.", "error");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
     fields.phone.focus();
