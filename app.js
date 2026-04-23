@@ -563,6 +563,7 @@ const fields = {
   clientEmail: document.querySelector("#clientEmail"),
   clientPhone: document.querySelector("#clientPhone"),
   eventType: document.querySelector("#eventType"),
+  eventDateTime: document.querySelector("#eventDateTime"),
   eventDate: document.querySelector("#eventDate"),
   eventTime: document.querySelector("#eventTime"),
   guestCount: document.querySelector("#guestCount"),
@@ -1063,6 +1064,44 @@ function getTodayInputValue() {
   const date = new Date();
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return localDate.toISOString().slice(0, 10);
+}
+
+function formatPhoneForField(value) {
+  const raw = String(value || "").trim();
+  const hasPlus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "").slice(0, 15);
+  if (!digits) return hasPlus ? "+" : "";
+  if (!hasPlus && digits.length <= 11) {
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length <= 2) return `+${digits}`;
+  if (digits.length <= 5) return `+${digits.slice(0, 2)} ${digits.slice(2)}`;
+  if (digits.length <= 9) return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+  return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 10)} ${digits.slice(10)}`.trim();
+}
+
+function syncDateTimeFromFields() {
+  if (!fields.eventDateTime) return;
+  if (!fields.eventDate.value || !fields.eventTime.value) {
+    fields.eventDateTime.value = "";
+    return;
+  }
+  fields.eventDateTime.value = `${fields.eventDate.value}T${fields.eventTime.value.slice(0, 5)}`;
+}
+
+function syncFieldsFromDateTime() {
+  if (!fields.eventDateTime) return;
+  const value = fields.eventDateTime.value;
+  if (!value) {
+    fields.eventDate.value = "";
+    fields.eventTime.value = "18:00";
+    return;
+  }
+  const [datePart, timePart] = value.split("T");
+  fields.eventDate.value = datePart || "";
+  fields.eventTime.value = (timePart || "18:00").slice(0, 5);
 }
 
 function getSignalDefaultAmount(total) {
@@ -1887,7 +1926,8 @@ function renderPriceList() {
       return `
         <label class="price-row">
           <input type="checkbox" data-select-id="${escapeHtml(item.id)}" ${checked} />
-          <span>
+          <span class="price-row-body">
+            <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
             <span class="price-name">
               <strong>${escapeHtml(item.nome)}</strong>
               <span class="chip">${escapeHtml(item.tipoEvento)}</span>
@@ -3232,6 +3272,7 @@ async function applyQuoteRequest(requestId) {
   fields.eventType.value = request.tipo_evento || "";
   fields.eventDate.value = request.data_evento || "";
   fields.eventTime.value = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "18:00";
+  syncDateTimeFromFields();
   fields.guestCount.value = request.convidados || 30;
   fields.eventDuration.value = String(request.duracao || 2);
   fields.eventReason.value = request.motivo_evento || "";
@@ -3839,6 +3880,7 @@ function applyProposalSnapshot(snapshot) {
   fields.eventType.value = snapshot.event?.type || "";
   fields.eventDate.value = snapshot.event?.date || "";
   fields.eventTime.value = snapshot.event?.time || "18:00";
+  syncDateTimeFromFields();
   fields.guestCount.value = snapshot.event?.guests || 30;
   fields.eventDuration.value = String(snapshot.event?.duration || 2);
   fields.validity.value = snapshot.event?.validity || "14 dias";
@@ -4049,6 +4091,7 @@ function renderProposal() {
 }
 
 function renderAll() {
+  syncDateTimeFromFields();
   renderPriceList();
   renderPricesTable();
   renderCommercialLibrarySummary();
@@ -4079,6 +4122,7 @@ function startNewProposal() {
   fields.eventType.value = "";
   fields.eventDate.value = "";
   fields.eventTime.value = "18:00";
+  syncDateTimeFromFields();
   fields.guestCount.value = "30";
   fields.eventDuration.value = "2";
   fields.validity.value = "14 dias";
@@ -4277,6 +4321,18 @@ function bindEvents() {
     };
     field.addEventListener("input", refreshFormOutputs);
     field.addEventListener("change", refreshFormOutputs);
+  });
+
+  fields.clientPhone?.addEventListener("input", () => {
+    fields.clientPhone.value = formatPhoneForField(fields.clientPhone.value);
+  });
+
+  fields.eventDateTime?.addEventListener("input", () => {
+    syncFieldsFromDateTime();
+    renderAvailabilityAlert();
+    renderSummary();
+    renderCalculation();
+    renderProposal();
   });
 
   fields.categoryFilter?.addEventListener("change", renderPriceList);
@@ -4501,6 +4557,7 @@ renderPrivatizationRulesTable();
 renderClientFormLink();
 initializeReportDefaults();
 if (fields.generalTerms) fields.generalTerms.value = loadGeneralTerms();
+syncDateTimeFromFields();
 bindEvents();
 renderAll();
 initSupabase();
