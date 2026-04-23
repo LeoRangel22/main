@@ -3330,12 +3330,46 @@ function buildNotesFromRequest(request) {
   return lines.join("\n");
 }
 
+function getEventCategoryFromRequest(type) {
+  const normalized = String(type || "").toLowerCase();
+  if (!normalized) return "";
+  if (normalized.includes("café") || normalized.includes("coffee") || normalized.includes("brunch")) {
+    return "Café da Manhã / Coffee Break";
+  }
+  if (normalized.includes("almoço")) return "Almoço Carioca";
+  if (normalized.includes("coquetel")) return "Coquetel";
+  if (normalized.includes("workshop")) return "Workshop de Caipirinha";
+  if (normalized.includes("welcome")) return "Welcome Drink";
+  return "";
+}
+
+function resetProposalDraftState() {
+  state.selectedIds.clear();
+  state.guided = { event: "", beverageId: "", foodId: "" };
+  state.privatizationChoice = "";
+  saveSelectedIds();
+  fields.manualAdjustment.value = "";
+  fields.manualAdjustmentLabel.value = "";
+  fields.searchPrice.value = "";
+  fields.categoryFilter.value = "";
+  nodes.coquetelChoices?.classList.add("is-hidden");
+  if (nodes.flowStatus) {
+    nodes.flowStatus.textContent =
+      "Comece escolhendo o tipo de evento. O app filtra os pacotes e seleciona automaticamente quando houver uma regra clara.";
+  }
+  setChoiceState(nodes.flowEventOptions, "", "flowEvent");
+  setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
+  setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.optionalPrivatizationControls, "", "privatizationChoice");
+}
+
 async function applyQuoteRequest(requestId) {
   const request = state.quoteRequests.find((item) => item.id === requestId);
   if (!request) return;
 
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
+  resetProposalDraftState();
   fields.clientName.value = request.cliente_nome || "";
   fields.clientEmail.value = request.cliente_email || "";
   fields.clientPhone.value = request.cliente_whatsapp || "";
@@ -3347,6 +3381,7 @@ async function applyQuoteRequest(requestId) {
   fields.eventDuration.value = String(request.duracao || 2);
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
+  fields.categoryFilter.value = getEventCategoryFromRequest(request.tipo_evento);
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
