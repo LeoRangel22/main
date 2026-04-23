@@ -99,6 +99,51 @@ const contactIntroTitle = document.querySelector("#contactIntroTitle");
 const contactIntroBody = document.querySelector("#contactIntroBody");
 const contactRequirementNote = document.querySelector("#contactRequirementNote");
 
+const chipLabelSets = {
+  pt: {
+    preference: {
+      "open-bar": "Open bar",
+      "tasting-menu": "Menu degustação",
+      "welcome-drink": "Welcome drink",
+      "vegetarian-options": "Opções vegetarianas",
+      "dietary-restrictions": "Restrições alimentares",
+      "interactive-experience": "Experiência interativa",
+    },
+    extra: {
+      dj: "DJ",
+      "jazz-trio": "Trio de Jazz/Bossa Nova",
+      photo: "Foto",
+      video: "Filmagem",
+      tv: "TV",
+      "sound-mic": "Som com Microfone",
+      "ambient-sound": "Som Ambiente",
+      decor: "Decoração",
+      banners: "Banners",
+    },
+  },
+  en: {
+    preference: {
+      "open-bar": "Open bar",
+      "tasting-menu": "Tasting menu",
+      "welcome-drink": "Welcome drink",
+      "vegetarian-options": "Vegetarian options",
+      "dietary-restrictions": "Dietary restrictions",
+      "interactive-experience": "Interactive experience",
+    },
+    extra: {
+      dj: "DJ",
+      "jazz-trio": "Jazz/Bossa Nova trio",
+      photo: "Photo",
+      video: "Video",
+      tv: "TV",
+      "sound-mic": "Sound with microphone",
+      "ambient-sound": "Ambient sound",
+      decor: "Decor",
+      banners: "Banners",
+    },
+  },
+};
+
 const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")];
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
@@ -584,6 +629,24 @@ function getCopy() {
   return copy[uiState.language] || copy.pt;
 }
 
+function applyChipLabels() {
+  const labels = chipLabelSets[uiState.language] || chipLabelSets.pt;
+
+  preferenceChips.forEach((chip) => {
+    const key = chip.dataset.chipKey;
+    const textNode = chip.parentElement?.querySelector("span");
+    if (!key || !textNode) return;
+    textNode.textContent = labels.preference[key] || textNode.textContent;
+  });
+
+  extraChips.forEach((chip) => {
+    const key = chip.dataset.chipKey;
+    const textNode = chip.parentElement?.querySelector("span");
+    if (!key || !textNode) return;
+    textNode.textContent = labels.extra[key] || textNode.textContent;
+  });
+}
+
 function getFormatDefinition(id) {
   const definitions = {
     recommendation: {
@@ -719,6 +782,7 @@ function applyStaticCopy() {
   document.querySelector("#eventDetailsTitle").textContent = uiState.language === "en" ? "Event details" : "Detalhes do evento";
   document.querySelector(".preference-chips legend").textContent = current.labels.preferenceLegend;
   document.querySelectorAll(".preference-chips legend")[1].textContent = current.labels.extrasLegend;
+  applyChipLabels();
   current.select.dateFlexible.forEach((text, index) => {
     if (fields.dateIsFlexible.options[index]) fields.dateIsFlexible.options[index].text = text;
   });
@@ -815,6 +879,7 @@ function renderSuccessStatus(referenceCode) {
 function fillGuestOptions() {
   fields.guests.value = "30";
   if (fields.guestSlider) fields.guestSlider.value = "30";
+  if (fields.dateIsFlexible) fields.dateIsFlexible.value = "";
   updateGuestOutput("number");
 }
 
@@ -1345,6 +1410,7 @@ async function submitRequest(event) {
   fields.clientType.value = "";
   fields.profile.value = "";
   fields.eventType.value = "";
+  fields.dateIsFlexible.value = "";
   selectedProfiles.clear();
   document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
   clearAllStepValidity();

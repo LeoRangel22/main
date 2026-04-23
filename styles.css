@@ -2104,6 +2104,13 @@ label.pipeline-status-control:focus-within select {
   gap: 6px;
 }
 
+.guest-count-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .event-details-grid label:nth-child(1),
 .event-details-grid label:nth-child(2),
 .event-details-grid label:nth-child(3) {
@@ -3740,9 +3747,10 @@ td:nth-child(9) {
 .guest-range-output {
   color: var(--verde-escuro);
   display: inline-block;
-  font-size: 1.35rem;
+  font-size: 1rem;
   font-weight: 900;
-  margin: 2px 0;
+  margin: 0;
+  white-space: nowrap;
 }
 
 input[type="range"] {
@@ -4320,6 +4328,12 @@ input[type="range"] {
 
   .event-details-grid label:nth-child(4) {
     grid-column: 1 / -1;
+  }
+
+  .guest-count-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .owner-metrics,
