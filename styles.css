@@ -4457,6 +4457,11 @@ input[type="range"] {
     padding: 16px;
   }
 
+  .choice-card-grid button {
+    min-height: 72px;
+    padding: 16px 18px;
+  }
+
   .profile-grid button {
     min-height: 58px;
   }
