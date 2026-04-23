@@ -168,8 +168,10 @@
                 </select>
               </label>
               <label>
-                <span id="guestCountLabel">Quantidade de convidados</span>
-                <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
+                <div class="guest-count-heading">
+                  <span id="guestCountLabel">Quantidade de convidados</span>
+                  <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
+                </div>
                 <input id="requestGuestSlider" type="range" min="2" max="100" step="1" value="30" aria-label="Escolha rápida de convidados" />
                 <input id="requestGuestCount" name="convidados" type="number" inputmode="numeric" min="2" max="500" step="1" value="30" required />
                 <small id="guestCountHelp">Use o slider até 99+. Para grupos maiores, digite o número exato até 500.</small>
@@ -223,24 +225,24 @@
             </label>
             <fieldset class="preference-chips premium-chips">
               <legend>O que não pode faltar?</legend>
-              <label><input type="checkbox" name="preferencias_chips" value="Open bar" data-preference-chip />Open bar</label>
-              <label><input type="checkbox" name="preferencias_chips" value="Menu degustação" data-preference-chip />Menu degustação</label>
-              <label><input type="checkbox" name="preferencias_chips" value="Welcome drink" data-preference-chip />Welcome drink</label>
-              <label><input type="checkbox" name="preferencias_chips" value="Opções vegetarianas" data-preference-chip />Opções vegetarianas</label>
-              <label><input type="checkbox" name="preferencias_chips" value="Restrições alimentares" data-preference-chip />Restrições alimentares</label>
-              <label><input type="checkbox" name="preferencias_chips" value="Experiência interativa" data-preference-chip />Experiência interativa</label>
+              <label><input type="checkbox" name="preferencias_chips" value="Open bar" data-preference-chip data-chip-key="open-bar" /><span>Open bar</span></label>
+              <label><input type="checkbox" name="preferencias_chips" value="Menu degustação" data-preference-chip data-chip-key="tasting-menu" /><span>Menu degustação</span></label>
+              <label><input type="checkbox" name="preferencias_chips" value="Welcome drink" data-preference-chip data-chip-key="welcome-drink" /><span>Welcome drink</span></label>
+              <label><input type="checkbox" name="preferencias_chips" value="Opções vegetarianas" data-preference-chip data-chip-key="vegetarian-options" /><span>Opções vegetarianas</span></label>
+              <label><input type="checkbox" name="preferencias_chips" value="Restrições alimentares" data-preference-chip data-chip-key="dietary-restrictions" /><span>Restrições alimentares</span></label>
+              <label><input type="checkbox" name="preferencias_chips" value="Experiência interativa" data-preference-chip data-chip-key="interactive-experience" /><span>Experiência interativa</span></label>
             </fieldset>
             <fieldset class="preference-chips premium-chips">
               <legend>Extras de produção</legend>
-              <label><input type="checkbox" name="extras_evento" value="DJ" data-extra-chip />DJ</label>
-              <label><input type="checkbox" name="extras_evento" value="Trio de Jazz/Bossa Nova" data-extra-chip />Trio de Jazz/Bossa Nova</label>
-              <label><input type="checkbox" name="extras_evento" value="Foto" data-extra-chip />Foto</label>
-              <label><input type="checkbox" name="extras_evento" value="Filmagem" data-extra-chip />Filmagem</label>
-              <label><input type="checkbox" name="extras_evento" value="TV" data-extra-chip />TV</label>
-              <label><input type="checkbox" name="extras_evento" value="Som com Microfone" data-extra-chip />Som com Microfone</label>
-              <label><input type="checkbox" name="extras_evento" value="Som Ambiente" data-extra-chip />Som Ambiente</label>
-              <label><input type="checkbox" name="extras_evento" value="Decoração" data-extra-chip />Decoração</label>
-              <label><input type="checkbox" name="extras_evento" value="Banners" data-extra-chip />Banners</label>
+              <label><input type="checkbox" name="extras_evento" value="DJ" data-extra-chip data-chip-key="dj" /><span>DJ</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Trio de Jazz/Bossa Nova" data-extra-chip data-chip-key="jazz-trio" /><span>Trio de Jazz/Bossa Nova</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Foto" data-extra-chip data-chip-key="photo" /><span>Foto</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Filmagem" data-extra-chip data-chip-key="video" /><span>Filmagem</span></label>
+              <label><input type="checkbox" name="extras_evento" value="TV" data-extra-chip data-chip-key="tv" /><span>TV</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Som com Microfone" data-extra-chip data-chip-key="sound-mic" /><span>Som com Microfone</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Som Ambiente" data-extra-chip data-chip-key="ambient-sound" /><span>Som Ambiente</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Decoração" data-extra-chip data-chip-key="decor" /><span>Decoração</span></label>
+              <label><input type="checkbox" name="extras_evento" value="Banners" data-extra-chip data-chip-key="banners" /><span>Banners</span></label>
             </fieldset>
             <div class="briefing-text-grid">
               <label>
