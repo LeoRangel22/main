@@ -93,6 +93,12 @@ const fields = {
   notes: document.querySelector("#requestNotes"),
 };
 
+const nameHelp = document.querySelector("#nameHelp");
+const companyHelp = document.querySelector("#companyHelp");
+const contactIntroTitle = document.querySelector("#contactIntroTitle");
+const contactIntroBody = document.querySelector("#contactIntroBody");
+const contactRequirementNote = document.querySelector("#contactRequirementNote");
+
 const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")];
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
@@ -347,12 +353,19 @@ const copy = {
       budget: "Faixa de investimento (Opcional)",
       leadSource: "Como conheceu a Embaixada?",
       name: "Nome completo",
+      nameHelp: "Use nome e sobrenome. Ex.: Marina Costa.",
       email: "E-mail",
       emailHelp: "Usaremos para enviar a proposta.",
       phone: "Celular/Whatsapp",
       phoneHelp: "Informe o DDD e o celular. Se for um número internacional, inclua o código do país.",
-      company: "Empresa",
-      companyHelp: "Se aplicável",
+      company: "Empresa ou agência",
+      companyHelpOptional: "Opcional para pessoa física.",
+      companyHelpRequired: "Obrigatório para empresa e agência.",
+      contactIntroTitle: "Como prefere que a equipe fale com você?",
+      contactIntroBody:
+        "Nome, e-mail e celular garantem o retorno da proposta. Se estiver falando por empresa ou agência, inclua também o nome completo da organização.",
+      contactRequirementNote:
+        "Nome, e-mail e celular são obrigatórios. Para empresa e agência, pedimos também o nome completo da empresa ou agência.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
@@ -365,10 +378,10 @@ const copy = {
       reason: "Ex.: comemorar 10 anos da empresa, premiar a equipe de vendas, receber clientes especiais…",
       preferences: "Conte estilos, bebidas preferidas ou restrições que a equipe deve considerar…",
       notes: "Qualquer detalhe ajuda: acessibilidade, surpresa para convidados, necessidades técnicas, perfil do grupo…",
-      name: "Ex.: Leonardo Rangel…",
-      email: "Ex.: nome@empresa.com.br…",
+      name: "Ex.: Marina Costa…",
+      email: "Ex.: marina@empresa.com.br…",
       phone: "Ex.: +55 21 99999-9999",
-      company: "Ex.: Empresa ou agência…",
+      company: "Ex.: Grupo Atlântico Eventos…",
     },
     select: {
       dateFlexible: ["Selecione", "Sim", "Não", "Ainda avaliando"],
@@ -388,8 +401,14 @@ const copy = {
       submitError: "Não foi possível enviar. Confira os dados e tente novamente.",
       missingRequired: "Falta só escolher o momento, a ocasião, o formato, o período e os dados de contato para seguirmos.",
       missingDate: "Informe uma data desejada ou uma janela aproximada para a equipe avaliar disponibilidade.",
+      requiredName: "Para seguir, conte seu nome completo. Ex.: Marina Costa.",
       invalidEmail: "Revise o e-mail para a proposta chegar no endereço certo.",
       invalidPhone: "Revise o celular/Whatsapp com DDD. Se for internacional, inclua também o código do país.",
+      requiredPhone: "Para seguir, precisamos de um celular/Whatsapp para o retorno da equipe.",
+      requiredCompany: "Como você marcou empresa ou agência, precisamos também do nome completo da empresa ou agência.",
+      invalidName: "Vale informar nome e sobrenome para a equipe preparar a proposta com o cuidado certo. Ex.: Marina Costa.",
+      invalidCompany: "Vale informar o nome completo da empresa ou agência. Ex.: Grupo Atlântico Eventos.",
+      submitTemporary: "Não foi possível enviar agora. Tente novamente em instantes ou fale com eventos@embaixadacarioca.com.br.",
     },
   },
   en: {
@@ -496,12 +515,19 @@ const copy = {
       budget: "Budget range (Optional)",
       leadSource: "How did you hear about Embaixada?",
       name: "Full name",
+      nameHelp: "Please include first and last name. Example: Marina Costa.",
       email: "E-mail",
       emailHelp: "We will use it to send your proposal.",
       phone: "Phone/WhatsApp",
       phoneHelp: "Enter the area code and phone number. For international numbers, include the country code.",
-      company: "Company",
-      companyHelp: "If applicable",
+      company: "Company or agency",
+      companyHelpOptional: "Optional for private celebrations.",
+      companyHelpRequired: "Required for companies and agencies.",
+      contactIntroTitle: "How should our team reach you?",
+      contactIntroBody:
+        "Full name, e-mail and phone help us return with the proposal. If you are reaching out on behalf of a company or agency, please include the full organization name as well.",
+      contactRequirementNote:
+        "Full name, e-mail and phone are required. For companies and agencies, we also ask for the full company or agency name.",
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
       contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
@@ -514,10 +540,10 @@ const copy = {
       reason: "Ex.: celebrate the company's 10th anniversary, reward the sales team, host special guests…",
       preferences: "Share styles, preferred drinks or dietary restrictions the team should consider…",
       notes: "Any detail helps: accessibility, guest surprise, technical needs, group profile…",
-      name: "Ex.: Leonardo Rangel…",
+      name: "Ex.: Marina Costa…",
       email: "Ex.: name@company.com…",
       phone: "Ex.: +1 305 555 0100",
-      company: "Ex.: Company or agency…",
+      company: "Ex.: Atlantic Events Group…",
     },
     select: {
       dateFlexible: ["Select", "Yes", "No", "Still evaluating"],
@@ -537,8 +563,14 @@ const copy = {
       submitError: "We could not send your request. Please review the information and try again.",
       missingRequired: "We only need the moment, occasion, format, period and contact details to move forward.",
       missingDate: "Please provide either a preferred date or an approximate date window so the team can assess availability.",
+      requiredName: "Please share your full name so we can prepare the proposal properly. Example: Marina Costa.",
       invalidEmail: "Please review the e-mail address so the proposal reaches the right inbox.",
       invalidPhone: "Please review the phone/WhatsApp number. For international contacts, include the country code.",
+      requiredPhone: "Please share a phone/WhatsApp number so our team can reply.",
+      requiredCompany: "Because you selected company or agency, we also need the full organization name.",
+      invalidName: "Please share first and last name so the team can prepare the proposal properly. Example: Marina Costa.",
+      invalidCompany: "Please share the full company or agency name. Example: Atlantic Events Group.",
+      submitTemporary: "We could not send your request right now. Please try again in a moment or contact eventos@embaixadacarioca.com.br.",
     },
   },
 };
@@ -655,12 +687,15 @@ function applyStaticCopy() {
   document.querySelector("#budgetLabel").textContent = current.labels.budget;
   document.querySelector("#leadSourceLabel").textContent = current.labels.leadSource;
   document.querySelector("#nameLabel").textContent = current.labels.name;
+  if (nameHelp) nameHelp.textContent = current.labels.nameHelp;
   document.querySelector("#emailLabel").textContent = current.labels.email;
   document.querySelector("#emailHelp").textContent = current.labels.emailHelp;
   document.querySelector("#phoneLabel").textContent = current.labels.phone;
   document.querySelector("#phoneHelp").textContent = current.labels.phoneHelp;
   document.querySelector("#companyLabel").textContent = current.labels.company;
-  document.querySelector("#companyHelp").textContent = current.labels.companyHelp;
+  if (contactIntroTitle) contactIntroTitle.textContent = current.labels.contactIntroTitle;
+  if (contactIntroBody) contactIntroBody.textContent = current.labels.contactIntroBody;
+  if (contactRequirementNote) contactRequirementNote.textContent = current.labels.contactRequirementNote;
   document.querySelector("#contactPromise").textContent = current.labels.contactPromise;
   document.querySelector("#contactAssurance").textContent = current.labels.contactAssurance;
   submitButton.textContent = current.labels.submit;
@@ -675,6 +710,8 @@ function applyStaticCopy() {
   fields.email.placeholder = current.placeholders.email;
   fields.phone.placeholder = current.placeholders.phone;
   fields.company.placeholder = current.placeholders.company;
+  updateContactRequirements();
+  updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Final touches" : "O toque final";
   document.querySelector("#contactTitle").textContent = current.stepLabels[5];
   document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "Moment" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
@@ -725,6 +762,12 @@ function setLanguage(language) {
 function setStatus(message, type = "neutral") {
   statusNode.textContent = message;
   statusNode.dataset.status = type;
+}
+
+function resetStatusIfError() {
+  if (statusNode.dataset.status === "error") {
+    setStatus(getCopy().labels.defaultStatus, "neutral");
+  }
 }
 
 function updateProgress(stepName = "moment") {
@@ -837,7 +880,81 @@ function isValidContactPhone(value) {
   return digits.length >= 8 && digits.length <= 15;
 }
 
+function startsWithCapitalLetter(value) {
+  const firstLetter = String(value || "").trim().match(/[A-Za-zÀ-ÿ]/);
+  if (!firstLetter) return false;
+  return firstLetter[0] === firstLetter[0].toUpperCase();
+}
+
+function isLikelyFullName(value) {
+  const trimmed = String(value || "").trim().replace(/\s+/g, " ");
+  if (trimmed.length < 7 || !startsWithCapitalLetter(trimmed)) return false;
+  const words = trimmed.split(" ").filter((word) => word.length >= 2);
+  return words.length >= 2;
+}
+
+function isCompanyRequired() {
+  return Boolean(fields.clientType.value) && fields.clientType.value !== "person";
+}
+
+function isLikelyCompanyName(value) {
+  const trimmed = String(value || "").trim().replace(/\s+/g, " ");
+  return trimmed.length >= 7 && startsWithCapitalLetter(trimmed);
+}
+
+function setHelperState(node, message, tone = "neutral") {
+  if (!node) return;
+  node.textContent = message;
+  if (tone === "neutral") delete node.dataset.tone;
+  else node.dataset.tone = tone;
+}
+
+function updateContactRequirements() {
+  const current = getCopy();
+  const companyRequired = isCompanyRequired();
+  fields.company.required = companyRequired;
+  fields.company.setAttribute("aria-required", companyRequired ? "true" : "false");
+  if (companyHelp) {
+    setHelperState(
+      companyHelp,
+      companyRequired ? current.labels.companyHelpRequired : current.labels.companyHelpOptional,
+      companyRequired ? "highlight" : "neutral",
+    );
+  }
+}
+
+function updateContactGuidance() {
+  const current = getCopy();
+  const nameValue = fields.name.value.trim();
+  const companyValue = fields.company.value.trim();
+
+  if (!nameValue) {
+    setHelperState(nameHelp, current.labels.nameHelp);
+  } else if (!isLikelyFullName(nameValue)) {
+    setHelperState(nameHelp, current.messages.invalidName, "warning");
+  } else {
+    setHelperState(nameHelp, current.labels.nameHelp, "success");
+  }
+
+  if (!isCompanyRequired()) {
+    setHelperState(companyHelp, current.labels.companyHelpOptional);
+    if (companyValue && !isLikelyCompanyName(companyValue)) {
+      setHelperState(companyHelp, current.messages.invalidCompany, "warning");
+    }
+    return;
+  }
+
+  if (!companyValue) {
+    setHelperState(companyHelp, current.labels.companyHelpRequired, "highlight");
+  } else if (!isLikelyCompanyName(companyValue)) {
+    setHelperState(companyHelp, current.messages.invalidCompany, "warning");
+  } else {
+    setHelperState(companyHelp, current.labels.companyHelpRequired, "success");
+  }
+}
+
 function setFieldValidity(field, isValid) {
+  if (!field) return;
   field.toggleAttribute("aria-invalid", !isValid);
 }
 
@@ -983,6 +1100,13 @@ function handleChoiceClick(event) {
     setActiveChoice(choiceGroup, choiceValue);
   }
 
+  if (choiceGroup === "clientType") {
+    updateContactRequirements();
+    updateContactGuidance();
+  }
+
+  resetStatusIfError();
+
   if (choiceGroup === "moment") {
     const preferredRange = preferredTimeRangeByMoment[choiceValue];
     if (preferredRange) {
@@ -1089,6 +1213,26 @@ function getPayload(snapshot) {
   };
 }
 
+function failValidation(field, stepName, message) {
+  setStatus(message, "error");
+  setStepValidity(stepName, false);
+  setFieldValidity(field, false);
+  field?.focus();
+  scrollToStep(stepName, true);
+  return false;
+}
+
+function getFriendlySubmitError(error, current) {
+  const raw = [error?.message, error?.details, error?.hint].filter(Boolean).join(" ").trim();
+  if (!raw) return current.messages.submitError;
+  if (/row-level security|permission denied|42501/i.test(raw)) return current.messages.submitTemporary;
+  if (/notify-new-lead|functions\/v1|zeptomail|webhook|500/i.test(raw)) return current.messages.submitTemporary;
+  if (/cliente_nome|nome_completo|null value/i.test(raw)) return current.messages.requiredName;
+  if (/cliente_email|email/i.test(raw)) return current.messages.invalidEmail;
+  if (/cliente_whatsapp|whatsapp|phone/i.test(raw)) return current.messages.invalidPhone;
+  return `${current.messages.submitError} ${raw}`;
+}
+
 function validateSnapshot(snapshot) {
   const current = getCopy();
   clearAllStepValidity();
@@ -1101,9 +1245,6 @@ function validateSnapshot(snapshot) {
     [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
     [fields.time, Boolean(snapshot.evento.horario), "eventDetails"],
     [fields.leadSource, Boolean(snapshot.qualificacao.origem), "contact"],
-    [fields.name, Boolean(snapshot.cliente.nome), "contact"],
-    [fields.email, Boolean(snapshot.cliente.email), "contact"],
-    [fields.phone, Boolean(snapshot.cliente.whatsapp), "contact"],
   ];
   required.forEach(([field, valid, stepName]) => {
     setFieldValidity(field, valid);
@@ -1126,6 +1267,18 @@ function validateSnapshot(snapshot) {
     return false;
   }
 
+  if (!snapshot.cliente.nome) {
+    return failValidation(fields.name, "contact", current.messages.requiredName);
+  }
+
+  if (!isLikelyFullName(snapshot.cliente.nome)) {
+    return failValidation(fields.name, "contact", current.messages.invalidName);
+  }
+
+  if (!snapshot.cliente.email) {
+    return failValidation(fields.email, "contact", current.messages.invalidEmail);
+  }
+
   if (!isValidEmail(snapshot.cliente.email)) {
     setStatus(current.messages.invalidEmail, "error");
     setStepValidity("contact", false);
@@ -1135,6 +1288,10 @@ function validateSnapshot(snapshot) {
     return false;
   }
 
+  if (!snapshot.cliente.whatsapp) {
+    return failValidation(fields.phone, "contact", current.messages.requiredPhone);
+  }
+
   if (!isValidContactPhone(snapshot.cliente.whatsapp)) {
     setStatus(current.messages.invalidPhone, "error");
     setStepValidity("contact", false);
@@ -1142,6 +1299,14 @@ function validateSnapshot(snapshot) {
     fields.phone.focus();
     scrollToStep("contact", true);
     return false;
+  }
+
+  if (isCompanyRequired() && !snapshot.cliente.empresa) {
+    return failValidation(fields.company, "contact", current.messages.requiredCompany);
+  }
+
+  if (snapshot.cliente.empresa && !isLikelyCompanyName(snapshot.cliente.empresa)) {
+    return failValidation(fields.company, "contact", current.messages.invalidCompany);
   }
 
   return true;
@@ -1170,7 +1335,8 @@ async function submitRequest(event) {
 
   if (error) {
     console.warn("Falha ao enviar solicitacao.", error);
-    setStatus(current.messages.submitError, "error");
+    setStatus(getFriendlySubmitError(error, current), "error");
+    scrollToStep("contact", true);
     return;
   }
 
@@ -1185,6 +1351,8 @@ async function submitRequest(event) {
   fillGuestOptions();
   fillTimeOptions("");
   renderRecommendations();
+  updateContactRequirements();
+  updateContactGuidance();
   renderSuccessStatus(referenceCode);
 }
 
@@ -1192,33 +1360,61 @@ fillGuestOptions();
 fillTimeOptions("");
 renderRecommendations();
 fields.date.min = getTodayInputValue();
+updateContactRequirements();
+updateContactGuidance();
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
 fields.timeRange.addEventListener("change", () => {
   fillTimeOptions();
   setFieldValidity(fields.timeRange, true);
   setStepValidity("eventDetails", true);
+  resetStatusIfError();
 });
 fields.phone.addEventListener("input", () => {
   fields.phone.value = formatPhoneInput(fields.phone.value);
   setFieldValidity(fields.phone, !fields.phone.value || isValidContactPhone(fields.phone.value));
   setStepValidity("contact", true);
+  updateContactGuidance();
+  resetStatusIfError();
+});
+fields.name.addEventListener("input", () => {
+  setFieldValidity(fields.name, !fields.name.value || isLikelyFullName(fields.name.value));
+  setStepValidity("contact", true);
+  updateContactGuidance();
+  resetStatusIfError();
+});
+fields.name.addEventListener("blur", () => {
+  setFieldValidity(fields.name, !fields.name.value || isLikelyFullName(fields.name.value));
+  updateContactGuidance();
 });
 fields.guests.addEventListener("input", updateGuestOutput);
 fields.guestSlider?.addEventListener("input", () => updateGuestOutput("slider"));
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   setStepValidity("contact", true);
+  resetStatusIfError();
 });
 fields.date.addEventListener("input", () => {
   setFieldValidity(fields.date, true);
   setFieldValidity(fields.dateFlex, true);
   setStepValidity("eventDetails", true);
+  resetStatusIfError();
 });
 fields.dateFlex.addEventListener("input", () => {
   setFieldValidity(fields.date, true);
   setFieldValidity(fields.dateFlex, true);
   setStepValidity("eventDetails", true);
+  resetStatusIfError();
+});
+fields.company.addEventListener("input", () => {
+  setFieldValidity(fields.company, !fields.company.value || isLikelyCompanyName(fields.company.value) || !isCompanyRequired());
+  setStepValidity("contact", true);
+  updateContactGuidance();
+  resetStatusIfError();
+});
+fields.company.addEventListener("blur", () => {
+  setFieldValidity(fields.company, !fields.company.value || isLikelyCompanyName(fields.company.value) || !isCompanyRequired());
+  updateContactGuidance();
 });
 preferenceChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
 extraChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));

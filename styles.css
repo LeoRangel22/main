@@ -3828,11 +3828,84 @@ input[type="range"] {
   min-height: 94px;
 }
 
+.contact-step-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.contact-step-intro {
+  background: linear-gradient(135deg, rgba(24, 58, 45, 0.06), rgba(238, 244, 240, 0.72));
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.contact-intro-title {
+  color: var(--verde-escuro);
+  font-size: 1rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.contact-intro-body,
+.contact-requirement-note {
+  color: var(--muted);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.contact-requirement-note {
+  color: var(--verde);
+}
+
 .contact-fields-grid {
   background: rgba(238, 244, 240, 0.52);
   border: 1px solid rgba(24, 58, 45, 0.12);
   border-radius: 8px;
   padding: 14px;
+}
+
+.contact-primary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.contact-secondary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.contact-fields-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.contact-fields-grid label > span {
+  color: var(--verde-escuro);
+  font-weight: 900;
+}
+
+.contact-fields-grid label > small {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+  min-height: 2.3em;
+}
+
+.contact-fields-grid label > small[data-tone="highlight"] {
+  color: var(--verde);
+}
+
+.contact-fields-grid label > small[data-tone="warning"] {
+  color: var(--danger);
+}
+
+.contact-fields-grid label > small[data-tone="success"] {
+  color: var(--verde);
 }
 
 .contact-reassurance {
@@ -3899,7 +3972,11 @@ input[type="range"] {
 }
 
 .public-form-actions p[data-status="error"] {
+  background: rgba(157, 67, 47, 0.08);
+  border-left: 4px solid var(--danger);
+  border-radius: 8px;
   color: var(--danger);
+  padding: 12px 14px;
 }
 
 .public-proposal-body {
@@ -4228,6 +4305,11 @@ input[type="range"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .contact-primary-grid,
+  .contact-secondary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .event-details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4330,6 +4412,11 @@ input[type="range"] {
   .builder-grid,
   .proposal-grid,
   .proposal-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-primary-grid,
+  .contact-secondary-grid {
     grid-template-columns: 1fr;
   }
 
