@@ -549,6 +549,9 @@ const state = {
   quoteRequests: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
+  pendingDashboardLeadId: "",
+  pendingDashboardProposalId: "",
+  lastAppliedDashboardTarget: "",
   activeReportPreset: "currentMonth",
   guided: {
     event: "",
@@ -1811,6 +1814,72 @@ function scrollToItems() {
 
 function scrollToClientData() {
   document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function extractDashboardDeepLink() {
+  try {
+    const url = new URL(window.location.href);
+    const queryLeadId = url.searchParams.get("lead") || "";
+    const queryProposalId = url.searchParams.get("proposal") || "";
+    const rawHash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+
+    if (!rawHash || rawHash.includes("access_token=") || rawHash.includes("refresh_token=")) {
+      return { leadId: queryLeadId, proposalId: queryProposalId };
+    }
+
+    const hashParams = new URLSearchParams(rawHash);
+    return {
+      leadId: queryLeadId || hashParams.get("lead") || "",
+      proposalId: queryProposalId || hashParams.get("proposal") || "",
+    };
+  } catch (error) {
+    console.warn("Falha ao ler deep link do dashboard.", error);
+    return { leadId: "", proposalId: "" };
+  }
+}
+
+function syncDashboardDeepLinkState() {
+  const { leadId, proposalId } = extractDashboardDeepLink();
+  state.pendingDashboardLeadId = leadId;
+  state.pendingDashboardProposalId = proposalId;
+  if (!leadId && !proposalId) state.lastAppliedDashboardTarget = "";
+}
+
+async function applyPendingDashboardTarget() {
+  if (!state.session) return false;
+
+  const targetKey = state.pendingDashboardProposalId
+    ? `proposal:${state.pendingDashboardProposalId}`
+    : state.pendingDashboardLeadId
+      ? `lead:${state.pendingDashboardLeadId}`
+      : "";
+
+  if (!targetKey || state.lastAppliedDashboardTarget === targetKey) return false;
+
+  if (state.pendingDashboardProposalId) {
+    const proposal = state.proposals.find((item) => item.id === state.pendingDashboardProposalId);
+    if (!proposal) return false;
+    openSavedProposal(proposal.id);
+    state.lastAppliedDashboardTarget = targetKey;
+    return true;
+  }
+
+  const linkedProposal = state.proposals.find(
+    (item) =>
+      item.solicitacao_id === state.pendingDashboardLeadId ||
+      item.snapshot?.activeQuoteRequestId === state.pendingDashboardLeadId,
+  );
+  if (linkedProposal) {
+    openSavedProposal(linkedProposal.id);
+    state.lastAppliedDashboardTarget = targetKey;
+    return true;
+  }
+
+  const request = state.quoteRequests.find((item) => item.id === state.pendingDashboardLeadId);
+  if (!request) return false;
+  await applyQuoteRequest(request.id);
+  state.lastAppliedDashboardTarget = targetKey;
+  return true;
 }
 
 function renderCategoryFilter() {
@@ -3235,6 +3304,7 @@ async function loadQuoteRequests() {
 
   state.quoteRequests = data || [];
   renderQuoteRequests();
+  await applyPendingDashboardTarget();
 }
 
 function buildNotesFromRequest(request) {
@@ -3596,6 +3666,7 @@ async function initSupabase() {
       } else {
         await loadProposalHistory();
         await loadQuoteRequests();
+        await applyPendingDashboardTarget();
       }
     } else {
       renderHistory();
@@ -3866,6 +3937,7 @@ async function loadProposalHistory() {
   renderHistory();
   renderPipeline();
   if (state.activeProposalId) renderCommercialTimeline(getActiveProposal());
+  await applyPendingDashboardTarget();
 }
 
 function applyProposalSnapshot(snapshot) {
@@ -4558,6 +4630,11 @@ renderClientFormLink();
 initializeReportDefaults();
 if (fields.generalTerms) fields.generalTerms.value = loadGeneralTerms();
 syncDateTimeFromFields();
+syncDashboardDeepLinkState();
+window.addEventListener("hashchange", async () => {
+  syncDashboardDeepLinkState();
+  await applyPendingDashboardTarget();
+});
 bindEvents();
 renderAll();
 initSupabase();
