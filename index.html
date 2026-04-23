@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v57" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v58" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -200,6 +200,7 @@
                 <li>Enquanto conversa com o cliente, mova o card para Em negociação.</li>
                 <li>Após o pagamento do sinal, use Marcar sinal pago para levar para Sinal recebido, a linha de chegada comercial.</li>
                 <li>Depois registre o pagamento restante, siga para Planejamento, Eventos hoje e amanhã e finalize em Pós-venda.</li>
+                <li>Abra a proposta para ver o histórico comercial, pagamentos, respostas do cliente e checklist operacional.</li>
               </ol>
             </details>
             <details>
@@ -280,6 +281,7 @@
               <div class="availability-alert is-hidden" id="availabilityAlert"></div>
               <div class="signal-summary is-hidden" id="signalPaymentInfo"></div>
               <div class="operational-checklist is-hidden" id="operationalChecklist"></div>
+              <div class="commercial-timeline is-hidden" id="commercialTimeline"></div>
               <label>
                 Observações
                 <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
@@ -496,6 +498,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v57"></script>
+    <script src="./app.js?v=20260422-eventos-v58"></script>
   </body>
 </html>

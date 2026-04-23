@@ -641,6 +641,7 @@ const nodes = {
   availabilityAlert: document.querySelector("#availabilityAlert"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
+  commercialTimeline: document.querySelector("#commercialTimeline"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -847,6 +848,140 @@ function renderSignalPaymentInfo(signal, remainingPayment = null) {
   `;
 }
 
+function getCommercialHistory(snapshot = {}) {
+  return Array.isArray(snapshot.commercialHistory) ? snapshot.commercialHistory : [];
+}
+
+function getCommercialActor() {
+  return state.session?.user?.email || "Equipe";
+}
+
+function createCommercialHistoryEntry(type, title, detail, extra = {}) {
+  return {
+    id: `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type,
+    title,
+    detail,
+    at: new Date().toISOString(),
+    actor: getCommercialActor(),
+    ...extra,
+  };
+}
+
+function withCommercialHistoryEntries(snapshot = {}, entries = []) {
+  const validEntries = entries.filter(Boolean);
+  if (!validEntries.length) return snapshot;
+  return {
+    ...snapshot,
+    commercialHistory: [...validEntries, ...getCommercialHistory(snapshot)].slice(0, 50),
+  };
+}
+
+function formatCommercialHistoryDate(value) {
+  if (!value) return "agora";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch (error) {
+    return "agora";
+  }
+}
+
+function getDisplayCommercialHistory(proposal) {
+  if (!proposal) return [];
+  const snapshot = proposal.snapshot || {};
+  const history = [...getCommercialHistory(snapshot)];
+  const hasType = (type) => history.some((entry) => entry.type === type);
+
+  if (proposal.cliente_resposta && !hasType("cliente_resposta")) {
+    history.push({
+      id: `client-${proposal.id}`,
+      type: "cliente_resposta",
+      title: getClientResponseLabel(proposal.cliente_resposta),
+      detail: proposal.cliente_mensagem || "Resposta registrada pelo link público.",
+      at: proposal.cliente_resposta_em || proposal.updated_at,
+      actor: "Cliente",
+    });
+  }
+
+  if (snapshot.pagamentoSinal && !hasType("sinal")) {
+    history.push({
+      id: `signal-${proposal.id}`,
+      type: "sinal",
+      title: "Sinal registrado",
+      detail: `${formatMoney(snapshot.pagamentoSinal.valor)} · ${formatSignalPaymentDate(snapshot.pagamentoSinal.data)} · ${(snapshot.pagamentoSinal.bancos || []).join(", ")}`,
+      at: snapshot.pagamentoSinal.registradoEm || proposal.updated_at,
+      actor: snapshot.pagamentoSinal.registradoPor || "Equipe",
+    });
+  }
+
+  if (snapshot.pagamentoRestante && !hasType("pagamento_restante")) {
+    history.push({
+      id: `remaining-${proposal.id}`,
+      type: "pagamento_restante",
+      title: "Pagamento restante registrado",
+      detail: `${formatMoney(snapshot.pagamentoRestante.valor)} · ${formatSignalPaymentDate(snapshot.pagamentoRestante.data)} · ${(snapshot.pagamentoRestante.bancos || []).join(", ")}`,
+      at: snapshot.pagamentoRestante.registradoEm || proposal.updated_at,
+      actor: snapshot.pagamentoRestante.registradoPor || "Equipe",
+    });
+  }
+
+  if (snapshot.cancelamento && !hasType("cancelamento")) {
+    history.push({
+      id: `cancel-${proposal.id}`,
+      type: "cancelamento",
+      title: "Cancelamento registrado",
+      detail: snapshot.cancelamento.motivo || "Sem motivo informado.",
+      at: snapshot.cancelamento.canceladoEm || proposal.updated_at,
+      actor: snapshot.cancelamento.canceladoPor || "Equipe",
+    });
+  }
+
+  return history.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 12);
+}
+
+function renderCommercialTimeline(proposal = getActiveProposal()) {
+  if (!nodes.commercialTimeline) return;
+  if (!proposal) {
+    nodes.commercialTimeline.classList.add("is-hidden");
+    nodes.commercialTimeline.innerHTML = "";
+    return;
+  }
+
+  const history = getDisplayCommercialHistory(proposal);
+  nodes.commercialTimeline.classList.remove("is-hidden");
+  nodes.commercialTimeline.innerHTML = `
+    <div class="timeline-heading">
+      <span>Histórico comercial</span>
+      <strong>${history.length || 0} registro(s)</strong>
+    </div>
+    <div class="timeline-list">
+      ${
+        history.length
+          ? history
+              .map(
+                (entry) => `
+                  <article>
+                    <div>
+                      <strong>${escapeHtml(entry.title || "Atualização")}</strong>
+                      <small>${escapeHtml(entry.detail || "")}</small>
+                    </div>
+                    <span>${escapeHtml(formatCommercialHistoryDate(entry.at))}</span>
+                    <em>${escapeHtml(entry.actor || "Equipe")}</em>
+                  </article>
+                `,
+              )
+              .join("")
+          : `<p>Ainda sem registros. Ao salvar, enviar, negociar ou registrar pagamentos, o histórico aparece aqui.</p>`
+      }
+    </div>
+  `;
+}
+
 function getActiveProposal() {
   return state.proposals.find((item) => item.id === state.activeProposalId) || null;
 }
@@ -890,6 +1025,7 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
 async function updateOperationalChecklist(checklistId, checked) {
   const proposal = getActiveProposal();
   if (!proposal || !state.supabase || !state.session) return;
+  const checklistItem = operationalChecklistItems.find((item) => item.id === checklistId);
   const snapshot = {
     ...(proposal.snapshot || {}),
     operationalChecklist: {
@@ -897,9 +1033,16 @@ async function updateOperationalChecklist(checklistId, checked) {
       [checklistId]: checked,
     },
   };
+  const snapshotWithHistory = withCommercialHistoryEntries(snapshot, [
+    createCommercialHistoryEntry(
+      "checklist",
+      "Checklist operacional atualizado",
+      `${checklistItem?.label || "Item"}: ${checked ? "concluído" : "reaberto"}.`,
+    ),
+  ]);
   const { data, error } = await state.supabase
     .from("propostas")
-    .update({ snapshot })
+    .update({ snapshot: snapshotWithHistory })
     .eq("id", proposal.id)
     .select("*")
     .single();
@@ -911,6 +1054,7 @@ async function updateOperationalChecklist(checklistId, checked) {
   }
   upsertProposalState(data);
   renderOperationalChecklist(data);
+  renderCommercialTimeline(data);
   renderPipeline();
   showToast("Checklist atualizado.");
 }
@@ -2040,6 +2184,7 @@ function getProposalSnapshot() {
     generalTerms: fields.generalTerms.value,
     paymentTerms,
     operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
+    commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
     proposalText: buildProposalText(),
   };
 }
@@ -3093,6 +3238,7 @@ async function applyQuoteRequest(requestId) {
   fields.notes.value = buildNotesFromRequest(request);
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
+  renderCommercialTimeline(null);
 
   renderAll();
   showToast("Solicitação carregada para revisão.");
@@ -3175,14 +3321,24 @@ async function cancelPipelineItem(kind, id) {
   if (kind === "request") {
     const request = state.quoteRequests.find((item) => item.id === id);
     if (!request) return;
-    const snapshot = { ...(request.snapshot || {}), cancelamento };
+    const snapshot = {
+      ...(request.snapshot || {}),
+      cancelamento,
+      commercialHistory: [
+        createCommercialHistoryEntry("cancelamento", "Lead cancelado", reason, { actor: cancelamento.canceladoPor }),
+        ...getCommercialHistory(request.snapshot || {}),
+      ].slice(0, 50),
+    };
     await updateQuoteRequest(id, { status: "cancelado", snapshot });
     return;
   }
 
   const proposal = state.proposals.find((item) => item.id === id);
   if (!proposal) return;
-  const snapshot = { ...(proposal.snapshot || {}), cancelamento };
+  const snapshot = withCommercialHistoryEntries(
+    { ...(proposal.snapshot || {}), cancelamento },
+    [createCommercialHistoryEntry("cancelamento", "Cancelamento registrado", reason, { actor: cancelamento.canceladoPor })],
+  );
   const { data, error } = await state.supabase
     .from("propostas")
     .update({ status: "cancelado", snapshot })
@@ -3199,6 +3355,7 @@ async function cancelPipelineItem(kind, id) {
   upsertProposalState(data);
   renderHistory();
   renderPipeline();
+  if (state.activeProposalId === id) renderCommercialTimeline(data);
   showToast("Cancelamento registrado.");
 }
 
@@ -3240,14 +3397,40 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     }
   }
 
-  const changes = { status: nextStatus };
-  if ((normalizedNext === "confirmado" && paymentSignal) || remainingPayment) {
-    changes.snapshot = {
-      ...(proposal.snapshot || {}),
-    };
-    if (normalizedNext === "confirmado" && paymentSignal) changes.snapshot.pagamentoSinal = paymentSignal;
-    if (remainingPayment) changes.snapshot.pagamentoRestante = remainingPayment;
+  const historyEntries = [];
+  if (normalizeProposalStatus(proposal.status) !== normalizedNext) {
+    historyEntries.push(
+      createCommercialHistoryEntry(
+        "etapa",
+        "Etapa alterada",
+        `${getProposalStatusLabel(proposal.status)} → ${getProposalStatusLabel(nextStatus)}.`,
+      ),
+    );
   }
+  if (normalizedNext === "confirmado" && paymentSignal) {
+    historyEntries.push(
+      createCommercialHistoryEntry("sinal", "Sinal registrado", `${formatMoney(paymentSignal.valor)} · ${formatSignalPaymentDate(paymentSignal.data)} · ${(paymentSignal.bancos || []).join(", ")}.`),
+    );
+  }
+  if (remainingPayment) {
+    historyEntries.push(
+      createCommercialHistoryEntry(
+        "pagamento_restante",
+        "Pagamento restante registrado",
+        `${formatMoney(remainingPayment.valor)} · ${formatSignalPaymentDate(remainingPayment.data)} · ${(remainingPayment.bancos || []).join(", ")}.`,
+      ),
+    );
+  }
+
+  const snapshot = withCommercialHistoryEntries(
+    {
+      ...(proposal.snapshot || {}),
+      ...(normalizedNext === "confirmado" && paymentSignal ? { pagamentoSinal: paymentSignal } : {}),
+      ...(remainingPayment ? { pagamentoRestante: remainingPayment } : {}),
+    },
+    historyEntries,
+  );
+  const changes = { status: nextStatus, snapshot };
 
   const { data, error } = await state.supabase
     .from("propostas")
@@ -3269,6 +3452,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   if (state.activeProposalId === proposalId) {
     renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
     renderOperationalChecklist(data);
+    renderCommercialTimeline(data);
   }
   showToast(
     nextStatus === "confirmado"
@@ -3548,8 +3732,43 @@ async function saveCurrentProposal(status, signalInfo = null) {
     snapshot.pagamentoRestante = remainingPayment || activeProposal?.snapshot?.pagamentoRestante || null;
   }
   snapshot.pagamentoRestante = snapshot.pagamentoRestante || activeProposal?.snapshot?.pagamentoRestante || null;
+  const historyEntries = [];
+  const previousStatus = normalizeProposalStatus(activeProposal?.status || "");
+  if (!activeProposal) {
+    historyEntries.push(
+      createCommercialHistoryEntry("proposta", "Proposta criada", `${formatMoney(snapshot.totals.total)} · ${snapshot.event.guests} pax · ${snapshot.event.type || "Evento"}.`),
+    );
+  } else {
+    historyEntries.push(
+      createCommercialHistoryEntry("proposta", "Proposta atualizada", `${formatMoney(snapshot.totals.total)} · ${snapshot.event.guests} pax · ${snapshot.event.type || "Evento"}.`),
+    );
+  }
+  if (activeProposal && previousStatus !== normalizedNext) {
+    historyEntries.push(
+      createCommercialHistoryEntry(
+        "etapa",
+        "Etapa alterada",
+        `${getProposalStatusLabel(activeProposal.status)} → ${getProposalStatusLabel(nextStatus)}.`,
+      ),
+    );
+  }
+  if (paymentSignal && !activeProposal?.snapshot?.pagamentoSinal) {
+    historyEntries.push(
+      createCommercialHistoryEntry("sinal", "Sinal registrado", `${formatMoney(paymentSignal.valor)} · ${formatSignalPaymentDate(paymentSignal.data)} · ${(paymentSignal.bancos || []).join(", ")}.`),
+    );
+  }
+  if (remainingPayment && !activeProposal?.snapshot?.pagamentoRestante) {
+    historyEntries.push(
+      createCommercialHistoryEntry(
+        "pagamento_restante",
+        "Pagamento restante registrado",
+        `${formatMoney(remainingPayment.valor)} · ${formatSignalPaymentDate(remainingPayment.data)} · ${(remainingPayment.bancos || []).join(", ")}.`,
+      ),
+    );
+  }
+  const snapshotWithHistory = withCommercialHistoryEntries(snapshot, historyEntries);
 
-  const row = getProposalRow(snapshot, nextStatus);
+  const row = getProposalRow(snapshotWithHistory, nextStatus);
   const query = state.activeProposalId
     ? state.supabase.from("propostas").update(row).eq("id", state.activeProposalId)
     : state.supabase.from("propostas").insert(row);
@@ -3574,6 +3793,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderPipeline();
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
   renderOperationalChecklist(data);
+  renderCommercialTimeline(data);
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
@@ -3604,6 +3824,7 @@ async function loadProposalHistory() {
   state.proposals = data || [];
   renderHistory();
   renderPipeline();
+  if (state.activeProposalId) renderCommercialTimeline(getActiveProposal());
 }
 
 function applyProposalSnapshot(snapshot) {
@@ -3628,6 +3849,7 @@ function applyProposalSnapshot(snapshot) {
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
   renderOperationalChecklist(getActiveProposal());
+  renderCommercialTimeline(getActiveProposal());
 
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
@@ -3868,6 +4090,7 @@ function startNewProposal() {
   fields.categoryFilter.value = "";
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
+  renderCommercialTimeline(null);
   renderAll();
   scrollToClientData();
   showToast("Nova proposta pronta para preencher.");
