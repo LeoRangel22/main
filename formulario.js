@@ -541,7 +541,6 @@ function validateSnapshot(snapshot) {
     [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
     [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
     [fields.time, Boolean(snapshot.evento.horario), "eventDetails"],
-    [fields.budgetRange, Boolean(snapshot.qualificacao.faixaInvestimento), "contact"],
     [fields.leadSource, Boolean(snapshot.qualificacao.origem), "contact"],
     [fields.name, Boolean(snapshot.cliente.nome), "contact"],
     [fields.email, Boolean(snapshot.cliente.email), "contact"],
@@ -554,7 +553,7 @@ function validateSnapshot(snapshot) {
 
   const firstInvalid = required.find(([, valid]) => !valid);
   if (firstInvalid) {
-    setStatus("Falta só escolher momento, qualificação, formato, período e contato para seguirmos.", "error");
+    setStatus("Falta só escolher o momento, a ocasião, o formato, o período e os dados de contato para seguirmos.", "error");
     scrollToStep(firstInvalid[2], true);
     return false;
   }
@@ -578,7 +577,7 @@ function validateSnapshot(snapshot) {
   }
 
   if (!isValidBrazilianMobile(snapshot.cliente.whatsapp)) {
-    setStatus("Revise o celular/Whatsapp com DDD. Ex.: 21 99999-9999.", "error");
+    setStatus("Revise o celular/Whatsapp com DDD. Se for internacional, inclua também o código do país.", "error");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
     fields.phone.focus();
