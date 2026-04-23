@@ -269,65 +269,81 @@
               <span>06</span>
               <h2 id="contactTitle">Contato</h2>
             </div>
-            <div class="fields-grid contact-fields-grid">
-              <label>
-                <span id="budgetLabel">Faixa de investimento (Opcional)</span>
-                <select id="requestBudgetRange" name="faixa_investimento" autocomplete="off">
-                  <option value="">Selecione</option>
-                  <option value="up-to-15">Até R$ 15 mil</option>
-                  <option value="15-30">R$ 15 mil a R$ 30 mil</option>
-                  <option value="30-60">R$ 30 mil a R$ 60 mil</option>
-                  <option value="above-60">Acima de R$ 60 mil</option>
-                  <option value="undefined">Ainda não definido</option>
-                </select>
-              </label>
-              <label>
-                <span id="leadSourceLabel">Como conheceu a Embaixada?</span>
-                <select id="requestLeadSource" name="como_conheceu" autocomplete="off" required>
-                  <option value="">Selecione</option>
-                  <option value="indication">Indicação</option>
-                  <option value="google-social">Google / Instagram</option>
-                  <option value="agency-partner">Agência / parceiro</option>
-                  <option value="already-know">Já conheço o restaurante</option>
-                  <option value="bondinho">Parque Bondinho</option>
-                  <option value="other">Outro</option>
-                </select>
-              </label>
-              <label>
-                <span id="nameLabel">Nome completo</span>
-                <input id="requestClientName" name="nome_completo" type="text" required autocomplete="name" placeholder="Ex.: Leonardo Rangel…" />
-              </label>
-              <label>
-                <span id="emailLabel">E-mail</span>
-                <input
-                  id="requestClientEmail"
-                  name="email"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  spellcheck="false"
-                  placeholder="Ex.: nome@empresa.com.br…"
-                />
-                <small id="emailHelp">Usaremos para enviar a proposta.</small>
-              </label>
-              <label>
-                <span id="phoneLabel">Celular/Whatsapp</span>
-                <input
-                  id="requestClientPhone"
-                  name="whatsapp"
-                  type="tel"
-                  inputmode="tel"
-                  required
-                  autocomplete="tel"
-                  placeholder="Ex.: 21 99999-9999…"
-                />
-                <small id="phoneHelp">Informe o DDD e o celular. Se for um número internacional, inclua o código do país.</small>
-              </label>
-              <label>
-                <span id="companyLabel">Empresa</span>
-                <small id="companyHelp">Se aplicável</small>
-                <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Empresa ou agência…" />
-              </label>
+            <div class="contact-step-shell">
+              <div class="contact-step-intro">
+                <p class="contact-intro-title" id="contactIntroTitle">Como prefere que a equipe fale com você?</p>
+                <p class="contact-intro-body" id="contactIntroBody">
+                  Nome, e-mail e celular garantem o retorno da proposta. Se estiver falando por empresa ou agência, inclua também o nome completo da organização.
+                </p>
+                <p class="contact-requirement-note" id="contactRequirementNote">
+                  Nome, e-mail e celular são obrigatórios. Para empresa e agência, pedimos também o nome completo da empresa ou agência.
+                </p>
+              </div>
+
+              <div class="fields-grid contact-fields-grid contact-primary-grid">
+                <label>
+                  <span id="nameLabel">Nome completo</span>
+                  <input id="requestClientName" name="nome_completo" type="text" required autocomplete="name" placeholder="Ex.: Marina Costa…" />
+                  <small id="nameHelp">Use nome e sobrenome. Ex.: Marina Costa.</small>
+                </label>
+                <label>
+                  <span id="emailLabel">E-mail</span>
+                  <input
+                    id="requestClientEmail"
+                    name="email"
+                    type="email"
+                    required
+                    autocomplete="email"
+                    spellcheck="false"
+                    placeholder="Ex.: marina@empresa.com.br…"
+                  />
+                  <small id="emailHelp">Usaremos para enviar a proposta.</small>
+                </label>
+                <label>
+                  <span id="phoneLabel">Celular/Whatsapp</span>
+                  <input
+                    id="requestClientPhone"
+                    name="whatsapp"
+                    type="tel"
+                    inputmode="tel"
+                    required
+                    autocomplete="tel"
+                    placeholder="Ex.: +55 21 99999-9999"
+                  />
+                  <small id="phoneHelp">Informe o DDD e o celular. Se for um número internacional, inclua o código do país.</small>
+                </label>
+                <label>
+                  <span id="companyLabel">Empresa ou agência</span>
+                  <small id="companyHelp">Obrigatório para empresa e agência.</small>
+                  <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Grupo Atlântico Eventos…" />
+                </label>
+              </div>
+
+              <div class="fields-grid contact-fields-grid contact-secondary-grid">
+                <label>
+                  <span id="leadSourceLabel">Como conheceu a Embaixada?</span>
+                  <select id="requestLeadSource" name="como_conheceu" autocomplete="off" required>
+                    <option value="">Selecione</option>
+                    <option value="indication">Indicação</option>
+                    <option value="google-social">Google / Instagram</option>
+                    <option value="agency-partner">Agência / parceiro</option>
+                    <option value="already-know">Já conheço o restaurante</option>
+                    <option value="bondinho">Parque Bondinho</option>
+                    <option value="other">Outro</option>
+                  </select>
+                </label>
+                <label>
+                  <span id="budgetLabel">Faixa de investimento (Opcional)</span>
+                  <select id="requestBudgetRange" name="faixa_investimento" autocomplete="off">
+                    <option value="">Selecione</option>
+                    <option value="up-to-15">Até R$ 15 mil</option>
+                    <option value="15-30">R$ 15 mil a R$ 30 mil</option>
+                    <option value="30-60">R$ 30 mil a R$ 60 mil</option>
+                    <option value="above-60">Acima de R$ 60 mil</option>
+                    <option value="undefined">Ainda não definido</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <div class="contact-reassurance">
               <p class="contact-promise" id="contactPromise">Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.</p>
@@ -344,6 +360,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./formulario.js?v=20260423-eventos-v62"></script>
+    <script defer src="./formulario.js?v=20260423-eventos-v63"></script>
   </body>
 </html>
