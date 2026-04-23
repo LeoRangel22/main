@@ -2009,6 +2009,43 @@ label.pipeline-status-control:focus-within select {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
 }
 
+.quote-section-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 6;
+  align-items: center;
+  backdrop-filter: blur(12px);
+  background: rgba(247, 250, 248, 0.9);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding: 8px;
+}
+
+.quote-section-nav a {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.05);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 0 12px;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.quote-section-nav a:hover {
+  background: rgba(24, 58, 45, 0.1);
+  border-color: rgba(24, 58, 45, 0.12);
+}
+
 #clientDataSection {
   scroll-margin-top: 18px;
 }
@@ -2086,6 +2123,10 @@ label.pipeline-status-control:focus-within select {
 .event-details-grid input,
 .event-details-grid select {
   min-height: 48px;
+}
+
+.field-span-2 {
+  grid-column: span 2;
 }
 
 .filters {
@@ -2303,12 +2344,12 @@ textarea {
 
 .price-row {
   align-items: start;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 250, 248, 0.92));
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
   gap: 14px;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   padding: 14px;
   transition:
     border-color 160ms ease,
@@ -2317,16 +2358,46 @@ textarea {
 }
 
 .price-row:hover {
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.98);
   border-color: var(--verde);
   transform: translateY(-1px);
 }
 
 .price-row input[type="checkbox"] {
   accent-color: var(--verde);
-  margin-top: 4px;
+  margin-top: 6px;
   min-height: auto;
   width: 18px;
+}
+
+.price-row-body {
+  display: grid;
+  gap: 6px;
+}
+
+.price-select-indicator {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.06);
+  border-radius: 999px;
+  color: var(--verde);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  width: fit-content;
+}
+
+.price-row:has(input:checked) {
+  background: rgba(24, 58, 45, 0.06);
+  border-color: rgba(24, 58, 45, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(24, 58, 45, 0.08);
+}
+
+.price-row:has(input:checked) .price-select-indicator {
+  background: var(--verde-escuro);
+  color: var(--white);
 }
 
 .price-name {
@@ -3286,6 +3357,31 @@ td:nth-child(9) {
   z-index: 1;
 }
 
+.language-toggle {
+  display: inline-flex;
+  gap: 6px;
+  justify-self: start;
+  margin-bottom: 6px;
+}
+
+.language-toggle button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 900;
+  min-height: 34px;
+  min-width: 50px;
+  padding: 0 12px;
+  touch-action: manipulation;
+}
+
+.language-toggle button.is-active,
+.language-toggle button:hover {
+  background: var(--areia);
+  color: var(--verde-escuro);
+}
+
 .public-form-hero-copy img {
   background: rgba(237, 226, 201, 0.92);
   border-radius: 50%;
@@ -3507,6 +3603,7 @@ td:nth-child(9) {
   overflow-wrap: anywhere;
   padding: 16px;
   text-align: left;
+  touch-action: manipulation;
   transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -3685,8 +3782,9 @@ input[type="range"] {
   gap: 8px;
   font-size: 0.88rem;
   font-weight: 900;
-  min-height: 36px;
-  padding: 0 11px;
+  min-height: 44px;
+  padding: 0 13px;
+  touch-action: manipulation;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
@@ -3697,11 +3795,11 @@ input[type="range"] {
   border: 1.5px solid rgba(24, 58, 45, 0.42);
   border-radius: 4px;
   box-shadow: inset 0 0 0 2px var(--white);
-  flex: 0 0 15px;
-  height: 15px;
+  flex: 0 0 18px;
+  height: 18px;
   min-height: 0;
   padding: 0;
-  width: 15px;
+  width: 18px;
 }
 
 .preference-chips label:hover {

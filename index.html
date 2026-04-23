@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v61" />
+    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v62" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -254,6 +254,13 @@
 
         <section class="quote-layout">
           <form class="quote-form" id="quoteForm">
+            <nav class="quote-section-nav" aria-label="Navegação da proposta">
+              <a href="#clientDataSection">Dados</a>
+              <a href="#eventConfigSection">Configuração</a>
+              <a href="#quoteItemsSection">Itens</a>
+              <a href="#quoteCalcSection">Cálculos</a>
+              <a href="#quoteTermsSection">Condições</a>
+            </nav>
             <div class="form-section" id="clientDataSection">
               <div class="section-heading">
                 <span>01</span>
@@ -270,23 +277,22 @@
                 </label>
                 <label>
                   Celular/Whatsapp
-                  <input id="clientPhone" type="tel" placeholder="5521999999999" />
+                  <input id="clientPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 21 99999-9999" />
                 </label>
                 <label>
                   Tipo de evento
                   <input id="eventType" type="text" placeholder="Escolha no fluxo guiado abaixo" />
                 </label>
-                <label>
-                  Data
-                  <input id="eventDate" type="date" />
-                </label>
-                <label>
-                  Horário
-                  <input id="eventTime" type="time" step="900" value="18:00" />
+                <label class="field-span-2">
+                  Data e horário
+                  <input id="eventDateTime" type="datetime-local" step="900" />
+                  <small>Use um único seletor para definir chegada e horário comercial da proposta.</small>
+                  <input id="eventDate" type="hidden" />
+                  <input id="eventTime" type="hidden" value="18:00" />
                 </label>
                 <label>
                   Convidados
-                  <input id="guestCount" type="number" min="1" step="1" value="30" />
+                  <input id="guestCount" type="number" inputmode="numeric" min="1" step="1" value="30" />
                 </label>
                 <label>
                   Duração
@@ -324,7 +330,7 @@
               </label>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" id="eventConfigSection">
               <div class="section-heading">
                 <span>02</span>
                 <h2>Configuração do evento</h2>
@@ -396,7 +402,7 @@
               </div>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" id="quoteItemsSection">
               <div class="section-heading">
                 <span>03</span>
                 <h2>Itens do orçamento</h2>
@@ -416,7 +422,7 @@
               <div class="price-list" id="priceList" aria-live="polite"></div>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" id="quoteCalcSection">
               <div class="section-heading">
                 <span>04</span>
                 <h2>Cálculo e privatização</h2>
@@ -460,7 +466,7 @@
               </div>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" id="quoteTermsSection">
               <div class="section-heading">
                 <span>05</span>
                 <h2>Condições gerais</h2>
@@ -477,6 +483,8 @@
               class="venue-image"
               src="./assets/venue.jpg"
               alt="Área externa da Embaixada Carioca com vista para o Pão de Açúcar"
+              loading="lazy"
+              decoding="async"
               onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1200&q=80';"
             />
             <div class="summary-brand">
@@ -533,7 +541,7 @@
       </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v60"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./app.js?v=20260423-eventos-v62"></script>
   </body>
 </html>

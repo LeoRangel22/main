@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v61" />
+    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v62" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -18,15 +18,19 @@
           alt="Área externa da Embaixada Carioca com vista para o Pão de Açúcar"
         />
         <div class="public-form-hero-copy">
+          <div class="language-toggle" aria-label="Idioma do formulário">
+            <button class="is-active" id="langPtBtn" type="button" data-lang="pt" aria-pressed="true">PT</button>
+            <button id="langEnBtn" type="button" data-lang="en" aria-pressed="false">EN</button>
+          </div>
           <img src="./assets/logo-reducao.svg" width="74" height="74" alt="Embaixada Carioca" />
-          <p class="eyebrow">Embaixada Carioca</p>
-          <h1>Planeje seu evento na Embaixada Carioca</h1>
-          <span>Escolha o momento ideal e descubra o formato mais indicado para o seu grupo no Morro da Urca.</span>
+          <p class="eyebrow" id="heroEyebrow">Embaixada Carioca</p>
+          <h1 id="heroTitle">Planeje seu evento na Embaixada Carioca</h1>
+          <span id="heroSubtitle">Escolha o momento ideal e descubra o formato mais indicado para o seu grupo no Morro da Urca.</span>
           <div class="public-form-trust" aria-label="Credenciais">
-            <b>Morro da Urca</b>
-            <b>Parque Bondinho Pão de Açúcar</b>
-            <b>Empresas, agências e eventos privados</b>
-            <b>Proposta em até 2 dias úteis</b>
+            <b id="trustPoint1">Morro da Urca</b>
+            <b id="trustPoint2">Parque Bondinho Pão de Açúcar</b>
+            <b id="trustPoint3">Empresas, agências e eventos privados</b>
+            <b id="trustPoint4">Proposta em até 2 dias úteis</b>
           </div>
         </div>
       </section>
@@ -34,27 +38,27 @@
       <section class="public-form-panel" aria-label="Formulário de solicitação">
         <div class="public-form-intro">
           <div>
-            <p class="eyebrow">Consultoria de eventos</p>
-            <h2>Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.</h2>
-            <p>Um fluxo breve para orientar empresas, agências e celebrações privadas com a atenção que o Morro da Urca merece.</p>
+            <p class="eyebrow" id="introEyebrow">Consultoria de eventos</p>
+            <h2 id="introTitle">Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.</h2>
+            <p id="introBody">Um fluxo breve para orientar empresas, agências e celebrações privadas com a atenção que o Morro da Urca merece.</p>
           </div>
           <div class="public-form-progress-panel">
             <ol class="public-form-steps" aria-label="Etapas do pedido">
-              <li><span>01</span>Momento</li>
-              <li><span>02</span>Qualificação</li>
-              <li><span>03</span>Formato</li>
-              <li><span>04</span>Viabilidade</li>
-              <li><span>05</span>Extras</li>
-              <li><span>06</span>Contato</li>
+              <li><span>01</span><em id="stepLabel1">Momento</em></li>
+              <li><span>02</span><em id="stepLabel2">Qualificação</em></li>
+              <li><span>03</span><em id="stepLabel3">Formato</em></li>
+              <li><span>04</span><em id="stepLabel4">Viabilidade</em></li>
+              <li><span>05</span><em id="stepLabel5">Extras</em></li>
+              <li><span>06</span><em id="stepLabel6">Contato</em></li>
             </ol>
             <div class="form-progress" aria-label="Progresso do formulário">
               <span id="formProgressText">Pergunta 1 de 6 - Tempo estimado 2 minutos</span>
               <div><i id="formProgressBar"></i></div>
             </div>
             <div class="form-ux-cues" aria-label="Como funciona">
-              <span>Escolha por cards</span>
-              <span>Recomendamos formatos</span>
-              <span>Você só informa o essencial</span>
+              <span id="uxCue1">Escolha por cards</span>
+              <span id="uxCue2">Recomendamos formatos</span>
+              <span id="uxCue3">Você só informa o essencial</span>
             </div>
           </div>
         </div>
@@ -92,11 +96,11 @@
               </button>
             </div>
             <details class="commercial-windows">
-              <summary>Ver janelas mais indicadas</summary>
-              <span>Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.</span>
-              <span>Início do almoço de 2ª a 6ª: Almoço Carioca.</span>
-              <span>Após 17h de domingo a 5ª: welcome drink e coquetéis.</span>
-              <span>Das 19h às 21h: encontros elegantes, leves e objetivos.</span>
+              <summary id="commercialWindowsSummary">Ver janelas mais indicadas</summary>
+              <span id="commercialWindow1">Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.</span>
+              <span id="commercialWindow2">Início do almoço de 2ª a 6ª: Almoço Carioca.</span>
+              <span id="commercialWindow3">Após 17h de domingo a 5ª: welcome drink e coquetéis.</span>
+              <span id="commercialWindow4">Das 19h às 21h: encontros elegantes, leves e objetivos.</span>
             </details>
           </section>
 
@@ -105,14 +109,14 @@
               <span>02</span>
               <h2 id="profileTitle">Quem está organizando e qual é a ocasião?</h2>
             </div>
-            <p class="step-support">Essas respostas ajudam a equipe a priorizar o atendimento e montar uma proposta mais certeira.</p>
+            <p class="step-support" id="profileSupport">Essas respostas ajudam a equipe a priorizar o atendimento e montar uma proposta mais certeira.</p>
             <div class="choice-card-grid client-type-grid" id="clientTypeChoices" aria-label="Tipo de cliente">
               <button type="button" data-choice-group="clientType" data-choice-value="agency-tourism"><strong>Agência de turismo receptivo / DMC</strong><span>Grupos turísticos, roteiros, operadores e experiências no Rio.</span></button>
               <button type="button" data-choice-group="clientType" data-choice-value="agency-marketing"><strong>Agência de marketing / eventos</strong><span>Ativações, produção, relacionamento, lançamentos e brand experience.</span></button>
               <button type="button" data-choice-group="clientType" data-choice-value="company"><strong>Empresa</strong><span>RH, marketing, diretoria ou relacionamento.</span></button>
               <button type="button" data-choice-group="clientType" data-choice-value="person"><strong>Pessoa física</strong><span>Celebrações, aniversários e encontros privados.</span></button>
             </div>
-            <p class="step-support">Ocasião do evento</p>
+            <p class="step-support" id="occasionSupport">Ocasião do evento</p>
             <div class="choice-card-grid profile-grid" id="profileChoices" aria-label="Ocasião do evento">
               <button type="button" data-choice-group="profile" data-choice-value="corporate"><span class="profile-icon">01</span>Reunião / encontro corporativo</button>
               <button type="button" data-choice-group="profile" data-choice-value="celebration"><span class="profile-icon">02</span>Confraternização</button>
@@ -140,12 +144,12 @@
             </div>
             <div class="fields-grid event-details-grid">
               <label>
-                Data desejada
+                <span id="eventDateLabel">Data desejada</span>
                 <input id="requestEventDate" name="data_desejada" type="date" autocomplete="off" />
-                <small>Se ainda não houver data fechada, conte a janela aproximada abaixo.</small>
+                <small id="eventDateHelp">Se ainda não houver data fechada, conte a janela aproximada abaixo.</small>
               </label>
               <label>
-                Data flexível
+                <span id="dateFlexLabel">Data flexível</span>
                 <input
                   id="requestDateFlex"
                   name="data_flexivel"
@@ -155,7 +159,7 @@
                 />
               </label>
               <label>
-                A data é flexível?
+                <span id="dateFlexibleLabel">A data é flexível?</span>
                 <select id="requestDateIsFlexible" name="data_e_flexivel" autocomplete="off">
                   <option value="">Selecione</option>
                   <option value="yes">Sim</option>
@@ -164,14 +168,14 @@
                 </select>
               </label>
               <label>
-                Quantidade de convidados
+                <span id="guestCountLabel">Quantidade de convidados</span>
                 <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
                 <input id="requestGuestSlider" type="range" min="2" max="100" step="1" value="30" aria-label="Escolha rápida de convidados" />
                 <input id="requestGuestCount" name="convidados" type="number" inputmode="numeric" min="2" max="500" step="1" value="30" required />
-                <small>Use o slider até 99+. Para grupos maiores, digite o número exato até 500.</small>
+                <small id="guestCountHelp">Use o slider até 99+. Para grupos maiores, digite o número exato até 500.</small>
               </label>
               <label>
-                Período desejado
+                <span id="timeRangeLabel">Período desejado</span>
                 <select id="requestTimeRange" name="periodo_desejado" autocomplete="off" required>
                   <option value="">Selecione</option>
                   <option value="morning">Manhã</option>
@@ -180,14 +184,14 @@
                 </select>
               </label>
               <label>
-                Horário de chegada
+                <span id="eventTimeLabel">Horário de chegada</span>
                 <select id="requestEventTime" name="horario_chegada" autocomplete="off" required>
                   <option value="">Selecione o período</option>
                 </select>
-                <small>O horário acordado orienta a operação. Atrasos podem gerar hora extra ou manter o término original.</small>
+                <small id="eventTimeHelp">O horário acordado orienta a operação. Atrasos podem gerar hora extra ou manter o término original.</small>
               </label>
               <label>
-                Duração estimada
+                <span id="durationLabel">Duração estimada</span>
                 <select id="requestDuration" name="duracao_estimada" autocomplete="off">
                   <option value="">A definir</option>
                   <option value="1">1h</option>
@@ -207,9 +211,9 @@
               <span>05</span>
               <h2 id="briefingTitle">O toque final</h2>
             </div>
-            <p class="step-support">Selecione o que ajuda a equipe a montar uma proposta mais precisa. Se não souber, deixe em branco.</p>
+            <p class="step-support" id="briefingSupport">Selecione o que ajuda a equipe a montar uma proposta mais precisa. Se não souber, deixe em branco.</p>
             <label>
-              Motivo do evento
+              <span id="reasonLabel">Motivo do evento</span>
               <textarea
                 id="requestReason"
                 name="motivo_evento"
@@ -240,7 +244,7 @@
             </fieldset>
             <div class="briefing-text-grid">
               <label>
-                Preferências de alimentos e bebidas
+                <span id="preferencesLabel">Preferências de alimentos e bebidas</span>
                 <textarea
                   id="requestPreferences"
                   name="preferencias"
@@ -249,7 +253,7 @@
                 ></textarea>
               </label>
               <label>
-                Há algo importante que devemos considerar para montar sua proposta?
+                <span id="notesLabel">Há algo importante que devemos considerar para montar sua proposta?</span>
                 <textarea
                   id="requestNotes"
                   name="observacoes"
@@ -267,7 +271,7 @@
             </div>
             <div class="fields-grid contact-fields-grid">
               <label>
-                Faixa de investimento (Opcional)
+                <span id="budgetLabel">Faixa de investimento (Opcional)</span>
                 <select id="requestBudgetRange" name="faixa_investimento" autocomplete="off">
                   <option value="">Selecione</option>
                   <option value="up-to-15">Até R$ 15 mil</option>
@@ -278,7 +282,7 @@
                 </select>
               </label>
               <label>
-                Como conheceu a Embaixada?
+                <span id="leadSourceLabel">Como conheceu a Embaixada?</span>
                 <select id="requestLeadSource" name="como_conheceu" autocomplete="off" required>
                   <option value="">Selecione</option>
                   <option value="indication">Indicação</option>
@@ -290,11 +294,11 @@
                 </select>
               </label>
               <label>
-                Nome completo
+                <span id="nameLabel">Nome completo</span>
                 <input id="requestClientName" name="nome_completo" type="text" required autocomplete="name" placeholder="Ex.: Leonardo Rangel…" />
               </label>
               <label>
-                E-mail
+                <span id="emailLabel">E-mail</span>
                 <input
                   id="requestClientEmail"
                   name="email"
@@ -304,10 +308,10 @@
                   spellcheck="false"
                   placeholder="Ex.: nome@empresa.com.br…"
                 />
-                <small>Usaremos para enviar a proposta.</small>
+                <small id="emailHelp">Usaremos para enviar a proposta.</small>
               </label>
               <label>
-                Celular/Whatsapp
+                <span id="phoneLabel">Celular/Whatsapp</span>
                 <input
                   id="requestClientPhone"
                   name="whatsapp"
@@ -317,17 +321,17 @@
                   autocomplete="tel"
                   placeholder="Ex.: 21 99999-9999…"
                 />
-                <small>Informe o DDD e o celular. Se for um número internacional, inclua o código do país.</small>
+                <small id="phoneHelp">Informe o DDD e o celular. Se for um número internacional, inclua o código do país.</small>
               </label>
               <label>
-                Empresa
-                <small>Se aplicável</small>
+                <span id="companyLabel">Empresa</span>
+                <small id="companyHelp">Se aplicável</small>
                 <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Empresa ou agência…" />
               </label>
             </div>
             <div class="contact-reassurance">
-              <p class="contact-promise">Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.</p>
-              <p class="contact-assurance">Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.</p>
+              <p class="contact-promise" id="contactPromise">Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.</p>
+              <p class="contact-assurance" id="contactAssurance">Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.</p>
             </div>
           </section>
 
@@ -339,7 +343,7 @@
       </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./formulario.js?v=20260423-eventos-v61"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./formulario.js?v=20260423-eventos-v62"></script>
   </body>
 </html>
