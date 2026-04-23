@@ -211,6 +211,7 @@ declare
   normalized_action text := lower(trim(coalesce(action, '')));
   clean_message text := nullif(trim(coalesce(message, '')), '');
   response_payload jsonb;
+  history_entry jsonb;
   next_status text;
   new_snapshot jsonb;
 begin
@@ -234,6 +235,19 @@ begin
     'mensagem', clean_message,
     'registradoEm', now()
   ));
+
+  history_entry := jsonb_build_object(
+    'id', 'cliente-' || extract(epoch from now())::text,
+    'type', 'cliente_resposta',
+    'title', case
+      when normalized_action = 'confirmar' then 'Cliente aprovou a proposta'
+      when normalized_action = 'cancelar' then 'Cliente solicitou cancelamento'
+      else 'Cliente solicitou alteração'
+    end,
+    'detail', coalesce(clean_message, 'Resposta registrada pelo link público.'),
+    'at', now(),
+    'actor', 'Cliente'
+  );
 
   next_status := case
     when normalized_action = 'cancelar' then 'cancelado'
@@ -261,6 +275,13 @@ begin
       true
     );
   end if;
+
+  new_snapshot := jsonb_set(
+    new_snapshot,
+    '{commercialHistory}',
+    jsonb_build_array(history_entry) || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
+    true
+  );
 
   update public.propostas
     set

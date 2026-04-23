@@ -1902,6 +1902,76 @@ label.pipeline-status-control:focus-within select {
   width: auto;
 }
 
+.commercial-timeline {
+  background: var(--white);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px;
+}
+
+.timeline-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.timeline-heading span {
+  color: var(--amarelo);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.timeline-heading strong {
+  color: var(--verde-escuro);
+  font-size: 0.86rem;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 6px;
+}
+
+.timeline-list article {
+  align-items: center;
+  border-left: 3px solid rgba(47, 111, 69, 0.45);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 5px 0 5px 10px;
+}
+
+.timeline-list article div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timeline-list strong {
+  color: var(--verde-escuro);
+  font-size: 0.86rem;
+}
+
+.timeline-list small,
+.timeline-list span,
+.timeline-list em,
+.timeline-list p {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 750;
+  margin: 0;
+}
+
+.timeline-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .eyebrow {
   color: var(--verde);
   font-size: 0.78rem;
@@ -4225,6 +4295,11 @@ input[type="range"] {
   }
 
   .public-proposal-items article {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-list article {
+    align-items: start;
     grid-template-columns: 1fr;
   }
 
