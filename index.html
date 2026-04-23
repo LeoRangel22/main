@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v58" />
+    <link rel="stylesheet" href="./styles.css?v=20260422-eventos-v59" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -128,6 +128,11 @@
               </div>
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
+            <div class="pipeline-guidance" aria-label="Como usar o funil">
+              <span><strong>1.</strong> Ações de hoje mostram o que exige resposta primeiro.</span>
+              <span><strong>2.</strong> Arraste o card ou use Mudar para atualizar a etapa.</span>
+              <span><strong>3.</strong> Abra a proposta para ajustar valores, enviar link e acompanhar histórico.</span>
+            </div>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
@@ -193,15 +198,46 @@
               </div>
             </details>
             <details>
-              <summary>Manual rápido do sistema</summary>
-              <ol>
-                <li>O cliente envia o formulário externo e entra como Lead recebido.</li>
-                <li>A equipe abre o lead, revisa os dados e salva a proposta enviada.</li>
-                <li>Enquanto conversa com o cliente, mova o card para Em negociação.</li>
-                <li>Após o pagamento do sinal, use Marcar sinal pago para levar para Sinal recebido, a linha de chegada comercial.</li>
-                <li>Depois registre o pagamento restante, siga para Planejamento, Eventos hoje e amanhã e finalize em Pós-venda.</li>
-                <li>Abra a proposta para ver o histórico comercial, pagamentos, respostas do cliente e checklist operacional.</li>
-              </ol>
+              <summary>Guia completo do sistema</summary>
+              <div class="guide-grid">
+                <section>
+                  <h3>Fluxo comercial</h3>
+                  <ol>
+                    <li>O cliente envia o formulário externo e entra como Lead.</li>
+                    <li>A equipe abre o lead, revisa dados, ajusta itens e salva a proposta.</li>
+                    <li>Ao salvar/enviar, o card vai para Sem resposta.</li>
+                    <li>Se o cliente pedir ajuste, use Negociação.</li>
+                    <li>Quando o sinal entrar, use Sinal Pago. Isso conclui a venda.</li>
+                  </ol>
+                </section>
+                <section>
+                  <h3>Operação</h3>
+                  <ol>
+                    <li>Depois do sinal, registre o pagamento restante quando recebido.</li>
+                    <li>Use Planejamento para preparar cardápio, extras, contato do dia e operação.</li>
+                    <li>Use 48h para eventos de hoje ou amanhã que exigem atenção máxima.</li>
+                    <li>Use Pós-venda somente após o evento realizado.</li>
+                  </ol>
+                </section>
+                <section>
+                  <h3>Propostas e links</h3>
+                  <ol>
+                    <li>Abrir proposta carrega os dados do lead na área de edição.</li>
+                    <li>Valores e itens podem ser ajustados antes de enviar.</li>
+                    <li>Link + WhatsApp gera uma proposta online para o cliente aprovar, cancelar ou pedir alteração.</li>
+                    <li>O PDF continua disponível quando for melhor anexar arquivo.</li>
+                  </ol>
+                </section>
+                <section>
+                  <h3>Controle</h3>
+                  <ol>
+                    <li>Ações de hoje prioriza leads antigos, conflitos, follow-ups e pagamentos.</li>
+                    <li>Histórico comercial registra atualizações, mudanças de etapa, pagamentos e respostas.</li>
+                    <li>Relatórios mostram visão rápida por período, etapa e tipo.</li>
+                    <li>Cancelados ficam recolhidos e guardam o motivo.</li>
+                  </ol>
+                </section>
+              </div>
             </details>
             <details>
               <summary>FAQ da equipe</summary>
@@ -498,6 +534,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260422-eventos-v58"></script>
+    <script src="./app.js?v=20260422-eventos-v59"></script>
   </body>
 </html>
