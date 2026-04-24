@@ -991,7 +991,7 @@ function getDisplayCommercialHistory(proposal) {
     });
   }
 
-  return history.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 12);
+  return history.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 30);
 }
 
 function getLifecycleStages() {
@@ -1071,6 +1071,67 @@ function getProposalLifecycle(proposal) {
       timestamp,
     };
   });
+}
+
+function isRoutineProposalUpdate(entry = {}) {
+  return entry.type === "proposta" && String(entry.title || "").toLowerCase().includes("atualizada");
+}
+
+function getHistoryTone(entry = {}) {
+  const text = `${entry.type || ""} ${entry.title || ""}`.toLowerCase();
+  if (entry.type === "proposta_agrupada") return "muted";
+  if (text.includes("cancel")) return "danger";
+  if (text.includes("sinal") || text.includes("pagamento")) return "money";
+  if (text.includes("whatsapp") || text.includes("enviada")) return "sent";
+  if (text.includes("cliente")) return "client";
+  if (text.includes("etapa")) return "stage";
+  if (text.includes("checklist")) return "operation";
+  if (isRoutineProposalUpdate(entry)) return "muted";
+  return "proposal";
+}
+
+function getHistoryBadge(entry = {}) {
+  const tone = getHistoryTone(entry);
+  const labels = {
+    danger: "ALERTA",
+    money: "PAG",
+    sent: "ENVIO",
+    client: "CLIENTE",
+    stage: "ETAPA",
+    operation: "OP",
+    muted: "AJUSTE",
+    proposal: "PROP",
+  };
+  return labels[tone] || "LOG";
+}
+
+function getCompactCommercialHistory(history = []) {
+  const routineUpdates = history.filter(isRoutineProposalUpdate);
+  const keyEntries = history.filter((entry) => !isRoutineProposalUpdate(entry));
+  const visible = keyEntries.slice(0, 7);
+
+  if (routineUpdates.length) {
+    const latestUpdate = routineUpdates[0];
+    const groupedEntry = {
+      id: "proposal-updates-group",
+      type: "proposta_agrupada",
+      title: `${routineUpdates.length} ajuste(s) de proposta agrupado(s)`,
+      detail: latestUpdate.detail
+        ? `Último ajuste: ${latestUpdate.detail}`
+        : "Alterações de valor, itens ou dados comerciais ficaram agrupadas para manter a leitura limpa.",
+      at: latestUpdate.at,
+      actor: latestUpdate.actor || "Equipe",
+      groupedCount: routineUpdates.length,
+    };
+    const insertionIndex = Math.min(visible.length, 3);
+    visible.splice(insertionIndex, 0, groupedEntry);
+  }
+
+  return {
+    visible: visible.slice(0, 8),
+    routineCount: routineUpdates.length,
+    keyCount: keyEntries.length,
+  };
 }
 
 function hasIncompleteChecklist(snapshot = {}) {
@@ -1218,12 +1279,21 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
   }
 
   const history = getDisplayCommercialHistory(proposal);
+  const compactHistory = getCompactCommercialHistory(history);
+  const lastRelevantEntry = compactHistory.visible.find((entry) => entry.id !== "proposal-updates-group") || history[0] || null;
   const lifecycle = getProposalLifecycle(proposal);
   nodes.commercialTimeline.classList.remove("is-hidden");
   nodes.commercialTimeline.innerHTML = `
     <div class="timeline-heading">
-      <span>Histórico comercial</span>
-      <strong>${history.length || 0} registro(s)</strong>
+      <div>
+        <span>Histórico comercial</span>
+        <strong>${compactHistory.keyCount || history.length || 0} ações relevantes</strong>
+      </div>
+      ${
+        lastRelevantEntry
+          ? `<p>Último movimento: <b>${escapeHtml(lastRelevantEntry.title || "Atualização")}</b> · ${escapeHtml(formatCommercialHistoryDate(lastRelevantEntry.at))}</p>`
+          : `<p>Salve, envie ou registre pagamentos para criar o histórico deste evento.</p>`
+      }
     </div>
     <div class="timeline-progress">
       ${lifecycle
@@ -1242,17 +1312,20 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
     </div>
     <div class="timeline-list">
       ${
-        history.length
-          ? history
+        compactHistory.visible.length
+          ? compactHistory.visible
               .map(
                 (entry) => `
-                  <article>
-                    <div>
+                  <article class="timeline-entry is-${escapeHtml(getHistoryTone(entry))}">
+                    <span class="timeline-entry-badge">${escapeHtml(getHistoryBadge(entry))}</span>
+                    <div class="timeline-entry-main">
                       <strong>${escapeHtml(entry.title || "Atualização")}</strong>
                       <small>${escapeHtml(entry.detail || "")}</small>
                     </div>
-                    <span>${escapeHtml(formatCommercialHistoryDate(entry.at))}</span>
-                    <em>${escapeHtml(entry.actor || "Equipe")}</em>
+                    <div class="timeline-entry-meta">
+                      <span>${escapeHtml(formatCommercialHistoryDate(entry.at))}</span>
+                      <em>${escapeHtml(entry.actor || "Equipe")}</em>
+                    </div>
                   </article>
                 `,
               )
