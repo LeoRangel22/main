@@ -3823,9 +3823,28 @@ function renderClientRegistryCard(client) {
     latest.kind === "proposal"
       ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(latest.id)}">Abrir último</button>`
       : `<button class="secondary" type="button" data-use-request="${escapeHtml(latest.id)}">Abrir último</button>`;
+  const realizedItems = client.items.filter((item) => item.kind === "proposal" && normalizeProposalStatus(item.status) === "pos_venda");
+  const confirmedItems = client.items.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)) && normalizeProposalStatus(item.status) !== "pos_venda");
+  const quoteItems = client.items.filter((item) => item.kind !== "proposal" || !operationStatuses.has(normalizeProposalStatus(item.status)));
+  const realizedValue = realizedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const confirmedValue = confirmedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const footerLabel = realizedValue
+    ? `Realizado: ${formatMoney(realizedValue)}`
+    : confirmedValue
+      ? `Confirmado: ${formatMoney(confirmedValue)}`
+      : "Sem evento realizado";
+  const summaryLabel = formatClientRegistrySummary(quoteItems.length, confirmedItems.length, realizedItems.length);
   const history = client.items
     .slice(0, 3)
-    .map((item) => `<li>${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data a definir")} · ${escapeHtml(item.type || "Evento")} · ${escapeHtml(getProposalStatusLabel(item.status))}</li>`)
+    .map((item) => {
+      const eventKind = getClientHistoryKind(item);
+      return `
+        <li>
+          <span class="client-history-chip client-history-${escapeHtml(eventKind.tone)}">${escapeHtml(eventKind.label)}</span>
+          <small>${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data a definir")} · ${escapeHtml(item.type || "Evento")} · ${escapeHtml(getProposalStatusLabel(item.status))}</small>
+        </li>
+      `;
+    })
     .join("");
   return `
     <article class="client-registry-card">
@@ -3837,13 +3856,38 @@ function renderClientRegistryCard(client) {
         <strong>${escapeHtml(client.name)}</strong>
         <small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || "Sem contato completo")}</small>
       </div>
+      <div class="client-registry-summary">${escapeHtml(summaryLabel)}</div>
       <ul>${history}</ul>
       <div class="client-registry-footer">
-        <b>${client.totalValue ? formatMoney(client.totalValue) : client.soldCount ? `${client.soldCount} evento(s)` : "Sem venda registrada"}</b>
+        <b>${escapeHtml(footerLabel)}</b>
         ${latestButton}
       </div>
     </article>
   `;
+}
+
+function formatClientRegistrySummary(quoteCount, confirmedCount, realizedCount) {
+  const quoteLabel = quoteCount === 1 ? "cotação" : "cotações";
+  const confirmedLabel = confirmedCount === 1 ? "confirmado" : "confirmados";
+  const realizedLabel = realizedCount === 1 ? "realizado" : "realizados";
+  return `${quoteCount} ${quoteLabel} · ${confirmedCount} ${confirmedLabel} · ${realizedCount} ${realizedLabel}`;
+}
+
+function getClientHistoryKind(item) {
+  if (item.kind !== "proposal") {
+    return { label: "Cotação", tone: "quote" };
+  }
+  const status = normalizeProposalStatus(item.status);
+  if (status === "pos_venda") {
+    return { label: "Evento realizado", tone: "realized" };
+  }
+  if (operationStatuses.has(status)) {
+    return { label: "Evento confirmado", tone: "confirmed" };
+  }
+  if (status === "cancelado") {
+    return { label: "Cotação cancelada", tone: "canceled" };
+  }
+  return { label: "Cotação", tone: "quote" };
 }
 
 function renderGlobalSearch(items = getPipelineItems()) {
