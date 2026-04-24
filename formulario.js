@@ -818,6 +818,7 @@ function setLanguage(language) {
   });
   renderLocalizedChoices();
   applyStaticCopy();
+  resetFlexibleDateField();
   fillTimeOptions();
   renderRecommendations();
   updateGuestOutput();
@@ -881,6 +882,12 @@ function fillGuestOptions() {
   if (fields.guestSlider) fields.guestSlider.value = "30";
   if (fields.dateIsFlexible) fields.dateIsFlexible.value = "";
   updateGuestOutput("number");
+}
+
+function resetFlexibleDateField() {
+  if (!fields.dateIsFlexible) return;
+  fields.dateIsFlexible.selectedIndex = 0;
+  fields.dateIsFlexible.value = "";
 }
 
 function updateGuestOutput(source = "number") {
@@ -1423,11 +1430,13 @@ async function submitRequest(event) {
 }
 
 fillGuestOptions();
+resetFlexibleDateField();
 fillTimeOptions("");
 renderRecommendations();
 fields.date.min = getTodayInputValue();
 updateContactRequirements();
 updateContactGuidance();
+window.addEventListener("pageshow", resetFlexibleDateField);
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
 fields.timeRange.addEventListener("change", () => {
