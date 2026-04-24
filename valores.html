@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260424-eventos-v74" />
+    <link rel="stylesheet" href="./styles.css?v=20260424-eventos-v75" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -19,8 +19,8 @@
           </div>
           <div class="topbar-actions">
             <a class="button-link secondary" href="./index.html">Sistema de eventos</a>
-            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formul·rio do cliente</a>
-            <button class="secondary" id="resetPricesBtn" type="button">Restaurar preÁos</button>
+            <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formul√°rio do cliente</a>
+            <button class="secondary" id="resetPricesBtn" type="button">Restaurar pre√ßos</button>
           </div>
         </header>
 
@@ -31,7 +31,7 @@
           </div>
           <div class="team-access">
             <div class="team-auth team-primary">
-              <p>Entre com um e-mail autorizado para editar produtos, preÁos e custos de privatizaÁ„o.</p>
+              <p>Entre com um e-mail autorizado para editar produtos, pre√ßos e custos de privatiza√ß√£o.</p>
               <div class="team-email-presets" aria-label="E-mails autorizados">
                 <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
                 <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
@@ -59,12 +59,12 @@
             </div>
             <div class="team-context">
               <div class="team-ready">
-                <span>ManutenÁ„o comercial</span>
+                <span>Manuten√ß√£o comercial</span>
                 <strong>Use esta tela para cadastrar produtos e atualizar regras.</strong>
-                <p>As alteraÁıes ficam salvas neste navegador e alimentam a montagem da proposta no sistema de eventos.</p>
+                <p>As altera√ß√µes ficam salvas neste navegador e alimentam a montagem da proposta no sistema de eventos.</p>
               </div>
               <details class="team-advanced">
-                <summary>ConfiguraÁ„o tÈcnica</summary>
+                <summary>Configura√ß√£o t√©cnica</summary>
                 <div class="supabase-config-grid">
                   <label>
                     Supabase URL
@@ -74,29 +74,29 @@
                     Supabase anon key
                     <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
                   </label>
-                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conex„o</button>
+                  <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conex√£o</button>
                 </div>
-                <div class="team-status" id="supabaseStatus">Conex„o pronta.</div>
+                <div class="team-status" id="supabaseStatus">Conex√£o pronta.</div>
               </details>
             </div>
           </div>
         </section>
 
         <section class="values-layout">
-          <section class="prices-editor" aria-label="PreÁos ajust·veis">
+          <section class="prices-editor" aria-label="Pre√ßos ajust√°veis">
             <div class="section-heading">
               <span>01</span>
-              <h2>Produtos e preÁos</h2>
+              <h2>Produtos e pre√ßos</h2>
             </div>
-            <p>Edite valores, mÌnimos e fÛrmulas. As alteraÁıes ser„o usadas na criaÁ„o das propostas neste navegador.</p>
-            <div class="item-builder" aria-label="Criar novo item de orÁamento">
+            <p>Edite valores, m√≠nimos e f√≥rmulas. As altera√ß√µes ser√£o usadas na cria√ß√£o das propostas neste navegador.</p>
+            <div class="item-builder" aria-label="Criar novo item de or√ßamento">
               <div>
                 <h3>Criar novo item</h3>
-                <p>Cadastre pacotes extras, opcionais ou novas versıes de card·pio.</p>
+                <p>Cadastre pacotes extras, opcionais ou novas vers√µes de card√°pio.</p>
               </div>
               <div class="builder-grid">
                 <label>
-                  CÛdigo
+                  C√≥digo
                   <input id="newCodigo" type="text" placeholder="Ex.: C5" />
                 </label>
                 <label>
@@ -109,35 +109,35 @@
                   <input id="newNome" type="text" placeholder="Nome do item" />
                 </label>
                 <label>
-                  FÛrmula
+                  F√≥rmula
                   <select id="newFormula">
-                    <option value="durationPerPerson">Por pessoa + duraÁ„o</option>
+                    <option value="durationPerPerson">Por pessoa + dura√ß√£o</option>
                     <option value="serviceIncluded90PerPerson">1h30 por pessoa, taxa inclusa</option>
                     <option value="perPersonFixed">Por pessoa fixo</option>
                     <option value="fixedPlusPerPerson">Fixo + por pessoa</option>
-                    <option value="fixedCoversMinimum">Fixo inclui mÌnimo</option>
+                    <option value="fixedCoversMinimum">Fixo inclui m√≠nimo</option>
                     <option value="fixedTotal">Valor fixo total</option>
                   </select>
                 </label>
                 <label class="builder-wide">
-                  DescriÁ„o
-                  <textarea id="newDescricao" rows="2" placeholder="O que est· incluÌdo"></textarea>
+                  Descri√ß√£o
+                  <textarea id="newDescricao" rows="2" placeholder="O que est√° inclu√≠do"></textarea>
                 </label>
                 <label class="builder-wide">
                   Resumo comercial
-                  <textarea id="newResumoComercial" rows="2" placeholder="Texto mais vend·vel para a proposta. Se ficar vazio, usa a descriÁ„o."></textarea>
+                  <textarea id="newResumoComercial" rows="2" placeholder="Texto mais vend√°vel para a proposta. Se ficar vazio, usa a descri√ß√£o."></textarea>
                 </label>
                 <label>
                   Prioridade
                   <select id="newPrioridadeComercial">
-                    <option value="media">MÈdia</option>
+                    <option value="media">M√©dia</option>
                     <option value="alta">Alta</option>
                     <option value="baixa">Baixa</option>
                   </select>
                 </label>
                 <label>
-                  Hor·rios indicados
-                  <input id="newHorariosRecomendados" type="text" placeholder="Ex.: manh„ 2™ a 6™" />
+                  Hor√°rios indicados
+                  <input id="newHorariosRecomendados" type="text" placeholder="Ex.: manh√£ 2¬™ a 6¬™" />
                 </label>
                 <label class="builder-checkbox">
                   <input id="newProdutoAtivo" type="checkbox" checked />
@@ -156,7 +156,7 @@
                   <input id="newPrecoExtra" type="text" inputmode="decimal" placeholder="0" />
                 </label>
                 <label>
-                  PreÁo fixo
+                  Pre√ßo fixo
                   <input id="newPrecoFixo" type="text" inputmode="decimal" placeholder="0" />
                 </label>
                 <label>
@@ -164,7 +164,7 @@
                   <input id="newValorAdicional" type="text" inputmode="decimal" placeholder="0" />
                 </label>
                 <label>
-                  MÌnimo
+                  M√≠nimo
                   <input id="newMinimo" type="number" min="0" step="1" value="20" />
                 </label>
                 <button class="primary" id="addItemBtn" type="button">Adicionar item</button>
@@ -175,7 +175,7 @@
                 <span>Biblioteca</span>
                 <h3>Uso comercial dos produtos</h3>
               </div>
-              <p>Controle quais produtos aparecem no orÁamento e ajuste resumo, prioridade e hor·rios recomendados sem mexer na lÛgica de c·lculo.</p>
+              <p>Controle quais produtos aparecem no or√ßamento e ajuste resumo, prioridade e hor√°rios recomendados sem mexer na l√≥gica de c√°lculo.</p>
               <div class="library-summary" id="commercialLibrarySummary"></div>
             </section>
             <div class="table-wrap">
@@ -183,19 +183,19 @@
                 <thead>
                   <tr>
                     <th>Ativo</th>
-                    <th>CÛdigo</th>
+                    <th>C√≥digo</th>
                     <th>Tipo</th>
                     <th>Nome</th>
                     <th>Prioridade</th>
-                    <th>Hor·rios</th>
+                    <th>Hor√°rios</th>
                     <th>Resumo comercial</th>
                     <th>1h</th>
                     <th>2h</th>
                     <th>1/2h extra</th>
-                    <th>PreÁo fixo</th>
+                    <th>Pre√ßo fixo</th>
                     <th>Adicional</th>
-                    <th>MÌnimo</th>
-                    <th>FÛrmula</th>
+                    <th>M√≠nimo</th>
+                    <th>F√≥rmula</th>
                   </tr>
                 </thead>
                 <tbody id="pricesTable"></tbody>
@@ -203,10 +203,10 @@
             </div>
           </section>
 
-          <section class="prices-editor" aria-label="Custos de privatizaÁ„o">
+          <section class="prices-editor" aria-label="Custos de privatiza√ß√£o">
             <div class="section-heading">
               <span>02</span>
-              <h2>Custos de privatizaÁ„o</h2>
+              <h2>Custos de privatiza√ß√£o</h2>
             </div>
             <p>Atualize abertura, pico, fechamento e valores aplicados automaticamente na proposta.</p>
             <div class="privatization-rules-wrap">
@@ -215,7 +215,7 @@
                   <tr>
                     <th>Dia</th>
                     <th>Abertura</th>
-                    <th>Pico inÌcio</th>
+                    <th>Pico in√≠cio</th>
                     <th>Pico fim</th>
                     <th>Fechamento</th>
                     <th>Pico parcial</th>
@@ -232,6 +232,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260424-eventos-v74"></script>
+    <script defer src="./app.js?v=20260424-eventos-v75"></script>
   </body>
 </html>
