@@ -48,6 +48,18 @@ function buildDefaultMessage(payload: SendPayload, proposal: any) {
   ].join("\n");
 }
 
+function getZapiErrorMessage(status: number, details: unknown) {
+  const detailsText = typeof details === "string" ? details : JSON.stringify(details);
+  const normalized = detailsText.toLowerCase();
+  if (normalized.includes("client-token") || normalized.includes("client token") || normalized.includes("unauthorized")) {
+    return "A Z-API recusou por Client-Token. Cadastre ZAPI_CLIENT_TOKEN nos secrets do Supabase.";
+  }
+  if (normalized.includes("phone") || normalized.includes("telefone")) {
+    return "A Z-API recusou o telefone. Confira se o Celular/WhatsApp tem DDI e DDD.";
+  }
+  return `A Z-API recusou o envio (HTTP ${status}).`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -134,7 +146,7 @@ Deno.serve(async (req) => {
 
     if (!zapiResponse.ok) {
       console.error("Z-API error:", zapiResponse.status, zapiBody);
-      return jsonResponse({ ok: false, message: "A Z-API recusou o envio.", details: zapiBody }, 502);
+      return jsonResponse({ ok: false, message: getZapiErrorMessage(zapiResponse.status, zapiBody), details: zapiBody }, 502);
     }
 
     const sentAt = new Date().toISOString();

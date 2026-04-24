@@ -5544,6 +5544,26 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   ].join("\n");
 }
 
+async function getFunctionErrorMessage(error) {
+  if (!error) return "";
+  const response = error.context;
+  if (response && typeof response.clone === "function") {
+    try {
+      const body = await response.clone().json();
+      if (body?.message) return body.message;
+      if (body?.details) return typeof body.details === "string" ? body.details : JSON.stringify(body.details);
+    } catch (_jsonError) {
+      try {
+        const text = await response.clone().text();
+        if (text) return text;
+      } catch (_textError) {
+        // Mantem fallback abaixo.
+      }
+    }
+  }
+  return error.message || "";
+}
+
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
@@ -5569,7 +5589,8 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
 
   if (error || data?.ok === false) {
     console.warn("Falha no envio direto por WhatsApp.", error || data);
-    showToast(data?.message || "Não foi possível enviar pela Z-API. Confira a configuração.");
+    const functionMessage = data?.message || (await getFunctionErrorMessage(error));
+    showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
     return false;
   }
 
