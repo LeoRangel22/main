@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v65" />
+    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v66" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -118,6 +118,18 @@
             </div>
             <div class="action-list" id="actionList">
               <p>Entre com Supabase para ver ações.</p>
+            </div>
+          </section>
+          <section class="operations-agenda" aria-label="Agenda operacional">
+            <div class="operations-agenda-heading">
+              <div>
+                <span>Agenda operacional</span>
+                <strong>Hoje, amanhã e próximos passos da operação</strong>
+              </div>
+              <small id="operationsAgendaMeta">Atualiza com o funil.</small>
+            </div>
+            <div class="operations-agenda-grid" id="operationsAgenda">
+              <p>Entre com Supabase para ver a agenda.</p>
             </div>
           </section>
           <div class="pipeline-panel">
@@ -353,6 +365,7 @@
                 </label>
               </div>
               <div class="availability-alert is-hidden" id="availabilityAlert"></div>
+              <div class="proposal-next-step is-hidden" id="proposalNextStep"></div>
               <div class="signal-summary is-hidden" id="signalPaymentInfo"></div>
               <div class="operational-checklist is-hidden" id="operationalChecklist"></div>
               <div class="commercial-timeline is-hidden" id="commercialTimeline"></div>
@@ -574,6 +587,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260423-eventos-v65"></script>
+    <script defer src="./app.js?v=20260423-eventos-v66"></script>
   </body>
 </html>
