@@ -444,6 +444,7 @@ const copy = {
       successContact: "Se quiser acrescentar algo, fale com eventos@embaixadacarioca.com.br ou 21 97142-6007.",
       loadError: "Não foi possível carregar a conexão. Tente novamente em instantes.",
       submitError: "Não foi possível enviar. Confira os dados e tente novamente.",
+      missingFields: (fieldsList) => `Falta completar: ${fieldsList}. Ajuste esses pontos e envie novamente.`,
       missingRequired: "Falta só escolher o momento, a ocasião, o formato, o período e os dados de contato para seguirmos.",
       missingDate: "Informe uma data desejada ou uma janela aproximada para a equipe avaliar disponibilidade.",
       requiredName: "Para seguir, conte seu nome completo. Ex.: Marina Costa.",
@@ -606,6 +607,7 @@ const copy = {
       successContact: "If you would like to add anything, contact eventos@embaixadacarioca.com.br or +55 21 97142-6007.",
       loadError: "We could not load the connection. Please try again in a moment.",
       submitError: "We could not send your request. Please review the information and try again.",
+      missingFields: (fieldsList) => `Please complete: ${fieldsList}. Review these items and send again.`,
       missingRequired: "We only need the moment, occasion, format, period and contact details to move forward.",
       missingDate: "Please provide either a preferred date or an approximate date window so the team can assess availability.",
       requiredName: "Please share your full name so we can prepare the proposal properly. Example: Marina Costa.",
@@ -880,14 +882,13 @@ function renderSuccessStatus(referenceCode) {
 function fillGuestOptions() {
   fields.guests.value = "30";
   if (fields.guestSlider) fields.guestSlider.value = "30";
-  if (fields.dateIsFlexible) fields.dateIsFlexible.value = "";
+  if (fields.dateIsFlexible) fields.dateIsFlexible.value = "no";
   updateGuestOutput("number");
 }
 
 function resetFlexibleDateField() {
   if (!fields.dateIsFlexible) return;
-  fields.dateIsFlexible.selectedIndex = 0;
-  fields.dateIsFlexible.value = "";
+  fields.dateIsFlexible.value = "no";
 }
 
 function updateGuestOutput(source = "number") {
@@ -1309,12 +1310,12 @@ function validateSnapshot(snapshot) {
   clearAllStepValidity();
   const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
   const required = [
-    [fields.moment, Boolean(snapshot.evento.momento), "moment"],
-    [fields.clientType, Boolean(snapshot.cliente.tipoCliente), "profile"],
-    [fields.profile, Boolean(snapshot.evento.perfil), "profile"],
-    [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
-    [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
-    [fields.time, Boolean(snapshot.evento.horario), "eventDetails"],
+    [fields.moment, Boolean(snapshot.evento.momento), "moment", uiState.language === "en" ? "event moment" : "momento do evento"],
+    [fields.clientType, Boolean(snapshot.cliente.tipoCliente), "profile", uiState.language === "en" ? "client type" : "tipo de cliente"],
+    [fields.profile, Boolean(snapshot.evento.perfil), "profile", uiState.language === "en" ? "event occasion" : "ocasião do evento"],
+    [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation", uiState.language === "en" ? "recommended format" : "formato do evento"],
+    [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails", uiState.language === "en" ? "preferred period" : "período desejado"],
+    [fields.time, Boolean(snapshot.evento.horario), "eventDetails", uiState.language === "en" ? "arrival time" : "horário de chegada"],
   ];
   required.forEach(([field, valid, stepName]) => {
     setFieldValidity(field, valid);
@@ -1323,7 +1324,11 @@ function validateSnapshot(snapshot) {
 
   const firstInvalid = required.find(([, valid]) => !valid);
   if (firstInvalid) {
-    setStatus(current.messages.missingRequired, "error");
+    const fieldsList = required
+      .filter(([, valid]) => !valid)
+      .map(([, , , label]) => label)
+      .join(", ");
+    setStatus(current.messages.missingFields ? current.messages.missingFields(fieldsList) : current.messages.missingRequired, "error");
     scrollToStep(firstInvalid[2], true);
     return false;
   }
@@ -1415,7 +1420,7 @@ async function submitRequest(event) {
   fields.clientType.value = "";
   fields.profile.value = "";
   fields.eventType.value = "";
-  fields.dateIsFlexible.value = "";
+  fields.dateIsFlexible.value = "no";
   selectedProfiles.clear();
   document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
   clearAllStepValidity();
