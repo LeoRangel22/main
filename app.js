@@ -1604,13 +1604,36 @@ function formatPhoneForField(value) {
   return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 10)} ${digits.slice(10)}`.trim();
 }
 
+function normalizeHalfHourTime(value, fallback = "18:00") {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return fallback;
+  let hours = Math.min(23, Math.max(0, Number(match[1]) || 0));
+  const minutes = Math.min(59, Math.max(0, Number(match[2]) || 0));
+
+  let normalizedMinutes = 0;
+  if (minutes >= 15 && minutes < 45) {
+    normalizedMinutes = 30;
+  } else if (minutes >= 45) {
+    if (hours < 23) {
+      hours += 1;
+      normalizedMinutes = 0;
+    } else {
+      normalizedMinutes = 30;
+    }
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(normalizedMinutes).padStart(2, "0")}`;
+}
+
 function syncDateTimeFromFields() {
   if (!fields.eventDateTime) return;
   if (!fields.eventDate.value || !fields.eventTime.value) {
     fields.eventDateTime.value = "";
     return;
   }
-  fields.eventDateTime.value = `${fields.eventDate.value}T${fields.eventTime.value.slice(0, 5)}`;
+  const normalizedTime = normalizeHalfHourTime(fields.eventTime.value);
+  fields.eventTime.value = normalizedTime;
+  fields.eventDateTime.value = `${fields.eventDate.value}T${normalizedTime}`;
 }
 
 function syncFieldsFromDateTime() {
@@ -1623,7 +1646,12 @@ function syncFieldsFromDateTime() {
   }
   const [datePart, timePart] = value.split("T");
   fields.eventDate.value = datePart || "";
-  fields.eventTime.value = (timePart || "18:00").slice(0, 5);
+  const normalizedTime = normalizeHalfHourTime((timePart || "18:00").slice(0, 5));
+  fields.eventTime.value = normalizedTime;
+  const normalizedDateTime = fields.eventDate.value ? `${fields.eventDate.value}T${normalizedTime}` : "";
+  if (normalizedDateTime && fields.eventDateTime.value !== normalizedDateTime) {
+    fields.eventDateTime.value = normalizedDateTime;
+  }
 }
 
 function getSignalDefaultAmount(total) {
@@ -5723,6 +5751,7 @@ function bindEvents() {
     fields.clientPhone.value = formatPhoneForField(fields.clientPhone.value);
   });
 
+  fields.eventDateTime?.setAttribute("step", "1800");
   fields.eventDateTime?.addEventListener("input", () => {
     syncFieldsFromDateTime();
     renderAvailabilityAlert();
