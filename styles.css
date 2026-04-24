@@ -2097,7 +2097,9 @@ label.pipeline-status-control:focus-within select {
 
 .event-details-grid {
   align-items: start;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: 12px;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  row-gap: 12px;
 }
 
 .event-details-grid label {
@@ -2105,31 +2107,39 @@ label.pipeline-status-control:focus-within select {
 }
 
 .guest-count-heading {
-  align-items: baseline;
+  align-items: center;
   display: flex;
   gap: 12px;
   justify-content: space-between;
 }
 
 .event-details-grid label:nth-child(1),
-.event-details-grid label:nth-child(2),
+.event-details-grid label:nth-child(2) {
+  grid-column: span 3;
+}
+
 .event-details-grid label:nth-child(3) {
-  grid-column: span 2;
+  grid-column: span 4;
 }
 
 .event-details-grid label:nth-child(4) {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .event-details-grid label:nth-child(5),
 .event-details-grid label:nth-child(6),
 .event-details-grid label:nth-child(7) {
-  grid-column: span 1;
+  grid-column: span 2;
 }
 
 .event-details-grid input,
 .event-details-grid select {
   min-height: 48px;
+}
+
+.event-details-grid label:nth-child(4) small,
+.event-details-grid label:nth-child(6) small {
+  max-width: 26ch;
 }
 
 .field-span-2 {
