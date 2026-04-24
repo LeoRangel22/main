@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clientes | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260424-eventos-v72" />
+  </head>
+  <body class="auth-locked clients-page" data-page="clientes">
+    <main class="app-shell">
+      <section class="workspace" aria-label="Clientes e histórico">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
+            <div>
+              <p class="eyebrow">Embaixada Carioca</p>
+              <h1>Clientes</h1>
+            </div>
+          </div>
+          <div class="team-auth team-primary topbar-team-auth">
+            <div class="team-auth-heading">
+              <div class="section-heading">
+                <span>Equipe</span>
+                <h2>Acesso da equipe</h2>
+              </div>
+              <div class="team-email-presets" aria-label="E-mails autorizados">
+                <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
+                <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
+              </div>
+            </div>
+            <div class="login-row compact-login-row">
+              <label>
+                E-mail da equipe
+                <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" placeholder="eventos@embaixadacarioca.com.br" />
+              </label>
+              <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
+            </div>
+            <div class="team-session-row">
+              <div class="team-status" id="authStatus">Aguardando login.</div>
+              <button class="secondary is-hidden" id="logoutBtn" type="button">Sair</button>
+            </div>
+            <details class="magic-link-recovery topbar-recovery">
+              <summary>Problema com magic link ou conexão?</summary>
+              <p>Se o magic link abrir uma tela de "Site not found", cole aqui a URL completa da barra do navegador.</p>
+              <div class="login-row compact-login-row">
+                <label>
+                  URL do magic link
+                  <input id="magicLinkUrl" type="url" placeholder="Cole a URL completa do magic link" autocomplete="off" />
+                </label>
+                <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
+              </div>
+              <div class="supabase-config-grid compact-config-grid">
+                <label>
+                  Supabase URL
+                  <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
+                </label>
+                <label>
+                  Supabase anon key
+                  <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
+                </label>
+                <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+              </div>
+              <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+            </details>
+          </div>
+          <div class="topbar-actions">
+            <a class="button-link secondary" href="./index.html">Dashboard</a>
+            <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
+            <div class="topbar-action-row">
+              <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário Cliente</a>
+              <button class="primary copy-link-small" id="copyClientFormLinkBtn" type="button">Copiar link</button>
+            </div>
+          </div>
+        </header>
+
+        <section class="clients-hero-panel">
+          <div>
+            <span>Carteira comercial</span>
+            <strong>Consulta rápida de clientes, agências, empresas e histórico.</strong>
+          </div>
+          <p>Use esta página para recuperar contatos, entender relacionamento anterior e abrir o último lead ou proposta sem procurar no funil.</p>
+        </section>
+
+        <section class="client-command-center" aria-label="Busca e carteira de clientes">
+          <div class="global-search-panel">
+            <div class="command-heading">
+              <div>
+                <span>Busca global</span>
+                <strong>Cliente, empresa, telefone, data ou referência</strong>
+              </div>
+            </div>
+            <label class="global-search-box">
+              <input id="globalSearchInput" type="search" placeholder="Buscar Leonardo, agência, 30/04, EC-..." autocomplete="off" />
+            </label>
+            <div class="global-search-results" id="globalSearchResults">
+              <p>Digite para encontrar leads, propostas e clientes.</p>
+            </div>
+          </div>
+          <div class="client-registry-panel">
+            <div class="command-heading">
+              <div>
+                <span>Clientes</span>
+                <strong>Carteira automática e histórico por contato</strong>
+              </div>
+              <small id="clientRegistryMeta">Atualiza com o funil.</small>
+            </div>
+            <div class="client-directory-list" id="clientDirectory">
+              <p>Entre com Supabase para ver clientes.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./app.js?v=20260424-eventos-v72"></script>
+  </body>
+</html>
