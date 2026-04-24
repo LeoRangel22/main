@@ -376,7 +376,7 @@ const copy = {
       { value: "suggestion", label: "Me ajudem a definir", icon: "07" },
     ],
     profileSupport: "Essas respostas ajudam a equipe a priorizar o atendimento e montar uma proposta mais certeira.",
-    occasionSupport: "Ocasião do evento",
+    occasionSupport: "Ocasião do evento · marque uma ou mais opções",
     recommendationTitle: "Experiências mais indicadas",
     recommendationEmpty: "Escolha o momento e o perfil para ver as experiências mais indicadas.",
     recommendationReady: (moment) => `Baseado no que nos contou, já deixamos a opção mais indicada selecionada para ${moment.toLowerCase()}. Você pode trocar se preferir.`,
@@ -396,7 +396,7 @@ const copy = {
       preferences: "Preferências de alimentos e bebidas",
       notes: "Há algo importante que devemos considerar para montar sua proposta?",
       budget: "Faixa de investimento (Opcional)",
-      leadSource: "Como conheceu a Embaixada?",
+      leadSource: "Como conheceu a Embaixada? (Opcional)",
       name: "Nome completo",
       nameHelp: "Use nome e sobrenome. Ex.: Marina Costa.",
       email: "E-mail",
@@ -538,7 +538,7 @@ const copy = {
       { value: "suggestion", label: "Help me define it", icon: "07" },
     ],
     profileSupport: "These answers help our team prioritize the lead and build a sharper proposal.",
-    occasionSupport: "Event occasion",
+    occasionSupport: "Event occasion · choose one or more options",
     recommendationTitle: "Best experiences for your event",
     recommendationEmpty: "Choose the moment and profile to see the most suitable experiences.",
     recommendationReady: (moment) => `Based on what you shared, we have already selected the best fit for ${moment.toLowerCase()}. You can still change it if you prefer.`,
@@ -558,7 +558,7 @@ const copy = {
       preferences: "Food and beverage preferences",
       notes: "Is there anything important we should consider when preparing your proposal?",
       budget: "Budget range (Optional)",
-      leadSource: "How did you hear about Embaixada?",
+      leadSource: "How did you hear about Embaixada? (Optional)",
       name: "Full name",
       nameHelp: "Please include first and last name. Example: Marina Costa.",
       email: "E-mail",
@@ -1199,7 +1199,6 @@ function handleChoiceClick(event) {
 
   renderRecommendations();
   if (choiceGroup === "moment") scrollToStep("profile");
-  if (choiceGroup === "profile") scrollToStep("recommendation");
 }
 
 function handleFormatClick(event) {
@@ -1316,7 +1315,6 @@ function validateSnapshot(snapshot) {
     [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation"],
     [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails"],
     [fields.time, Boolean(snapshot.evento.horario), "eventDetails"],
-    [fields.leadSource, Boolean(snapshot.qualificacao.origem), "contact"],
   ];
   required.forEach(([field, valid, stepName]) => {
     setFieldValidity(field, valid);
