@@ -68,11 +68,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Supabase não configurado na função." }, 500);
     }
 
-    if (!instanceId || !zapiToken || !clientToken) {
+    if (!instanceId || !zapiToken) {
       return jsonResponse(
         {
           ok: false,
-          message: "Z-API não configurada. Defina ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN nos secrets do Supabase.",
+          message: "Z-API não configurada. Defina ZAPI_INSTANCE_ID e ZAPI_TOKEN nos secrets do Supabase.",
         },
         500,
       );
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Client-Token": clientToken,
+        ...(clientToken ? { "Client-Token": clientToken } : {}),
       },
       body: JSON.stringify({ phone, message }),
     });
