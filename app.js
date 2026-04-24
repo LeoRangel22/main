@@ -1996,10 +1996,10 @@ function renderPriceList() {
         <label class="price-row">
           <input type="checkbox" data-select-id="${escapeHtml(item.id)}" ${checked} />
           <span class="price-row-body">
+            <span class="price-category-badge">${escapeHtml(item.tipoEvento)}</span>
             <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
             <span class="price-name">
               <strong>${escapeHtml(item.nome)}</strong>
-              <span class="chip">${escapeHtml(item.tipoEvento)}</span>
               ${item.idioma ? `<span class="chip">${escapeHtml(item.idioma)}</span>` : ""}
               <span class="chip">${escapeHtml(item.priority === "alta" ? "Prioridade alta" : item.priority === "baixa" ? "Prioridade baixa" : "Prioridade média")}</span>
             </span>

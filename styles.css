@@ -2395,6 +2395,23 @@ textarea {
   gap: 6px;
 }
 
+.price-category-badge {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.08);
+  border-left: 4px solid var(--verde);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  min-height: 30px;
+  padding: 0 10px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
 .price-select-indicator {
   align-items: center;
   background: rgba(24, 58, 45, 0.06);
@@ -2418,6 +2435,11 @@ textarea {
 .price-row:has(input:checked) .price-select-indicator {
   background: var(--verde-escuro);
   color: var(--white);
+}
+
+.price-row:has(input:checked) .price-category-badge {
+  background: rgba(24, 58, 45, 0.12);
+  border-left-color: var(--amarelo);
 }
 
 .price-name {
