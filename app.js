@@ -2172,6 +2172,7 @@ function getProposalReviewItems() {
   const guests = getGuestCount();
   const allowedCategories = getAllowedCategoriesForEvent(eventType);
   const requiredCategory = getEventCategoryFromRequest(eventType);
+  const availability = getAvailabilityReviewStatus();
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
     selected.length > 0 &&
@@ -2197,6 +2198,13 @@ function getProposalReviewItems() {
       label: "Data e horário",
       status: eventDate && eventTime ? "ok" : "error",
       detail: eventDate && eventTime ? `${formatDateFromIso(eventDate)} · ${eventTime}` : "Defina data e horário de chegada.",
+      target: "client",
+    },
+    {
+      id: "availability",
+      label: "Agenda",
+      status: availability.status,
+      detail: availability.detail,
       target: "client",
     },
     {
@@ -2325,6 +2333,30 @@ function getAvailabilityConflicts() {
       severity: operationStatuses.has(normalizeProposalStatus(item.status)) ? "danger" : "warning",
     }))
     .sort((a, b) => (a.severity === "danger" ? -1 : 1) - (b.severity === "danger" ? -1 : 1));
+}
+
+function getAvailabilityReviewStatus() {
+  const draft = getDraftAvailabilityWindow();
+  if (!draft) {
+    return {
+      status: "error",
+      detail: "Informe data e horário para checar a agenda interna.",
+    };
+  }
+  const conflicts = getAvailabilityConflicts();
+  if (!conflicts.length) {
+    return {
+      status: "ok",
+      detail: "Sem conflito cadastrado no funil.",
+    };
+  }
+  const hasSoldConflict = conflicts.some((item) => item.severity === "danger");
+  return {
+    status: hasSoldConflict ? "error" : "warning",
+    detail: hasSoldConflict
+      ? "Há evento vendido sobreposto. Ajuste ou confirme internamente antes de enviar."
+      : `${conflicts.length} lead/proposta no mesmo horário. Confirme disponibilidade antes de avançar.`,
+  };
 }
 
 function renderAvailabilityAlert() {
@@ -2530,6 +2562,59 @@ function setExclusiveSelection(ids, selectedId) {
   if (selectedId) state.selectedIds.add(selectedId);
 }
 
+const smartEventTemplates = {
+  coquetel: {
+    label: "Coquetel completo",
+    ids: ["coquetel-carioca", "brasileiro-ii"],
+    status:
+      "Template sugerido: Coquetel Carioca + Brasileiro II. Se o cliente quiser experiência interativa, adicione Workshop de Caipirinha.",
+  },
+  workshop: {
+    label: "Workshop PT",
+    ids: ["workshop-caipirinha-pt"],
+    status: "Template sugerido: Workshop de Caipirinha em português. Troque para EN se o grupo for internacional.",
+  },
+  cafe: {
+    label: "Café da Manhã Clássico",
+    ids: ["cafe-classico"],
+    status: "Template sugerido: Café da Manhã Clássico. Para grupos premium ou reuniões mais longas, avalie o Completo.",
+  },
+  almoco: {
+    label: "Almoço Carioca com bebida livre",
+    ids: ["almoco-carioca-bebida-livre"],
+    status: "Template sugerido: Almoço Carioca com bebida livre. Para proposta mais enxuta, troque para 2 bebidas por pessoa.",
+  },
+  welcome: {
+    label: "Welcome Drink Caipirinha",
+    ids: ["welcome-caipirinha"],
+    status: "Template sugerido: Welcome Drink Caipirinha. Espumante e champagne ficam disponíveis como upgrade.",
+  },
+};
+
+function itemExists(itemId) {
+  return state.prices.some((item) => item.id === itemId && item.active !== false);
+}
+
+function applySmartTemplateForEvent(eventKey) {
+  const template = smartEventTemplates[eventKey];
+  if (!template) return "";
+
+  state.selectedIds.clear();
+
+  const appliedIds = template.ids.filter(itemExists);
+  appliedIds.forEach((id) => state.selectedIds.add(id));
+
+  state.guided.beverageId = appliedIds.find((id) => ["coquetel-caipirinha", "coquetel-carioca"].includes(id)) || "";
+  state.guided.foodId = appliedIds.find((id) => ["brasileiro-i", "brasileiro-ii"].includes(id)) || "";
+  state.guided.workshopId = appliedIds.find((id) => ["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(id)) || "";
+
+  setChoiceState(nodes.flowBeverageOptions, state.guided.beverageId, "selectPackage");
+  setChoiceState(nodes.flowFoodOptions, state.guided.foodId || (eventKey === "coquetel" ? "" : ""), "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, state.guided.workshopId, "selectPackage");
+
+  return appliedIds.length ? template.status : "";
+}
+
 function scrollToItems() {
   nodes.priceList?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -2643,9 +2728,8 @@ function applyGuidedEvent(eventKey) {
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
   setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
 
-  if (eventKey !== "coquetel") {
-    state.selectedIds.clear();
-  }
+  const templateStatus = applySmartTemplateForEvent(eventKey);
+  if (templateStatus && nodes.flowStatus) nodes.flowStatus.textContent = templateStatus;
 
   saveSelectedIds();
   renderAll();
@@ -2688,9 +2772,9 @@ function applyGuidedPackage(packageId) {
 
 function clearGuidedFlow() {
   state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
-  ["coquetel-caipirinha", "coquetel-carioca", "brasileiro-i", "brasileiro-ii", "workshop-caipirinha-pt", "workshop-caipirinha-en"].forEach((id) =>
-    state.selectedIds.delete(id),
-  );
+  Object.values(smartEventTemplates)
+    .flatMap((item) => item.ids)
+    .forEach((id) => state.selectedIds.delete(id));
   fields.eventType.value = "";
   fields.categoryFilter.value = "";
   fields.searchPrice.value = "";
@@ -3782,6 +3866,15 @@ function getLeadAgeInfo(item) {
   return { label, level };
 }
 
+function getProposalFollowUpInfo(item) {
+  if (item.kind !== "proposal" || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
+  const hours = getHoursSince(item.updatedAt || item.createdAt);
+  if (hours < 24) return null;
+  const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
+  const label = hours >= 72 ? `Follow-up urgente · ${hours}h` : hours >= 48 ? `Follow-up atrasado · ${hours}h` : `Follow-up hoje · ${hours}h`;
+  return { label, level };
+}
+
 function getDaysUntilEvent(item) {
   const date = item.eventDate || parseLocalIsoDate(item.date || "");
   if (!date) return null;
@@ -3924,6 +4017,7 @@ function getPipelineQuickFilterDefinitions() {
           const age = getLeadAgeInfo(item);
           return age && ["warning", "danger", "critical"].includes(age.level);
         }
+        if (getProposalFollowUpInfo(item)) return true;
         if (item.clientResponse === "confirmar" && ["proposta_enviada", "negociacao"].includes(status)) return true;
         return isSoldReportItem(item) && item.eventDate && item.eventDate >= today && item.eventDate <= addDays(today, 2);
       },
@@ -4233,11 +4327,12 @@ function getActionTasks(items = getPipelineItems()) {
     }
 
     if (item.kind === "proposal" && status === "proposta_enviada") {
+      const followUp = getProposalFollowUpInfo(item);
       tasks.push({
         ...base,
         title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Follow-up da proposta",
-        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : `Sem resposta há ${hours || 0}h`,
-        priority: item.clientResponse === "confirmar" ? 92 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
+        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : followUp?.label || `Sem resposta há ${hours || 0}h`,
+        priority: item.clientResponse === "confirmar" ? 92 : hours >= 72 ? 90 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
         track: item.clientResponse === "confirmar" ? "Venda" : "Comercial",
       });
     }
@@ -4574,6 +4669,10 @@ function renderPipelineCard(item) {
   const leadAgeBadge = leadAge
     ? `<small class="lead-age-badge lead-age-${escapeHtml(leadAge.level)}">${escapeHtml(leadAge.label)}</small>`
     : "";
+  const followUp = getProposalFollowUpInfo(item);
+  const followUpBadge = followUp
+    ? `<small class="follow-up-badge follow-up-${escapeHtml(followUp.level)}">${escapeHtml(followUp.label)}</small>`
+    : "";
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
@@ -4625,6 +4724,7 @@ function renderPipelineCard(item) {
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
         ${leadAgeBadge}
+        ${followUpBadge}
         ${topAction}
       </div>
       <div class="pipeline-card-event-row">
@@ -4842,8 +4942,11 @@ async function applyQuoteRequest(requestId) {
   const eventCategory = getEventCategoryFromRequest(request.tipo_evento);
   state.guided.event = guidedKey;
   fields.categoryFilter.value = eventCategory;
+  const templateStatus = applySmartTemplateForEvent(guidedKey);
   if (nodes.flowStatus) {
-    nodes.flowStatus.textContent = eventCategory
+    nodes.flowStatus.textContent = templateStatus
+      ? `${templateStatus} Revise data, horário, pax e observações antes de enviar.`
+      : eventCategory
       ? `${eventCategory} carregado do formulário. Confira cardápio, pax, data e horário antes de enviar.`
       : "Lead carregado do formulário. Escolha o formato e confira os pontos essenciais.";
   }
