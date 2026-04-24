@@ -641,12 +641,15 @@ const nodes = {
   periodMetrics: document.querySelector("#periodMetrics"),
   actionList: document.querySelector("#actionList"),
   actionCenterMeta: document.querySelector("#actionCenterMeta"),
+  operationsAgenda: document.querySelector("#operationsAgenda"),
+  operationsAgendaMeta: document.querySelector("#operationsAgendaMeta"),
   pipelineQuickFilters: document.querySelector("#pipelineQuickFilters"),
   quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   availabilityAlert: document.querySelector("#availabilityAlert"),
+  proposalNextStep: document.querySelector("#proposalNextStep"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
   commercialTimeline: document.querySelector("#commercialTimeline"),
@@ -984,6 +987,221 @@ function getDisplayCommercialHistory(proposal) {
   return history.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 12);
 }
 
+function getLifecycleStages() {
+  return funnelStages.filter((stage) => ["commercial", "operation"].includes(stage.row));
+}
+
+function getLifecycleStageIndex(stageId) {
+  return getLifecycleStages().findIndex((stage) => stage.id === stageId);
+}
+
+function getLifecycleStepCopy(stageId) {
+  const copy = {
+    lead_recebido: "Lead recebido e contexto inicial capturado.",
+    proposta_enviada: "Proposta pronta para envio e acompanhamento.",
+    negociacao: "Ajustes comerciais e retorno do cliente em andamento.",
+    confirmado: "Sinal registrado e reserva confirmada.",
+    pagamento_final: "Saldo final alinhado ou aguardando confirmação.",
+    planejamento: "Operação revisando cardápio, extras e responsáveis.",
+    evento_proximo: "Evento na janela de execução de hoje ou amanhã.",
+    pos_venda: "Evento concluído e relacionamento em pós-venda.",
+  };
+  return copy[stageId] || "Etapa em andamento.";
+}
+
+function getHistoryEntryForStage(proposal, stageId) {
+  const history = getDisplayCommercialHistory(proposal);
+  const labels = {
+    proposta_enviada: "Proposta enviada",
+    negociacao: "Negociação",
+    confirmado: "Sinal registrado",
+    pagamento_final: "Pagamento restante registrado",
+    planejamento: "Etapa alterada",
+    evento_proximo: "Etapa alterada",
+    pos_venda: "Etapa alterada",
+  };
+  const label = labels[stageId];
+  if (!label) return null;
+  return history.find((entry) => {
+    const title = String(entry.title || "").toLowerCase();
+    const detail = String(entry.detail || "").toLowerCase();
+    if (stageId === "planejamento") return title.includes("etapa alterada") && detail.includes("planejamento");
+    if (stageId === "evento_proximo") return title.includes("etapa alterada") && detail.includes("eventos hoje e amanhã");
+    if (stageId === "pos_venda") return title.includes("etapa alterada") && detail.includes("pós-venda");
+    return title.includes(label.toLowerCase()) || detail.includes(label.toLowerCase());
+  });
+}
+
+function getLifecycleStepTimestamp(proposal, stageId, stateLabel) {
+  const snapshot = proposal.snapshot || {};
+  if (stageId === "lead_recebido") return proposal.created_at;
+  if (stageId === "confirmado") {
+    return snapshot.pagamentoSinal?.registradoEm || snapshot.pagamentoSinal?.data || getHistoryEntryForStage(proposal, stageId)?.at || "";
+  }
+  if (stageId === "pagamento_final") {
+    return (
+      snapshot.pagamentoRestante?.registradoEm ||
+      snapshot.pagamentoRestante?.data ||
+      getHistoryEntryForStage(proposal, stageId)?.at ||
+      (stateLabel !== "upcoming" ? proposal.updated_at : "")
+    );
+  }
+  return getHistoryEntryForStage(proposal, stageId)?.at || (stateLabel !== "upcoming" ? proposal.updated_at : "");
+}
+
+function getProposalLifecycle(proposal) {
+  if (!proposal) return [];
+  const currentStage = getPipelineStage(proposal.status);
+  const currentIndex = getLifecycleStageIndex(currentStage);
+  return getLifecycleStages().map((stage, index) => {
+    const stateLabel = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming";
+    const timestamp = getLifecycleStepTimestamp(proposal, stage.id, stateLabel);
+    return {
+      id: stage.id,
+      title: getProposalStatusLabel(stage.statuses[0]),
+      detail: getLifecycleStepCopy(stage.id),
+      state: stateLabel,
+      timestamp,
+    };
+  });
+}
+
+function hasIncompleteChecklist(snapshot = {}) {
+  const progress = getChecklistProgress(snapshot);
+  return progress.done < progress.total;
+}
+
+function getActiveQuoteRequest() {
+  return state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId) || null;
+}
+
+function getProposalNextStepConfig() {
+  const proposal = getActiveProposal();
+  const request = getActiveQuoteRequest();
+  if (proposal) {
+    const status = normalizeProposalStatus(proposal.status);
+    const progress = getChecklistProgress(proposal.snapshot || {});
+    const hasSignal = Boolean(proposal.snapshot?.pagamentoSinal);
+    const hasRemaining = Boolean(proposal.snapshot?.pagamentoRestante);
+
+    if (status === "proposta_enviada" && proposal.clientResponse === "confirmar") {
+      return {
+        tone: "success",
+        title: "Registrar sinal e travar a reserva",
+        note: "O cliente já aprovou a proposta. O próximo movimento é registrar o sinal para tirar o evento da zona comercial e confirmar a data.",
+        action: "mark_signal",
+        actionLabel: "Registrar sinal",
+      };
+    }
+
+    if (status === "proposta_enviada") {
+      return {
+        tone: "commercial",
+        title: "Enviar o link público e acompanhar retorno",
+        note: "A proposta já está pronta. Gere o link, envie ao cliente e acompanhe a resposta nas próximas horas para não esfriar o lead.",
+        action: "copy_link",
+        actionLabel: "Copiar link público",
+      };
+    }
+
+    if (status === "negociacao") {
+      return {
+        tone: "warning",
+        title: "Refinar a proposta e reenviar",
+        note: proposal.clientResponse === "alteracao"
+          ? "O cliente pediu ajuste. Revise itens, data, horário ou pax e gere uma nova rodada com rapidez."
+          : "A negociação está em andamento. Vale revisar itens e reforçar os próximos passos comerciais.",
+        action: "focus_items",
+        actionLabel: "Ir para itens",
+      };
+    }
+
+    if (status === "confirmado" && !hasRemaining) {
+      return {
+        tone: "success",
+        title: "Cobrar e registrar o pagamento restante",
+        note: "O sinal já entrou. Agora vale alinhar o saldo final para deixar o evento pronto para o planejamento.",
+        action: "mark_remaining",
+        actionLabel: "Registrar saldo",
+      };
+    }
+
+    if (["pagamento_final", "planejamento"].includes(status) && hasIncompleteChecklist(proposal.snapshot || {})) {
+      return {
+        tone: "operation",
+        title: "Fechar o checklist operacional",
+        note: `${progress.done}/${progress.total} itens concluídos. Revise responsáveis, extras, operação e observações críticas antes da execução.`,
+        action: "focus_checklist",
+        actionLabel: "Ver checklist",
+      };
+    }
+
+    if (status === "evento_proximo") {
+      return {
+        tone: "operation",
+        title: "Revisar detalhes finais da execução",
+        note: "O evento está na janela crítica de hoje ou amanhã. Faça uma última leitura operacional e confirme qualquer ponto sensível.",
+        action: "focus_checklist",
+        actionLabel: "Revisar operação",
+      };
+    }
+
+    if (status === "pos_venda") {
+      return {
+        tone: "neutral",
+        title: "Registrar follow-up e próximos passos",
+        note: "Evento entregue. Vale registrar aprendizados, retorno do cliente e oportunidade de relacionamento.",
+        action: "focus_notes",
+        actionLabel: "Ir para observações",
+      };
+    }
+
+    if (!hasSignal) {
+      return {
+        tone: "commercial",
+        title: "Salvar proposta e avançar no funil",
+        note: "Deixe a proposta salva com o status correto para o time não perder histórico nem contexto comercial.",
+        action: "save_proposal",
+        actionLabel: "Salvar proposta",
+      };
+    }
+  }
+
+  const hasDraft = fields.clientName.value.trim() || fields.eventType.value.trim() || state.selectedIds.size;
+  if (request || hasDraft) {
+    return {
+      tone: "commercial",
+      title: "Salvar proposta enviada e começar o acompanhamento",
+      note: "Você já está com os dados do lead ou com um rascunho montado. Salve a proposta para entrar no funil e seguir com envio e retorno.",
+      action: "save_proposal",
+      actionLabel: "Salvar proposta",
+    };
+  }
+
+  return null;
+}
+
+function renderProposalNextStep() {
+  if (!nodes.proposalNextStep) return;
+  const config = getProposalNextStepConfig();
+  if (!config) {
+    nodes.proposalNextStep.className = "proposal-next-step is-hidden";
+    nodes.proposalNextStep.innerHTML = "";
+    return;
+  }
+  nodes.proposalNextStep.className = `proposal-next-step proposal-next-step-${config.tone}`;
+  nodes.proposalNextStep.innerHTML = `
+    <div class="proposal-next-step-heading">
+      <span>Próximo passo sugerido</span>
+      <strong>${escapeHtml(config.title)}</strong>
+    </div>
+    <div class="proposal-next-step-body">
+      <p>${escapeHtml(config.note)}</p>
+      <button class="secondary" type="button" data-next-step-action="${escapeHtml(config.action)}">${escapeHtml(config.actionLabel)}</button>
+    </div>
+  `;
+}
+
 function renderCommercialTimeline(proposal = getActiveProposal()) {
   if (!nodes.commercialTimeline) return;
   if (!proposal) {
@@ -993,11 +1211,27 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
   }
 
   const history = getDisplayCommercialHistory(proposal);
+  const lifecycle = getProposalLifecycle(proposal);
   nodes.commercialTimeline.classList.remove("is-hidden");
   nodes.commercialTimeline.innerHTML = `
     <div class="timeline-heading">
       <span>Histórico comercial</span>
       <strong>${history.length || 0} registro(s)</strong>
+    </div>
+    <div class="timeline-progress">
+      ${lifecycle
+        .map(
+          (step) => `
+            <article class="timeline-step is-${escapeHtml(step.state)}">
+              <span>${escapeHtml(step.title)}</span>
+              <strong>${
+                step.state === "done" ? "Concluído" : step.state === "current" ? "Etapa atual" : "Próxima etapa"
+              }</strong>
+              <small>${escapeHtml(step.timestamp ? formatCommercialHistoryDate(step.timestamp) : step.detail)}</small>
+            </article>
+          `,
+        )
+        .join("")}
     </div>
     <div class="timeline-list">
       ${
@@ -1095,6 +1329,7 @@ async function updateOperationalChecklist(checklistId, checked) {
   upsertProposalState(data);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderProposalNextStep();
   renderPipeline();
   showToast("Checklist atualizado.");
 }
@@ -3329,6 +3564,199 @@ function renderActionTasks(items = getPipelineItems()) {
     .join("");
 }
 
+function getAgendaEventLabel(item) {
+  const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
+  const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
+  return `${dateLabel} · ${timeLabel} · ${item.guests || 0} pax`;
+}
+
+function getOperationalAgendaCollections(items = getPipelineItems()) {
+  const today = startOfDay(new Date());
+  const tomorrowLimit = addDays(today, 2);
+  const agendaItems = items
+    .map((item) => ({ ...item, eventDate: parseLocalIsoDate(item.date) }))
+    .filter((item) => item.eventDate);
+
+  const upcoming = agendaItems
+    .filter((item) => item.kind === "proposal" && isSoldReportItem(item) && item.eventDate >= today && item.eventDate < tomorrowLimit)
+    .sort((a, b) => {
+      const dateDiff = a.eventDate - b.eventDate;
+      if (dateDiff) return dateDiff;
+      return (timeToMinutes(String(a.time).slice(0, 5)) || 0) - (timeToMinutes(String(b.time).slice(0, 5)) || 0);
+    });
+
+  const planningQueue = agendaItems
+    .filter((item) => item.kind === "proposal" && ["confirmado", "pagamento_final", "planejamento"].includes(getReportStatus(item)))
+    .sort((a, b) => {
+      const dateDiff = a.eventDate - b.eventDate;
+      if (dateDiff) return dateDiff;
+      return (timeToMinutes(String(a.time).slice(0, 5)) || 0) - (timeToMinutes(String(b.time).slice(0, 5)) || 0);
+    });
+
+  const scheduleItems = agendaItems.filter((item) => item.time && isAvailabilityRelevantStatus(item.status));
+  const conflictPairs = [];
+  for (let index = 0; index < scheduleItems.length; index += 1) {
+    for (let nextIndex = index + 1; nextIndex < scheduleItems.length; nextIndex += 1) {
+      const first = scheduleItems[index];
+      const second = scheduleItems[nextIndex];
+      if (first.date !== second.date) continue;
+      const firstStart = timeToMinutes(String(first.time).slice(0, 5));
+      const secondStart = timeToMinutes(String(second.time).slice(0, 5));
+      if (firstStart === null || secondStart === null) continue;
+      const firstEnd = firstStart + (Number(first.duration) || 2) * 60;
+      const secondEnd = secondStart + (Number(second.duration) || 2) * 60;
+      if (!rangesOverlap(firstStart, firstEnd, secondStart, secondEnd)) continue;
+      if (first.id === second.id && first.kind === second.kind) continue;
+      const hasSoldConflict =
+        operationStatuses.has(normalizeProposalStatus(first.status)) || operationStatuses.has(normalizeProposalStatus(second.status));
+      conflictPairs.push({
+        id: `${first.kind}-${first.id}-${second.kind}-${second.id}`,
+        date: first.date,
+        time: first.time,
+        severity: hasSoldConflict ? "danger" : "warning",
+        primary: first.kind === "proposal" ? first : second,
+        note: `${first.name} e ${second.name} se sobrepõem no mesmo horário.`,
+      });
+    }
+  }
+
+  const loadByDate = agendaItems
+    .filter((item) => item.kind === "proposal" && isAvailabilityRelevantStatus(item.status))
+    .reduce((accumulator, item) => {
+      accumulator[item.date] = (accumulator[item.date] || 0) + 1;
+      return accumulator;
+    }, {});
+  const busiestDay = Object.entries(loadByDate).sort((a, b) => b[1] - a[1])[0];
+
+  return {
+    upcoming,
+    planningQueue,
+    conflicts: conflictPairs.slice(0, 6),
+    busiestDay: busiestDay ? `${formatDateFromIso(busiestDay[0])} com ${busiestDay[1]} item(ns)` : "Sem concentração crítica na agenda.",
+  };
+}
+
+function renderAgendaItemCard(item, options = {}) {
+  const isProposal = item.kind === "proposal";
+  const actionButton = isProposal
+    ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
+    : `<button class="secondary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+  return `
+    <article class="agenda-event-card${options.className ? ` ${options.className}` : ""}">
+      <div class="agenda-event-topline">
+        <span>${escapeHtml(options.kicker || getProposalStatusLabel(item.status))}</span>
+        <b>${escapeHtml(options.value || (item.total ? formatMoney(item.total) : getAgendaEventLabel(item)))}</b>
+      </div>
+      <strong>${escapeHtml(item.name || "Cliente")}</strong>
+      <small>${escapeHtml(getAgendaEventLabel(item))}</small>
+      <p>${escapeHtml(options.note || item.type || "Evento")}</p>
+      <div class="agenda-event-footer">
+        <em>${escapeHtml(options.footer || item.type || "Evento")}</em>
+        ${actionButton}
+      </div>
+    </article>
+  `;
+}
+
+function renderConflictCard(conflict) {
+  return `
+    <article class="agenda-event-card agenda-conflict-card agenda-conflict-${escapeHtml(conflict.severity)}">
+      <div class="agenda-event-topline">
+        <span>${escapeHtml(conflict.severity === "danger" ? "Conflito com venda" : "Disputa de agenda")}</span>
+        <b>${escapeHtml(`${formatDateFromIso(conflict.date)} · ${String(conflict.time).slice(0, 5)}`)}</b>
+      </div>
+      <strong>${escapeHtml(conflict.primary?.name || "Evento")}</strong>
+      <small>${escapeHtml(conflict.primary?.type || "Evento")}</small>
+      <p>${escapeHtml(conflict.note)}</p>
+      <div class="agenda-event-footer">
+        <em>${escapeHtml(conflict.primary?.status ? getProposalStatusLabel(conflict.primary.status) : "Agenda")}</em>
+        ${
+          conflict.primary?.kind === "proposal"
+            ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(conflict.primary.id)}">Abrir</button>`
+            : `<button class="secondary" type="button" data-use-request="${escapeHtml(conflict.primary.id)}">Abrir</button>`
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderOperationsAgenda(items = getPipelineItems()) {
+  if (!nodes.operationsAgenda) return;
+  if (!state.supabase) {
+    nodes.operationsAgenda.innerHTML = "<p>Entre com Supabase para ver a agenda operacional.</p>";
+    if (nodes.operationsAgendaMeta) nodes.operationsAgendaMeta.textContent = "Atualiza com o funil.";
+    return;
+  }
+  if (!state.session) {
+    nodes.operationsAgenda.innerHTML = "<p>Entre com o e-mail da equipe para ver a agenda operacional.</p>";
+    if (nodes.operationsAgendaMeta) nodes.operationsAgendaMeta.textContent = "Atualiza com o funil.";
+    return;
+  }
+
+  const { upcoming, planningQueue, conflicts, busiestDay } = getOperationalAgendaCollections(items);
+  if (nodes.operationsAgendaMeta) {
+    nodes.operationsAgendaMeta.textContent = `${upcoming.length} próximo(s) · ${planningQueue.length} em preparação · ${conflicts.length} conflito(s) · ${busiestDay}`;
+  }
+
+  const columns = [
+    {
+      title: "Hoje e amanhã",
+      subtitle: "Execução na janela crítica",
+      items: upcoming.slice(0, 4),
+      empty: "Nenhum evento em execução imediata.",
+      render: (item) =>
+        renderAgendaItemCard(item, {
+          kicker: item.eventDate && startOfDay(item.eventDate).getTime() === startOfDay(new Date()).getTime() ? "Hoje" : "Amanhã",
+          value: item.total ? formatMoney(item.total) : getAgendaEventLabel(item),
+          note: `${item.type} · ${item.guests || 0} pax`,
+          footer: getProposalStatusLabel(item.status),
+        }),
+    },
+    {
+      title: "Aguardando planejamento",
+      subtitle: "Sinal, saldo e checklist",
+      items: planningQueue.slice(0, 5),
+      empty: "Sem fila operacional agora.",
+      render: (item) => {
+        const progress = getChecklistProgress(item.snapshot || {});
+        return renderAgendaItemCard(item, {
+          kicker: getProposalStatusLabel(item.status),
+          value: item.total ? formatMoney(item.total) : getAgendaEventLabel(item),
+          note:
+            ["confirmado", "pagamento_final"].includes(getReportStatus(item))
+              ? "Falta alinhar saldo final ou liberar a operação."
+              : `${progress.done}/${progress.total} itens do checklist concluídos.`,
+          footer: item.type,
+        });
+      },
+    },
+    {
+      title: "Conflitos e carga",
+      subtitle: busiestDay,
+      items: conflicts,
+      empty: "Sem conflito de horário no radar.",
+      render: renderConflictCard,
+    },
+  ];
+
+  nodes.operationsAgenda.innerHTML = columns
+    .map(
+      (column) => `
+        <section class="operations-agenda-column">
+          <header>
+            <span>${escapeHtml(column.title)}</span>
+            <strong>${column.items.length}</strong>
+          </header>
+          <small>${escapeHtml(column.subtitle)}</small>
+          <div class="operations-agenda-list">
+            ${column.items.length ? column.items.map((item) => column.render(item)).join("") : `<p class="agenda-empty">${escapeHtml(column.empty)}</p>`}
+          </div>
+        </section>
+      `,
+    )
+    .join("");
+}
+
 function getClientResponseLabel(response) {
   const labels = {
     confirmar: "Cliente aprovou a proposta",
@@ -3454,6 +3882,7 @@ function renderPipeline() {
   if (!nodes.pipelineBoard) return;
   if (!state.supabase) {
     renderPipelineQuickFilters([]);
+    renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     renderPipelineMetrics([]);
     return;
@@ -3461,6 +3890,7 @@ function renderPipeline() {
 
   if (!state.session) {
     renderPipelineQuickFilters([]);
+    renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
     renderPipelineMetrics([]);
     return;
@@ -3470,6 +3900,7 @@ function renderPipeline() {
   const filteredItems = getFilteredPipelineItems(items);
   renderPipelineQuickFilters(items);
   renderPipelineMetrics(items);
+  renderOperationsAgenda(items);
   renderAvailabilityAlert();
 
   const rows = [
@@ -3711,7 +4142,10 @@ async function cancelPipelineItem(kind, id) {
   upsertProposalState(data);
   renderHistory();
   renderPipeline();
-  if (state.activeProposalId === id) renderCommercialTimeline(data);
+  if (state.activeProposalId === id) {
+    renderCommercialTimeline(data);
+    renderProposalNextStep();
+  }
   showToast("Cancelamento registrado.");
 }
 
@@ -3809,6 +4243,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
     renderOperationalChecklist(data);
     renderCommercialTimeline(data);
+    renderProposalNextStep();
   }
   showToast(
     nextStatus === "confirmado"
@@ -4151,6 +4586,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderProposalNextStep();
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
@@ -4181,7 +4617,10 @@ async function loadProposalHistory() {
   state.proposals = data || [];
   renderHistory();
   renderPipeline();
-  if (state.activeProposalId) renderCommercialTimeline(getActiveProposal());
+  if (state.activeProposalId) {
+    renderCommercialTimeline(getActiveProposal());
+    renderProposalNextStep();
+  }
   await applyPendingDashboardTarget();
 }
 
@@ -4206,6 +4645,7 @@ function applyProposalSnapshot(snapshot) {
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
+  renderProposalNextStep();
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
   renderOperationalChecklist(getActiveProposal());
   renderCommercialTimeline(getActiveProposal());
@@ -4415,6 +4855,7 @@ function renderAll() {
   renderPricesTable();
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
+  renderProposalNextStep();
   renderSummary();
   renderCalculation();
   renderProposal();
@@ -4452,6 +4893,7 @@ function startNewProposal() {
   fields.notes.value = "";
   fields.searchPrice.value = "";
   fields.categoryFilter.value = "";
+  renderProposalNextStep();
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
@@ -4544,6 +4986,36 @@ async function copyClientFormLink() {
   } catch (error) {
     console.warn("Falha ao copiar link do formulario.", error);
     showToast("Não foi possível copiar automaticamente.");
+  }
+}
+
+async function runProposalNextStepAction(action) {
+  const activeProposal = getActiveProposal();
+  switch (action) {
+    case "save_proposal":
+      await saveCurrentProposal(activeProposal?.status || "proposta_enviada");
+      break;
+    case "copy_link":
+      await copyProposalLink();
+      break;
+    case "mark_signal":
+      if (activeProposal) await updateProposalStatus(activeProposal.id, "confirmado");
+      break;
+    case "mark_remaining":
+      if (activeProposal) await updateProposalStatus(activeProposal.id, "planejamento");
+      break;
+    case "focus_items":
+      scrollToItems();
+      break;
+    case "focus_checklist":
+      nodes.operationalChecklist?.scrollIntoView({ behavior: "smooth", block: "start" });
+      break;
+    case "focus_notes":
+      fields.notes?.scrollIntoView({ behavior: "smooth", block: "center" });
+      fields.notes?.focus();
+      break;
+    default:
+      break;
   }
 }
 
@@ -4790,11 +5262,25 @@ function bindEvents() {
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
   });
+  nodes.operationsAgenda?.addEventListener("click", (event) => {
+    const proposalButton = event.target.closest("button[data-proposal-id]");
+    if (proposalButton) {
+      openSavedProposal(proposalButton.dataset.proposalId);
+      return;
+    }
+    const requestButton = event.target.closest("button[data-use-request]");
+    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
   nodes.pipelineQuickFilters?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-pipeline-filter]");
     if (!button) return;
     state.activePipelineFilter = button.dataset.pipelineFilter || "all";
     renderPipeline();
+  });
+  nodes.proposalNextStep?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-next-step-action]");
+    if (!button) return;
+    runProposalNextStepAction(button.dataset.nextStepAction);
   });
   nodes.operationalChecklist?.addEventListener("change", (event) => {
     const checkbox = event.target.closest("input[data-checklist-id]");

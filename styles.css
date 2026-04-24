@@ -150,6 +150,7 @@ summary:focus-visible {
 .auth-locked .owner-metrics,
 .auth-locked .period-metrics,
 .auth-locked .action-center,
+.auth-locked .operations-agenda,
 .auth-locked .reports-panel,
 .auth-locked .pipeline-panel,
 .auth-locked .help-panel,
@@ -892,6 +893,163 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.operations-agenda {
+  background: var(--panel);
+  border: 1px solid rgba(24, 58, 45, 0.13);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.operations-agenda-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.operations-agenda-heading div {
+  display: grid;
+  gap: 2px;
+}
+
+.operations-agenda-heading span {
+  color: var(--amarelo);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.operations-agenda-heading strong {
+  color: var(--verde-escuro);
+  font-size: 1rem;
+}
+
+.operations-agenda-heading small,
+.agenda-empty {
+  color: var(--muted);
+  font-weight: 800;
+  margin: 0;
+}
+
+.operations-agenda-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.operations-agenda-column {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 248, 0.98));
+  border: 1px solid rgba(24, 58, 45, 0.09);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 100%;
+  padding: 12px;
+}
+
+.operations-agenda-column header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.operations-agenda-column header span {
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.operations-agenda-column header strong {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.08);
+  border-radius: 999px;
+  color: var(--verde);
+  display: inline-flex;
+  font-size: 0.82rem;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.operations-agenda-column > small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin: -4px 0 2px;
+}
+
+.operations-agenda-list {
+  display: grid;
+  gap: 10px;
+}
+
+.agenda-event-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.11);
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgba(24, 58, 45, 0.05);
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+}
+
+.agenda-event-topline,
+.agenda-event-footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.agenda-event-topline span {
+  color: var(--amarelo);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.agenda-event-topline b {
+  color: var(--verde);
+  font-size: 0.78rem;
+}
+
+.agenda-event-card strong {
+  color: var(--verde-escuro);
+  font-size: 0.94rem;
+}
+
+.agenda-event-card small,
+.agenda-event-card p,
+.agenda-event-card em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 780;
+  margin: 0;
+}
+
+.agenda-event-card p {
+  color: var(--verde-escuro);
+}
+
+.agenda-event-footer em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-conflict-card.agenda-conflict-warning {
+  border-color: rgba(199, 134, 33, 0.34);
+}
+
+.agenda-conflict-card.agenda-conflict-danger {
+  border-color: rgba(168, 61, 33, 0.3);
+  box-shadow: 0 10px 22px rgba(168, 61, 33, 0.08);
 }
 
 .action-task {
@@ -2068,6 +2226,75 @@ label.pipeline-status-control:focus-within select {
   border: 1px solid rgba(199, 71, 63, 0.28);
 }
 
+.proposal-next-step {
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px;
+}
+
+.proposal-next-step-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.proposal-next-step-heading span {
+  color: var(--amarelo);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.proposal-next-step-heading strong {
+  color: var(--verde-escuro);
+  font-size: 0.96rem;
+}
+
+.proposal-next-step-body {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.proposal-next-step-body p {
+  color: var(--verde-escuro);
+  font-weight: 780;
+  margin: 0;
+}
+
+.proposal-next-step-commercial,
+.proposal-next-step-success,
+.proposal-next-step-operation,
+.proposal-next-step-warning,
+.proposal-next-step-neutral {
+  border: 1px solid rgba(24, 58, 45, 0.14);
+}
+
+.proposal-next-step-commercial {
+  background: rgba(24, 58, 45, 0.07);
+}
+
+.proposal-next-step-success {
+  background: rgba(47, 111, 69, 0.09);
+}
+
+.proposal-next-step-operation {
+  background: rgba(0, 90, 129, 0.08);
+}
+
+.proposal-next-step-warning {
+  background: rgba(199, 134, 33, 0.12);
+}
+
+.proposal-next-step-neutral {
+  background: rgba(107, 114, 128, 0.08);
+}
+
 .operational-checklist {
   background: rgba(47, 111, 69, 0.08);
   border: 1px solid rgba(47, 111, 69, 0.18);
@@ -2154,6 +2381,54 @@ label.pipeline-status-control:focus-within select {
 .timeline-list {
   display: grid;
   gap: 6px;
+}
+
+.timeline-progress {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.timeline-step {
+  background: rgba(247, 250, 248, 0.94);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 88px;
+  padding: 10px;
+}
+
+.timeline-step span {
+  color: var(--verde);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.timeline-step strong {
+  color: var(--verde-escuro);
+  font-size: 0.88rem;
+}
+
+.timeline-step small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 780;
+}
+
+.timeline-step.is-current {
+  background: rgba(24, 58, 45, 0.1);
+  border-color: rgba(24, 58, 45, 0.18);
+}
+
+.timeline-step.is-done {
+  background: rgba(47, 111, 69, 0.08);
+  border-color: rgba(47, 111, 69, 0.16);
+}
+
+.timeline-step.is-upcoming {
+  opacity: 0.82;
 }
 
 .timeline-list article {
@@ -4882,6 +5157,7 @@ input[type="range"] {
   }
 
   .pipeline-quick-filters,
+  .operations-agenda-grid,
   .public-proposal-stage,
   .public-proposal-layout {
     grid-template-columns: 1fr;
@@ -5128,6 +5404,11 @@ input[type="range"] {
   .timeline-list article {
     align-items: start;
     grid-template-columns: 1fr;
+  }
+
+  .proposal-next-step-body {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .public-form-trust {
