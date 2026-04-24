@@ -627,6 +627,7 @@ const nodes = {
   grandTotal: document.querySelector("#grandTotal"),
   totalMeta: document.querySelector("#totalMeta"),
   selectedItems: document.querySelector("#selectedItems"),
+  sendReviewPanel: document.querySelector("#sendReviewPanel"),
   proposalTotal: document.querySelector("#proposalTotal"),
   proposalContent: document.querySelector("#proposalContent"),
   supabaseStatus: document.querySelector("#supabaseStatus"),
@@ -2151,6 +2152,105 @@ function getSelectedItems() {
     .map((item) => ({ ...item, calc: calculateItem(item) }));
 }
 
+function getAllowedCategoriesForEvent(eventType = "") {
+  const mainCategory = getEventCategoryFromRequest(eventType);
+  if (mainCategory === "Coquetel") return ["Coquetel", "Comidas", "Workshop de Caipirinha", "Snacks"];
+  if (mainCategory === "Welcome Drink") return ["Welcome Drink", "Snacks"];
+  if (mainCategory) return [mainCategory];
+  return [];
+}
+
+function getProposalReviewItems() {
+  const selected = getSelectedItems();
+  const totals = getQuoteTotals();
+  const clientName = fields.clientName.value.trim();
+  const clientEmail = fields.clientEmail.value.trim();
+  const clientPhone = fields.clientPhone.value.trim();
+  const eventDate = fields.eventDate.value;
+  const eventTime = fields.eventTime.value;
+  const eventType = fields.eventType.value.trim();
+  const guests = getGuestCount();
+  const allowedCategories = getAllowedCategoriesForEvent(eventType);
+  const requiredCategory = getEventCategoryFromRequest(eventType);
+  const hasCategoryMismatch =
+    allowedCategories.length > 0 &&
+    selected.length > 0 &&
+    !selected.some((item) => allowedCategories.includes(item.tipoEvento));
+  const missingBaseCategory = requiredCategory && selected.length > 0 && !selected.some((item) => item.tipoEvento === requiredCategory);
+  const minimumWarnings = selected.filter((item) => guests < (toNumber(item.minimo) || 0));
+  const hasNotes = fields.notes.value.trim() || fields.eventReason.value.trim();
+
+  return [
+    {
+      id: "contact",
+      label: "Contato",
+      status: clientName && (clientPhone || clientEmail) ? "ok" : "error",
+      detail: clientName
+        ? clientPhone || clientEmail
+          ? "Cliente e canal de retorno ok."
+          : "Inclua celular ou e-mail antes de enviar."
+        : "Informe o nome do cliente.",
+      target: "client",
+    },
+    {
+      id: "date",
+      label: "Data e horário",
+      status: eventDate && eventTime ? "ok" : "error",
+      detail: eventDate && eventTime ? `${formatDateFromIso(eventDate)} · ${eventTime}` : "Defina data e horário de chegada.",
+      target: "client",
+    },
+    {
+      id: "guests",
+      label: "Pax e duração",
+      status: guests > 0 && minimumWarnings.length === 0 ? "ok" : guests > 0 ? "warning" : "error",
+      detail:
+        guests > 0
+          ? minimumWarnings.length
+            ? `${guests} pax. Atenção aos mínimos: ${minimumWarnings.map((item) => item.nome).join(", ")}.`
+            : `${guests} pax · ${getDuration()}h.`
+          : "Informe a quantidade de convidados.",
+      target: "client",
+    },
+    {
+      id: "items",
+      label: "Cardápio",
+      status: selected.length ? (hasCategoryMismatch || missingBaseCategory ? "warning" : "ok") : "error",
+      detail: selected.length
+        ? hasCategoryMismatch
+          ? `Pedido: ${eventType || "evento"}. Confira se os itens escolhidos combinam com o formato.`
+          : missingBaseCategory
+            ? `Confira o produto base de ${requiredCategory}. Há complementos, mas falta o item principal.`
+          : `${selected.length} item(ns): ${selected.map((item) => item.nome).slice(0, 3).join(", ")}${selected.length > 3 ? "..." : ""}.`
+        : "Escolha os itens da proposta antes de enviar.",
+      target: "items",
+    },
+    {
+      id: "briefing",
+      label: "Observações",
+      status: hasNotes ? "ok" : "warning",
+      detail: hasNotes ? "Briefing e observações revisados." : "Sem observações. Se houver restrições, montagem ou pedido especial, registre.",
+      target: "notes",
+    },
+    {
+      id: "value",
+      label: "Valor final",
+      status: totals.total > 0 ? "ok" : "error",
+      detail: totals.total > 0 ? `${formatMoney(totals.total)} · validade ${fields.validity.value || "a definir"}.` : "Monte os itens para calcular o total.",
+      target: "items",
+    },
+  ];
+}
+
+function getProposalReviewSummary(items = getProposalReviewItems()) {
+  const errors = items.filter((item) => item.status === "error").length;
+  const warnings = items.filter((item) => item.status === "warning").length;
+  return {
+    errors,
+    warnings,
+    ready: errors === 0,
+  };
+}
+
 function getSubtotal() {
   return getSelectedItems().reduce((sum, item) => sum + item.calc.total, 0);
 }
@@ -2769,6 +2869,42 @@ function renderSummary() {
         )
         .join("")
     : `<p>Os itens escolhidos aparecem aqui.</p>`;
+}
+
+function renderSendReview() {
+  if (!nodes.sendReviewPanel) return;
+  const items = getProposalReviewItems();
+  const summary = getProposalReviewSummary(items);
+  const title = summary.ready ? "Pronto para enviar" : "Revise antes de enviar";
+  const note = summary.ready
+    ? summary.warnings
+      ? `${summary.warnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
+      : "Dados essenciais, cardápio e valor estão coerentes."
+    : `${summary.errors} pendência(s) impedem o envio. Corrija para evitar proposta errada.`;
+
+  nodes.sendReviewPanel.className = `send-review-panel is-${summary.ready ? "ready" : "blocked"}`;
+  nodes.sendReviewPanel.innerHTML = `
+    <div class="send-review-heading">
+      <div>
+        <span>Revisão antes do envio</span>
+        <strong>${escapeHtml(title)}</strong>
+      </div>
+      <small>${escapeHtml(note)}</small>
+    </div>
+    <div class="send-review-grid">
+      ${items
+        .map(
+          (item) => `
+            <button class="send-review-item is-${escapeHtml(item.status)}" type="button" data-review-target="${escapeHtml(item.target)}">
+              <span>${item.status === "ok" ? "OK" : item.status === "warning" ? "!" : "!"}</span>
+              <strong>${escapeHtml(item.label)}</strong>
+              <small>${escapeHtml(item.detail)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderCalculation() {
@@ -4650,9 +4786,21 @@ function getEventCategoryFromRequest(type) {
   return "";
 }
 
+function getGuidedEventKeyFromType(type) {
+  const category = getEventCategoryFromRequest(type);
+  const byCategory = {
+    Coquetel: "coquetel",
+    "Workshop de Caipirinha": "workshop",
+    "Café da Manhã / Coffee Break": "cafe",
+    "Almoço Carioca": "almoco",
+    "Welcome Drink": "welcome",
+  };
+  return byCategory[category] || "";
+}
+
 function resetProposalDraftState() {
   state.selectedIds.clear();
-  state.guided = { event: "", beverageId: "", foodId: "" };
+  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
   state.privatizationChoice = "";
   saveSelectedIds();
   fields.manualAdjustment.value = "";
@@ -4690,7 +4838,17 @@ async function applyQuoteRequest(requestId) {
   fields.eventDuration.value = String(request.duracao || 2);
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
-  fields.categoryFilter.value = getEventCategoryFromRequest(request.tipo_evento);
+  const guidedKey = getGuidedEventKeyFromType(request.tipo_evento);
+  const eventCategory = getEventCategoryFromRequest(request.tipo_evento);
+  state.guided.event = guidedKey;
+  fields.categoryFilter.value = eventCategory;
+  if (nodes.flowStatus) {
+    nodes.flowStatus.textContent = eventCategory
+      ? `${eventCategory} carregado do formulário. Confira cardápio, pax, data e horário antes de enviar.`
+      : "Lead carregado do formulário. Escolha o formato e confira os pontos essenciais.";
+  }
+  nodes.coquetelChoices?.classList.toggle("is-hidden", guidedKey !== "coquetel");
+  setChoiceState(nodes.flowEventOptions, guidedKey, "flowEvent");
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
@@ -5526,6 +5684,7 @@ function renderAll() {
   renderProposalNextStep();
   renderQuickReplies();
   renderSummary();
+  renderSendReview();
   renderCalculation();
   renderProposal();
 }
@@ -5542,7 +5701,7 @@ function startNewProposal() {
   state.activeQuoteRequestId = "";
   state.quoteGuideDismissed = true;
   state.selectedIds.clear();
-  state.guided = { event: "", beverageId: "", foodId: "" };
+  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
   state.privatizationChoice = "";
   saveSelectedIds();
 
@@ -5586,7 +5745,31 @@ function getPublicProposalUrl(proposal) {
   return token ? `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}` : "";
 }
 
+function scrollToReviewTarget(target) {
+  const targets = {
+    client: "#clientDataSection",
+    items: "#eventConfigSection",
+    notes: "#notes",
+  };
+  const selector = targets[target] || "#sendReviewPanel";
+  const node = document.querySelector(selector);
+  node?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (target === "notes") fields.notes?.focus();
+}
+
+function ensureProposalReadyForSending() {
+  const items = getProposalReviewItems();
+  const summary = getProposalReviewSummary(items);
+  renderSendReview();
+  if (summary.ready) return true;
+  const firstError = items.find((item) => item.status === "error");
+  showToast(firstError?.detail || "Revise os pontos obrigatórios antes de enviar.");
+  nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
+  return false;
+}
+
 async function ensureProposalForSharing() {
+  if (!ensureProposalReadyForSending()) return null;
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
   const saved = await saveCurrentProposal(status);
@@ -5849,6 +6032,7 @@ function bindEvents() {
       renderPriceList();
       renderAvailabilityAlert();
       renderSummary();
+      renderSendReview();
       renderCalculation();
       renderProposal();
     };
@@ -5865,6 +6049,7 @@ function bindEvents() {
     syncFieldsFromDateTime();
     renderAvailabilityAlert();
     renderSummary();
+    renderSendReview();
     renderCalculation();
     renderProposal();
   });
@@ -5926,6 +6111,7 @@ function bindEvents() {
     else state.selectedIds.delete(id);
     saveSelectedIds();
     renderSummary();
+    renderSendReview();
     renderProposal();
   });
 
@@ -6052,6 +6238,11 @@ function bindEvents() {
     const button = event.target.closest("button[data-next-step-action]");
     if (!button) return;
     runProposalNextStepAction(button.dataset.nextStepAction);
+  });
+  nodes.sendReviewPanel?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-review-target]");
+    if (!button) return;
+    scrollToReviewTarget(button.dataset.reviewTarget);
   });
   nodes.quickReplies?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-quick-reply][data-quick-reply-channel]");
