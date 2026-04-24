@@ -3587,6 +3587,112 @@ textarea {
   line-height: 1.35;
 }
 
+.send-review-panel {
+  background: rgba(247, 250, 248, 0.88);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.send-review-heading {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.send-review-heading div {
+  display: grid;
+  gap: 2px;
+}
+
+.send-review-heading span {
+  color: var(--amarelo);
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.send-review-heading strong {
+  color: var(--verde-escuro);
+  font-size: 1.02rem;
+  line-height: 1.08;
+}
+
+.send-review-heading small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  max-width: 190px;
+  text-align: right;
+}
+
+.send-review-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.send-review-item {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 58px;
+  padding: 9px;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.send-review-item span {
+  align-items: center;
+  background: rgba(47, 111, 69, 0.12);
+  border-radius: 999px;
+  color: var(--verde);
+  display: inline-flex;
+  font-size: 0.66rem;
+  font-weight: 950;
+  grid-row: span 2;
+  height: 24px;
+  justify-content: center;
+  margin-top: 1px;
+  width: 24px;
+}
+
+.send-review-item strong {
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.send-review-item small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.send-review-item.is-warning span {
+  background: rgba(245, 158, 11, 0.2);
+  color: #9a5d00;
+}
+
+.send-review-item.is-error {
+  border-color: rgba(168, 50, 39, 0.24);
+}
+
+.send-review-item.is-error span {
+  background: rgba(168, 50, 39, 0.12);
+  color: #8d261d;
+}
+
 .send-actions {
   border-top: 1px solid var(--line);
 }
@@ -5916,6 +6022,19 @@ input[type="range"] {
     justify-items: start;
     min-width: 0;
     text-align: left;
+  }
+
+  .send-review-heading {
+    display: grid;
+  }
+
+  .send-review-heading small {
+    max-width: none;
+    text-align: left;
+  }
+
+  .send-review-grid {
+    grid-template-columns: 1fr;
   }
 
   .proposal-next-step-body {
