@@ -51,6 +51,9 @@ function buildDefaultMessage(payload: SendPayload, proposal: any) {
 function getZapiErrorMessage(status: number, details: unknown) {
   const detailsText = typeof details === "string" ? details : JSON.stringify(details);
   const normalized = detailsText.toLowerCase();
+  if (status === 404) {
+    return "A Z-API retornou 404. Confira ID da instância, token da instância e principalmente o Client-Token da conta.";
+  }
   if (normalized.includes("client-token") || normalized.includes("client token") || normalized.includes("unauthorized")) {
     return "A Z-API recusou por Client-Token. Cadastre ZAPI_CLIENT_TOKEN nos secrets do Supabase.";
   }
@@ -58,6 +61,12 @@ function getZapiErrorMessage(status: number, details: unknown) {
     return "A Z-API recusou o telefone. Confira se o Celular/WhatsApp tem DDI e DDD.";
   }
   return `A Z-API recusou o envio (HTTP ${status}).`;
+}
+
+function maskSecret(value: string) {
+  if (!value) return "";
+  if (value.length <= 8) return `${value.slice(0, 2)}***`;
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
 }
 
 Deno.serve(async (req) => {
@@ -127,7 +136,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Mensagem de WhatsApp vazia." }, 400);
     }
 
-    const zapiResponse = await fetch(`https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`, {
+    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
+    const zapiResponse = await fetch(zapiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -146,7 +156,21 @@ Deno.serve(async (req) => {
 
     if (!zapiResponse.ok) {
       console.error("Z-API error:", zapiResponse.status, zapiBody);
-      return jsonResponse({ ok: false, message: getZapiErrorMessage(zapiResponse.status, zapiBody), details: zapiBody }, 502);
+      return jsonResponse(
+        {
+          ok: false,
+          message: getZapiErrorMessage(zapiResponse.status, zapiBody),
+          details: zapiBody,
+          diagnostic: {
+            status: zapiResponse.status,
+            instanceId: maskSecret(instanceId),
+            token: maskSecret(zapiToken),
+            hasClientToken: Boolean(clientToken),
+            endpoint: `https://api.z-api.io/instances/${maskSecret(instanceId)}/token/${maskSecret(zapiToken)}/send-text`,
+          },
+        },
+        502,
+      );
     }
 
     const sentAt = new Date().toISOString();
