@@ -1000,10 +1000,24 @@ textarea[aria-invalid="true"] {
 
 .client-registry-card ul {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.client-registry-card li {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.client-registry-card li small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-registry-topline,
@@ -1020,6 +1034,46 @@ textarea[aria-invalid="true"] {
   color: var(--verde);
   font-size: 0.68rem;
   padding: 3px 8px;
+}
+
+.client-registry-summary {
+  background: rgba(24, 58, 45, 0.05);
+  border-radius: 8px;
+  color: var(--verde);
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 6px 8px;
+}
+
+.client-history-chip {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 5px 7px;
+  text-transform: uppercase;
+}
+
+.client-history-quote {
+  background: rgba(24, 58, 45, 0.08);
+  color: var(--verde);
+}
+
+.client-history-confirmed {
+  background: rgba(88, 188, 180, 0.24);
+  color: #174f4b;
+}
+
+.client-history-realized {
+  background: rgba(13, 111, 163, 0.16);
+  color: #0b5f8c;
+}
+
+.client-history-canceled {
+  background: rgba(139, 42, 35, 0.12);
+  color: #8b2a23;
 }
 
 .client-registry-footer b {
