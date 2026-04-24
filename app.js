@@ -710,6 +710,36 @@ function getDefaultRecommendedWindows(item) {
   return "Sob consulta";
 }
 
+function getCommercialCategoryMeta(item) {
+  const rawType = String(item?.tipoEvento || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (rawType.includes("coquetel")) {
+    return { key: "coquetel", caption: "Drinks e recepção com clima de celebração" };
+  }
+  if (rawType.includes("cafe") || rawType.includes("coffee")) {
+    return { key: "cafe", caption: "Encontros matinais e pausas corporativas" };
+  }
+  if (rawType.includes("welcome")) {
+    return { key: "welcome", caption: "Recepção elegante para começar o evento" };
+  }
+  if (rawType.includes("workshop")) {
+    return { key: "workshop", caption: "Experiência interativa para grupos" };
+  }
+  if (rawType.includes("almoco")) {
+    return { key: "almoco", caption: "Mesa farta no melhor horário do almoço" };
+  }
+  if (rawType.includes("comidas")) {
+    return { key: "comidas", caption: "Complementos gastronômicos para compor a proposta" };
+  }
+  if (rawType.includes("snack")) {
+    return { key: "snacks", caption: "Apoios rápidos e acolhimento leve" };
+  }
+  return { key: "generic", caption: "Formato sob medida para a proposta" };
+}
+
 function normalizeCatalogItem(item) {
   return {
     ...item,
@@ -1998,29 +2028,42 @@ function renderPriceList() {
     .map((item) => {
       const calc = calculateItem(item);
       const checked = state.selectedIds.has(item.id) ? "checked" : "";
+      const categoryMeta = getCommercialCategoryMeta(item);
       const priorityLabel =
         item.priority === "alta"
           ? "Prioridade alta"
           : item.priority === "baixa"
             ? "Prioridade baixa"
             : "Prioridade média";
+      const priorityClass =
+        item.priority === "alta"
+          ? "chip-priority-high"
+          : item.priority === "baixa"
+            ? "chip-priority-low"
+            : "chip-priority-medium";
       return `
-        <label class="price-row">
+        <label class="price-row" data-price-category="${escapeHtml(categoryMeta.key)}">
           <input type="checkbox" data-select-id="${escapeHtml(item.id)}" ${checked} />
           <span class="price-row-body">
-            <span class="price-card-head">
-              <span class="price-category-badge">${escapeHtml(item.tipoEvento)}</span>
+            <span class="price-card-topline">
+              <span class="price-category-group">
+                <span class="price-category-badge">${escapeHtml(item.tipoEvento)}</span>
+                <span class="price-category-support">${escapeHtml(categoryMeta.caption)}</span>
+              </span>
+              <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
+            </span>
+            <span class="price-card-main">
+              <span class="price-name">
+                <strong>${escapeHtml(item.nome)}</strong>
+              </span>
               <span class="item-cost">
                 <span class="item-cost-label">${checked ? "Incluído na proposta" : "Valor estimado"}</span>
                 <strong>${formatMoney(calc.total)}</strong>
               </span>
             </span>
-            <span class="price-name">
-              <strong>${escapeHtml(item.nome)}</strong>
-            </span>
             <span class="price-meta">
               ${item.idioma ? `<span class="chip">${escapeHtml(item.idioma)}</span>` : ""}
-              <span class="chip">${escapeHtml(priorityLabel)}</span>
+              <span class="chip ${priorityClass}">${escapeHtml(priorityLabel)}</span>
               <span class="chip chip-soft">${escapeHtml(item.formula === "fixo" ? "Preço fixo" : "Por pessoa")}</span>
             </span>
             <p class="price-summary">${escapeHtml(item.commercialSummary || item.descricao)}</p>
@@ -2029,7 +2072,6 @@ function renderPriceList() {
                 <span class="price-window-label">Melhor janela</span>
                 <strong>${escapeHtml(item.recommendedWindows || "Sob consulta")}</strong>
               </span>
-              <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
             </span>
             <p class="price-detail">${escapeHtml(calc.detail)}</p>
           </span>

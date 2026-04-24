@@ -621,7 +621,9 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-guidance span {
-  background: rgba(24, 58, 45, 0.05);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-left: 4px solid rgba(24, 58, 45, 0.22);
   border-radius: 8px;
   color: var(--muted);
   font-size: 0.72rem;
@@ -888,20 +890,21 @@ textarea[aria-invalid="true"] {
 
 .action-list {
   display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .action-task {
   align-content: start;
-  background: var(--white);
-  border-left: 5px solid var(--verde);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 248, 0.98));
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-top: 4px solid var(--verde);
   border-radius: 8px;
   box-shadow: 0 8px 18px rgba(24, 58, 45, 0.06);
   display: grid;
-  gap: 9px;
-  min-height: 146px;
-  padding: 10px;
+  gap: 8px;
+  min-height: 138px;
+  padding: 12px;
 }
 
 .action-task-topline,
@@ -1007,7 +1010,7 @@ textarea[aria-invalid="true"] {
   border-radius: 8px;
   display: grid;
   gap: 16px;
-  padding: 18px;
+  padding: 20px 22px;
 }
 
 .quote-empty-copy {
@@ -1048,7 +1051,7 @@ textarea[aria-invalid="true"] {
   border-radius: 8px;
   display: grid;
   gap: 7px;
-  padding: 14px;
+  padding: 15px;
 }
 
 .quote-empty-steps span {
@@ -2559,14 +2562,19 @@ textarea {
 }
 
 .price-row {
+  --price-accent: var(--verde);
+  --price-soft: rgba(51, 93, 74, 0.12);
   align-items: start;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 247, 0.98));
-  border: 1px solid var(--line);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-top: 4px solid var(--price-accent);
   border-radius: 8px;
   display: grid;
   gap: 12px;
   grid-template-columns: 22px minmax(0, 1fr);
+  overflow: hidden;
   padding: 18px;
+  position: relative;
   height: 100%;
   transition:
     border-color 160ms ease,
@@ -2577,35 +2585,54 @@ textarea {
 
 .price-row:hover {
   background: rgba(255, 255, 255, 1);
-  border-color: var(--verde);
+  border-color: rgba(24, 58, 45, 0.22);
   box-shadow: 0 14px 30px rgba(24, 58, 45, 0.08);
   transform: translateY(-2px);
+}
+
+.price-row::before {
+  background: linear-gradient(180deg, var(--price-soft), rgba(255, 255, 255, 0));
+  content: "";
+  inset: 0 0 auto 0;
+  height: 86px;
+  pointer-events: none;
+  position: absolute;
 }
 
 .price-row input[type="checkbox"] {
   accent-color: var(--verde);
   margin-top: 4px;
   min-height: auto;
+  position: relative;
   width: 16px;
+  z-index: 1;
 }
 
 .price-row-body {
   display: grid;
-  gap: 10px;
+  gap: 11px;
+  position: relative;
+  z-index: 1;
 }
 
-.price-card-head {
+.price-card-topline {
   align-items: start;
   display: flex;
   gap: 12px;
   justify-content: space-between;
 }
 
+.price-category-group {
+  display: grid;
+  gap: 6px;
+}
+
 .price-category-badge {
   align-items: center;
-  background: rgba(24, 58, 45, 0.92);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.08);
   border-radius: 999px;
-  color: var(--white);
+  color: var(--price-accent);
   display: inline-flex;
   font-size: 0.74rem;
   font-weight: 900;
@@ -2617,11 +2644,28 @@ textarea {
   width: fit-content;
 }
 
+.price-category-support {
+  color: var(--price-accent);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.price-card-main {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .price-select-indicator {
   align-items: center;
-  background: rgba(24, 58, 45, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.1);
   border-radius: 999px;
-  color: var(--verde);
+  color: var(--price-accent);
   display: inline-flex;
   font-size: 0.74rem;
   font-weight: 900;
@@ -2633,19 +2677,21 @@ textarea {
 
 .price-row:has(input:checked) {
   background: linear-gradient(180deg, rgba(24, 58, 45, 0.07), rgba(248, 250, 247, 0.98));
-  border-color: rgba(24, 58, 45, 0.34);
+  border-color: rgba(24, 58, 45, 0.2);
   box-shadow:
     inset 0 0 0 1px rgba(24, 58, 45, 0.08),
     0 12px 24px rgba(24, 58, 45, 0.08);
 }
 
 .price-row:has(input:checked) .price-select-indicator {
-  background: var(--verde-escuro);
+  background: var(--price-accent);
+  border-color: var(--price-accent);
   color: var(--white);
 }
 
 .price-row:has(input:checked) .price-category-badge {
-  background: linear-gradient(135deg, var(--verde-escuro), var(--verde));
+  background: var(--price-accent);
+  border-color: var(--price-accent);
   color: var(--white);
 }
 
@@ -2657,8 +2703,8 @@ textarea {
 .price-name strong {
   color: var(--ink);
   display: block;
-  font-size: 1.06rem;
-  line-height: 1.28;
+  font-size: 1.12rem;
+  line-height: 1.2;
 }
 
 .price-meta {
@@ -2684,6 +2730,21 @@ textarea {
   color: #705725;
 }
 
+.chip-priority-high {
+  background: rgba(171, 73, 47, 0.12);
+  color: #8d3e28;
+}
+
+.chip-priority-medium {
+  background: rgba(155, 122, 31, 0.14);
+  color: #7a5b10;
+}
+
+.chip-priority-low {
+  background: rgba(58, 103, 89, 0.12);
+  color: #2f5d50;
+}
+
 .price-row p {
   color: var(--muted);
   line-height: 1.45;
@@ -2692,12 +2753,12 @@ textarea {
 
 .price-summary {
   color: var(--ink) !important;
-  font-weight: 600;
-  line-height: 1.55;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .price-card-footer {
-  align-items: end;
+  align-items: center;
   border-top: 1px solid rgba(24, 58, 45, 0.08);
   display: flex;
   gap: 12px;
@@ -2721,12 +2782,14 @@ textarea {
 
 .price-window strong {
   color: var(--verde-escuro);
-  font-size: 0.88rem;
+  font-size: 0.92rem;
 }
 
 .price-detail {
   color: var(--muted) !important;
-  font-size: 0.86rem;
+  border-top: 1px dashed rgba(24, 58, 45, 0.1);
+  font-size: 0.84rem;
+  padding-top: 10px;
 }
 
 .item-cost {
@@ -2735,7 +2798,11 @@ textarea {
   display: grid;
   gap: 3px;
   justify-items: end;
-  min-width: 118px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  min-width: 136px;
+  padding: 10px 12px;
   text-align: right;
 }
 
@@ -2749,8 +2816,48 @@ textarea {
 
 .item-cost strong {
   color: var(--verde-escuro);
-  font-size: 1.08rem;
-  line-height: 1;
+  font-size: 1.22rem;
+  line-height: 0.98;
+}
+
+.price-row[data-price-category="coquetel"] {
+  --price-accent: #a8573a;
+  --price-soft: rgba(168, 87, 58, 0.13);
+}
+
+.price-row[data-price-category="cafe"] {
+  --price-accent: #6d7d37;
+  --price-soft: rgba(109, 125, 55, 0.14);
+}
+
+.price-row[data-price-category="welcome"] {
+  --price-accent: #9a7425;
+  --price-soft: rgba(154, 116, 37, 0.13);
+}
+
+.price-row[data-price-category="workshop"] {
+  --price-accent: #4f7d76;
+  --price-soft: rgba(79, 125, 118, 0.13);
+}
+
+.price-row[data-price-category="almoco"] {
+  --price-accent: #8a5c31;
+  --price-soft: rgba(138, 92, 49, 0.13);
+}
+
+.price-row[data-price-category="comidas"] {
+  --price-accent: #78573c;
+  --price-soft: rgba(120, 87, 60, 0.12);
+}
+
+.price-row[data-price-category="snacks"] {
+  --price-accent: #6f6a45;
+  --price-soft: rgba(111, 106, 69, 0.12);
+}
+
+.price-row[data-price-category="generic"] {
+  --price-accent: var(--verde);
+  --price-soft: rgba(51, 93, 74, 0.1);
 }
 
 .summary-panel {
@@ -4929,10 +5036,19 @@ input[type="range"] {
     text-align: left;
   }
 
-  .price-card-head,
+  .price-card-topline,
   .price-card-footer {
     align-items: start;
     flex-direction: column;
+  }
+
+  .price-card-main {
+    grid-template-columns: 1fr;
+  }
+
+  .price-category-group,
+  .item-cost {
+    width: 100%;
   }
 
   .proposal-paper {
