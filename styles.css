@@ -1970,6 +1970,13 @@ textarea[aria-invalid="true"] {
   padding: 2px 7px;
 }
 
+.follow-up-badge {
+  border-radius: 999px;
+  justify-self: start;
+  max-width: 100%;
+  padding: 2px 7px;
+}
+
 .lead-age-fresh {
   background: rgba(24, 58, 45, 0.08);
   color: var(--verde) !important;
@@ -1987,6 +1994,21 @@ textarea[aria-invalid="true"] {
 }
 
 .lead-age-critical {
+  font-weight: 950 !important;
+}
+
+.follow-up-warning {
+  background: rgba(242, 185, 75, 0.24);
+  color: #8c5a00 !important;
+}
+
+.follow-up-danger,
+.follow-up-critical {
+  background: rgba(199, 71, 63, 0.12);
+  color: #a72d26 !important;
+}
+
+.follow-up-critical {
   font-weight: 950 !important;
 }
 
