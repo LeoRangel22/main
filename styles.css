@@ -2625,19 +2625,25 @@ label.pipeline-status-control:focus-within select {
 }
 
 .commercial-timeline {
-  background: var(--white);
-  border: 1px solid rgba(24, 58, 45, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 248, 0.96));
+  border: 1px solid rgba(24, 58, 45, 0.14);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  margin: 0 0 12px;
-  padding: 12px;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 14px;
 }
 
 .timeline-heading {
   align-items: center;
   display: flex;
+  gap: 14px;
   justify-content: space-between;
+}
+
+.timeline-heading div {
+  display: grid;
+  gap: 3px;
 }
 
 .timeline-heading span {
@@ -2649,17 +2655,29 @@ label.pipeline-status-control:focus-within select {
 
 .timeline-heading strong {
   color: var(--verde-escuro);
-  font-size: 0.86rem;
+  font-size: 1rem;
+}
+
+.timeline-heading p {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin: 0;
+  text-align: right;
+}
+
+.timeline-heading b {
+  color: var(--verde-escuro);
 }
 
 .timeline-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .timeline-progress {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
@@ -2668,26 +2686,26 @@ label.pipeline-status-control:focus-within select {
   border: 1px solid rgba(24, 58, 45, 0.08);
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  min-height: 88px;
-  padding: 10px;
+  gap: 3px;
+  min-height: 72px;
+  padding: 9px 10px;
 }
 
 .timeline-step span {
   color: var(--verde);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .timeline-step strong {
   color: var(--verde-escuro);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .timeline-step small {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 780;
 }
 
@@ -2705,24 +2723,54 @@ label.pipeline-status-control:focus-within select {
   opacity: 0.82;
 }
 
-.timeline-list article {
+.timeline-entry {
   align-items: center;
-  border-left: 3px solid rgba(47, 111, 69, 0.45);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-left: 5px solid rgba(47, 111, 69, 0.45);
+  border-radius: 8px;
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 5px 0 5px 10px;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: 8px 10px;
 }
 
-.timeline-list article div {
+.timeline-entry-badge {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  display: inline-flex;
+  font-size: 0.66rem;
+  font-weight: 950;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 52px;
+  padding: 0 8px;
+  text-transform: uppercase;
+}
+
+.timeline-entry-main {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
+.timeline-entry-meta {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.7rem;
+  font-weight: 800;
+  gap: 2px;
+  justify-items: end;
+  min-width: 138px;
+  text-align: right;
+}
+
 .timeline-list strong {
   color: var(--verde-escuro);
-  font-size: 0.86rem;
+  font-size: 0.88rem;
 }
 
 .timeline-list small,
@@ -2740,6 +2788,40 @@ label.pipeline-status-control:focus-within select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.timeline-entry.is-sent {
+  border-left-color: #2f7d4f;
+}
+
+.timeline-entry.is-sent .timeline-entry-badge {
+  background: rgba(47, 125, 79, 0.14);
+}
+
+.timeline-entry.is-money {
+  border-left-color: var(--amarelo);
+}
+
+.timeline-entry.is-money .timeline-entry-badge {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.timeline-entry.is-danger {
+  border-left-color: #a83227;
+}
+
+.timeline-entry.is-danger .timeline-entry-badge {
+  background: rgba(168, 50, 39, 0.12);
+  color: #8d261d;
+}
+
+.timeline-entry.is-stage {
+  border-left-color: #2b6f7f;
+}
+
+.timeline-entry.is-muted {
+  background: rgba(247, 250, 248, 0.7);
+  border-left-color: rgba(24, 58, 45, 0.18);
 }
 
 .eyebrow {
@@ -5810,9 +5892,30 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
-  .timeline-list article {
+  .timeline-heading {
+    align-items: start;
+    display: grid;
+  }
+
+  .timeline-heading p {
+    text-align: left;
+  }
+
+  .timeline-entry {
     align-items: start;
     grid-template-columns: 1fr;
+  }
+
+  .timeline-entry-badge {
+    justify-content: flex-start;
+    min-width: 0;
+    width: fit-content;
+  }
+
+  .timeline-entry-meta {
+    justify-items: start;
+    min-width: 0;
+    text-align: left;
   }
 
   .proposal-next-step-body {
