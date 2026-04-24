@@ -99,6 +99,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (clientToken && (clientToken === instanceId || clientToken === zapiToken)) {
+      return jsonResponse(
+        {
+          ok: false,
+          message: "O ZAPI_CLIENT_TOKEN parece estar incorreto. Ele não pode ser igual ao ID ou ao token da instância; use o Client-Token da conta Z-API.",
+        },
+        500,
+      );
+    }
+
     const authHeader = req.headers.get("Authorization") || "";
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
