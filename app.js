@@ -404,7 +404,7 @@ const guidedEvents = {
   coquetel: {
     label: "Coquetel",
     category: "Coquetel",
-    status: "Coquetel selecionado. Escolha uma bebida e, se quiser, um pacote de comidas.",
+    status: "Coquetel selecionado. Escolha bebidas, comidas e, se fizer sentido, adicione workshop como experiência.",
   },
   workshop: {
     label: "Workshop de Caipirinha",
@@ -559,6 +559,7 @@ const state = {
     event: "",
     beverageId: "",
     foodId: "",
+    workshopId: "",
   },
   privatizationChoice: "",
 };
@@ -617,6 +618,7 @@ const nodes = {
   flowEventOptions: document.querySelector("#flowEventOptions"),
   flowBeverageOptions: document.querySelector("#flowBeverageOptions"),
   flowFoodOptions: document.querySelector("#flowFoodOptions"),
+  flowWorkshopOptions: document.querySelector("#flowWorkshopOptions"),
   calculationBreakdown: document.querySelector("#calculationBreakdown"),
   privatizationTitle: document.querySelector("#privatizationTitle"),
   privatizationDescription: document.querySelector("#privatizationDescription"),
@@ -2450,6 +2452,7 @@ function applyGuidedEvent(eventKey) {
   state.guided.event = eventKey;
   state.guided.beverageId = "";
   state.guided.foodId = "";
+  state.guided.workshopId = "";
   fields.eventType.value = config.label;
   fields.categoryFilter.value = config.category;
   fields.searchPrice.value = "";
@@ -2465,6 +2468,7 @@ function applyGuidedEvent(eventKey) {
   setChoiceState(nodes.flowEventOptions, eventKey, "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
 
   if (eventKey !== "coquetel") {
     state.selectedIds.clear();
@@ -2480,7 +2484,12 @@ function applyGuidedPackage(packageId) {
     state.guided.foodId = "";
     setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], "");
     setChoiceState(nodes.flowFoodOptions, packageId, "selectPackage");
-    nodes.flowStatus.textContent = "Coquetel com bebidas selecionadas e sem pacote de comidas.";
+    nodes.flowStatus.textContent = "Coquetel com bebidas selecionadas e sem pacote de comidas. Se quiser, adicione workshop como experiência.";
+  } else if (packageId === "none-workshop") {
+    state.guided.workshopId = "";
+    setExclusiveSelection(["workshop-caipirinha-pt", "workshop-caipirinha-en"], "");
+    setChoiceState(nodes.flowWorkshopOptions, packageId, "selectPackage");
+    nodes.flowStatus.textContent = "Coquetel sem workshop adicional. Confira convidados, duração e total estimado.";
   } else if (["coquetel-caipirinha", "coquetel-carioca"].includes(packageId)) {
     state.guided.beverageId = packageId;
     setExclusiveSelection(["coquetel-caipirinha", "coquetel-carioca"], packageId);
@@ -2490,7 +2499,12 @@ function applyGuidedPackage(packageId) {
     state.guided.foodId = packageId;
     setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], packageId);
     setChoiceState(nodes.flowFoodOptions, packageId, "selectPackage");
-    nodes.flowStatus.textContent = "Coquetel configurado. Confira convidados, duração e total estimado.";
+    nodes.flowStatus.textContent = "Comidas selecionadas. Você ainda pode adicionar workshop como experiência opcional.";
+  } else if (["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(packageId)) {
+    state.guided.workshopId = packageId;
+    setExclusiveSelection(["workshop-caipirinha-pt", "workshop-caipirinha-en"], packageId);
+    setChoiceState(nodes.flowWorkshopOptions, packageId, "selectPackage");
+    nodes.flowStatus.textContent = "Workshop adicionado ao coquetel. Confira convidados, duração e total estimado.";
   }
 
   fields.eventType.value = "Coquetel";
@@ -2500,8 +2514,8 @@ function applyGuidedPackage(packageId) {
 }
 
 function clearGuidedFlow() {
-  state.guided = { event: "", beverageId: "", foodId: "" };
-  ["coquetel-caipirinha", "coquetel-carioca", "brasileiro-i", "brasileiro-ii"].forEach((id) =>
+  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
+  ["coquetel-caipirinha", "coquetel-carioca", "brasileiro-i", "brasileiro-ii", "workshop-caipirinha-pt", "workshop-caipirinha-en"].forEach((id) =>
     state.selectedIds.delete(id),
   );
   fields.eventType.value = "";
@@ -4580,6 +4594,7 @@ function resetProposalDraftState() {
   setChoiceState(nodes.flowEventOptions, "", "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
   setChoiceState(nodes.optionalPrivatizationControls, "", "privatizationChoice");
 }
 
@@ -5776,6 +5791,12 @@ function bindEvents() {
   });
 
   nodes.flowFoodOptions?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-select-package]");
+    if (!button) return;
+    applyGuidedPackage(button.dataset.selectPackage);
+  });
+
+  nodes.flowWorkshopOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-select-package]");
     if (!button) return;
     applyGuidedPackage(button.dataset.selectPackage);
