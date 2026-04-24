@@ -653,6 +653,7 @@ const nodes = {
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
   commercialTimeline: document.querySelector("#commercialTimeline"),
+  quickReplies: document.querySelector("#quickReplies"),
   startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
 };
@@ -1258,6 +1259,243 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
 
 function getActiveProposal() {
   return state.proposals.find((item) => item.id === state.activeProposalId) || null;
+}
+
+function getQuickReplyRecommendation(status) {
+  const normalized = normalizeProposalStatus(status);
+  if (normalized === "proposta_enviada") return "followup";
+  if (normalized === "negociacao") return "sinal";
+  if (normalized === "confirmado") return "saldo";
+  if (["pagamento_final", "planejamento", "evento_proximo"].includes(normalized)) return "pre_evento";
+  return "proposta";
+}
+
+function getQuickReplyContext() {
+  const proposal = getActiveProposal();
+  const request = getActiveQuoteRequest();
+  const qualification = request?.snapshot?.qualificacao || proposal?.snapshot?.qualificacao || {};
+  return {
+    proposal,
+    request,
+    clientName: fields.clientName.value.trim() || proposal?.cliente_nome || request?.cliente_nome || "cliente",
+    company:
+      request?.empresa ||
+      request?.cliente_empresa ||
+      proposal?.snapshot?.client?.company ||
+      request?.snapshot?.cliente?.empresa ||
+      "",
+    email: fields.clientEmail.value.trim() || proposal?.cliente_email || request?.cliente_email || "",
+    phone: fields.clientPhone.value.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || "",
+    eventType: fields.eventType.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "evento",
+    eventDate: getEventDateLabel(),
+    eventTime: getEventTimeLabel(),
+    guests: getGuestCount(),
+    duration: getDuration(),
+    total: formatMoney(getQuoteTotals().total),
+    investmentRange: qualification.faixaInvestimento || "",
+    status: proposal?.status || request?.status || "lead_recebido",
+  };
+}
+
+function getQuickReplyPresets(status) {
+  const recommended = getQuickReplyRecommendation(status);
+  return [
+    {
+      id: "proposta",
+      title: "Proposta enviada",
+      eyebrow: "Primeiro envio",
+      note: "Apresenta a proposta com contexto e CTA de ajuste.",
+      subject: "Proposta de evento - Embaixada Carioca",
+      needsLink: true,
+      recommended: recommended === "proposta",
+      buildText: (context, proposalUrl) =>
+        [
+          `Olá, ${context.clientName}!`,
+          "",
+          `Preparei a proposta comercial da Embaixada Carioca para o seu ${context.eventType} no dia ${context.eventDate} às ${context.eventTime}, para ${context.guests} pessoa(s).`,
+          "",
+          "Segue o link para você ver com calma:",
+          proposalUrl,
+          "",
+          "Se fizer sentido, consigo ajustar data, horário, convidados e formato para chegar na melhor versão.",
+          "",
+          "Fico à disposição.",
+        ].join("\n"),
+    },
+    {
+      id: "followup",
+      title: "Follow-up sem resposta",
+      eyebrow: "Retomada comercial",
+      note: "Retoma o contato sem soar insistente.",
+      subject: "Follow-up da proposta - Embaixada Carioca",
+      needsLink: true,
+      recommended: recommended === "followup",
+      buildText: (context, proposalUrl) =>
+        [
+          `Olá, ${context.clientName}! Tudo bem?`,
+          "",
+          `Passando para saber se você conseguiu ver a proposta do seu ${context.eventType} na Embaixada Carioca.`,
+          "",
+          "Deixo o link aqui novamente:",
+          proposalUrl,
+          "",
+          "Se fizer sentido, consigo ajustar alguns pontos para chegarmos na versão ideal para o grupo.",
+          "",
+          "Fico à disposição.",
+        ].join("\n"),
+    },
+    {
+      id: "sinal",
+      title: "Cobrança de sinal",
+      eyebrow: "Reserva da data",
+      note: "Explica o próximo passo comercial de forma clara.",
+      subject: "Reserva e sinal do evento - Embaixada Carioca",
+      needsLink: true,
+      recommended: recommended === "sinal",
+      buildText: (context, proposalUrl) =>
+        [
+          `Olá, ${context.clientName}!`,
+          "",
+          `Para reservarmos a data do seu ${context.eventType}, seguimos com o sinal de 50% do valor total acordado.`,
+          "",
+          `A proposta continua aqui para consulta:`,
+          proposalUrl,
+          "",
+          "Assim que o sinal entrar, já deixamos a reserva confirmada e seguimos para a parte operacional.",
+          "",
+          "Se preferir, também posso resumir tudo por aqui.",
+        ].join("\n"),
+    },
+    {
+      id: "saldo",
+      title: "Cobrança do saldo",
+      eyebrow: "Financeiro",
+      note: "Alinha o restante com tom profissional e sereno.",
+      subject: "Pagamento restante do evento - Embaixada Carioca",
+      needsLink: true,
+      recommended: recommended === "saldo",
+      buildText: (context, proposalUrl) =>
+        [
+          `Olá, ${context.clientName}!`,
+          "",
+          `Passando para alinhar o pagamento restante do seu ${context.eventType} na Embaixada Carioca.`,
+          "",
+          "Deixo o link da proposta aqui como referência:",
+          proposalUrl,
+          "",
+          "Se precisar, também te envio o resumo do combinado por e-mail ou WhatsApp.",
+          "",
+          "Fico à disposição.",
+        ].join("\n"),
+    },
+    {
+      id: "pre_evento",
+      title: "Confirmação pré-evento",
+      eyebrow: "Reta final",
+      note: "Fecha a operação com segurança e elegância.",
+      subject: "Confirmação final do evento - Embaixada Carioca",
+      needsLink: true,
+      recommended: recommended === "pre_evento",
+      buildText: (context, proposalUrl) =>
+        [
+          `Olá, ${context.clientName}!`,
+          "",
+          `Estamos na reta final do seu ${context.eventType} na Embaixada Carioca.`,
+          `Hoje o combinado está assim: ${context.eventDate} às ${context.eventTime}, ${context.guests} pessoa(s), duração estimada de ${context.duration}h.`,
+          "",
+          "Deixo o link da proposta aqui para referência final:",
+          proposalUrl,
+          "",
+          "Se houver qualquer ajuste de última hora, me avise por aqui.",
+          "",
+          "Nos vemos em breve.",
+        ].join("\n"),
+    },
+  ];
+}
+
+function getQuickReplyPayload(replyId, context, proposalUrl) {
+  const preset = getQuickReplyPresets(context.status).find((item) => item.id === replyId);
+  if (!preset) return null;
+  return {
+    ...preset,
+    message: preset.buildText(context, proposalUrl),
+  };
+}
+
+async function runQuickReply(replyId, channel) {
+  const context = getQuickReplyContext();
+  const needsLink = getQuickReplyPresets(context.status).find((item) => item.id === replyId)?.needsLink;
+  const proposalUrl = needsLink ? await ensureProposalLink() : "";
+  if (needsLink && !proposalUrl) return;
+  const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+  if (!payload) return;
+
+  if (channel === "copy") {
+    try {
+      await navigator.clipboard.writeText(payload.message);
+      showToast(`Mensagem "${payload.title}" copiada.`);
+    } catch (error) {
+      console.warn("Falha ao copiar resposta rapida.", error);
+      showToast("Não foi possível copiar automaticamente.");
+    }
+    return;
+  }
+
+  if (channel === "email") {
+    const email = context.email;
+    if (!email) {
+      showToast("Preencha o e-mail do cliente para abrir a mensagem.");
+      return;
+    }
+    const subject = encodeURIComponent(payload.subject);
+    const body = encodeURIComponent(payload.message);
+    showToast(`Abrindo e-mail com "${payload.title}".`);
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+    return;
+  }
+
+  if (channel === "whatsapp") {
+    const phone = String(context.phone || "").replace(/\D/g, "");
+    const text = encodeURIComponent(payload.message);
+    const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    showToast(`Abrindo WhatsApp com "${payload.title}".`);
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+function renderQuickReplies() {
+  if (!nodes.quickReplies) return;
+  const context = getQuickReplyContext();
+  const hasContext =
+    context.clientName && context.clientName !== "cliente" && (context.eventType !== "evento" || context.email || context.phone);
+
+  if (!hasContext) {
+    nodes.quickReplies.innerHTML = `<p>Abra um lead ou comece uma proposta para liberar mensagens prontas de envio, follow-up e cobrança.</p>`;
+    return;
+  }
+
+  nodes.quickReplies.innerHTML = getQuickReplyPresets(context.status)
+    .map(
+      (preset) => `
+        <article class="quick-reply-card${preset.recommended ? " is-recommended" : ""}">
+          <div class="quick-reply-copy">
+            <div class="quick-reply-topline">
+              <span>${escapeHtml(preset.eyebrow)}</span>
+              ${preset.recommended ? `<strong>Recomendado agora</strong>` : ""}
+            </div>
+            <h3>${escapeHtml(preset.title)}</h3>
+            <p>${escapeHtml(preset.note)}</p>
+          </div>
+          <div class="quick-reply-actions">
+            <button class="secondary" type="button" data-quick-reply="${escapeHtml(preset.id)}" data-quick-reply-channel="copy">Copiar</button>
+            <button class="secondary" type="button" data-quick-reply="${escapeHtml(preset.id)}" data-quick-reply-channel="email">E-mail</button>
+            <button class="primary" type="button" data-quick-reply="${escapeHtml(preset.id)}" data-quick-reply-channel="whatsapp">WhatsApp</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
 }
 
 function shouldShowOperationalChecklist(proposal) {
@@ -4856,6 +5094,7 @@ function renderAll() {
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
   renderProposalNextStep();
+  renderQuickReplies();
   renderSummary();
   renderCalculation();
   renderProposal();
@@ -5281,6 +5520,11 @@ function bindEvents() {
     const button = event.target.closest("button[data-next-step-action]");
     if (!button) return;
     runProposalNextStepAction(button.dataset.nextStepAction);
+  });
+  nodes.quickReplies?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-quick-reply][data-quick-reply-channel]");
+    if (!button) return;
+    runQuickReply(button.dataset.quickReply, button.dataset.quickReplyChannel);
   });
   nodes.operationalChecklist?.addEventListener("change", (event) => {
     const checkbox = event.target.closest("input[data-checklist-id]");
