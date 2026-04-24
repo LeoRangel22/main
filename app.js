@@ -553,6 +553,8 @@ const state = {
   pendingDashboardProposalId: "",
   lastAppliedDashboardTarget: "",
   activeReportPreset: "currentMonth",
+  activePipelineFilter: "all",
+  quoteGuideDismissed: false,
   guided: {
     event: "",
     beverageId: "",
@@ -639,6 +641,8 @@ const nodes = {
   periodMetrics: document.querySelector("#periodMetrics"),
   actionList: document.querySelector("#actionList"),
   actionCenterMeta: document.querySelector("#actionCenterMeta"),
+  pipelineQuickFilters: document.querySelector("#pipelineQuickFilters"),
+  quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
@@ -646,6 +650,8 @@ const nodes = {
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
   commercialTimeline: document.querySelector("#commercialTimeline"),
+  startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
+  jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -3013,6 +3019,124 @@ function getActionPriorityClass(priority) {
   return "normal";
 }
 
+function getActionTrack(task) {
+  if (task.track) return task.track;
+  if (task.priority >= 90) return "Agora";
+  if (task.priority >= 70) return "Comercial";
+  if (task.priority >= 45) return "Operação";
+  return "Acompanhar";
+}
+
+function getActionUrgencyLabel(priority) {
+  if (priority >= 90) return "Agora";
+  if (priority >= 70) return "Hoje";
+  if (priority >= 45) return "Em seguida";
+  return "Acompanhar";
+}
+
+function getPipelineQuickFilterDefinitions() {
+  const today = startOfDay(new Date());
+  const next7Days = addDays(today, 7);
+  return [
+    {
+      id: "all",
+      label: "Tudo",
+      matches: () => true,
+    },
+    {
+      id: "lead_recebido",
+      label: "Leads",
+      matches: (item) => getReportStatus(item) === "lead_recebido",
+    },
+    {
+      id: "proposta_enviada",
+      label: "Sem resposta",
+      matches: (item) => getReportStatus(item) === "proposta_enviada",
+    },
+    {
+      id: "negociacao",
+      label: "Negociação",
+      matches: (item) => getReportStatus(item) === "negociacao",
+    },
+    {
+      id: "urgent",
+      label: "Alta urgência",
+      matches: (item) => {
+        const status = getReportStatus(item);
+        if (item.kind === "request") {
+          const age = getLeadAgeInfo(item);
+          return age && ["warning", "danger", "critical"].includes(age.level);
+        }
+        if (item.clientResponse === "confirmar" && ["proposta_enviada", "negociacao"].includes(status)) return true;
+        return isSoldReportItem(item) && item.eventDate && item.eventDate >= today && item.eventDate <= addDays(today, 2);
+      },
+    },
+    {
+      id: "next7days",
+      label: "Próximos 7 dias",
+      matches: (item) => item.eventDate && item.eventDate >= today && item.eventDate <= next7Days,
+    },
+    {
+      id: "agency",
+      label: "Agências",
+      matches: (item) => /ag[êe]ncia/i.test(item.clientType || ""),
+    },
+    {
+      id: "company",
+      label: "Empresas",
+      matches: (item) => /empresa/i.test(item.clientType || ""),
+    },
+  ];
+}
+
+function getFilteredPipelineItems(items = getPipelineItems()) {
+  const activeFilter = state.activePipelineFilter || "all";
+  const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
+  if (!definition || activeFilter === "all") return items;
+  return items.filter((item) => definition.matches(item));
+}
+
+function renderPipelineQuickFilters(items = getPipelineItems()) {
+  if (!nodes.pipelineQuickFilters) return;
+  const definitions = getPipelineQuickFilterDefinitions();
+  nodes.pipelineQuickFilters.innerHTML = definitions
+    .map((filter) => {
+      const total = items.filter((item) => filter.matches(item)).length;
+      return `
+        <button
+          class="${state.activePipelineFilter === filter.id ? "is-active" : ""}"
+          type="button"
+          data-pipeline-filter="${escapeHtml(filter.id)}"
+        >
+          <span>${escapeHtml(filter.label)}</span>
+          <b>${total}</b>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function isQuoteWorkspaceEffectivelyEmpty() {
+  return (
+    !state.activeProposalId &&
+    !state.activeQuoteRequestId &&
+    !state.selectedIds.size &&
+    !fields.clientName.value.trim() &&
+    !fields.clientEmail.value.trim() &&
+    !fields.clientPhone.value.trim() &&
+    !fields.eventType.value.trim() &&
+    !fields.eventReason.value.trim() &&
+    !fields.notes.value.trim() &&
+    !fields.manualAdjustment.value.trim()
+  );
+}
+
+function renderQuoteWorkspaceGuide() {
+  if (!nodes.quoteEmptyState) return;
+  const shouldShow = isQuoteWorkspaceEffectivelyEmpty() && !state.quoteGuideDismissed;
+  nodes.quoteEmptyState.hidden = !shouldShow;
+}
+
 function getActionTasks(items = getPipelineItems()) {
   const today = startOfDay(new Date());
   const next48h = addDays(today, 2);
@@ -3033,6 +3157,7 @@ function getActionTasks(items = getPipelineItems()) {
         title: "Responder lead",
         note: age?.label || "Novo pedido recebido",
         priority: age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
+        track: "Comercial",
       });
     }
 
@@ -3042,6 +3167,7 @@ function getActionTasks(items = getPipelineItems()) {
         title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Follow-up da proposta",
         note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : `Sem resposta há ${hours || 0}h`,
         priority: item.clientResponse === "confirmar" ? 92 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
+        track: item.clientResponse === "confirmar" ? "Venda" : "Comercial",
       });
     }
 
@@ -3051,6 +3177,7 @@ function getActionTasks(items = getPipelineItems()) {
         title: "Avançar negociação",
         note: item.clientResponse === "alteracao" ? "Cliente pediu ajuste na proposta." : "Ajuste comercial em andamento.",
         priority: item.clientResponse === "alteracao" ? 74 : 50,
+        track: "Comercial",
       });
     }
 
@@ -3060,6 +3187,7 @@ function getActionTasks(items = getPipelineItems()) {
         title: "Cobrar pagamento restante",
         note: "Sinal recebido. Falta registrar saldo.",
         priority: 72,
+        track: "Financeiro",
       });
     }
 
@@ -3071,6 +3199,7 @@ function getActionTasks(items = getPipelineItems()) {
           title: "Concluir checklist operacional",
           note: `${progress.done}/${progress.total} itens concluídos.`,
           priority: status === "planejamento" ? 58 : 44,
+          track: "Operação",
         });
       }
     }
@@ -3081,6 +3210,7 @@ function getActionTasks(items = getPipelineItems()) {
         title: "Revisar evento 48h",
         note: "Confirmar detalhes finais antes da execução.",
         priority: 88,
+        track: "Operação",
       });
     }
   });
@@ -3107,6 +3237,7 @@ function getActionTasks(items = getPipelineItems()) {
         meta: `${formatDateFromIso(first.date)} · ${String(first.time).slice(0, 5)} · ${first.guests || 0} pax`,
         note: `${first.name || "Cliente"} e ${second.name || "Cliente"} no mesmo horário.`,
         priority: hasSoldConflict ? 96 : 64,
+        track: "Agenda",
       });
     }
   }
@@ -3117,7 +3248,12 @@ function getActionTasks(items = getPipelineItems()) {
 function renderActionTasks(items = getPipelineItems()) {
   if (!nodes.actionList) return;
   const tasks = getActionTasks(items);
-  if (nodes.actionCenterMeta) nodes.actionCenterMeta.textContent = `${tasks.length} ação(ões) prioritária(s).`;
+  if (nodes.actionCenterMeta) {
+    const criticalCount = tasks.filter((task) => task.priority >= 90).length;
+    const commercialCount = tasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task))).length;
+    const operationCount = tasks.filter((task) => ["Operação", "Agenda", "Financeiro"].includes(getActionTrack(task))).length;
+    nodes.actionCenterMeta.textContent = `${tasks.length} ação(ões) no radar · ${criticalCount} agora · ${commercialCount} comercial · ${operationCount} operação`;
+  }
   if (!tasks.length) {
     nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora.</p>`;
     return;
@@ -3131,12 +3267,20 @@ function renderActionTasks(items = getPipelineItems()) {
           : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
       return `
         <article class="action-task action-${getActionPriorityClass(task.priority)}">
-          <div>
-            <span>${escapeHtml(task.title)}</span>
-            <strong>${escapeHtml(item.name || "Cliente")}</strong>
-            <small>${escapeHtml(task.meta)} · ${escapeHtml(task.note)}</small>
+          <div class="action-task-topline">
+            <span class="action-task-track">${escapeHtml(getActionTrack(task))}</span>
+            <b class="action-task-urgency">${escapeHtml(getActionUrgencyLabel(task.priority))}</b>
           </div>
-          ${actionButton}
+          <div class="action-task-body">
+            <strong>${escapeHtml(item.name || "Cliente")}</strong>
+            <span class="action-task-title">${escapeHtml(task.title)}</span>
+            <small>${escapeHtml(task.meta)}</small>
+            <p>${escapeHtml(task.note)}</p>
+          </div>
+          <div class="action-task-footer">
+            <small>${escapeHtml(item.type || item.clientType || "Lead")}</small>
+            ${actionButton}
+          </div>
         </article>
       `;
     })
@@ -3267,18 +3411,22 @@ function renderPipelineStage(stage, items) {
 function renderPipeline() {
   if (!nodes.pipelineBoard) return;
   if (!state.supabase) {
+    renderPipelineQuickFilters([]);
     nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     renderPipelineMetrics([]);
     return;
   }
 
   if (!state.session) {
+    renderPipelineQuickFilters([]);
     nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
     renderPipelineMetrics([]);
     return;
   }
 
   const items = getPipelineItems();
+  const filteredItems = getFilteredPipelineItems(items);
+  renderPipelineQuickFilters(items);
   renderPipelineMetrics(items);
   renderAvailabilityAlert();
 
@@ -3291,7 +3439,7 @@ function renderPipeline() {
   nodes.pipelineBoard.innerHTML = rows
     .map((row) => `
       <div class="pipeline-row pipeline-row-${escapeHtml(row.id)}" aria-label="${escapeHtml(row.title)}">
-        ${row.stages.map((stage) => renderPipelineStage(stage, items)).join("")}
+        ${row.stages.map((stage) => renderPipelineStage(stage, filteredItems)).join("")}
       </div>
     `)
     .join("");
@@ -3388,6 +3536,7 @@ async function applyQuoteRequest(requestId) {
 
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
+  state.quoteGuideDismissed = true;
   resetProposalDraftState();
   fields.clientName.value = request.cliente_nome || "";
   fields.clientEmail.value = request.cliente_email || "";
@@ -4046,6 +4195,7 @@ function openSavedProposal(proposalId) {
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
+  state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
   scrollToClientData();
 }
@@ -4218,6 +4368,7 @@ function renderProposal() {
 
 function renderAll() {
   syncDateTimeFromFields();
+  renderQuoteWorkspaceGuide();
   renderPriceList();
   renderPricesTable();
   renderCommercialLibrarySummary();
@@ -4237,6 +4388,7 @@ function startNewProposal() {
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.quoteGuideDismissed = true;
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "" };
   state.privatizationChoice = "";
@@ -4541,6 +4693,10 @@ function bindEvents() {
   document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
   document.querySelector("#emailBtn")?.addEventListener("click", openEmail);
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
+  nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
+  nodes.jumpToPipelineBtn?.addEventListener("click", () => {
+    document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
@@ -4591,6 +4747,12 @@ function bindEvents() {
     }
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
+  nodes.pipelineQuickFilters?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-pipeline-filter]");
+    if (!button) return;
+    state.activePipelineFilter = button.dataset.pipelineFilter || "all";
+    renderPipeline();
   });
   nodes.operationalChecklist?.addEventListener("change", (event) => {
     const checkbox = event.target.closest("input[data-checklist-id]");
