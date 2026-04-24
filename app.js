@@ -3058,8 +3058,8 @@ function getPipelineItems() {
         name: request.cliente_nome || "Cliente",
         company: request.empresa || request.cliente_empresa || request.snapshot?.cliente?.empresa || "",
         type: request.tipo_evento || eventSnapshot.tipo || "Evento",
-        date: request.data_evento || "",
-        time: request.horario_evento || "",
+        date: request.data_evento || eventSnapshot.data || "",
+        time: request.horario_evento || eventSnapshot.horario || "",
         guests: request.convidados || eventSnapshot.convidados || 1,
         duration: Number(request.duracao || eventSnapshot.duracao || 2),
         total: null,
@@ -3070,6 +3070,7 @@ function getPipelineItems() {
         clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
+        eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
       };
     });
 
@@ -3107,6 +3108,7 @@ function getPipelineItems() {
       clientMessage: proposal.cliente_mensagem || proposal.snapshot?.clienteResposta?.mensagem || "",
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
+      eventDate: parseLocalIsoDate(proposal.data_evento || ""),
     };
   });
 
@@ -3513,6 +3515,79 @@ function getLeadAgeInfo(item) {
   return { label, level };
 }
 
+function getDaysUntilEvent(item) {
+  const date = item.eventDate || parseLocalIsoDate(item.date || "");
+  if (!date) return null;
+  return Math.ceil((startOfDay(date).getTime() - startOfDay(new Date()).getTime()) / 864e5);
+}
+
+function getInvestmentWeight(item) {
+  const text = [item.meta?.join(" "), item.snapshot?.qualificacao?.faixaInvestimento, item.snapshot?.qualification?.budgetRange]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/acima|above|60/.test(text)) return { points: 22, label: "Investimento alto" };
+  if (/30/.test(text)) return { points: 16, label: "Investimento forte" };
+  if (/15/.test(text)) return { points: 10, label: "Investimento mapeado" };
+  return { points: 0, label: "" };
+}
+
+function getCommercialScore(item) {
+  const reasons = [];
+  let score = 28;
+  const guests = Number(item.guests) || 0;
+  const daysUntil = getDaysUntilEvent(item);
+  const investment = getInvestmentWeight(item);
+  const clientType = String(item.clientType || item.meta?.[0] || "").toLowerCase();
+  const status = getReportStatus(item);
+
+  if (investment.points) {
+    score += investment.points;
+    reasons.push(investment.label);
+  }
+  if (guests >= 80) {
+    score += 18;
+    reasons.push(`${guests} pax`);
+  } else if (guests >= 40) {
+    score += 12;
+    reasons.push(`${guests} pax`);
+  } else if (guests >= 20) {
+    score += 7;
+  }
+  if (/ag[êe]ncia|dmc|marketing|empresa/.test(clientType)) {
+    score += 12;
+    reasons.push(/ag[êe]ncia|dmc|marketing/.test(clientType) ? "Agência" : "Empresa");
+  }
+  if (daysUntil !== null) {
+    if (daysUntil >= 0 && daysUntil <= 14) {
+      score += 18;
+      reasons.push("Data próxima");
+    } else if (daysUntil <= 45) {
+      score += 10;
+      reasons.push("Janela ativa");
+    }
+  }
+  if (item.kind === "request") {
+    const ageHours = getHoursSince(item.createdAt);
+    if (ageHours >= 24) {
+      score += 10;
+      reasons.push("SLA quente");
+    } else if (ageHours >= 12) {
+      score += 6;
+    }
+  }
+  if (["negociacao", "confirmado", "pagamento_final"].includes(status)) score += 10;
+  if (item.clientResponse === "confirmar") {
+    score += 18;
+    reasons.push("Cliente aprovou");
+  }
+
+  const value = Math.max(0, Math.min(99, Math.round(score)));
+  const level = value >= 80 ? "high" : value >= 60 ? "good" : value >= 45 ? "warm" : "base";
+  const label = value >= 80 ? "Prioridade alta" : value >= 60 ? "Boa oportunidade" : value >= 45 ? "Acompanhar" : "Mapear";
+  return { value, level, label, reasons: reasons.slice(0, 3) };
+}
+
 function getHoursSince(value) {
   if (!value) return 0;
   const date = new Date(value);
@@ -3585,6 +3660,11 @@ function getPipelineQuickFilterDefinitions() {
         if (item.clientResponse === "confirmar" && ["proposta_enviada", "negociacao"].includes(status)) return true;
         return isSoldReportItem(item) && item.eventDate && item.eventDate >= today && item.eventDate <= addDays(today, 2);
       },
+    },
+    {
+      id: "highScore",
+      label: "Score alto",
+      matches: (item) => getCommercialScore(item).value >= 80,
     },
     {
       id: "next7days",
@@ -4014,9 +4094,14 @@ function renderPipelineCard(item) {
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
   const leadAge = getLeadAgeInfo(item);
+  const commercialScore = getCommercialScore(item);
   const leadAgeBadge = leadAge
     ? `<small class="lead-age-badge lead-age-${escapeHtml(leadAge.level)}">${escapeHtml(leadAge.label)}</small>`
     : "";
+  const scoreTitle = commercialScore.reasons.length
+    ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
+    : "";
+  const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} · ${commercialScore.value}</small>`;
   const clientResponseLine = item.clientResponse
     ? `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`
     : "";
@@ -4077,6 +4162,7 @@ function renderPipelineCard(item) {
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
         <span class="pipeline-card-meta-group">
+          ${scoreBadge}
           ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : ""}
         </span>
         ${actionButtons}
