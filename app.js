@@ -1430,7 +1430,8 @@ function getQuickReplyPayload(replyId, context, proposalUrl) {
 async function runQuickReply(replyId, channel) {
   const context = getQuickReplyContext();
   const needsLink = getQuickReplyPresets(context.status).find((item) => item.id === replyId)?.needsLink;
-  const proposalUrl = needsLink ? await ensureProposalLink() : "";
+  let share = needsLink ? await ensureProposalForSharing() : null;
+  const proposalUrl = share?.url || "";
   if (needsLink && !proposalUrl) return;
   const payload = getQuickReplyPayload(replyId, context, proposalUrl);
   if (!payload) return;
@@ -1460,11 +1461,16 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "whatsapp") {
-    const phone = String(context.phone || "").replace(/\D/g, "");
-    const text = encodeURIComponent(payload.message);
-    const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-    showToast(`Abrindo WhatsApp com "${payload.title}".`);
-    window.open(url, "_blank", "noopener");
+    if (!share) {
+      share = await ensureProposalForSharing();
+      if (!share?.saved || !share?.url) return;
+    }
+    await sendProposalWhatsAppViaZapi({
+      proposal: share.saved,
+      proposalUrl: share.url,
+      message: payload.message,
+      title: payload.title,
+    });
   }
 }
 
@@ -5464,17 +5470,69 @@ function getPublicProposalUrl(proposal) {
   return token ? `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}` : "";
 }
 
-async function ensureProposalLink() {
+async function ensureProposalForSharing() {
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
   const saved = await saveCurrentProposal(status);
-  if (!saved) return "";
+  if (!saved) return null;
   const url = getPublicProposalUrl(saved);
   if (!url) {
     showToast("Rode o schema atualizado no Supabase para gerar links públicos.");
-    return "";
+    return null;
   }
-  return url;
+  return { saved, url };
+}
+
+async function ensureProposalLink() {
+  const share = await ensureProposalForSharing();
+  return share?.url || "";
+}
+
+function buildProposalWhatsAppMessage(proposalUrl) {
+  const clientName = fields.clientName.value.trim();
+  const firstName = clientName.split(/\s+/)[0] || "";
+  return [
+    `Olá${firstName ? `, ${firstName}` : ""}!`,
+    "",
+    "Segue o link da proposta comercial da Embaixada Carioca:",
+    proposalUrl,
+    "",
+    "Pelo link você pode aprovar a proposta, solicitar ajustes de data, horário ou convidados, ou falar com a nossa equipe.",
+  ].join("\n");
+}
+
+async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+  if (!state.supabase || !state.session) {
+    showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
+    return false;
+  }
+
+  const phone = fields.clientPhone.value.trim() || proposal?.cliente_whatsapp || proposal?.snapshot?.client?.phone || "";
+  if (!phone.replace(/\D/g, "")) {
+    showToast("Preencha o Celular/WhatsApp do cliente antes de enviar.");
+    return false;
+  }
+
+  showToast("Enviando proposta por WhatsApp...");
+  const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
+    body: {
+      proposalId: proposal.id,
+      phone,
+      message,
+      proposalUrl,
+      title,
+    },
+  });
+
+  if (error || data?.ok === false) {
+    console.warn("Falha no envio direto por WhatsApp.", error || data);
+    showToast(data?.message || "Não foi possível enviar pela Z-API. Confira a configuração.");
+    return false;
+  }
+
+  showToast("Proposta enviada por WhatsApp e registrada no histórico.");
+  await loadProposalHistory();
+  return true;
 }
 
 async function openEmail() {
@@ -5567,15 +5625,14 @@ async function runProposalNextStepAction(action) {
 }
 
 async function openWhatsApp() {
-  const phone = fields.clientPhone.value.replace(/\D/g, "");
-  const proposalUrl = await ensureProposalLink();
-  if (!proposalUrl) return;
-  const text = encodeURIComponent(
-    `Olá! Segue a proposta comercial da Embaixada Carioca: ${proposalUrl}\n\nPelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados.`,
-  );
-  const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-  showToast("Link da proposta gerado. Abrindo WhatsApp.");
-  window.open(url, "_blank", "noopener");
+  const share = await ensureProposalForSharing();
+  if (!share?.saved || !share?.url) return;
+  await sendProposalWhatsAppViaZapi({
+    proposal: share.saved,
+    proposalUrl: share.url,
+    message: buildProposalWhatsAppMessage(share.url),
+    title: "Proposta comercial",
+  });
 }
 
 function resetPrices() {

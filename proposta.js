@@ -9,6 +9,7 @@ const token = new URLSearchParams(window.location.search).get("p") || "";
 const supabaseClient = window.supabase?.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
 
 let currentProposal = null;
+let proposalViewRecorded = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -340,6 +341,21 @@ async function loadProposal() {
     return;
   }
   renderProposal(data[0]);
+  recordProposalView();
+}
+
+async function recordProposalView() {
+  if (proposalViewRecorded || !token || !supabaseClient) return;
+  proposalViewRecorded = true;
+  try {
+    await supabaseClient.rpc("record_public_proposal_view", {
+      proposal_token: token,
+      user_agent: navigator.userAgent || "",
+      referrer: document.referrer || "",
+    });
+  } catch (error) {
+    console.warn("Falha ao registrar visualizacao da proposta.", error);
+  }
 }
 
 card.addEventListener("click", (event) => {
