@@ -2356,7 +2356,9 @@ textarea {
 
 .price-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: stretch;
 }
 
 .price-row {
@@ -2368,6 +2370,7 @@ textarea {
   gap: 14px;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   padding: 14px;
+  height: 100%;
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -4488,6 +4491,10 @@ input[type="range"] {
 
   .price-row {
     grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .price-list {
+    grid-template-columns: 1fr;
   }
 
   .item-cost {
