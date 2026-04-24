@@ -138,6 +138,57 @@ alter table public.propostas
 create unique index if not exists propostas_public_token_idx
   on public.propostas (public_token);
 
+create table if not exists public.proposta_visualizacoes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  proposta_id uuid not null references public.propostas(id) on delete cascade,
+  public_token uuid not null,
+  user_agent text,
+  referrer text
+);
+
+create index if not exists proposta_visualizacoes_proposta_idx
+  on public.proposta_visualizacoes (proposta_id, created_at desc);
+
+alter table public.proposta_visualizacoes enable row level security;
+
+drop policy if exists "Equipe autenticada pode ler visualizacoes de proposta" on public.proposta_visualizacoes;
+create policy "Equipe autenticada pode ler visualizacoes de proposta"
+on public.proposta_visualizacoes
+for select
+to authenticated
+using ((select public.is_team_member()));
+
+create or replace function public.record_public_proposal_view(
+  proposal_token uuid,
+  user_agent text default null,
+  referrer text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_id uuid;
+begin
+  select p.id
+    into target_id
+  from public.propostas p
+  where p.public_token = proposal_token
+  limit 1;
+
+  if target_id is null then
+    return false;
+  end if;
+
+  insert into public.proposta_visualizacoes (proposta_id, public_token, user_agent, referrer)
+  values (target_id, proposal_token, left(coalesce(user_agent, ''), 500), left(coalesce(referrer, ''), 500));
+
+  return true;
+end;
+$$;
+
 create or replace function public.get_public_proposal(proposal_token uuid)
 returns table (
   id uuid,
@@ -299,6 +350,7 @@ $$;
 
 grant execute on function public.get_public_proposal(uuid) to anon, authenticated;
 grant execute on function public.respond_public_proposal(uuid, text, date, time, integer, text) to anon, authenticated;
+grant execute on function public.record_public_proposal_view(uuid, text, text) to anon, authenticated;
 
 create index if not exists solicitacoes_cotacao_created_at_idx
   on public.solicitacoes_cotacao (created_at desc);
