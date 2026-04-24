@@ -3451,6 +3451,8 @@ function initializeReportDefaults() {
 }
 
 function renderPipelineMetrics(items = getPipelineItems()) {
+  renderGlobalSearch(items);
+  renderClientRegistry(items);
   if (!nodes.metricStageLead) return;
   const counts = {
     lead: 0,
@@ -3485,8 +3487,6 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   nodes.metricStage48h.textContent = String(counts.quarentaOito);
   nodes.metricStagePosVenda.textContent = String(counts.posVenda);
   renderPeriodMetrics(items);
-  renderGlobalSearch(items);
-  renderClientRegistry(items);
   renderActionTasks(items);
   renderDashboardReports(items);
 }
@@ -3805,6 +3805,7 @@ function renderClientRegistry(items = getPipelineItems()) {
   const clients = getClientRegistry(items);
   const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
   const filtered = term ? clients.filter((client) => client.searchText.includes(term)) : clients;
+  const maxClients = document.body?.dataset?.page === "clientes" ? 24 : 6;
   if (nodes.clientRegistryMeta) {
     const recurring = clients.filter((client) => client.items.length > 1).length;
     nodes.clientRegistryMeta.textContent = `${clients.length} cliente(s) · ${recurring} com histórico`;
@@ -3813,7 +3814,7 @@ function renderClientRegistry(items = getPipelineItems()) {
     nodes.clientDirectory.innerHTML = `<p>Nenhum cliente carregado ainda.</p>`;
     return;
   }
-  nodes.clientDirectory.innerHTML = filtered.slice(0, 6).map(renderClientRegistryCard).join("") || `<p>Nenhum cliente encontrado.</p>`;
+  nodes.clientDirectory.innerHTML = filtered.slice(0, maxClients).map(renderClientRegistryCard).join("") || `<p>Nenhum cliente encontrado.</p>`;
 }
 
 function renderClientRegistryCard(client) {
@@ -4377,7 +4378,10 @@ function renderPipelineStage(stage, items) {
 }
 
 function renderPipeline() {
-  if (!nodes.pipelineBoard) return;
+  if (!nodes.pipelineBoard) {
+    renderPipelineMetrics(getPipelineItems());
+    return;
+  }
   if (!state.supabase) {
     renderPipelineQuickFilters([]);
     renderOperationsAgenda([]);
