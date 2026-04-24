@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v62" />
+    <link rel="stylesheet" href="./styles.css?v=20260423-eventos-v64" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -132,6 +132,10 @@
               <span><strong>1.</strong> Ações de hoje mostram o que exige resposta primeiro.</span>
               <span><strong>2.</strong> Arraste o card ou use Mudar para atualizar a etapa.</span>
               <span><strong>3.</strong> Abra a proposta para ajustar valores, enviar link e acompanhar histórico.</span>
+            </div>
+            <div class="pipeline-quick-filters" aria-label="Filtros rápidos do funil">
+              <span>Filtros rápidos</span>
+              <div class="pipeline-filter-list" id="pipelineQuickFilters"></div>
             </div>
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
@@ -261,6 +265,34 @@
               <a href="#quoteCalcSection">Cálculos</a>
               <a href="#quoteTermsSection">Condições</a>
             </nav>
+            <section class="quote-empty-state" id="quoteEmptyState" aria-label="Como começar uma proposta">
+              <div class="quote-empty-copy">
+                <span>Nova proposta</span>
+                <strong>Escolha o caminho mais rápido para começar.</strong>
+                <p>Abra um lead do funil para carregar os dados automaticamente ou monte uma proposta manual quando precisar atender algo fora do fluxo.</p>
+              </div>
+              <div class="quote-empty-steps">
+                <article>
+                  <span>01</span>
+                  <strong>Abra um lead</strong>
+                  <p>Use o funil para puxar cliente, data, origem e contexto comercial sem retrabalho.</p>
+                </article>
+                <article>
+                  <span>02</span>
+                  <strong>Ajuste o evento</strong>
+                  <p>Filtre produtos, revise valores e deixe a proposta pronta para vender com segurança.</p>
+                </article>
+                <article>
+                  <span>03</span>
+                  <strong>Envie e acompanhe</strong>
+                  <p>Salve, envie por link ou PDF e acompanhe sinal, pagamentos e histórico em um só lugar.</p>
+                </article>
+              </div>
+              <div class="quote-empty-actions">
+                <button class="primary" id="startManualProposalBtn" type="button">Nova proposta manual</button>
+                <button class="secondary" id="jumpToPipelineBtn" type="button">Ver leads no funil</button>
+              </div>
+            </section>
             <div class="form-section" id="clientDataSection">
               <div class="section-heading">
                 <span>01</span>
@@ -542,6 +574,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260423-eventos-v62"></script>
+    <script defer src="./app.js?v=20260423-eventos-v64"></script>
   </body>
 </html>

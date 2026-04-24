@@ -69,6 +69,38 @@ function getActionLabel(value) {
   return labels[value] || "";
 }
 
+function getDecisionCopy(proposal) {
+  const status = proposal.status || "";
+  if (status === "confirmado") {
+    return {
+      title: "Sinal recebido e reserva confirmada",
+      note: "A proposta já avançou de etapa. Se precisar rever algum detalhe, a equipe pode seguir com você por e-mail ou WhatsApp.",
+    };
+  }
+  if (status === "pagamento_final") {
+    return {
+      title: "Pagamento restante em andamento",
+      note: "A equipe acompanha o saldo final e os próximos combinados do evento.",
+    };
+  }
+  if (status === "planejamento" || status === "evento_proximo") {
+    return {
+      title: "Evento em preparação",
+      note: "Os detalhes operacionais já estão sendo conduzidos pela equipe da Embaixada Carioca.",
+    };
+  }
+  if (status === "cancelado") {
+    return {
+      title: "Pedido encerrado",
+      note: "Se quiser retomar a conversa em outro momento, a equipe pode montar uma nova proposta com você.",
+    };
+  }
+  return {
+    title: "Você pode aprovar agora ou pedir um ajuste",
+    note: "Ao aprovar, nossa equipe segue com o sinal e a reserva. Se quiser mudar data, horário ou convidados, use o pedido de alteração.",
+  };
+}
+
 function setMessage(message, type = "neutral") {
   const node = document.querySelector("#publicProposalStatus");
   if (!node) return;
@@ -94,11 +126,36 @@ function renderProposal(proposal) {
   const selectedItems = Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems : [];
   const response = proposal.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const responseMessage = proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "";
+  const decision = getDecisionCopy(proposal);
+  const eventTitle = event.type || proposal.tipo_evento || "Proposta de evento";
+  const guests = proposal.convidados || event.guests || 0;
+  const dateLabel = formatDate(proposal.data_evento);
+  const timeLabel = formatTime(proposal.horario_evento);
+  const durationLabel = formatDuration(proposal.duracao || event.duration);
 
-  title.textContent = event.type || proposal.tipo_evento || "Proposta de evento";
-  subtitle.textContent = `${proposal.cliente_nome || "Cliente"} · ${formatDate(proposal.data_evento)} · ${proposal.convidados || event.guests || 0} convidados`;
+  title.textContent = eventTitle;
+  subtitle.textContent = `${proposal.cliente_nome || "Cliente"} · ${dateLabel} · ${guests} convidados`;
 
   card.innerHTML = `
+    <div class="public-proposal-topline">
+      <span class="public-proposal-chip is-status">${escapeHtml(getStatusLabel(proposal.status))}</span>
+      <span class="public-proposal-chip">${escapeHtml(eventTitle)}</span>
+      <span class="public-proposal-chip">${escapeHtml(String(guests))} convidados</span>
+    </div>
+
+    <div class="public-proposal-stage">
+      <div class="public-proposal-stage-copy">
+        <span>Experiência sugerida</span>
+        <h2>${escapeHtml(eventTitle)}</h2>
+        <p>Proposta pensada para ${escapeHtml(String(guests))} convidados, com duração de ${escapeHtml(durationLabel)}, no Morro da Urca.</p>
+      </div>
+      <div class="public-proposal-decision-card">
+        <span>Próximo passo</span>
+        <strong>${escapeHtml(decision.title)}</strong>
+        <p>${escapeHtml(decision.note)}</p>
+      </div>
+    </div>
+
     <div class="public-proposal-summary">
       <div>
         <span>Cliente</span>
@@ -106,11 +163,11 @@ function renderProposal(proposal) {
       </div>
       <div>
         <span>Data e horário</span>
-        <strong>${escapeHtml(formatDate(proposal.data_evento))} · ${escapeHtml(formatTime(proposal.horario_evento))}</strong>
+        <strong>${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</strong>
       </div>
       <div>
         <span>Convidados</span>
-        <strong>${escapeHtml(String(proposal.convidados || event.guests || 0))}</strong>
+        <strong>${escapeHtml(String(guests))}</strong>
       </div>
       <div>
         <span>Total estimado</span>
@@ -124,50 +181,11 @@ function renderProposal(proposal) {
         : ""
     }
 
-    <div class="public-proposal-section">
-      <span>Resumo</span>
-      <h2>${escapeHtml(event.type || proposal.tipo_evento || "Evento")}</h2>
-      <p>Experiência para ${escapeHtml(String(proposal.convidados || event.guests || 0))} convidados, com duração de ${escapeHtml(formatDuration(proposal.duracao || event.duration))}, no Morro da Urca.</p>
-    </div>
-
-    <div class="public-proposal-items">
-      <h3>Itens incluídos</h3>
-      ${
-        selectedItems.length
-          ? selectedItems
-              .map(
-                (item) => `
-                  <article>
-                    <div>
-                      <strong>${escapeHtml(item.nome)}</strong>
-                      <p>${escapeHtml(item.descricao || "")}</p>
-                      <small>${escapeHtml(item.calc?.detail || "")}</small>
-                    </div>
-                    <b>${formatMoney(item.calc?.total || 0)}</b>
-                  </article>
-                `,
-              )
-              .join("")
-          : "<p>Itens a confirmar com a equipe de eventos.</p>"
-      }
-    </div>
-
-    <div class="public-proposal-totals">
-      <div><span>Subtotal</span><strong>${formatMoney(proposal.subtotal || totals.subtotal)}</strong></div>
-      <div><span>Taxa de serviço</span><strong>${formatMoney(proposal.taxa_servico || totals.serviceFee)}</strong></div>
-      <div><span>Privatização</span><strong>${formatMoney(proposal.privatizacao || totals.privatizationAmount)}</strong></div>
-      <div><span>Total estimado</span><strong>${formatMoney(proposal.total || totals.total)}</strong></div>
-    </div>
-
-    ${
-      snapshot.generalTerms
-        ? `<details class="public-proposal-terms"><summary>Condições comerciais</summary><p>${formatMultiline(snapshot.generalTerms)}</p></details>`
-        : ""
-    }
-
     <div class="public-proposal-actions">
-      <h3>Como deseja seguir?</h3>
-      <p>Você pode aprovar a proposta, solicitar um ajuste ou cancelar este pedido. A reserva é confirmada após o pagamento do sinal.</p>
+      <div class="public-proposal-actions-copy">
+        <h3>Como deseja seguir?</h3>
+        <p>Você pode aprovar a proposta, solicitar um ajuste ou encerrar este pedido. A reserva é confirmada após o pagamento do sinal.</p>
+      </div>
       <div class="public-proposal-buttons">
         <button class="primary" type="button" data-public-action="confirmar">Aprovar proposta</button>
         <button class="secondary" type="button" data-public-action="alteracao">Solicitar alteração</button>
@@ -187,7 +205,7 @@ function renderProposal(proposal) {
           </label>
           <label>
             Convidados
-            <input id="publicRequestedGuests" type="number" min="1" max="500" placeholder="${escapeHtml(String(proposal.convidados || event.guests || ""))}" />
+            <input id="publicRequestedGuests" type="number" min="1" max="500" placeholder="${escapeHtml(String(guests || ""))}" />
           </label>
         </div>
         <label>
@@ -200,6 +218,51 @@ function renderProposal(proposal) {
         </div>
       </form>
       <p id="publicProposalStatus" class="public-proposal-status" role="status" aria-live="polite">Status atual: ${escapeHtml(getStatusLabel(proposal.status))}.</p>
+    </div>
+
+    <div class="public-proposal-layout">
+      <div class="public-proposal-items">
+        <h3>Itens incluídos</h3>
+        ${
+          selectedItems.length
+            ? selectedItems
+                .map(
+                  (item) => `
+                    <article>
+                      <div>
+                        <strong>${escapeHtml(item.nome)}</strong>
+                        <p>${escapeHtml(item.descricao || "")}</p>
+                        <small>${escapeHtml(item.calc?.detail || "")}</small>
+                      </div>
+                      <b>${formatMoney(item.calc?.total || 0)}</b>
+                    </article>
+                  `,
+                )
+                .join("")
+            : "<p>Itens a confirmar com a equipe de eventos.</p>"
+        }
+      </div>
+
+      <aside class="public-proposal-side-stack">
+        <div class="public-proposal-totals">
+          <div><span>Subtotal</span><strong>${formatMoney(proposal.subtotal || totals.subtotal)}</strong></div>
+          <div><span>Taxa de serviço</span><strong>${formatMoney(proposal.taxa_servico || totals.serviceFee)}</strong></div>
+          <div><span>Privatização</span><strong>${formatMoney(proposal.privatizacao || totals.privatizationAmount)}</strong></div>
+          <div><span>Total estimado</span><strong>${formatMoney(proposal.total || totals.total)}</strong></div>
+        </div>
+
+        <div class="public-proposal-contact-card">
+          <span>Contato da equipe</span>
+          <strong>Eventos Embaixada Carioca</strong>
+          <p>Se preferir falar antes de responder, escreva para eventos@embaixadacarioca.com.br ou chame no +55 21 97142-6007.</p>
+        </div>
+
+        ${
+          snapshot.generalTerms
+            ? `<details class="public-proposal-terms"><summary>Condições comerciais</summary><p>${formatMultiline(snapshot.generalTerms)}</p></details>`
+            : ""
+        }
+      </aside>
     </div>
   `;
 }
@@ -272,7 +335,7 @@ async function loadProposal() {
 
   const { data, error } = await supabaseClient.rpc("get_public_proposal", { proposal_token: token });
   if (error || !data?.length) {
-    console.warn("Falha ao carregar proposta publica.", error);
+    console.warn("Falha ao carregar proposta pública.", error);
     renderError("O link pode ter expirado ou ainda falta ativar a consulta pública no Supabase.");
     return;
   }
