@@ -604,6 +604,7 @@ const fields = {
   reportEndDate: document.querySelector("#reportEndDate"),
   reportStatusFilter: document.querySelector("#reportStatusFilter"),
   reportKindFilter: document.querySelector("#reportKindFilter"),
+  globalSearchInput: document.querySelector("#globalSearchInput"),
 };
 
 const nodes = {
@@ -656,6 +657,9 @@ const nodes = {
   quickReplies: document.querySelector("#quickReplies"),
   startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
+  globalSearchResults: document.querySelector("#globalSearchResults"),
+  clientDirectory: document.querySelector("#clientDirectory"),
+  clientRegistryMeta: document.querySelector("#clientRegistryMeta"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -3056,6 +3060,8 @@ function getPipelineItems() {
         status,
         stage: getPipelineStage(status),
         name: request.cliente_nome || "Cliente",
+        email: request.cliente_email || request.snapshot?.cliente?.email || "",
+        phone: request.cliente_whatsapp || request.snapshot?.cliente?.whatsapp || "",
         company: request.empresa || request.cliente_empresa || request.snapshot?.cliente?.empresa || "",
         type: request.tipo_evento || eventSnapshot.tipo || "Evento",
         date: request.data_evento || eventSnapshot.data || "",
@@ -3082,6 +3088,8 @@ function getPipelineItems() {
       status,
       stage: getPipelineStage(status),
       name: proposal.cliente_nome || "Cliente",
+      email: proposal.cliente_email || proposal.snapshot?.client?.email || proposal.snapshot?.cliente?.email || "",
+      phone: proposal.cliente_whatsapp || proposal.snapshot?.client?.phone || proposal.snapshot?.cliente?.whatsapp || "",
       company:
         proposal.empresa ||
         proposal.cliente_empresa ||
@@ -3477,6 +3485,8 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   nodes.metricStage48h.textContent = String(counts.quarentaOito);
   nodes.metricStagePosVenda.textContent = String(counts.posVenda);
   renderPeriodMetrics(items);
+  renderGlobalSearch(items);
+  renderClientRegistry(items);
   renderActionTasks(items);
   renderDashboardReports(items);
 }
@@ -3711,6 +3721,170 @@ function renderPipelineQuickFilters(items = getPipelineItems()) {
     .join("");
 }
 
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getItemSearchText(item) {
+  return normalizeSearchValue(
+    [
+      item.name,
+      item.company,
+      item.email,
+      item.phone,
+      item.type,
+      item.clientType,
+      item.reference,
+      item.date ? formatDateFromIso(item.date) : "",
+      item.time,
+      item.guests ? `${item.guests} pax` : "",
+      item.meta?.join(" "),
+      item.status ? getProposalStatusLabel(item.status) : "",
+    ].filter(Boolean).join(" "),
+  );
+}
+
+function getClientRegistry(items = getPipelineItems()) {
+  const registry = new Map();
+  items.forEach((item) => {
+    const emailKey = normalizeSearchValue(item.email);
+    const phoneKey = String(item.phone || "").replace(/\D/g, "");
+    const companyKey = normalizeSearchValue(item.company);
+    const nameKey = normalizeSearchValue(item.name);
+    const key = emailKey || phoneKey || companyKey || nameKey || item.id;
+    const current = registry.get(key) || {
+      key,
+      name: item.name || "Cliente",
+      company: item.company || "",
+      email: item.email || "",
+      phone: item.phone || "",
+      clientType: item.clientType || "",
+      items: [],
+      totalValue: 0,
+      soldCount: 0,
+      lastUpdated: item.updatedAt || item.createdAt || "",
+      searchText: "",
+    };
+    current.name = current.name || item.name || "Cliente";
+    current.company = current.company || item.company || "";
+    current.email = current.email || item.email || "";
+    current.phone = current.phone || item.phone || "";
+    current.clientType = current.clientType || item.clientType || "";
+    current.items.push(item);
+    if (item.kind === "proposal" && Number(item.total)) current.totalValue += Number(item.total);
+    if (item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status))) current.soldCount += 1;
+    if (new Date(item.updatedAt || item.createdAt || 0) > new Date(current.lastUpdated || 0)) {
+      current.lastUpdated = item.updatedAt || item.createdAt || "";
+    }
+    registry.set(key, current);
+  });
+  return [...registry.values()]
+    .map((client) => ({
+      ...client,
+      searchText: normalizeSearchValue(
+        [
+          client.name,
+          client.company,
+          client.email,
+          client.phone,
+          client.clientType,
+          client.items.map((item) => getItemSearchText(item)).join(" "),
+        ].join(" "),
+      ),
+    }))
+    .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
+}
+
+function renderClientRegistry(items = getPipelineItems()) {
+  if (!nodes.clientDirectory) return;
+  const clients = getClientRegistry(items);
+  const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
+  const filtered = term ? clients.filter((client) => client.searchText.includes(term)) : clients;
+  if (nodes.clientRegistryMeta) {
+    const recurring = clients.filter((client) => client.items.length > 1).length;
+    nodes.clientRegistryMeta.textContent = `${clients.length} cliente(s) · ${recurring} com histórico`;
+  }
+  if (!clients.length) {
+    nodes.clientDirectory.innerHTML = `<p>Nenhum cliente carregado ainda.</p>`;
+    return;
+  }
+  nodes.clientDirectory.innerHTML = filtered.slice(0, 6).map(renderClientRegistryCard).join("") || `<p>Nenhum cliente encontrado.</p>`;
+}
+
+function renderClientRegistryCard(client) {
+  const latest = client.items[0];
+  const latestButton =
+    latest.kind === "proposal"
+      ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(latest.id)}">Abrir último</button>`
+      : `<button class="secondary" type="button" data-use-request="${escapeHtml(latest.id)}">Abrir último</button>`;
+  const history = client.items
+    .slice(0, 3)
+    .map((item) => `<li>${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data a definir")} · ${escapeHtml(item.type || "Evento")} · ${escapeHtml(getProposalStatusLabel(item.status))}</li>`)
+    .join("");
+  return `
+    <article class="client-registry-card">
+      <div class="client-registry-topline">
+        <span>${escapeHtml(client.clientType || "Cliente")}</span>
+        <strong>${escapeHtml(client.items.length)} registro(s)</strong>
+      </div>
+      <div class="client-registry-main">
+        <strong>${escapeHtml(client.name)}</strong>
+        <small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || "Sem contato completo")}</small>
+      </div>
+      <ul>${history}</ul>
+      <div class="client-registry-footer">
+        <b>${client.totalValue ? formatMoney(client.totalValue) : client.soldCount ? `${client.soldCount} evento(s)` : "Sem venda registrada"}</b>
+        ${latestButton}
+      </div>
+    </article>
+  `;
+}
+
+function renderGlobalSearch(items = getPipelineItems()) {
+  if (!nodes.globalSearchResults) return;
+  const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
+  if (!term) {
+    nodes.globalSearchResults.innerHTML = `<p>Digite para encontrar leads, propostas e clientes.</p>`;
+    return;
+  }
+  const matchedItems = items.filter((item) => getItemSearchText(item).includes(term)).slice(0, 7);
+  const matchedClients = getClientRegistry(items).filter((client) => client.searchText.includes(term)).slice(0, 3);
+  const clientResults = matchedClients
+    .map((client) => {
+      const latest = client.items[0];
+      const actionButton =
+        latest?.kind === "proposal"
+          ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(latest.id)}">Abrir</button>`
+          : `<button class="secondary" type="button" data-use-request="${escapeHtml(latest?.id || "")}">Abrir</button>`;
+      return `<article class="global-search-hit"><span>Cliente</span><strong>${escapeHtml(client.name)}</strong><small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || `${client.items.length} registro(s)`)}</small>${actionButton}</article>`;
+    })
+    .join("");
+  const itemResults = matchedItems.map(renderGlobalSearchItem).join("");
+  nodes.globalSearchResults.innerHTML = clientResults || itemResults
+    ? `${clientResults}${itemResults}`
+    : `<p>Nada encontrado para essa busca.</p>`;
+}
+
+function renderGlobalSearchItem(item) {
+  const actionButton =
+    item.kind === "proposal"
+      ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
+      : `<button class="secondary" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+  return `
+    <article class="global-search-hit">
+      <span>${escapeHtml(getProposalStatusLabel(item.status))}</span>
+      <strong>${escapeHtml(item.name || "Cliente")}</strong>
+      <small>${escapeHtml([item.type, item.date ? formatDateFromIso(item.date) : "", item.time ? String(item.time).slice(0, 5) : "", item.reference].filter(Boolean).join(" · "))}</small>
+      ${actionButton}
+    </article>
+  `;
+}
+
 function isQuoteWorkspaceEffectivelyEmpty() {
   return (
     !state.activeProposalId &&
@@ -3847,7 +4021,7 @@ function renderActionTasks(items = getPipelineItems()) {
     const criticalCount = tasks.filter((task) => task.priority >= 90).length;
     const commercialCount = tasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task))).length;
     const operationCount = tasks.filter((task) => ["Operação", "Agenda", "Financeiro"].includes(getActionTrack(task))).length;
-    nodes.actionCenterMeta.textContent = `${tasks.length} ação(ões) no radar · ${criticalCount} agora · ${commercialCount} comercial · ${operationCount} operação`;
+    nodes.actionCenterMeta.textContent = `${tasks.length} no radar · ${criticalCount} agora · ${commercialCount} venda · ${operationCount} operação`;
   }
   if (!tasks.length) {
     nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora.</p>`;
@@ -5588,6 +5762,29 @@ function bindEvents() {
     if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
   });
   nodes.operationsAgenda?.addEventListener("click", (event) => {
+    const proposalButton = event.target.closest("button[data-proposal-id]");
+    if (proposalButton) {
+      openSavedProposal(proposalButton.dataset.proposalId);
+      return;
+    }
+    const requestButton = event.target.closest("button[data-use-request]");
+    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
+  fields.globalSearchInput?.addEventListener("input", () => {
+    const items = getPipelineItems();
+    renderGlobalSearch(items);
+    renderClientRegistry(items);
+  });
+  nodes.globalSearchResults?.addEventListener("click", (event) => {
+    const proposalButton = event.target.closest("button[data-proposal-id]");
+    if (proposalButton) {
+      openSavedProposal(proposalButton.dataset.proposalId);
+      return;
+    }
+    const requestButton = event.target.closest("button[data-use-request]");
+    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+  });
+  nodes.clientDirectory?.addEventListener("click", (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
       openSavedProposal(proposalButton.dataset.proposalId);

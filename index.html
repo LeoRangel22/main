@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260424-eventos-v69" />
+    <link rel="stylesheet" href="./styles.css?v=20260424-eventos-v70" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -108,6 +108,34 @@
             </div>
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
+          <section class="client-command-center" aria-label="Busca e carteira de clientes">
+            <div class="global-search-panel">
+              <div class="command-heading">
+                <div>
+                  <span>Busca global</span>
+                  <strong>Cliente, empresa, telefone, data ou referência</strong>
+                </div>
+              </div>
+              <label class="global-search-box">
+                <input id="globalSearchInput" type="search" placeholder="Buscar Leonardo, agência, 30/04, EC-..." autocomplete="off" />
+              </label>
+              <div class="global-search-results" id="globalSearchResults">
+                <p>Digite para encontrar leads, propostas e clientes.</p>
+              </div>
+            </div>
+            <div class="client-registry-panel">
+              <div class="command-heading">
+                <div>
+                  <span>Clientes</span>
+                  <strong>Carteira automática e histórico por contato</strong>
+                </div>
+                <small id="clientRegistryMeta">Atualiza com o funil.</small>
+              </div>
+              <div class="client-directory-list" id="clientDirectory">
+                <p>Entre com Supabase para ver clientes.</p>
+              </div>
+            </div>
+          </section>
           <section class="action-center" aria-label="Ações de hoje">
             <div class="action-center-heading">
               <div>
@@ -599,6 +627,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260424-eventos-v69"></script>
+    <script defer src="./app.js?v=20260424-eventos-v70"></script>
   </body>
 </html>
