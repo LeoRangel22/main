@@ -3324,7 +3324,7 @@ function getPipelineItems() {
         date: request.data_evento || eventSnapshot.data || "",
         time: request.horario_evento || eventSnapshot.horario || "",
         guests: request.convidados || eventSnapshot.convidados || 1,
-        duration: Number(request.duracao || eventSnapshot.duracao || 2),
+        duration: Number(request.duracao || eventSnapshot.duracao || 1),
         total: null,
         createdAt: request.created_at,
         updatedAt: request.updated_at || request.created_at,
@@ -3357,7 +3357,7 @@ function getPipelineItems() {
       date: proposal.data_evento || "",
       time: proposal.horario_evento || "",
       guests: proposal.convidados || 1,
-      duration: Number(proposal.duracao || proposal.snapshot?.event?.duration || 2),
+      duration: Number(proposal.duracao || proposal.snapshot?.event?.duration || 1),
       total: proposal.total || 0,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
@@ -4835,7 +4835,7 @@ async function applyQuoteRequest(requestId) {
   fields.eventTime.value = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "18:00";
   syncDateTimeFromFields();
   fields.guestCount.value = request.convidados || 30;
-  fields.eventDuration.value = String(request.duracao || 2);
+  fields.eventDuration.value = String(request.duracao || 1);
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
   const guidedKey = getGuidedEventKeyFromType(request.tipo_evento);
@@ -5464,7 +5464,7 @@ function applyProposalSnapshot(snapshot) {
   fields.eventTime.value = snapshot.event?.time || "18:00";
   syncDateTimeFromFields();
   fields.guestCount.value = snapshot.event?.guests || 30;
-  fields.eventDuration.value = String(snapshot.event?.duration || 2);
+  fields.eventDuration.value = String(snapshot.event?.duration || 1);
   fields.validity.value = snapshot.event?.validity || "14 dias";
   fields.manualAdjustment.value = snapshot.event?.manualAdjustment || snapshot.totals?.adjustment || "";
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
@@ -5713,7 +5713,7 @@ function startNewProposal() {
   fields.eventTime.value = "18:00";
   syncDateTimeFromFields();
   fields.guestCount.value = "30";
-  fields.eventDuration.value = "2";
+  fields.eventDuration.value = "1";
   fields.validity.value = "14 dias";
   fields.manualAdjustment.value = "";
   fields.manualAdjustmentLabel.value = "";
