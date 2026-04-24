@@ -1992,22 +1992,41 @@ function renderPriceList() {
     .map((item) => {
       const calc = calculateItem(item);
       const checked = state.selectedIds.has(item.id) ? "checked" : "";
+      const priorityLabel =
+        item.priority === "alta"
+          ? "Prioridade alta"
+          : item.priority === "baixa"
+            ? "Prioridade baixa"
+            : "Prioridade média";
       return `
         <label class="price-row">
           <input type="checkbox" data-select-id="${escapeHtml(item.id)}" ${checked} />
           <span class="price-row-body">
-            <span class="price-category-badge">${escapeHtml(item.tipoEvento)}</span>
-            <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
+            <span class="price-card-head">
+              <span class="price-category-badge">${escapeHtml(item.tipoEvento)}</span>
+              <span class="item-cost">
+                <span class="item-cost-label">${checked ? "Incluído na proposta" : "Valor estimado"}</span>
+                <strong>${formatMoney(calc.total)}</strong>
+              </span>
+            </span>
             <span class="price-name">
               <strong>${escapeHtml(item.nome)}</strong>
-              ${item.idioma ? `<span class="chip">${escapeHtml(item.idioma)}</span>` : ""}
-              <span class="chip">${escapeHtml(item.priority === "alta" ? "Prioridade alta" : item.priority === "baixa" ? "Prioridade baixa" : "Prioridade média")}</span>
             </span>
-            <p>${escapeHtml(item.commercialSummary || item.descricao)}</p>
-            <p><strong>Indicado:</strong> ${escapeHtml(item.recommendedWindows || "Sob consulta")}</p>
-            <p>${escapeHtml(calc.detail)}</p>
+            <span class="price-meta">
+              ${item.idioma ? `<span class="chip">${escapeHtml(item.idioma)}</span>` : ""}
+              <span class="chip">${escapeHtml(priorityLabel)}</span>
+              <span class="chip chip-soft">${escapeHtml(item.formula === "fixo" ? "Preço fixo" : "Por pessoa")}</span>
+            </span>
+            <p class="price-summary">${escapeHtml(item.commercialSummary || item.descricao)}</p>
+            <span class="price-card-footer">
+              <span class="price-window">
+                <span class="price-window-label">Melhor janela</span>
+                <strong>${escapeHtml(item.recommendedWindows || "Sob consulta")}</strong>
+              </span>
+              <span class="price-select-indicator">${checked ? "Selecionado" : "Selecionar"}</span>
+            </span>
+            <p class="price-detail">${escapeHtml(calc.detail)}</p>
           </span>
-          <span class="item-cost">${formatMoney(calc.total)}</span>
         </label>
       `;
     })
