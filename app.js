@@ -653,6 +653,7 @@ const nodes = {
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   availabilityAlert: document.querySelector("#availabilityAlert"),
+  leadReviewPanel: document.querySelector("#leadReviewPanel"),
   proposalNextStep: document.querySelector("#proposalNextStep"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
@@ -2257,6 +2258,262 @@ function getProposalReviewSummary(items = getProposalReviewItems()) {
     warnings,
     ready: errors === 0,
   };
+}
+
+function getActiveCommercialContext() {
+  const request = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
+  const proposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const snapshot = proposal?.snapshot || request?.snapshot || {};
+  const qualification = snapshot.qualificacao || snapshot.qualification || {};
+  const event = snapshot.evento || snapshot.event || {};
+  return {
+    request,
+    proposal,
+    snapshot,
+    clientType:
+      qualification.tipoCliente ||
+      qualification.clientType ||
+      proposal?.snapshot?.clientType ||
+      request?.tipo_cliente ||
+      "",
+    budgetRange: qualification.faixaInvestimento || qualification.budgetRange || "",
+    origin: qualification.origem || qualification.origin || "",
+    occasion: event.ocasiao || event.perfil || event.occasion || "",
+    extras: event.extras || "",
+  };
+}
+
+function getLeadReadinessItems() {
+  const review = getProposalReviewItems();
+  const context = getActiveCommercialContext();
+  const selected = getSelectedItems();
+  const hasCommercialProfile = Boolean(context.clientType || context.budgetRange || context.origin);
+  const hasBriefing = Boolean(fields.eventReason.value.trim() || fields.notes.value.trim() || context.occasion || context.extras);
+  const contact = review.find((item) => item.id === "contact");
+  const agenda = review.find((item) => item.id === "availability");
+  const items = review.find((item) => item.id === "items");
+  const value = review.find((item) => item.id === "value");
+
+  return [
+    {
+      id: "contact",
+      label: "Contato",
+      status: contact?.status || "error",
+      detail: contact?.status === "ok" ? "Canal de retorno pronto." : contact?.detail || "Complete nome e contato.",
+      target: "client",
+    },
+    {
+      id: "profile",
+      label: "Perfil comercial",
+      status: hasCommercialProfile ? "ok" : "warning",
+      detail: hasCommercialProfile
+        ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
+        : "Classifique cliente, investimento ou origem quando possível.",
+      target: "notes",
+    },
+    {
+      id: "agenda",
+      label: "Agenda",
+      status: agenda?.status || "error",
+      detail: agenda?.detail || "Cheque data e horário.",
+      target: "client",
+    },
+    {
+      id: "menu",
+      label: "Produto",
+      status: items?.status || "error",
+      detail: selected.length ? `${selected.length} item(ns) selecionado(s).` : "Escolha o pacote principal.",
+      target: "items",
+    },
+    {
+      id: "brief",
+      label: "Briefing",
+      status: hasBriefing ? "ok" : "warning",
+      detail: hasBriefing ? "Contexto suficiente para abordagem." : "Inclua motivo, restrições ou observação útil.",
+      target: "notes",
+    },
+    {
+      id: "value",
+      label: "Valor",
+      status: value?.status || "error",
+      detail: value?.status === "ok" ? value.detail : "Monte o valor antes de enviar.",
+      target: "items",
+    },
+  ];
+}
+
+function pushUpsellRecommendation(recommendations, itemId, title, detail, reason) {
+  if (!itemExists(itemId) || state.selectedIds.has(itemId) || recommendations.some((item) => item.itemId === itemId)) return;
+  recommendations.push({ itemId, title, detail, reason });
+}
+
+function getUpsellRecommendations() {
+  const recommendations = [];
+  const category = getEventCategoryFromRequest(fields.eventType.value);
+  const has = (id) => state.selectedIds.has(id);
+  const selected = getSelectedItems();
+  const selectedCategories = new Set(selected.map((item) => item.tipoEvento));
+
+  if (category === "Coquetel") {
+    if (has("coquetel-caipirinha")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "coquetel-carioca",
+        "Elevar para Coquetel Carioca",
+        "Inclui caipirinhas variadas, chope, sucos, refrigerantes e água.",
+        "Upgrade natural para grupos corporativos e confraternizações.",
+      );
+    }
+    if (!selectedCategories.has("Comidas")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "brasileiro-ii",
+        "Adicionar Brasileiro II",
+        "Caldinho, pastéis, aipim, bolinho, barquete e prato quente.",
+        "Deixa o coquetel mais completo e aumenta ticket sem complicar operação.",
+      );
+    }
+    if (!selectedCategories.has("Workshop de Caipirinha")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "workshop-caipirinha-pt",
+        "Incluir experiência de caipirinha",
+        "Formato interativo para criar memória e engajamento do grupo.",
+        "Ótimo para agências, DMCs e eventos de relacionamento.",
+      );
+    }
+  }
+
+  if (category === "Café da Manhã / Coffee Break" && has("cafe-classico")) {
+    pushUpsellRecommendation(
+      recommendations,
+      "cafe-completo",
+      "Trocar para Café Completo",
+      "Inclui ovos mexidos, iogurte, granola e bolo adicional.",
+      "Mais adequado para reuniões longas e grupos premium.",
+    );
+  }
+
+  if (category === "Welcome Drink") {
+    if (has("welcome-caipirinha")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "welcome-espumante",
+        "Oferecer espumante nacional",
+        "Recepção mais elegante para chegada do grupo.",
+        "Bom upgrade para lançamentos, clientes especiais e turismo premium.",
+      );
+    }
+    if (!selectedCategories.has("Snacks")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "snacks-carioca",
+        "Adicionar snack carioca",
+        "Biscoito Globo e caldinho de feijão.",
+        "Complemento simples para uma recepção mais gostosa.",
+      );
+    }
+  }
+
+  if (category === "Almoço Carioca" && has("almoco-carioca-duas-bebidas")) {
+    pushUpsellRecommendation(
+      recommendations,
+      "almoco-carioca-bebida-livre",
+      "Trocar para bebida livre",
+      "Experiência mais fluida para grupos que querem conforto e previsibilidade.",
+      "Reduz atrito no evento e melhora percepção de valor.",
+    );
+  }
+
+  return recommendations.slice(0, 3);
+}
+
+function applyUpsellSuggestion(itemId) {
+  if (!itemExists(itemId)) return;
+  if (["coquetel-caipirinha", "coquetel-carioca"].includes(itemId)) {
+    setExclusiveSelection(["coquetel-caipirinha", "coquetel-carioca"], itemId);
+    state.guided.beverageId = itemId;
+  } else if (["brasileiro-i", "brasileiro-ii"].includes(itemId)) {
+    setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], itemId);
+    state.guided.foodId = itemId;
+  } else if (["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(itemId)) {
+    state.selectedIds.add(itemId);
+    state.guided.workshopId = itemId;
+  } else if (["cafe-classico", "cafe-completo", "coffee-praia-vermelha", "coffee-morro-urca"].includes(itemId)) {
+    setExclusiveSelection(["cafe-classico", "cafe-completo", "coffee-praia-vermelha", "coffee-morro-urca"], itemId);
+  } else if (["welcome-caipirinha", "welcome-espumante", "welcome-champagne"].includes(itemId)) {
+    setExclusiveSelection(["welcome-caipirinha", "welcome-espumante", "welcome-champagne"], itemId);
+  } else if (["almoco-carioca-bebida-livre", "almoco-carioca-duas-bebidas"].includes(itemId)) {
+    setExclusiveSelection(["almoco-carioca-bebida-livre", "almoco-carioca-duas-bebidas"], itemId);
+  } else {
+    state.selectedIds.add(itemId);
+  }
+  saveSelectedIds();
+  setChoiceState(nodes.flowBeverageOptions, state.guided.beverageId, "selectPackage");
+  setChoiceState(nodes.flowFoodOptions, state.guided.foodId, "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, state.guided.workshopId, "selectPackage");
+  renderAll();
+  showToast("Sugestão adicionada à proposta.");
+}
+
+function renderLeadReviewPanel() {
+  if (!nodes.leadReviewPanel) return;
+  if (isQuoteWorkspaceEffectivelyEmpty()) {
+    nodes.leadReviewPanel.className = "lead-review-panel is-hidden";
+    nodes.leadReviewPanel.innerHTML = "";
+    return;
+  }
+
+  const items = getLeadReadinessItems();
+  const errors = items.filter((item) => item.status === "error").length;
+  const warnings = items.filter((item) => item.status === "warning").length;
+  const upsells = getUpsellRecommendations();
+  nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
+  nodes.leadReviewPanel.innerHTML = `
+    <div class="lead-review-heading">
+      <div>
+        <span>Checklist comercial</span>
+        <strong>${errors ? "Ajuste antes de enviar" : warnings ? "Quase pronto para vender" : "Lead pronto para proposta"}</strong>
+      </div>
+      <small>${errors ? `${errors} pendência(s) obrigatória(s)` : warnings ? `${warnings} ponto(s) de atenção` : "Dados, agenda e valor coerentes"}</small>
+    </div>
+    <div class="lead-review-grid">
+      ${items
+        .map(
+          (item) => `
+            <button class="lead-review-item is-${escapeHtml(item.status)}" type="button" data-review-target="${escapeHtml(item.target)}">
+              <span>${item.status === "ok" ? "OK" : item.status === "warning" ? "!" : "!"}</span>
+              <strong>${escapeHtml(item.label)}</strong>
+              <small>${escapeHtml(item.detail)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+    ${
+      upsells.length
+        ? `<div class="upsell-strip">
+            <div class="upsell-strip-heading">
+              <span>Sugestões para vender melhor</span>
+              <small>Um clique adiciona ou troca o item recomendado.</small>
+            </div>
+            <div class="upsell-grid">
+              ${upsells
+                .map(
+                  (item) => `
+                    <button class="upsell-card" type="button" data-upsell-add="${escapeHtml(item.itemId)}">
+                      <span>${escapeHtml(item.title)}</span>
+                      <strong>${escapeHtml(item.detail)}</strong>
+                      <small>${escapeHtml(item.reason)}</small>
+                    </button>
+                  `,
+                )
+                .join("")}
+            </div>
+          </div>`
+        : ""
+    }
+  `;
 }
 
 function getSubtotal() {
@@ -3875,6 +4132,32 @@ function getProposalFollowUpInfo(item) {
   return { label, level };
 }
 
+function getSlaMeta(item) {
+  const status = getReportStatus(item);
+  if (item.kind === "request" && status === "lead_recebido") {
+    const hours = getHoursSince(item.createdAt);
+    const nextLimit = hours < 12 ? "12h" : hours < 24 ? "24h" : hours < 48 ? "48h" : "estourado";
+    const level = hours >= 48 ? "critical" : hours >= 24 ? "danger" : hours >= 12 ? "warning" : "fresh";
+    return {
+      label: `SLA lead: ${hours || "<1"}h · alvo ${nextLimit}`,
+      level,
+    };
+  }
+  if (item.kind === "proposal" && status === "proposta_enviada") {
+    const hours = getHoursSince(item.updatedAt || item.createdAt);
+    const nextLimit = hours < 24 ? "24h" : hours < 48 ? "48h" : hours < 72 ? "72h" : "estourado";
+    const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : hours >= 24 ? "warning" : "fresh";
+    return {
+      label: `SLA proposta: ${hours || "<1"}h · follow-up ${nextLimit}`,
+      level,
+    };
+  }
+  if (item.kind === "proposal" && status === "confirmado") {
+    return { label: "SLA financeiro: cobrar saldo restante", level: "warning" };
+  }
+  return null;
+}
+
 function getDaysUntilEvent(item) {
   const date = item.eventDate || parseLocalIsoDate(item.date || "");
   if (!date) return null;
@@ -4177,6 +4460,8 @@ function renderClientRegistryCard(client) {
   const realizedItems = client.items.filter((item) => item.kind === "proposal" && normalizeProposalStatus(item.status) === "pos_venda");
   const confirmedItems = client.items.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)) && normalizeProposalStatus(item.status) !== "pos_venda");
   const quoteItems = client.items.filter((item) => item.kind !== "proposal" || !operationStatuses.has(normalizeProposalStatus(item.status)));
+  const canceledItems = client.items.filter((item) => getReportStatus(item) === "cancelado");
+  const openQuoteItems = quoteItems.filter((item) => getReportStatus(item) !== "cancelado");
   const realizedValue = realizedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const confirmedValue = confirmedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const footerLabel = realizedValue
@@ -4206,6 +4491,12 @@ function renderClientRegistryCard(client) {
       <div class="client-registry-main">
         <strong>${escapeHtml(client.name)}</strong>
         <small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || "Sem contato completo")}</small>
+      </div>
+      <div class="client-registry-metrics" aria-label="Resumo do cliente">
+        <span><b>${openQuoteItems.length}</b><small>Cotações abertas</small></span>
+        <span><b>${confirmedItems.length}</b><small>Confirmados</small></span>
+        <span><b>${realizedItems.length}</b><small>Realizados</small></span>
+        <span><b>${canceledItems.length}</b><small>Cancelados</small></span>
       </div>
       <div class="client-registry-summary">${escapeHtml(summaryLabel)}</div>
       <ul>${history}</ul>
@@ -4313,6 +4604,7 @@ function getActionTasks(items = getPipelineItems()) {
     const base = {
       item,
       meta: `${item.date ? formatDateFromIso(item.date) : "Data a definir"} · ${item.time ? String(item.time).slice(0, 5) : "Horário a definir"} · ${item.guests || 0} pax`,
+      sla: getSlaMeta(item),
     };
 
     if (item.kind === "request" && status === "lead_recebido") {
@@ -4441,6 +4733,7 @@ function renderActionTasks(items = getPipelineItems()) {
             <strong>${escapeHtml(item.name || "Cliente")}</strong>
             <span class="action-task-title">${escapeHtml(task.title)}</span>
             <small>${escapeHtml(task.meta)}</small>
+            ${task.sla ? `<small class="action-task-sla sla-${escapeHtml(task.sla.level)}">${escapeHtml(task.sla.label)}</small>` : ""}
             <p>${escapeHtml(task.note)}</p>
           </div>
           <div class="action-task-footer">
@@ -5784,6 +6077,7 @@ function renderAll() {
   renderPricesTable();
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
+  renderLeadReviewPanel();
   renderProposalNextStep();
   renderQuickReplies();
   renderSummary();
@@ -6341,6 +6635,15 @@ function bindEvents() {
     const button = event.target.closest("button[data-next-step-action]");
     if (!button) return;
     runProposalNextStepAction(button.dataset.nextStepAction);
+  });
+  nodes.leadReviewPanel?.addEventListener("click", (event) => {
+    const upsellButton = event.target.closest("button[data-upsell-add]");
+    if (upsellButton) {
+      applyUpsellSuggestion(upsellButton.dataset.upsellAdd);
+      return;
+    }
+    const reviewButton = event.target.closest("button[data-review-target]");
+    if (reviewButton) scrollToReviewTarget(reviewButton.dataset.reviewTarget);
   });
   nodes.sendReviewPanel?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-review-target]");
