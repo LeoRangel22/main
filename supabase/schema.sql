@@ -18,6 +18,18 @@ as $$
   );
 $$;
 
+create or replace function public.is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select lower(coalesce(auth.jwt() ->> 'email', '')) in (
+    'leorangel@gmail.com'
+  );
+$$;
+
 create table if not exists public.propostas (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
@@ -97,11 +109,12 @@ using ((select public.is_team_member()))
 with check ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode remover propostas" on public.propostas;
-create policy "Equipe autenticada pode remover propostas"
+drop policy if exists "Super admin pode remover propostas" on public.propostas;
+create policy "Super admin pode remover propostas"
 on public.propostas
 for delete
 to authenticated
-using ((select public.is_team_member()));
+using ((select public.is_super_admin()));
 
 create table if not exists public.solicitacoes_cotacao (
   id uuid primary key default gen_random_uuid(),
@@ -412,8 +425,9 @@ using ((select public.is_team_member()))
 with check ((select public.is_team_member()));
 
 drop policy if exists "Equipe autenticada pode remover solicitacoes" on public.solicitacoes_cotacao;
-create policy "Equipe autenticada pode remover solicitacoes"
+drop policy if exists "Super admin pode remover solicitacoes" on public.solicitacoes_cotacao;
+create policy "Super admin pode remover solicitacoes"
 on public.solicitacoes_cotacao
 for delete
 to authenticated
-using ((select public.is_team_member()));
+using ((select public.is_super_admin()));
