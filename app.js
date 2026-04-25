@@ -10,6 +10,7 @@ const CANONICAL_APP_URL = "https://leorangel22.github.io/main/";
 const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
 const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
 const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "leorangel@gmail.com"];
+const SUPER_ADMIN_EMAILS = ["leorangel@gmail.com"];
 const SERVICE_RATE = 0.12;
 const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
@@ -113,6 +114,7 @@ const cancelReasons = [
   "Data ou horário indisponível",
   "Evento cancelado pelo cliente",
   "Fechou com outro local",
+  "Teste / cadastro de teste",
   "Outro motivo",
 ];
 
@@ -3481,6 +3483,14 @@ function isTeamEmail(email) {
   return TEAM_EMAILS.includes(normalizeEmail(email));
 }
 
+function isSuperAdminEmail(email) {
+  return SUPER_ADMIN_EMAILS.includes(normalizeEmail(email));
+}
+
+function isSuperAdminSession() {
+  return Boolean(state.session?.user?.email && isSuperAdminEmail(state.session.user.email));
+}
+
 function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
@@ -4948,6 +4958,16 @@ function getClientResponseLabel(response) {
   return labels[response] || "";
 }
 
+function isTestCancelReason(reason) {
+  return slugify(reason).includes("teste");
+}
+
+function canDeletePipelineItem(item) {
+  if (!isSuperAdminSession()) return false;
+  if (item.status !== "cancelado") return false;
+  return isTestCancelReason(item.cancelReason || "");
+}
+
 function renderPipelineCard(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -4998,10 +5018,14 @@ function renderPipelineCard(item) {
     item.status === "cancelado"
       ? ""
       : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`;
+  const deleteTestButton = canDeletePipelineItem(item)
+    ? `<button class="secondary danger-light pipeline-delete-chip" type="button" data-delete-kind="${escapeHtml(item.kind)}" data-delete-id="${escapeHtml(item.id)}">Apagar teste</button>`
+    : "";
   const actionButtons = `
     <span class="pipeline-card-actions">
       ${cancelButton}
       ${renderStatusSelect(item)}
+      ${deleteTestButton}
       ${openButton}
     </span>
   `;
@@ -5305,12 +5329,55 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
 
 function getCancelReason() {
   const options = cancelReasons.map((reason, index) => `${index + 1}. ${reason}`).join("\n");
-  const answer = window.prompt(`Motivo do cancelamento:\n\n${options}\n\nDigite o número ou escreva outro motivo.`);
+  const answer = window.prompt(`Motivo do cancelamento:\n\n${options}\n\nUse 6 para leads de teste. Digite o número ou escreva outro motivo.`);
   if (answer === null) return "";
   const trimmed = answer.trim();
   if (!trimmed) return "";
   const selectedIndex = Number(trimmed) - 1;
   return cancelReasons[selectedIndex] || trimmed;
+}
+
+async function deleteTestPipelineItem(kind, id) {
+  if (!state.supabase || !state.session) return;
+  if (!isSuperAdminSession()) {
+    showToast("Apenas o super administrador pode apagar testes.");
+    return;
+  }
+
+  const collection = kind === "request" ? state.quoteRequests : state.proposals;
+  const item = collection.find((entry) => entry.id === id);
+  const cancelReason = item?.snapshot?.cancelamento?.motivo || "";
+  if (!item || item.status !== "cancelado" || !isTestCancelReason(cancelReason)) {
+    showToast("Só é possível apagar itens cancelados com motivo de teste.");
+    renderPipeline();
+    return;
+  }
+
+  const label = item.cliente_nome || item.clienteNome || item.name || "este item";
+  const confirmed = window.confirm(
+    `Apagar definitivamente o teste de ${label}?\n\nEssa ação remove o registro do Supabase e não pode ser desfeita.`,
+  );
+  if (!confirmed) return;
+
+  const table = kind === "request" ? "solicitacoes_cotacao" : "propostas";
+  const { error } = await state.supabase.from(table).delete().eq("id", id);
+  if (error) {
+    console.warn("Falha ao apagar item de teste.", error);
+    showToast("Não foi possível apagar. Confira permissão do super admin no Supabase.");
+    return;
+  }
+
+  if (kind === "request") {
+    state.quoteRequests = state.quoteRequests.filter((entry) => entry.id !== id);
+    if (state.activeQuoteRequestId === id) state.activeQuoteRequestId = null;
+  } else {
+    state.proposals = state.proposals.filter((entry) => entry.id !== id);
+    if (state.activeProposalId === id) state.activeProposalId = null;
+  }
+  renderHistory();
+  renderPipeline();
+  renderAll();
+  showToast("Teste apagado do histórico.");
 }
 
 async function cancelPipelineItem(kind, id) {
@@ -6691,6 +6758,8 @@ function bindEvents() {
     if (markButton) markQuoteRequestAnalyzed(markButton.dataset.markRequest);
     const cancelButton = event.target.closest("button[data-cancel-id]");
     if (cancelButton) cancelPipelineItem(cancelButton.dataset.cancelKind, cancelButton.dataset.cancelId);
+    const deleteButton = event.target.closest("button[data-delete-id]");
+    if (deleteButton) deleteTestPipelineItem(deleteButton.dataset.deleteKind, deleteButton.dataset.deleteId);
   });
   nodes.pipelineBoard?.addEventListener("change", (event) => {
     const select = event.target.closest("select[data-pipeline-status-id]");
