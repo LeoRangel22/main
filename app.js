@@ -564,6 +564,10 @@ const state = {
     workshopId: "",
   },
   privatizationChoice: "",
+  sendLocks: {
+    email: false,
+    whatsapp: false,
+  },
 };
 
 const fields = {
@@ -1532,10 +1536,28 @@ async function runQuickReply(replyId, channel) {
       showToast("Preencha o e-mail do cliente para abrir a mensagem.");
       return;
     }
+    if (state.sendLocks.email) {
+      showToast("E-mail já está sendo preparado.");
+      return;
+    }
+    const confirmed = confirmClientSend({
+      channel: "E-mail",
+      destination: email,
+      title: payload.title,
+      action: "abrir o e-mail pronto para envio",
+    });
+    if (!confirmed) {
+      showToast("Abertura do e-mail cancelada.");
+      return;
+    }
+    state.sendLocks.email = true;
     const subject = encodeURIComponent(payload.subject);
     const body = encodeURIComponent(payload.message);
     showToast(`Abrindo e-mail com "${payload.title}".`);
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+    window.setTimeout(() => {
+      state.sendLocks.email = false;
+    }, 1500);
     return;
   }
 
@@ -6264,6 +6286,28 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   ].join("\n");
 }
 
+function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar" }) {
+  const clientName = fields.clientName.value.trim() || "cliente";
+  const eventType = fields.eventType.value.trim();
+  const eventDate = fields.eventDate.value || getEventDateLabel();
+  const eventTime = fields.eventTime.value || getEventTimeLabel();
+  const details = [
+    "Confirmar envio ao cliente?",
+    "",
+    `Cliente: ${clientName}`,
+    `Canal: ${channel}`,
+    destination ? `Destino: ${destination}` : "",
+    title ? `Mensagem: ${title}` : "",
+    eventType ? `Evento: ${eventType}` : "",
+    eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
+    "",
+    `Confirme apenas se a mensagem foi revisada. Ao confirmar, o app vai ${action}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return window.confirm(details);
+}
+
 async function getFunctionErrorMessage(error) {
   if (!error) return "";
   const response = error.context;
@@ -6284,9 +6328,14 @@ async function getFunctionErrorMessage(error) {
   return error.message || "";
 }
 
-async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial", skipConfirm = false }) {
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
+    return false;
+  }
+
+  if (state.sendLocks.whatsapp) {
+    showToast("Envio por WhatsApp já está em andamento.");
     return false;
   }
 
@@ -6296,27 +6345,45 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     return false;
   }
 
-  showToast("Enviando proposta por WhatsApp...");
-  const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
-    body: {
-      proposalId: proposal.id,
-      phone,
-      message,
-      proposalUrl,
+  if (!skipConfirm) {
+    const confirmed = confirmClientSend({
+      channel: "WhatsApp",
+      destination: phone,
       title,
-    },
-  });
-
-  if (error || data?.ok === false) {
-    console.warn("Falha no envio direto por WhatsApp.", error || data);
-    const functionMessage = data?.message || (await getFunctionErrorMessage(error));
-    showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
-    return false;
+      action: "enviar agora pela Z-API e registrar no histórico",
+    });
+    if (!confirmed) {
+      showToast("Envio por WhatsApp cancelado.");
+      return false;
+    }
   }
 
-  showToast("Proposta enviada por WhatsApp e registrada no histórico.");
-  await loadProposalHistory();
-  return true;
+  state.sendLocks.whatsapp = true;
+  try {
+    showToast("Enviando proposta por WhatsApp...");
+    const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
+      body: {
+        proposalId: proposal.id,
+        phone,
+        message,
+        proposalUrl,
+        title,
+      },
+    });
+
+    if (error || data?.ok === false) {
+      console.warn("Falha no envio direto por WhatsApp.", error || data);
+      const functionMessage = data?.message || (await getFunctionErrorMessage(error));
+      showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
+      return false;
+    }
+
+    showToast("Proposta enviada por WhatsApp e registrada no histórico.");
+    await loadProposalHistory();
+    return true;
+  } finally {
+    state.sendLocks.whatsapp = false;
+  }
 }
 
 async function openEmail() {
@@ -6325,8 +6392,26 @@ async function openEmail() {
     showToast("Preencha o e-mail do cliente para abrir a mensagem.");
     return;
   }
+  if (state.sendLocks.email) {
+    showToast("E-mail já está sendo preparado.");
+    return;
+  }
+  const confirmed = confirmClientSend({
+    channel: "E-mail",
+    destination: email,
+    title: "Proposta comercial",
+    action: "abrir o e-mail pronto para envio",
+  });
+  if (!confirmed) {
+    showToast("Abertura do e-mail cancelada.");
+    return;
+  }
+  state.sendLocks.email = true;
   const proposalUrl = await ensureProposalLink();
-  if (!proposalUrl) return;
+  if (!proposalUrl) {
+    state.sendLocks.email = false;
+    return;
+  }
   const subject = encodeURIComponent("Proposta de evento - Embaixada Carioca");
   const body = encodeURIComponent(
     [
@@ -6342,6 +6427,9 @@ async function openEmail() {
   );
   showToast("Link da proposta gerado. Abrindo e-mail.");
   window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+  window.setTimeout(() => {
+    state.sendLocks.email = false;
+  }, 1500);
 }
 
 async function copyProposal() {
