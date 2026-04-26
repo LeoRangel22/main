@@ -682,7 +682,7 @@ function loadPrices() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (Array.isArray(saved) && saved.length) return mergeCatalogLabels(saved).map(normalizeCatalogItem);
   } catch (error) {
-    console.warn("Nao foi possivel carregar precos salvos.", error);
+    console.warn("Não foi possível carregar preços salvos.", error);
   }
   return clonePrices(initialPrices).map(normalizeCatalogItem);
 }
@@ -772,7 +772,7 @@ function loadSelectedIds() {
   try {
     return new Set(JSON.parse(localStorage.getItem(SELECTED_KEY) || "[]"));
   } catch (error) {
-    console.warn("Nao foi possivel carregar selecao salva.", error);
+    console.warn("Não foi possível carregar seleção salva.", error);
     return new Set();
   }
 }
@@ -782,7 +782,7 @@ function loadPrivatizationRules() {
     const saved = JSON.parse(localStorage.getItem(PRIVATIZATION_KEY) || "null");
     if (Array.isArray(saved) && saved.length) return saved;
   } catch (error) {
-    console.warn("Nao foi possivel carregar regras de privatizacao salvas.", error);
+    console.warn("Não foi possível carregar regras de privatização salvas.", error);
   }
   return clonePrices(defaultPrivatizationRules);
 }
@@ -792,7 +792,7 @@ function loadGeneralTerms() {
     const saved = localStorage.getItem(TERMS_KEY);
     if (saved && saved.trim()) return saved;
   } catch (error) {
-    console.warn("Nao foi possivel carregar condicoes gerais salvas.", error);
+    console.warn("Não foi possível carregar condições gerais salvas.", error);
   }
   return defaultGeneralTerms;
 }
@@ -818,7 +818,7 @@ function loadSupabaseConfig() {
     const saved = JSON.parse(localStorage.getItem(SUPABASE_CONFIG_KEY) || "null");
     if (saved && saved.url && saved.anonKey) return saved;
   } catch (error) {
-    console.warn("Nao foi possivel carregar configuracao do Supabase.", error);
+    console.warn("Não foi possível carregar configuração do Supabase.", error);
   }
   return { url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY };
 }
@@ -5598,7 +5598,7 @@ async function initSupabase() {
   fields.supabaseAnonKey.value = config.anonKey;
 
   if (!config.url || !config.anonKey) {
-    renderSupabaseStatus("Supabase ainda nao configurado.");
+    renderSupabaseStatus("Supabase ainda não configurado.");
     updateAuthUI();
     renderHistory();
     renderConfirmedEvents();
@@ -5607,7 +5607,7 @@ async function initSupabase() {
   }
 
   if (!window.supabase?.createClient) {
-    renderSupabaseStatus("Biblioteca do Supabase nao carregou. Verifique a internet deste navegador.");
+    renderSupabaseStatus("Biblioteca do Supabase não carregou. Verifique a internet deste navegador.");
     updateAuthUI();
     renderHistory();
     renderConfirmedEvents();
@@ -5668,7 +5668,7 @@ async function initSupabase() {
     console.warn("Falha ao iniciar Supabase.", error);
     state.supabase = null;
     state.session = null;
-    renderSupabaseStatus("Nao foi possivel conectar. Confira URL e anon key.");
+    renderSupabaseStatus("Não foi possível conectar. Confira URL e anon key.");
     updateAuthUI();
     renderHistory();
     renderConfirmedEvents();
@@ -5689,7 +5689,7 @@ function configureSupabaseFromForm() {
 
 async function loginWithEmail() {
   if (!state.supabase) {
-    showToast("A conexao da equipe ainda esta carregando. Tente novamente em instantes.");
+    showToast("A conexão da equipe ainda está carregando. Tente novamente em instantes.");
     return;
   }
 
@@ -5711,7 +5711,7 @@ async function loginWithEmail() {
 
   if (error) {
     console.warn("Falha no login.", error);
-    showToast("Nao foi possivel enviar o link de acesso.");
+    showToast("Não foi possível enviar o link de acesso.");
     return;
   }
 
@@ -5750,7 +5750,7 @@ async function recoverMagicLinkSession() {
   const { data, error } = await state.supabase.auth.setSession(tokens);
   if (error || !data?.session) {
     console.warn("Falha ao recuperar magic link.", error);
-    showToast("Nao foi possivel entrar com essa URL. Peça um novo magic link.");
+    showToast("Não foi possível entrar com essa URL. Peça um novo magic link.");
     return;
   }
 
@@ -5793,7 +5793,7 @@ function upsertProposalState(proposal) {
 
 async function saveCurrentProposal(status, signalInfo = null) {
   if (!state.supabase) {
-    showToast("Conecte o Supabase para salvar no historico.");
+    showToast("Conecte o Supabase para salvar no histórico.");
     return null;
   }
 
@@ -5879,7 +5879,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
 
   if (error) {
     console.warn("Falha ao salvar proposta.", error);
-    showToast("Nao foi possivel salvar. Confira o schema no Supabase.");
+    showToast("Não foi possível salvar. Confira o schema no Supabase.");
     return null;
   }
 
@@ -5920,8 +5920,8 @@ async function loadProposalHistory() {
     .limit(60);
 
   if (error) {
-    console.warn("Falha ao carregar historico.", error);
-    nodes.historyList.innerHTML = `<p>Nao foi possivel carregar o historico. Confira as politicas RLS.</p>`;
+    console.warn("Falha ao carregar histórico.", error);
+    nodes.historyList.innerHTML = `<p>Não foi possível carregar o histórico. Confira as políticas RLS.</p>`;
     return;
   }
 
@@ -6508,13 +6508,13 @@ async function openWhatsApp() {
 }
 
 function resetPrices() {
-  const confirmed = window.confirm("Restaurar os precos originais da planilha enviada?");
+  const confirmed = window.confirm("Restaurar os preços originais da planilha enviada?");
   if (!confirmed) return;
   state.prices = clonePrices(initialPrices);
   savePrices();
   renderCategoryFilter();
   renderAll();
-  showToast("Precos restaurados.");
+  showToast("Preços restaurados.");
 }
 
 function clearNewItemForm() {
