@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260426-eventos-v87" />
+    <link rel="stylesheet" href="./styles.css?v=20260426-eventos-v88" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -353,6 +353,15 @@
             </div>
           </section>
 
+          <section class="final-review-card" id="finalReviewCard" aria-live="polite">
+            <div>
+              <span id="finalReviewEyebrow">Antes de enviar</span>
+              <h2 id="finalReviewTitle">Confira se estÃ¡ tudo certo</h2>
+              <p id="finalReviewBody">Esse Ã© o resumo que nossa equipe vai usar para preparar sua proposta.</p>
+            </div>
+            <div class="final-review-grid" id="finalReviewGrid"></div>
+          </section>
+
           <div class="public-form-actions">
             <button class="primary" id="submitClientQuoteBtn" type="submit">Solicitar minha proposta</button>
             <p id="clientFormStatus" role="status" aria-live="polite">Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.</p>
@@ -362,6 +371,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./formulario.js?v=20260426-eventos-v87"></script>
+    <script defer src="./formulario.js?v=20260426-eventos-v88"></script>
   </body>
 </html>

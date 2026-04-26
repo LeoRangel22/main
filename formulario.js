@@ -7,6 +7,7 @@ const statusNode = document.querySelector("#clientFormStatus");
 const submitButton = document.querySelector("#submitClientQuoteBtn");
 const recommendationIntro = document.querySelector("#recommendationIntro");
 const recommendationList = document.querySelector("#formatRecommendations");
+const finalReviewGrid = document.querySelector("#finalReviewGrid");
 const progressText = document.querySelector("#formProgressText");
 const progressBar = document.querySelector("#formProgressBar");
 const progressSteps = [...document.querySelectorAll(".public-form-steps li")];
@@ -414,6 +415,9 @@ const copy = {
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
+      finalReviewEyebrow: "Antes de enviar",
+      finalReviewTitle: "Confira se está tudo certo",
+      finalReviewBody: "Esse é o resumo que nossa equipe vai usar para preparar sua proposta.",
       submit: "Solicitar minha proposta",
       preferenceLegend: "O que não pode faltar?",
       extrasLegend: "Extras de produção",
@@ -577,6 +581,9 @@ const copy = {
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
       contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
+      finalReviewEyebrow: "Before sending",
+      finalReviewTitle: "Review your request",
+      finalReviewBody: "This is the summary our team will use to prepare your proposal.",
       submit: "Request my proposal",
       preferenceLegend: "What cannot be missing?",
       extrasLegend: "Production extras",
@@ -763,6 +770,9 @@ function applyStaticCopy() {
   if (contactRequirementNote) contactRequirementNote.textContent = current.labels.contactRequirementNote;
   document.querySelector("#contactPromise").textContent = current.labels.contactPromise;
   document.querySelector("#contactAssurance").textContent = current.labels.contactAssurance;
+  document.querySelector("#finalReviewEyebrow").textContent = current.labels.finalReviewEyebrow;
+  document.querySelector("#finalReviewTitle").textContent = current.labels.finalReviewTitle;
+  document.querySelector("#finalReviewBody").textContent = current.labels.finalReviewBody;
   submitButton.textContent = current.labels.submit;
   if (!statusNode.dataset.status || statusNode.dataset.status === "neutral") {
     statusNode.textContent = current.labels.defaultStatus;
@@ -824,6 +834,7 @@ function setLanguage(language) {
   fillTimeOptions();
   renderRecommendations();
   updateGuestOutput();
+  renderFinalReview();
 }
 
 function setStatus(message, type = "neutral") {
@@ -909,6 +920,56 @@ function updateGuestOutput(source = "number") {
 
   const outputLabel = current.guestOutput(guests);
   fields.guestOutput.textContent = outputLabel;
+  renderFinalReview();
+}
+
+function getSelectedDurationLabel() {
+  return fields.duration.selectedOptions?.[0]?.textContent?.trim() || getCopy().select.duration[1];
+}
+
+function renderFinalReview() {
+  if (!finalReviewGrid) return;
+  const current = getCopy();
+  const pendingLabel = uiState.language === "en" ? "To be defined" : "A definir";
+  const items = [
+    {
+      label: uiState.language === "en" ? "Format" : "Formato",
+      value: fields.eventType.value || (uiState.language === "en" ? "To be suggested" : "A sugerir"),
+      step: "recommendation",
+    },
+    {
+      label: uiState.language === "en" ? "Date and arrival" : "Data e chegada",
+      value: [
+        fields.date.value || fields.dateFlex.value.trim() || pendingLabel,
+        fields.time.value || (uiState.language === "en" ? "time pending" : "horário pendente"),
+      ].join(" · "),
+      step: "eventDetails",
+    },
+    {
+      label: uiState.language === "en" ? "Group" : "Grupo",
+      value: `${fields.guests.value || 30} ${uiState.language === "en" ? "guests" : "pessoas"} · ${getSelectedDurationLabel()}`,
+      step: "eventDetails",
+    },
+    {
+      label: uiState.language === "en" ? "Contact" : "Contato",
+      value:
+        [fields.name.value.trim(), fields.email.value.trim(), fields.phone.value.trim()].filter(Boolean).join(" · ") ||
+        current.labels.defaultStatus,
+      step: "contact",
+    },
+  ];
+
+  finalReviewGrid.innerHTML = items
+    .map(
+      (item) => `
+        <button type="button" data-review-step="${item.step}">
+          <span>${item.label}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>${uiState.language === "en" ? "Edit" : "Editar"}</small>
+        </button>
+      `,
+    )
+    .join("");
 }
 
 function fillTimeOptions(range = fields.timeRange.value) {
@@ -922,6 +983,15 @@ function fillTimeOptions(range = fields.timeRange.value) {
 function toNumber(value) {
   const number = Number(String(value || "").replace(",", "."));
   return Number.isFinite(number) ? number : null;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function isValidEmail(value) {
@@ -1214,7 +1284,7 @@ function getSnapshot(referenceCode) {
   const selectedExtras = getSelectedExtraLabels();
   const preferenceText = fields.preferences.value.trim();
   const selectedOccasions = getSelectedProfileLabels().join(", ");
-  const durationLabel = fields.duration.selectedOptions?.[0]?.textContent?.trim() || translations[state.lang].select.duration[1];
+  const durationLabel = getSelectedDurationLabel();
   return {
     referencia: referenceCode,
     cliente: {
@@ -1431,6 +1501,7 @@ async function submitRequest(event) {
   renderRecommendations();
   updateContactRequirements();
   updateContactGuidance();
+  renderFinalReview();
   renderSuccessStatus(referenceCode);
 }
 
@@ -1441,9 +1512,17 @@ renderRecommendations();
 fields.date.min = getTodayInputValue();
 updateContactRequirements();
 updateContactGuidance();
+renderFinalReview();
 window.addEventListener("pageshow", resetFlexibleDateField);
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
+finalReviewGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-review-step]");
+  if (!button) return;
+  scrollToStep(button.dataset.reviewStep, true);
+});
+form.addEventListener("input", renderFinalReview);
+form.addEventListener("change", renderFinalReview);
 fields.timeRange.addEventListener("change", () => {
   fillTimeOptions();
   setFieldValidity(fields.timeRange, true);
