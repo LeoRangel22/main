@@ -401,7 +401,7 @@ const copy = {
       nameHelp: "Use nome e sobrenome. Ex.: Marina Costa.",
       email: "E-mail",
       emailHelp: "Usaremos para enviar a proposta.",
-      phone: "Celular/Whatsapp",
+      phone: "Celular/WhatsApp",
       phoneHelp: "Informe o DDD e o celular. Se for um número internacional, inclua o código do país.",
       company: "Empresa ou agência",
       companyHelpOptional: "Opcional para pessoa física.",
@@ -449,8 +449,8 @@ const copy = {
       missingDate: "Informe uma data desejada ou uma janela aproximada para a equipe avaliar disponibilidade.",
       requiredName: "Para seguir, conte seu nome completo. Ex.: Marina Costa.",
       invalidEmail: "Revise o e-mail para a proposta chegar no endereço certo.",
-      invalidPhone: "Revise o celular/Whatsapp com DDD. Se for internacional, inclua também o código do país.",
-      requiredPhone: "Para seguir, precisamos de um celular/Whatsapp para o retorno da equipe.",
+      invalidPhone: "Revise o celular/WhatsApp com DDD. Se for internacional, inclua também o código do país.",
+      requiredPhone: "Para seguir, precisamos de um celular/WhatsApp para o retorno da equipe.",
       requiredCompany: "Como você marcou empresa ou agência, precisamos também do nome completo da empresa ou agência.",
       invalidName: "Vale informar nome e sobrenome para a equipe preparar a proposta com o cuidado certo. Ex.: Marina Costa.",
       invalidCompany: "Vale informar o nome completo da empresa ou agência. Ex.: Grupo Atlântico Eventos.",
@@ -1214,6 +1214,7 @@ function getSnapshot(referenceCode) {
   const selectedExtras = getSelectedExtraLabels();
   const preferenceText = fields.preferences.value.trim();
   const selectedOccasions = getSelectedProfileLabels().join(", ");
+  const durationLabel = fields.duration.selectedOptions?.[0]?.textContent?.trim() || translations[state.lang].select.duration[1];
   return {
     referencia: referenceCode,
     cliente: {
@@ -1235,6 +1236,7 @@ function getSnapshot(referenceCode) {
       horario: selectedTime,
       convidados: Math.min(500, Math.max(2, Math.floor(toNumber(fields.guests.value) || 30))),
       duracao: toNumber(fields.duration.value),
+      duracaoTexto: durationLabel,
       motivo: fields.reason.value.trim(),
       preferencias: [selectedPreferences.length ? `Preferências marcadas: ${selectedPreferences.join(", ")}` : "", preferenceText]
         .filter(Boolean)
