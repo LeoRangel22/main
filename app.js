@@ -2492,15 +2492,28 @@ function renderLeadReviewPanel() {
   const errors = items.filter((item) => item.status === "error").length;
   const warnings = items.filter((item) => item.status === "warning").length;
   const upsells = getUpsellRecommendations();
+  const criticalItems = items.filter((item) => item.status !== "ok").slice(0, 3);
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
       <div>
-        <span>Checklist comercial</span>
+        <span>Checklist antes do envio</span>
         <strong>${errors ? "Ajuste antes de enviar" : warnings ? "Quase pronto para vender" : "Lead pronto para proposta"}</strong>
       </div>
       <small>${errors ? `${errors} pendência(s) obrigatória(s)` : warnings ? `${warnings} ponto(s) de atenção` : "Dados, agenda e valor coerentes"}</small>
     </div>
+    ${
+      criticalItems.length
+        ? `<div class="lead-review-priority">
+            <span>Próximo ajuste</span>
+            <strong>${escapeHtml(criticalItems.map((item) => item.label).join(" · "))}</strong>
+            <small>Clique nos blocos abaixo para ir direto ao ponto da proposta.</small>
+          </div>`
+        : `<div class="lead-review-priority is-clear">
+            <span>Pronto para enviar</span>
+            <strong>Proposta revisada, valor montado e canais preenchidos.</strong>
+          </div>`
+    }
     <div class="lead-review-grid">
       ${items
         .map(
@@ -2538,6 +2551,10 @@ function renderLeadReviewPanel() {
         : ""
     }
   `;
+}
+
+function getReadinessBlockingItems() {
+  return getLeadReadinessItems().filter((item) => item.status === "error");
 }
 
 function getSubtotal() {
@@ -4502,6 +4519,7 @@ function renderClientRegistryCard(client) {
       ? `Confirmado: ${formatMoney(confirmedValue)}`
       : "Sem evento realizado";
   const summaryLabel = formatClientRegistrySummary(quoteItems.length, confirmedItems.length, realizedItems.length);
+  const nextAction = getClientNextAction(latest);
   const history = client.items
     .slice(0, 3)
     .map((item) => {
@@ -4531,6 +4549,10 @@ function renderClientRegistryCard(client) {
         <span><b>${canceledItems.length}</b><small>Cancelados</small></span>
       </div>
       <div class="client-registry-summary">${escapeHtml(summaryLabel)}</div>
+      <div class="client-registry-next">
+        <span>Próximo passo</span>
+        <strong>${escapeHtml(nextAction)}</strong>
+      </div>
       <ul>${history}</ul>
       <div class="client-registry-footer">
         <b>${escapeHtml(footerLabel)}</b>
@@ -4538,6 +4560,21 @@ function renderClientRegistryCard(client) {
       </div>
     </article>
   `;
+}
+
+function getClientNextAction(item) {
+  if (!item) return "Cadastrar primeiro contato.";
+  const status = normalizeProposalStatus(item.status);
+  if (item.kind === "request" || status === "lead_recebido") return "Abrir lead e montar proposta.";
+  if (status === "proposta_enviada") return "Fazer follow-up e buscar resposta.";
+  if (status === "negociacao") return "Resolver ajustes e avançar para sinal.";
+  if (status === "confirmado") return "Registrar pagamento restante.";
+  if (status === "pagamento_final") return "Avançar para planejamento.";
+  if (status === "planejamento") return "Concluir checklist operacional.";
+  if (status === "evento_proximo") return "Confirmar detalhes finais.";
+  if (status === "pos_venda") return "Registrar pós-venda e oportunidade futura.";
+  if (status === "cancelado") return "Arquivado; manter histórico para nova oportunidade.";
+  return "Atualizar etapa comercial.";
 }
 
 function formatClientRegistrySummary(quoteCount, confirmedCount, realizedCount) {
@@ -4745,7 +4782,7 @@ function renderActionTasks(items = getPipelineItems()) {
     nodes.actionCenterMeta.textContent = `${tasks.length} no radar · ${criticalCount} agora · ${commercialCount} venda · ${operationCount} operação`;
   }
   if (!tasks.length) {
-    nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora.</p>`;
+    nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora. O funil está limpo para novos contatos e follow-ups.</p>`;
     return;
   }
   nodes.actionList.innerHTML = tasks
@@ -4769,7 +4806,7 @@ function renderActionTasks(items = getPipelineItems()) {
             <p>${escapeHtml(task.note)}</p>
           </div>
           <div class="action-task-footer">
-            <small>${escapeHtml(item.type || item.clientType || "Lead")}</small>
+            <small>${escapeHtml([item.type || item.clientType || "Lead", item.updatedAt ? `atualizado ${formatSavedAt(item.updatedAt)}` : ""].filter(Boolean).join(" · "))}</small>
             ${actionButton}
           </div>
         </article>
@@ -5810,6 +5847,26 @@ async function saveCurrentProposal(status, signalInfo = null) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
+  if (normalizedNext === "proposta_enviada") {
+    const blockingItems = getReadinessBlockingItems();
+    if (blockingItems.length) {
+      const confirmed = window.confirm(
+        [
+          "A proposta ainda tem pendências antes do envio:",
+          "",
+          ...blockingItems.map((item) => `- ${item.label}: ${item.detail}`),
+          "",
+          "Deseja salvar mesmo assim?",
+        ].join("\n"),
+      );
+      if (!confirmed) {
+        showToast("Envio pausado para revisar o checklist.");
+        renderLeadReviewPanel();
+        return null;
+      }
+    }
+  }
+
   if (normalizedNext === "confirmado" && !activeProposal?.snapshot?.pagamentoSinal) {
     paymentSignal = paymentSignal || (await showSignalPaymentDialog(getSignalDefaultAmount(snapshot.totals.total)));
     if (!paymentSignal) {
@@ -6077,7 +6134,7 @@ function renderProposal() {
       </div>
       <div class="proposal-note">
         <span>Experiência proposta</span>
-        ${escapeHtml(fields.eventType.value.trim() || "Evento")} para ${getGuestCount()} pessoa(s), com duração estimada de ${getDuration()}h. Inclui: ${escapeHtml(includedSummary)}.
+        Pensamos esta proposta para receber ${getGuestCount()} pessoa(s) no Morro da Urca com o cuidado da Embaixada Carioca: vista, serviço e uma experiência gastronômica carioca em ritmo confortável. Inclui: ${escapeHtml(includedSummary)}.
       </div>
 
       ${

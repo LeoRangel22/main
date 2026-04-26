@@ -97,8 +97,8 @@ function getDecisionCopy(proposal) {
     };
   }
   return {
-    title: "Você pode aprovar agora ou pedir um ajuste",
-    note: "Ao aprovar, nossa equipe segue com o sinal e a reserva. Se quiser mudar data, horário ou convidados, use o pedido de alteração.",
+    title: "Aprovar, ajustar ou conversar com a equipe",
+    note: "Se a proposta fizer sentido, aprove por aqui e nossa equipe segue com o sinal para reservar a data. Se preferir ajustar data, horário ou convidados, mande o pedido direto nesta página.",
   };
 }
 
@@ -148,7 +148,7 @@ function renderProposal(proposal) {
       <div class="public-proposal-stage-copy">
         <span>Experiência sugerida</span>
         <h2>${escapeHtml(eventTitle)}</h2>
-        <p>Proposta pensada para ${escapeHtml(String(guests))} convidados, com duração de ${escapeHtml(durationLabel)}, no Morro da Urca.</p>
+        <p>Uma experiência no Morro da Urca para receber ${escapeHtml(String(guests))} convidados com vista, serviço e gastronomia carioca. Duração prevista: ${escapeHtml(durationLabel)}.</p>
       </div>
       <div class="public-proposal-decision-card">
         <span>Próximo passo</span>
@@ -185,7 +185,7 @@ function renderProposal(proposal) {
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
         <h3>Como deseja seguir?</h3>
-        <p>Você pode aprovar a proposta, solicitar um ajuste ou encerrar este pedido. A reserva é confirmada após o pagamento do sinal.</p>
+        <p>Aprovar por aqui agiliza o próximo passo com a equipe. A reserva é confirmada após o pagamento do sinal.</p>
       </div>
       <div class="public-proposal-buttons">
         <button class="primary" type="button" data-public-action="confirmar">Aprovar proposta</button>
