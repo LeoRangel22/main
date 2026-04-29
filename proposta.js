@@ -97,8 +97,8 @@ function getDecisionCopy(proposal) {
     };
   }
   return {
-    title: "Aprovar, ajustar ou conversar com a equipe",
-    note: "Se a proposta fizer sentido, aprove nesta página e nossa equipe segue com o sinal para reservar a data. Se preferir ajustar data, horário ou convidados, mande o pedido direto por aqui.",
+    title: "Pronto para reservar sua data?",
+    note: "Aprovar a proposta sinaliza que você quer seguir. A equipe confirma disponibilidade final e orienta o pagamento do sinal de 50% para reservar data e horário.",
   };
 }
 
@@ -157,6 +157,24 @@ function renderProposal(proposal) {
       </div>
     </div>
 
+    <div class="public-proposal-next-steps" aria-label="Próximos passos da reserva">
+      <article>
+        <span>01</span>
+        <strong>Aprovação</strong>
+        <p>Você confirma que a proposta faz sentido para o seu evento.</p>
+      </article>
+      <article>
+        <span>02</span>
+        <strong>Sinal de 50%</strong>
+        <p>A equipe envia as orientações para reservar a data.</p>
+      </article>
+      <article>
+        <span>03</span>
+        <strong>Data reservada</strong>
+        <p>Após o sinal, seguimos com os combinados finais do evento.</p>
+      </article>
+    </div>
+
     <div class="public-proposal-summary">
       <div>
         <span>Cliente</span>
@@ -184,13 +202,13 @@ function renderProposal(proposal) {
 
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
-        <h3>Como deseja seguir?</h3>
-        <p>Aprovar nesta página agiliza o próximo passo com a equipe. A reserva é confirmada após o pagamento do sinal.</p>
+        <h3>Escolha seu próximo passo</h3>
+        <p>Para avançar, aprove a proposta. Se algum detalhe ainda não estiver perfeito, peça ajuste de data, horário, convidados ou observações.</p>
       </div>
       <div class="public-proposal-buttons">
-        <button class="primary" type="button" data-public-action="confirmar">Aprovar proposta</button>
-        <button class="secondary" type="button" data-public-action="alteracao">Solicitar alteração</button>
-        <button class="secondary danger-light" type="button" data-public-action="cancelar">Cancelar</button>
+        <button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">Aprovar e seguir para reserva</button>
+        <button class="secondary" type="button" data-public-action="alteracao">Pedir ajuste</button>
+        <button class="secondary danger-light" type="button" data-public-action="cancelar">Encerrar pedido</button>
       </div>
 
       <form class="public-proposal-change-form" id="publicProposalResponseForm" hidden>

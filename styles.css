@@ -1045,6 +1045,59 @@ textarea[aria-invalid="true"] {
   padding: 6px 8px;
 }
 
+.client-registry-profile {
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+}
+
+.client-registry-profile span {
+  color: var(--verde);
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.client-registry-profile strong {
+  color: var(--verde-escuro);
+  font-size: 0.74rem;
+  line-height: 1.22;
+}
+
+.client-profile-hot,
+.client-profile-confirmed {
+  background: rgba(245, 155, 30, 0.1);
+  border-color: rgba(245, 155, 30, 0.22);
+}
+
+.client-profile-realized {
+  background: rgba(47, 111, 69, 0.09);
+  border-color: rgba(47, 111, 69, 0.22);
+}
+
+.client-profile-canceled {
+  background: rgba(168, 50, 39, 0.07);
+  border-color: rgba(168, 50, 39, 0.16);
+}
+
+.client-registry-commerce {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.client-registry-commerce span {
+  background: rgba(24, 58, 45, 0.045);
+  border-radius: 999px;
+  padding: 4px 7px;
+}
+
 .client-registry-next {
   background: rgba(245, 155, 30, 0.1);
   border: 1px solid rgba(245, 155, 30, 0.18);
@@ -1731,6 +1784,34 @@ textarea[aria-invalid="true"] {
   color: var(--white);
   font-size: 0.9rem;
   font-weight: 900;
+}
+
+.report-insights {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(1.3fr, 1.8fr) repeat(3, minmax(0, 1fr));
+}
+
+.report-insights article {
+  background: rgba(24, 58, 45, 0.045);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+}
+
+.report-insights span {
+  color: var(--amarelo);
+  font-size: 0.64rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.report-insights strong {
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  line-height: 1.24;
 }
 
 .report-list {
@@ -2686,6 +2767,40 @@ label.pipeline-status-control:focus-within select {
 .lead-review-priority small {
   color: var(--muted);
   font-weight: 750;
+}
+
+.lead-approval-gate {
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.lead-approval-gate strong {
+  color: var(--verde-escuro);
+  font-size: 0.9rem;
+}
+
+.lead-approval-gate span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 780;
+  line-height: 1.32;
+}
+
+.lead-approval-gate.is-blocker {
+  background: rgba(168, 50, 39, 0.09);
+  border: 1px solid rgba(168, 50, 39, 0.2);
+}
+
+.lead-approval-gate.is-warning {
+  background: rgba(245, 155, 30, 0.12);
+  border: 1px solid rgba(245, 155, 30, 0.22);
+}
+
+.lead-approval-gate.is-ready {
+  background: rgba(47, 111, 69, 0.09);
+  border: 1px solid rgba(47, 111, 69, 0.18);
 }
 
 .lead-review-grid {
@@ -5911,6 +6026,41 @@ input[type="range"] {
   font-weight: 750;
 }
 
+.public-proposal-next-steps {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.public-proposal-next-steps article {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+}
+
+.public-proposal-next-steps span {
+  color: var(--amarelo);
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.public-proposal-next-steps strong {
+  color: var(--verde-escuro);
+  font-size: 0.98rem;
+}
+
+.public-proposal-next-steps p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .public-proposal-section,
 .public-proposal-items,
 .public-proposal-actions,
@@ -6020,6 +6170,10 @@ input[type="range"] {
   gap: 10px;
 }
 
+.public-proposal-main-cta {
+  flex: 1 1 260px;
+}
+
 .public-proposal-change-form {
   border-top: 1px solid var(--line);
   display: grid;
@@ -6124,7 +6278,8 @@ input[type="range"] {
   .pipeline-quick-filters,
   .operations-agenda-grid,
   .public-proposal-stage,
-  .public-proposal-layout {
+  .public-proposal-layout,
+  .public-proposal-next-steps {
     grid-template-columns: 1fr;
   }
 
@@ -6142,6 +6297,10 @@ input[type="range"] {
 
   .report-summary {
     grid-template-columns: 1fr;
+  }
+
+  .report-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pipeline-row-commercial,
@@ -6201,6 +6360,7 @@ input[type="range"] {
   .client-registry-metrics,
   .lead-review-grid,
   .upsell-grid,
+  .report-insights,
   .library-summary,
   .checklist-items,
   .custom-report,
