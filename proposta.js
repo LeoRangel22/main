@@ -98,7 +98,7 @@ function getDecisionCopy(proposal) {
   }
   return {
     title: "Aprovar, ajustar ou conversar com a equipe",
-    note: "Se a proposta fizer sentido, aprove por aqui e nossa equipe segue com o sinal para reservar a data. Se preferir ajustar data, horário ou convidados, mande o pedido direto nesta página.",
+    note: "Se a proposta fizer sentido, aprove nesta página e nossa equipe segue com o sinal para reservar a data. Se preferir ajustar data, horário ou convidados, mande o pedido direto por aqui.",
   };
 }
 
@@ -185,7 +185,7 @@ function renderProposal(proposal) {
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
         <h3>Como deseja seguir?</h3>
-        <p>Aprovar por aqui agiliza o próximo passo com a equipe. A reserva é confirmada após o pagamento do sinal.</p>
+        <p>Aprovar nesta página agiliza o próximo passo com a equipe. A reserva é confirmada após o pagamento do sinal.</p>
       </div>
       <div class="public-proposal-buttons">
         <button class="primary" type="button" data-public-action="confirmar">Aprovar proposta</button>
