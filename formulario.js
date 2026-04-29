@@ -927,6 +927,13 @@ function getSelectedDurationLabel() {
   return fields.duration.selectedOptions?.[0]?.textContent?.trim() || getCopy().select.duration[1];
 }
 
+function formatReviewDate(value) {
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 function renderFinalReview() {
   if (!finalReviewGrid) return;
   const current = getCopy();
@@ -940,7 +947,7 @@ function renderFinalReview() {
     {
       label: uiState.language === "en" ? "Date and arrival" : "Data e chegada",
       value: [
-        fields.date.value || fields.dateFlex.value.trim() || pendingLabel,
+        formatReviewDate(fields.date.value) || fields.dateFlex.value.trim() || pendingLabel,
         fields.time.value || (uiState.language === "en" ? "time pending" : "horário pendente"),
       ].join(" · "),
       step: "eventDetails",
