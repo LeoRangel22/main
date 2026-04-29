@@ -1524,14 +1524,20 @@ function appendBotWhatsAppNotice(message) {
 
 async function runQuickReply(replyId, channel) {
   const context = getQuickReplyContext();
-  const needsLink = getQuickReplyPresets(context.status).find((item) => item.id === replyId)?.needsLink;
-  let share = needsLink ? await ensureProposalForSharing() : null;
-  const proposalUrl = share?.url || "";
-  if (needsLink && !proposalUrl) return;
-  const payload = getQuickReplyPayload(replyId, context, proposalUrl);
-  if (!payload) return;
+  const preset = getQuickReplyPresets(context.status).find((item) => item.id === replyId);
+  const needsLink = preset?.needsLink;
+  if (!preset) return;
+  let share = null;
+  let proposalUrl = "";
 
   if (channel === "copy") {
+    if (needsLink) {
+      share = await ensureProposalForSharing();
+      proposalUrl = share?.url || "";
+      if (!proposalUrl) return;
+    }
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    if (!payload) return;
     try {
       await navigator.clipboard.writeText(payload.message);
       showToast(`Mensagem "${payload.title}" copiada.`);
@@ -1555,13 +1561,20 @@ async function runQuickReply(replyId, channel) {
     const confirmed = confirmClientSend({
       channel: "E-mail",
       destination: email,
-      title: payload.title,
+      title: preset.title,
       action: "abrir o e-mail pronto para envio",
     });
     if (!confirmed) {
       showToast("Abertura do e-mail cancelada.");
       return;
     }
+    if (needsLink) {
+      share = await ensureProposalForSharing();
+      proposalUrl = share?.url || "";
+      if (!proposalUrl) return;
+    }
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    if (!payload) return;
     state.sendLocks.email = true;
     const subject = encodeURIComponent(payload.subject);
     const body = encodeURIComponent(payload.message);
@@ -1574,15 +1587,30 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "whatsapp") {
-    if (!share) {
+    const phone = fields.clientPhone.value.trim() || context.phone || "";
+    const confirmed = confirmClientSend({
+      channel: "WhatsApp",
+      destination: phone,
+      title: preset.title,
+      action: "enviar agora pela Z-API e registrar no histórico",
+    });
+    if (!confirmed) {
+      showToast("Envio por WhatsApp cancelado.");
+      return;
+    }
+    if (needsLink) {
       share = await ensureProposalForSharing();
       if (!share?.saved || !share?.url) return;
     }
+    proposalUrl = share?.url || "";
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    if (!payload) return;
     await sendProposalWhatsAppViaZapi({
       proposal: share.saved,
       proposalUrl: share.url,
       message: payload.message,
       title: payload.title,
+      skipConfirm: true,
     });
   }
 }
@@ -6631,6 +6659,7 @@ async function openEmail() {
     showToast("E-mail já está sendo preparado.");
     return;
   }
+  if (!ensureProposalReadyForSending()) return;
   const confirmed = confirmClientSend({
     channel: "E-mail",
     destination: email,
@@ -6732,6 +6761,18 @@ async function runProposalNextStepAction(action) {
 }
 
 async function openWhatsApp() {
+  if (!ensureProposalReadyForSending()) return;
+  const phone = fields.clientPhone.value.trim();
+  const confirmed = confirmClientSend({
+    channel: "WhatsApp",
+    destination: phone,
+    title: "Proposta comercial",
+    action: "enviar agora pela Z-API e registrar no histórico",
+  });
+  if (!confirmed) {
+    showToast("Envio por WhatsApp cancelado.");
+    return;
+  }
   const share = await ensureProposalForSharing();
   if (!share?.saved || !share?.url) return;
   await sendProposalWhatsAppViaZapi({
@@ -6739,6 +6780,7 @@ async function openWhatsApp() {
     proposalUrl: share.url,
     message: buildProposalWhatsAppMessage(share.url),
     title: "Proposta comercial",
+    skipConfirm: true,
   });
 }
 
