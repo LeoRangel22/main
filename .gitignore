@@ -11,3 +11,7 @@ Thumbs.db
 
 # Arquivos temporarios de preview
 _preview-*.pdf
+
+# Arquivos locais gerados por ferramentas
+package-lock.json
+supabase/.temp/
