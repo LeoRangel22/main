@@ -11,6 +11,8 @@ const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario
 const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
 const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SUPER_ADMIN_EMAILS = ["leorangel@gmail.com"];
+const HUMAN_EVENTS_EMAIL = "eventos@embaixadacarioca.com.br";
+const HUMAN_EVENTS_WHATSAPP = "+55 21 97142-6007";
 const SERVICE_RATE = 0.12;
 const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
@@ -1406,7 +1408,7 @@ function getQuickReplyPresets(status) {
           "",
           "Se fizer sentido, consigo ajustar data, horário, convidados e formato para chegar na melhor versão.",
           "",
-          "Fico à disposição.",
+          `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -1428,7 +1430,7 @@ function getQuickReplyPresets(status) {
           "",
           "Se fizer sentido, consigo ajustar alguns pontos para chegarmos na versão ideal para o grupo.",
           "",
-          "Fico à disposição.",
+          `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -1450,7 +1452,7 @@ function getQuickReplyPresets(status) {
           "",
           "Assim que o sinal entrar, já deixamos a reserva confirmada e seguimos para a parte operacional.",
           "",
-          "Se preferir, também posso resumir tudo por aqui.",
+          `Se preferir conversar com a equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -1470,9 +1472,9 @@ function getQuickReplyPresets(status) {
           "Deixo o link da proposta aqui como referência:",
           proposalUrl,
           "",
-          "Se precisar, também te envio o resumo do combinado por e-mail ou WhatsApp.",
+          `Se precisar, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
           "",
-          "Fico à disposição.",
+          "A equipe acompanha por esses canais.",
         ].join("\n"),
     },
     {
@@ -1493,7 +1495,7 @@ function getQuickReplyPresets(status) {
           "Deixo o link da proposta aqui para referência final:",
           proposalUrl,
           "",
-          "Se houver qualquer ajuste de última hora, me avise por aqui.",
+          `Se houver qualquer ajuste de última hora, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
           "",
           "Nos vemos em breve.",
         ].join("\n"),
@@ -1508,6 +1510,16 @@ function getQuickReplyPayload(replyId, context, proposalUrl) {
     ...preset,
     message: preset.buildText(context, proposalUrl),
   };
+}
+
+function appendBotWhatsAppNotice(message) {
+  const text = String(message || "").trim();
+  const notice = [
+    "Observação importante: esta mensagem foi enviada pelo número automático da Embaixada Carioca.",
+    `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
+  ].join("\n");
+  if (text.includes("número automático da Embaixada Carioca")) return text;
+  return [text, "", notice].filter(Boolean).join("\n");
 }
 
 async function runQuickReply(replyId, channel) {
@@ -6339,7 +6351,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
     "Segue o link da proposta comercial da Embaixada Carioca:",
     proposalUrl,
     "",
-    "Pelo link você pode aprovar a proposta, solicitar ajustes de data, horário ou convidados, ou falar com a nossa equipe.",
+    "Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados.",
   ].join("\n");
 }
 
@@ -6359,6 +6371,9 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
     "",
     `Confirme apenas se a mensagem foi revisada. Ao confirmar, o app vai ${action}.`,
+    channel === "WhatsApp"
+      ? `Atenção: este envio sai pelo número automático do bot. Atendimento humano: ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -6418,11 +6433,12 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   state.sendLocks.whatsapp = true;
   try {
     showToast("Enviando proposta por WhatsApp...");
+    const outboundMessage = appendBotWhatsAppNotice(message || buildProposalWhatsAppMessage(proposalUrl));
     const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
       body: {
         proposalId: proposal.id,
         phone,
-        message,
+        message: outboundMessage,
         proposalUrl,
         title,
       },
