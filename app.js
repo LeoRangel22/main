@@ -2333,9 +2333,9 @@ function getLeadReadinessItems() {
   return [
     {
       id: "contact",
-      label: "Contato",
+      label: "Cliente e canal",
       status: contact?.status || "error",
-      detail: contact?.status === "ok" ? "Canal de retorno pronto." : contact?.detail || "Complete nome e contato.",
+      detail: contact?.status === "ok" ? "Nome e canal de retorno revisados." : contact?.detail || "Complete nome, e-mail ou celular.",
       target: "client",
     },
     {
@@ -2344,38 +2344,68 @@ function getLeadReadinessItems() {
       status: hasCommercialProfile ? "ok" : "warning",
       detail: hasCommercialProfile
         ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
-        : "Classifique cliente, investimento ou origem quando possível.",
+        : "Classifique cliente, investimento ou origem para priorizar follow-up.",
       target: "notes",
     },
     {
       id: "agenda",
-      label: "Agenda",
+      label: "Data e horário",
       status: agenda?.status || "error",
-      detail: agenda?.detail || "Cheque data e horário.",
+      detail: agenda?.detail || "Cheque data, horário e conflito de agenda.",
       target: "client",
     },
     {
       id: "menu",
-      label: "Produto",
+      label: "Formato e itens",
       status: items?.status || "error",
-      detail: selected.length ? `${selected.length} item(ns) selecionado(s).` : "Escolha o pacote principal.",
+      detail: selected.length ? `${selected.length} item(ns) selecionado(s). Confira se combinam com o pedido.` : "Escolha o pacote principal.",
       target: "items",
     },
     {
       id: "brief",
       label: "Briefing",
       status: hasBriefing ? "ok" : "warning",
-      detail: hasBriefing ? "Contexto suficiente para abordagem." : "Inclua motivo, restrições ou observação útil.",
+      detail: hasBriefing ? "Contexto suficiente para abordagem comercial." : "Inclua motivo, restrições ou observação útil.",
       target: "notes",
     },
     {
       id: "value",
-      label: "Valor",
+      label: "Investimento",
       status: value?.status || "error",
       detail: value?.status === "ok" ? value.detail : "Monte o valor antes de enviar.",
       target: "items",
     },
   ];
+}
+
+function getProposalApprovalMessage(items = getLeadReadinessItems()) {
+  const errors = items.filter((item) => item.status === "error");
+  const warnings = items.filter((item) => item.status === "warning");
+  if (errors.length) {
+    return {
+      tone: "blocker",
+      eyebrow: "Checklist de aprovação",
+      title: "Ainda não envie para o cliente",
+      note: "Resolva os pontos obrigatórios para evitar proposta incompleta, valor errado ou retorno sem canal claro.",
+      label: `${errors.length} obrigatório(s)`,
+    };
+  }
+  if (warnings.length) {
+    return {
+      tone: "warning",
+      eyebrow: "Checklist de aprovação",
+      title: "Pode enviar, mas vale revisar",
+      note: "A proposta está montada. Os alertas abaixo ajudam a aumentar a chance de resposta e fechamento.",
+      label: `${warnings.length} atenção`,
+    };
+  }
+  return {
+    tone: "ready",
+    eyebrow: "Checklist de aprovação",
+    title: "Pronto para enviar com segurança",
+    note: "Cliente, agenda, itens e investimento estão coerentes. Salve como enviada e faça o acompanhamento pelo funil.",
+    label: "Aprovado",
+  };
 }
 
 function pushUpsellRecommendation(recommendations, itemId, title, detail, reason) {
@@ -2505,24 +2535,29 @@ function renderLeadReviewPanel() {
   const warnings = items.filter((item) => item.status === "warning").length;
   const upsells = getUpsellRecommendations();
   const criticalItems = items.filter((item) => item.status !== "ok").slice(0, 3);
+  const approval = getProposalApprovalMessage(items);
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
       <div>
-        <span>Checklist antes do envio</span>
-        <strong>${errors ? "Ajuste antes de enviar" : warnings ? "Quase pronto para vender" : "Lead pronto para proposta"}</strong>
+        <span>${escapeHtml(approval.eyebrow)}</span>
+        <strong>${escapeHtml(approval.title)}</strong>
       </div>
-      <small>${errors ? `${errors} pendência(s) obrigatória(s)` : warnings ? `${warnings} ponto(s) de atenção` : "Dados, agenda e valor coerentes"}</small>
+      <small>${escapeHtml(approval.label)}</small>
+    </div>
+    <div class="lead-approval-gate is-${escapeHtml(approval.tone)}">
+      <strong>${escapeHtml(approval.title)}</strong>
+      <span>${escapeHtml(approval.note)}</span>
     </div>
     ${
       criticalItems.length
         ? `<div class="lead-review-priority">
-            <span>Próximo ajuste</span>
+            <span>Revisar agora</span>
             <strong>${escapeHtml(criticalItems.map((item) => item.label).join(" · "))}</strong>
-            <small>Clique nos blocos abaixo para ir direto ao ponto da proposta.</small>
+            <small>Clique nos blocos abaixo para ir direto ao ponto antes de salvar ou enviar.</small>
           </div>`
         : `<div class="lead-review-priority is-clear">
-            <span>Pronto para enviar</span>
+            <span>Envio liberado</span>
             <strong>Proposta revisada, valor montado e canais preenchidos.</strong>
           </div>`
     }
@@ -4053,6 +4088,50 @@ function renderReportItem(item) {
   `;
 }
 
+function getTopReportLabel(items, getter, fallback = "Sem dado suficiente") {
+  const counts = new Map();
+  items.forEach((item) => {
+    const label = getter(item);
+    if (!label) return;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+  if (!counts.size) return fallback;
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0].join(" · ");
+}
+
+function getReportActionInsight({ config, reportItems, proposalItems, soldItems }) {
+  const statusCounts = reportItems.reduce((acc, item) => {
+    const status = getReportStatus(item);
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const canceled = statusCounts.cancelado || 0;
+  const awaiting = statusCounts.proposta_enviada || 0;
+  const negotiation = statusCounts.negociacao || 0;
+  const confirmed = statusCounts.confirmado || 0;
+  const conversion = proposalItems.length ? Math.round((soldItems.length / proposalItems.length) * 100) : 0;
+  let nextAction = "Use este relatório para abrir os itens mais recentes e registrar o próximo passo.";
+
+  if (config.title.toLowerCase().includes("responder") || awaiting) {
+    nextAction = "Priorize follow-up: propostas sem resposta perdem força depois de 24h.";
+  } else if (config.title.toLowerCase().includes("negociação") || negotiation) {
+    nextAction = "Feche a próxima ação da negociação: ajuste, aprovação ou sinal.";
+  } else if (config.title.toLowerCase().includes("sinal") || confirmed) {
+    nextAction = "Confira saldo, comprovantes e planejamento para não deixar venda parada.";
+  } else if (config.title.toLowerCase().includes("48h")) {
+    nextAction = "Revise operação, cardápio, responsáveis e horário final do evento.";
+  } else if (canceled) {
+    nextAction = "Leia os motivos de cancelamento para ajustar preço, produto ou abordagem.";
+  }
+
+  return {
+    conversion,
+    topType: getTopReportLabel(reportItems, (item) => item.type),
+    topClientType: getTopReportLabel(reportItems, (item) => item.clientType || "Cliente direto"),
+    nextAction,
+  };
+}
+
 function renderDashboardReports(items = getPipelineItems()) {
   if (!nodes.reportOutput) return;
   const prepared = getReportItems(items);
@@ -4068,6 +4147,7 @@ function renderDashboardReports(items = getPipelineItems()) {
   const soldItems = reportItems.filter(isSoldReportItem);
   const total = proposalItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const average = proposalItems.length ? total / proposalItems.length : 0;
+  const insight = getReportActionInsight({ config, reportItems, proposalItems, soldItems });
 
   nodes.reportPresets?.querySelectorAll("[data-report-preset]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.reportPreset === state.activeReportPreset);
@@ -4085,6 +4165,24 @@ function renderDashboardReports(items = getPipelineItems()) {
         <div><dt>Valor</dt><dd>${formatMoney(total)}</dd></div>
         <div><dt>TKT médio</dt><dd>${formatMoney(average)}</dd></div>
       </dl>
+    </div>
+    <div class="report-insights">
+      <article>
+        <span>Próxima ação</span>
+        <strong>${escapeHtml(insight.nextAction)}</strong>
+      </article>
+      <article>
+        <span>Conversão da visão</span>
+        <strong>${escapeHtml(String(insight.conversion))}%</strong>
+      </article>
+      <article>
+        <span>Formato mais presente</span>
+        <strong>${escapeHtml(insight.topType)}</strong>
+      </article>
+      <article>
+        <span>Perfil mais comum</span>
+        <strong>${escapeHtml(insight.topClientType)}</strong>
+      </article>
     </div>
     <div class="report-list">
       ${reportItems.length ? reportItems.slice(0, 14).map(renderReportItem).join("") : `<p>Nenhum item neste relatório.</p>`}
@@ -4512,6 +4610,49 @@ function renderClientRegistry(items = getPipelineItems()) {
   nodes.clientDirectory.innerHTML = filtered.slice(0, maxClients).map(renderClientRegistryCard).join("") || `<p>Nenhum cliente encontrado.</p>`;
 }
 
+function getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, realizedItems, canceledItems }) {
+  if (realizedItems.length) {
+    return {
+      tone: "realized",
+      label: "Cliente com evento realizado",
+      detail: "Histórico forte. Vale nutrir para nova data, agência ou indicação.",
+    };
+  }
+  if (confirmedItems.length) {
+    return {
+      tone: "confirmed",
+      label: "Venda em andamento",
+      detail: "Acompanhe pagamento, planejamento e execução para proteger a experiência.",
+    };
+  }
+  if (openQuoteItems.length >= 2) {
+    return {
+      tone: "hot",
+      label: "Cliente recorrente em cotação",
+      detail: "Mais de uma oportunidade aberta. Priorize follow-up consultivo.",
+    };
+  }
+  if (latest?.kind === "proposal" && normalizeProposalStatus(latest.status) === "negociacao") {
+    return {
+      tone: "hot",
+      label: "Negociação ativa",
+      detail: "Ajuste pendências e conduza para sinal com próximo passo claro.",
+    };
+  }
+  if (canceledItems.length && !openQuoteItems.length) {
+    return {
+      tone: "canceled",
+      label: "Histórico sem venda",
+      detail: "Mantenha motivo do cancelamento para reativar com proposta melhor no futuro.",
+    };
+  }
+  return {
+    tone: "quote",
+    label: "Novo relacionamento",
+    detail: "Use o histórico para qualificar rápido e enviar uma proposta certeira.",
+  };
+}
+
 function renderClientRegistryCard(client) {
   const latest = client.items[0];
   const latestButton =
@@ -4525,6 +4666,10 @@ function renderClientRegistryCard(client) {
   const openQuoteItems = quoteItems.filter((item) => getReportStatus(item) !== "cancelado");
   const realizedValue = realizedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const confirmedValue = confirmedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const quoteValue = openQuoteItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const totalRelationshipValue = realizedValue + confirmedValue;
+  const profile = getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, realizedItems, canceledItems });
+  const lastInteraction = latest.updatedAt || latest.createdAt || client.lastUpdated;
   const footerLabel = realizedValue
     ? `Realizado: ${formatMoney(realizedValue)}`
     : confirmedValue
@@ -4561,6 +4706,15 @@ function renderClientRegistryCard(client) {
         <span><b>${canceledItems.length}</b><small>Cancelados</small></span>
       </div>
       <div class="client-registry-summary">${escapeHtml(summaryLabel)}</div>
+      <div class="client-registry-profile client-profile-${escapeHtml(profile.tone)}">
+        <span>${escapeHtml(profile.label)}</span>
+        <strong>${escapeHtml(profile.detail)}</strong>
+      </div>
+      <div class="client-registry-commerce">
+        <span>Cotado: ${formatMoney(quoteValue)}</span>
+        <span>Vendido: ${formatMoney(totalRelationshipValue)}</span>
+        <span>Último contato: ${escapeHtml(formatSavedAt(lastInteraction))}</span>
+      </div>
       <div class="client-registry-next">
         <span>Próximo passo</span>
         <strong>${escapeHtml(nextAction)}</strong>
@@ -6360,6 +6514,9 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
   const eventType = fields.eventType.value.trim();
   const eventDate = fields.eventDate.value || getEventDateLabel();
   const eventTime = fields.eventTime.value || getEventTimeLabel();
+  const approvalItems = getLeadReadinessItems();
+  const approvalErrors = approvalItems.filter((item) => item.status === "error");
+  const approvalWarnings = approvalItems.filter((item) => item.status === "warning");
   const details = [
     "Confirmar envio ao cliente?",
     "",
@@ -6369,6 +6526,11 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     title ? `Mensagem: ${title}` : "",
     eventType ? `Evento: ${eventType}` : "",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
+    approvalErrors.length || approvalWarnings.length ? "" : "",
+    approvalErrors.length ? "Pendências obrigatórias:" : "",
+    ...approvalErrors.map((item) => `- ${item.label}: ${item.detail}`),
+    approvalWarnings.length ? "Pontos de atenção:" : "",
+    ...approvalWarnings.map((item) => `- ${item.label}: ${item.detail}`),
     "",
     `Confirme apenas se a mensagem foi revisada. Ao confirmar, o app vai ${action}.`,
     channel === "WhatsApp"
