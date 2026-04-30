@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260430-eventos-v95" />
+    <link rel="stylesheet" href="./styles.css?v=20260430-eventos-v96" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -110,6 +110,7 @@
             </div>
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
+          <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
           <section class="action-center" aria-label="Ações de hoje">
             <div class="action-center-heading">
               <div>
@@ -373,6 +374,8 @@
               <div class="signal-summary is-hidden" id="signalPaymentInfo"></div>
               <div class="operational-checklist is-hidden" id="operationalChecklist"></div>
               <div class="commercial-timeline is-hidden" id="commercialTimeline"></div>
+              <div class="internal-notes-panel is-hidden" id="internalNotesPanel"></div>
+              <div class="event-attachments-panel is-hidden" id="eventAttachmentsPanel"></div>
               <label>
                 Observações
                 <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
@@ -620,6 +623,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260430-eventos-v95"></script>
+    <script defer src="./app.js?v=20260430-eventos-v96"></script>
   </body>
 </html>

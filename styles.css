@@ -150,6 +150,7 @@ summary:focus-visible {
 .auth-locked .owner-metrics,
 .auth-locked .period-metrics,
 .auth-locked .action-center,
+.auth-locked .finance-command-panel,
 .auth-locked .client-command-center,
 .auth-locked .operations-agenda,
 .auth-locked .reports-panel,
@@ -3405,9 +3406,212 @@ label.pipeline-status-control:focus-within select {
   border-left-color: #2b6f7f;
 }
 
+.timeline-entry.is-audit {
+  border-left-color: #6b7f76;
+}
+
+.timeline-entry.is-audit .timeline-entry-badge {
+  background: rgba(24, 58, 45, 0.1);
+  color: var(--verde);
+}
+
 .timeline-entry.is-muted {
   background: rgba(247, 250, 248, 0.7);
   border-left-color: rgba(24, 58, 45, 0.18);
+}
+
+.timeline-change-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.timeline-change-list li {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.05);
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 5px 7px;
+}
+
+.timeline-change-list b,
+.timeline-change-list span {
+  color: var(--verde-escuro);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.internal-notes-panel,
+.event-attachments-panel,
+.finance-command-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 58, 45, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px;
+}
+
+.internal-notes-panel details,
+.event-attachments-panel details {
+  display: grid;
+  gap: 10px;
+}
+
+.internal-notes-panel details:not([open]),
+.event-attachments-panel details:not([open]) {
+  gap: 0;
+}
+
+.internal-panel-heading,
+.finance-command-heading {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.internal-panel-heading::-webkit-details-marker {
+  display: none;
+}
+
+.internal-panel-heading::after {
+  color: var(--verde);
+  content: "Abrir";
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.internal-notes-panel details[open] .internal-panel-heading::after,
+.event-attachments-panel details[open] .internal-panel-heading::after {
+  content: "Fechar";
+}
+
+.internal-notes-panel details[open] .internal-panel-heading,
+.event-attachments-panel details[open] .internal-panel-heading {
+  margin-bottom: 10px;
+}
+
+.internal-panel-heading div,
+.finance-command-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.internal-panel-heading span,
+.finance-command-heading span {
+  color: var(--amarelo);
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.internal-panel-heading strong,
+.finance-command-heading strong {
+  color: var(--verde-escuro);
+  font-size: 0.92rem;
+}
+
+.internal-panel-heading small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.internal-note-form,
+.attachment-form {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.attachment-form {
+  grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr) auto;
+}
+
+.internal-note-form textarea,
+.attachment-form input,
+.attachment-form select {
+  min-height: 42px;
+}
+
+.internal-note-list,
+.attachment-list {
+  display: grid;
+  gap: 7px;
+}
+
+.internal-note-list article,
+.attachment-list article {
+  background: rgba(247, 250, 248, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+}
+
+.internal-note-list p,
+.attachment-list p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  margin: 0;
+}
+
+.internal-note-list small,
+.attachment-list small,
+.attachment-list span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.attachment-list a,
+.attachment-list strong {
+  color: var(--verde-escuro);
+  font-size: 0.84rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.finance-command-panel {
+  margin: 10px 0 12px;
+}
+
+.finance-command-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.finance-command-grid article {
+  background: rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+}
+
+.finance-command-grid span {
+  color: var(--verde);
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.finance-command-grid strong {
+  color: var(--verde-escuro);
+  font-size: 1rem;
 }
 
 .eyebrow {
@@ -6743,6 +6947,12 @@ input[type="range"] {
     justify-items: start;
     min-width: 0;
     text-align: left;
+  }
+
+  .internal-note-form,
+  .attachment-form,
+  .finance-command-grid {
+    grid-template-columns: 1fr;
   }
 
   .send-review-heading {

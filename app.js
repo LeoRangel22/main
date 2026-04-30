@@ -11,6 +11,29 @@ const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario
 const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
 const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "financeiro@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SUPER_ADMIN_EMAILS = ["leorangel@gmail.com"];
+const TEAM_PROFILES = {
+  "leorangel@gmail.com": {
+    label: "Super admin",
+    area: "Gestão",
+    canManageFinance: true,
+    canManageOperations: true,
+    canManageCommercial: true,
+  },
+  "eventos@embaixadacarioca.com.br": {
+    label: "Eventos",
+    area: "Comercial e operação",
+    canManageFinance: false,
+    canManageOperations: true,
+    canManageCommercial: true,
+  },
+  "financeiro@embaixadacarioca.com.br": {
+    label: "Financeiro",
+    area: "Pagamentos",
+    canManageFinance: true,
+    canManageOperations: false,
+    canManageCommercial: false,
+  },
+};
 const HUMAN_EVENTS_EMAIL = "eventos@embaixadacarioca.com.br";
 const HUMAN_EVENTS_WHATSAPP = "+55 21 97142-6007";
 const SERVICE_RATE = 0.12;
@@ -667,6 +690,9 @@ const nodes = {
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
   commercialTimeline: document.querySelector("#commercialTimeline"),
+  internalNotesPanel: document.querySelector("#internalNotesPanel"),
+  eventAttachmentsPanel: document.querySelector("#eventAttachmentsPanel"),
+  financeCommandPanel: document.querySelector("#financeCommandPanel"),
   quickReplies: document.querySelector("#quickReplies"),
   startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
@@ -917,6 +943,24 @@ function getCommercialActor() {
   return state.session?.user?.email || "Equipe";
 }
 
+function getTeamProfile(email = state.session?.user?.email) {
+  const normalized = normalizeEmail(email);
+  return (
+    TEAM_PROFILES[normalized] || {
+      label: "Equipe",
+      area: "Atendimento",
+      canManageFinance: false,
+      canManageOperations: true,
+      canManageCommercial: true,
+    }
+  );
+}
+
+function getActorLabel(email = getCommercialActor()) {
+  const profile = getTeamProfile(email);
+  return `${email || "Equipe"} · ${profile.label}`;
+}
+
 function createCommercialHistoryEntry(type, title, detail, extra = {}) {
   return {
     id: `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -925,6 +969,7 @@ function createCommercialHistoryEntry(type, title, detail, extra = {}) {
     detail,
     at: new Date().toISOString(),
     actor: getCommercialActor(),
+    actorRole: getTeamProfile().label,
     ...extra,
   };
 }
@@ -936,6 +981,42 @@ function withCommercialHistoryEntries(snapshot = {}, entries = []) {
     ...snapshot,
     commercialHistory: [...validEntries, ...getCommercialHistory(snapshot)].slice(0, 50),
   };
+}
+
+function getInternalComments(snapshot = {}) {
+  return Array.isArray(snapshot.internalComments) ? snapshot.internalComments : [];
+}
+
+function getEventAttachments(snapshot = {}) {
+  return Array.isArray(snapshot.eventAttachments) ? snapshot.eventAttachments : [];
+}
+
+function formatAuditChanges(changes = []) {
+  if (!Array.isArray(changes) || !changes.length) return "";
+  return changes
+    .map((change) => `${change.label}: ${change.from || "vazio"} → ${change.to || "vazio"}`)
+    .join(" · ");
+}
+
+function getProposalChangeList(previousSnapshot = {}, nextSnapshot = {}) {
+  if (!previousSnapshot || !nextSnapshot) return [];
+  const previousNames = (previousSnapshot.selectedItems || []).map((item) => item.nome).filter(Boolean).join(", ");
+  const nextNames = (nextSnapshot.selectedItems || []).map((item) => item.nome).filter(Boolean).join(", ");
+  const checks = [
+    ["Cliente", previousSnapshot.client?.name, nextSnapshot.client?.name],
+    ["E-mail", previousSnapshot.client?.email, nextSnapshot.client?.email],
+    ["Celular", previousSnapshot.client?.phone, nextSnapshot.client?.phone],
+    ["Tipo", previousSnapshot.event?.type, nextSnapshot.event?.type],
+    ["Data", previousSnapshot.event?.date, nextSnapshot.event?.date],
+    ["Horário", previousSnapshot.event?.time, nextSnapshot.event?.time],
+    ["Convidados", previousSnapshot.event?.guests, nextSnapshot.event?.guests],
+    ["Duração", previousSnapshot.event?.duration, nextSnapshot.event?.duration],
+    ["Itens", previousNames, nextNames],
+    ["Total", previousSnapshot.totals?.total ? formatMoney(previousSnapshot.totals.total) : "", nextSnapshot.totals?.total ? formatMoney(nextSnapshot.totals.total) : ""],
+  ];
+  return checks
+    .filter(([, from, to]) => String(from || "") !== String(to || ""))
+    .map(([label, from, to]) => ({ label, from: String(from || ""), to: String(to || "") }));
 }
 
 function formatCommercialHistoryDate(value) {
@@ -1091,6 +1172,9 @@ function isRoutineProposalUpdate(entry = {}) {
 function getHistoryTone(entry = {}) {
   const text = `${entry.type || ""} ${entry.title || ""}`.toLowerCase();
   if (entry.type === "proposta_agrupada") return "muted";
+  if (entry.type === "auditoria") return "audit";
+  if (entry.type === "comentario") return "client";
+  if (entry.type === "anexo") return "operation";
   if (text.includes("cancel")) return "danger";
   if (text.includes("sinal") || text.includes("pagamento")) return "money";
   if (text.includes("whatsapp") || text.includes("enviada")) return "sent";
@@ -1110,6 +1194,7 @@ function getHistoryBadge(entry = {}) {
     client: "CLIENTE",
     stage: "ETAPA",
     operation: "OP",
+    audit: "LOG",
     muted: "AJUSTE",
     proposal: "PROP",
   };
@@ -1532,10 +1617,20 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
                     <div class="timeline-entry-main">
                       <strong>${escapeHtml(entry.title || "Atualização")}</strong>
                       <small>${escapeHtml(entry.detail || "")}</small>
+                      ${
+                        Array.isArray(entry.changes) && entry.changes.length
+                          ? `<ul class="timeline-change-list">${entry.changes
+                              .map(
+                                (change) =>
+                                  `<li><b>${escapeHtml(change.label)}</b><span>${escapeHtml(change.from || "vazio")} → ${escapeHtml(change.to || "vazio")}</span></li>`,
+                              )
+                              .join("")}</ul>`
+                          : ""
+                      }
                     </div>
                     <div class="timeline-entry-meta">
                       <span>${escapeHtml(formatCommercialHistoryDate(entry.at))}</span>
-                      <em>${escapeHtml(entry.actor || "Equipe")}</em>
+                      <em>${escapeHtml(entry.actorRole ? `${entry.actor || "Equipe"} · ${entry.actorRole}` : entry.actor || "Equipe")}</em>
                     </div>
                   </article>
                 `,
@@ -1545,6 +1640,182 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
       }
     </div>
   `;
+}
+
+function renderInternalNotesPanel(proposal = getActiveProposal()) {
+  if (!nodes.internalNotesPanel) return;
+  if (!proposal) {
+    nodes.internalNotesPanel.classList.add("is-hidden");
+    nodes.internalNotesPanel.innerHTML = "";
+    return;
+  }
+  const comments = getInternalComments(proposal.snapshot || {});
+  nodes.internalNotesPanel.classList.remove("is-hidden");
+  nodes.internalNotesPanel.innerHTML = `
+    <details ${comments.length ? "open" : ""}>
+      <summary class="internal-panel-heading">
+        <div>
+          <span>Comentários internos</span>
+          <strong>Memória do atendimento</strong>
+        </div>
+        <small>${comments.length} registro(s)</small>
+      </summary>
+      <div class="internal-note-form">
+        <textarea id="internalCommentText" rows="2" placeholder="Ex.: cliente pediu retorno amanhã, agência precisa de comissão, validar cardápio com operação..."></textarea>
+        <button class="secondary" type="button" data-add-internal-comment="${escapeHtml(proposal.id)}">Registrar</button>
+      </div>
+      <div class="internal-note-list">
+        ${
+          comments.length
+            ? comments
+                .slice(0, 5)
+                .map(
+                  (comment) => `
+                    <article>
+                      <p>${escapeHtml(comment.text)}</p>
+                      <small>${escapeHtml(formatCommercialHistoryDate(comment.at))} · ${escapeHtml(getActorLabel(comment.actor))}</small>
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<p>Use este espaço para decisões, combinados e contexto que não deve ir para o cliente.</p>`
+        }
+      </div>
+    </details>
+  `;
+}
+
+function renderEventAttachmentsPanel(proposal = getActiveProposal()) {
+  if (!nodes.eventAttachmentsPanel) return;
+  if (!proposal) {
+    nodes.eventAttachmentsPanel.classList.add("is-hidden");
+    nodes.eventAttachmentsPanel.innerHTML = "";
+    return;
+  }
+  const attachments = getEventAttachments(proposal.snapshot || {});
+  nodes.eventAttachmentsPanel.classList.remove("is-hidden");
+  nodes.eventAttachmentsPanel.innerHTML = `
+    <details ${attachments.length ? "open" : ""}>
+      <summary class="internal-panel-heading">
+        <div>
+          <span>Anexos do evento</span>
+          <strong>Comprovantes, briefings e produção</strong>
+        </div>
+        <small>${attachments.length} arquivo(s)</small>
+      </summary>
+      <div class="attachment-form">
+        <select id="eventAttachmentType">
+          <option value="Briefing">Briefing</option>
+          <option value="Comprovante">Comprovante</option>
+          <option value="Contrato ou autorização">Contrato ou autorização</option>
+          <option value="Produção">Produção</option>
+          <option value="Outro">Outro</option>
+        </select>
+        <input id="eventAttachmentFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" />
+        <button class="secondary" type="button" data-add-event-attachment="${escapeHtml(proposal.id)}">Anexar</button>
+      </div>
+      <div class="attachment-list">
+        ${
+          attachments.length
+            ? attachments
+                .slice(0, 8)
+                .map(
+                  (attachment) => `
+                    <article>
+                      <span>${escapeHtml(attachment.type || "Arquivo")}</span>
+                      ${
+                        attachment.dataUrl
+                          ? `<a href="${escapeHtml(attachment.dataUrl)}" download="${escapeHtml(attachment.nome || "arquivo")}">${escapeHtml(attachment.nome || "arquivo")}</a>`
+                          : `<strong>${escapeHtml(attachment.nome || "Arquivo")}</strong>`
+                      }
+                      <small>${escapeHtml(formatCommercialHistoryDate(attachment.at))} · ${escapeHtml(getActorLabel(attachment.actor))}</small>
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<p>Nenhum anexo interno ainda.</p>`
+        }
+      </div>
+    </details>
+  `;
+}
+
+async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Registro atualizado.") {
+  if (!state.supabase || !state.session || !proposalId) return null;
+  const { data, error } = await state.supabase
+    .from("propostas")
+    .update({ snapshot })
+    .eq("id", proposalId)
+    .select("*")
+    .single();
+  if (error) {
+    console.warn("Falha ao atualizar snapshot da proposta.", error);
+    showToast("Não foi possível salvar este registro.");
+    return null;
+  }
+  upsertProposalState(data);
+  renderCommercialTimeline(data);
+  renderInternalNotesPanel(data);
+  renderEventAttachmentsPanel(data);
+  renderPipeline();
+  showToast(successMessage);
+  return data;
+}
+
+async function addInternalComment(proposalId) {
+  const proposal = state.proposals.find((item) => item.id === proposalId);
+  const text = document.querySelector("#internalCommentText")?.value?.trim() || "";
+  if (!proposal || !text) {
+    showToast("Escreva um comentário curto antes de registrar.");
+    return;
+  }
+  const comment = {
+    id: `comment-${Date.now()}`,
+    text,
+    at: new Date().toISOString(),
+    actor: getCommercialActor(),
+    actorRole: getTeamProfile().label,
+  };
+  const history = createCommercialHistoryEntry("comentario", "Comentário interno", text);
+  const snapshot = withCommercialHistoryEntries(
+    {
+      ...(proposal.snapshot || {}),
+      internalComments: [comment, ...getInternalComments(proposal.snapshot || {})].slice(0, 30),
+    },
+    [history],
+  );
+  await updateProposalSnapshot(proposalId, snapshot, "Comentário interno registrado.");
+}
+
+async function addEventAttachment(proposalId) {
+  const proposal = state.proposals.find((item) => item.id === proposalId);
+  const type = document.querySelector("#eventAttachmentType")?.value || "Outro";
+  const file = document.querySelector("#eventAttachmentFile")?.files?.[0] || null;
+  if (!proposal || !file) {
+    showToast("Escolha um arquivo para anexar.");
+    return;
+  }
+  try {
+    const attachmentFile = await readSignalProofFile(file);
+    const attachment = {
+      ...attachmentFile,
+      id: `attach-${Date.now()}`,
+      type,
+      at: new Date().toISOString(),
+      actor: getCommercialActor(),
+      actorRole: getTeamProfile().label,
+    };
+    const snapshot = withCommercialHistoryEntries(
+      {
+        ...(proposal.snapshot || {}),
+        eventAttachments: [attachment, ...getEventAttachments(proposal.snapshot || {})].slice(0, 20),
+      },
+      [createCommercialHistoryEntry("anexo", `${type} anexado`, attachment.nome)],
+    );
+    await updateProposalSnapshot(proposalId, snapshot, "Anexo registrado no evento.");
+  } catch (error) {
+    showToast(error.message || "Não foi possível anexar o arquivo.");
+  }
 }
 
 function getActiveProposal() {
@@ -1919,6 +2190,8 @@ async function updateOperationalChecklist(checklistId, checked) {
   upsertProposalState(data);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderInternalNotesPanel(data);
+  renderEventAttachmentsPanel(data);
   renderProposalNextStep();
   renderPipeline();
   showToast("Checklist atualizado.");
@@ -3753,6 +4026,8 @@ function getProposalSnapshot() {
     paymentTerms,
     operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
     commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
+    internalComments: getInternalComments(activeProposal?.snapshot || {}),
+    eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
     proposalText: buildProposalText(),
   };
 }
@@ -3806,6 +4081,10 @@ function isSuperAdminSession() {
   return Boolean(state.session?.user?.email && isSuperAdminEmail(state.session.user.email));
 }
 
+function isFinanceSession() {
+  return Boolean(state.session?.user?.email && getTeamProfile(state.session.user.email).canManageFinance);
+}
+
 function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
@@ -3829,7 +4108,7 @@ function updateAuthUI() {
   }
 
   nodes.authStatus.textContent = isLoggedIn
-    ? `Conectado como ${state.session.user.email}.`
+    ? `Conectado como ${state.session.user.email} · ${getTeamProfile(state.session.user.email).label}.`
     : "Use eventos@embaixadacarioca.com.br, financeiro@embaixadacarioca.com.br ou leorangel@gmail.com para receber o link de acesso.";
 }
 
@@ -5111,6 +5390,35 @@ function getActionTasks(items = getPipelineItems()) {
         priority: 72,
         track: "Financeiro",
       });
+      if (!item.hasSignalProof) {
+        tasks.push({
+          ...base,
+          title: "Anexar comprovante do sinal",
+          note: "Venda confirmada sem comprovante no histórico.",
+          priority: 76,
+          track: "Financeiro",
+        });
+      }
+    }
+
+    if (item.kind === "proposal" && status === "pagamento_final") {
+      if (!item.hasRemainingPayment) {
+        tasks.push({
+          ...base,
+          title: "Registrar pagamento restante",
+          note: "Saldo final ainda não registrado.",
+          priority: 78,
+          track: "Financeiro",
+        });
+      } else if (!item.hasRemainingProof) {
+        tasks.push({
+          ...base,
+          title: "Anexar comprovante do saldo",
+          note: "Pagamento restante registrado sem comprovante.",
+          priority: 60,
+          track: "Financeiro",
+        });
+      }
     }
 
     if (item.kind === "proposal" && ["pagamento_final", "planejamento"].includes(status)) {
@@ -5164,7 +5472,17 @@ function getActionTasks(items = getPipelineItems()) {
     }
   }
 
-  return tasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
+  const profile = getTeamProfile();
+  const rankedTasks = tasks.map((task) => ({
+    ...task,
+    priority:
+      profile.canManageFinance && getActionTrack(task) === "Financeiro"
+        ? task.priority + 12
+        : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
+          ? task.priority + 6
+          : task.priority,
+  }));
+  return rankedTasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
 }
 
 function renderActionTasks(items = getPipelineItems()) {
@@ -5208,6 +5526,44 @@ function renderActionTasks(items = getPipelineItems()) {
       `;
     })
     .join("");
+}
+
+function renderFinanceCommandPanel(items = getPipelineItems()) {
+  if (!nodes.financeCommandPanel) return;
+  if (!state.session || !isFinanceSession()) {
+    nodes.financeCommandPanel.classList.add("is-hidden");
+    nodes.financeCommandPanel.innerHTML = "";
+    return;
+  }
+  const proposals = items.filter((item) => item.kind === "proposal");
+  const awaitingSignal = proposals.filter((item) => ["proposta_enviada", "negociacao"].includes(item.status));
+  const awaitingRemaining = proposals.filter((item) => item.status === "confirmado" || (item.status === "pagamento_final" && !item.hasRemainingPayment));
+  const missingProof = proposals.filter(
+    (item) =>
+      (operationStatuses.has(item.status) && !item.hasSignalProof) ||
+      (item.hasRemainingPayment && !item.hasRemainingProof),
+  );
+  const receivedMonth = proposals.reduce((sum, item) => {
+    const signal = item.snapshot?.pagamentoSinal;
+    const remaining = item.snapshot?.pagamentoRestante;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const signalValue = signal?.data?.startsWith(currentMonth) ? toNumber(signal.valor) : 0;
+    const remainingValue = remaining?.data?.startsWith(currentMonth) ? toNumber(remaining.valor) : 0;
+    return sum + signalValue + remainingValue;
+  }, 0);
+  nodes.financeCommandPanel.classList.remove("is-hidden");
+  nodes.financeCommandPanel.innerHTML = `
+    <div class="finance-command-heading">
+      <span>Financeiro</span>
+      <strong>Pagamentos que pedem atenção</strong>
+    </div>
+    <div class="finance-command-grid">
+      <article><span>Aguardando sinal</span><strong>${awaitingSignal.length}</strong></article>
+      <article><span>Saldo pendente</span><strong>${awaitingRemaining.length}</strong></article>
+      <article><span>Comprovante faltando</span><strong>${missingProof.length}</strong></article>
+      <article><span>Recebido no mês</span><strong>${escapeHtml(formatMoney(receivedMonth))}</strong></article>
+    </div>
+  `;
 }
 
 function getAgendaEventLabel(item) {
@@ -5559,6 +5915,7 @@ function renderPipeline() {
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
     renderPipelineMetrics([]);
+    renderFinanceCommandPanel([]);
     return;
   }
 
@@ -5567,6 +5924,7 @@ function renderPipeline() {
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
     renderPipelineMetrics([]);
+    renderFinanceCommandPanel([]);
     return;
   }
 
@@ -5574,6 +5932,7 @@ function renderPipeline() {
   const filteredItems = getFilteredPipelineItems(items);
   renderPipelineQuickFilters(items);
   renderPipelineMetrics(items);
+  renderFinanceCommandPanel(items);
   renderOperationsAgenda(items);
   renderAvailabilityAlert();
 
@@ -5726,6 +6085,8 @@ async function applyQuoteRequest(requestId) {
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
+  renderInternalNotesPanel(null);
+  renderEventAttachmentsPanel(null);
 
   renderAll();
   showToast("Solicitação carregada para revisão.");
@@ -5856,6 +6217,7 @@ async function cancelPipelineItem(kind, id) {
       cancelamento,
       commercialHistory: [
         createCommercialHistoryEntry("cancelamento", "Lead cancelado", reason, { actor: cancelamento.canceladoPor }),
+        createCommercialHistoryEntry("auditoria", "Cancelamento auditado", `Motivo: ${reason}`, { actor: cancelamento.canceladoPor }),
         ...getCommercialHistory(request.snapshot || {}),
       ].slice(0, 50),
     };
@@ -5867,7 +6229,10 @@ async function cancelPipelineItem(kind, id) {
   if (!proposal) return;
   const snapshot = withCommercialHistoryEntries(
     { ...(proposal.snapshot || {}), cancelamento },
-    [createCommercialHistoryEntry("cancelamento", "Cancelamento registrado", reason, { actor: cancelamento.canceladoPor })],
+    [
+      createCommercialHistoryEntry("cancelamento", "Cancelamento registrado", reason, { actor: cancelamento.canceladoPor }),
+      createCommercialHistoryEntry("auditoria", "Cancelamento auditado", `Motivo: ${reason}`, { actor: cancelamento.canceladoPor }),
+    ],
   );
   const { data, error } = await state.supabase
     .from("propostas")
@@ -5944,6 +6309,11 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     historyEntries.push(
       createCommercialHistoryEntry("sinal", "Sinal registrado", `${formatMoney(paymentSignal.valor)} · ${formatSignalPaymentDate(paymentSignal.data)} · ${(paymentSignal.bancos || []).join(", ")}.`),
     );
+    if (paymentSignal.comprovante?.nome) {
+      historyEntries.push(
+        createCommercialHistoryEntry("anexo", "Comprovante do sinal anexado", paymentSignal.comprovante.nome),
+      );
+    }
   }
   if (remainingPayment) {
     historyEntries.push(
@@ -5953,6 +6323,11 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
         `${formatMoney(remainingPayment.valor)} · ${formatSignalPaymentDate(remainingPayment.data)} · ${(remainingPayment.bancos || []).join(", ")}.`,
       ),
     );
+    if (remainingPayment.comprovante?.nome) {
+      historyEntries.push(
+        createCommercialHistoryEntry("anexo", "Comprovante do pagamento restante anexado", remainingPayment.comprovante.nome),
+      );
+    }
   }
 
   const snapshot = withCommercialHistoryEntries(
@@ -5986,6 +6361,8 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
     renderOperationalChecklist(data);
     renderCommercialTimeline(data);
+    renderInternalNotesPanel(data);
+    renderEventAttachmentsPanel(data);
     renderProposalNextStep();
   }
   showToast(
@@ -6307,10 +6684,28 @@ async function saveCurrentProposal(status, signalInfo = null) {
       ),
     );
   }
+  if (activeProposal) {
+    const proposalChanges = getProposalChangeList(activeProposal.snapshot || {}, snapshot);
+    if (proposalChanges.length) {
+      historyEntries.push(
+        createCommercialHistoryEntry(
+          "auditoria",
+          "Alterações salvas",
+          formatAuditChanges(proposalChanges.slice(0, 5)),
+          { changes: proposalChanges.slice(0, 8) },
+        ),
+      );
+    }
+  }
   if (paymentSignal && !activeProposal?.snapshot?.pagamentoSinal) {
     historyEntries.push(
       createCommercialHistoryEntry("sinal", "Sinal registrado", `${formatMoney(paymentSignal.valor)} · ${formatSignalPaymentDate(paymentSignal.data)} · ${(paymentSignal.bancos || []).join(", ")}.`),
     );
+    if (paymentSignal.comprovante?.nome) {
+      historyEntries.push(
+        createCommercialHistoryEntry("anexo", "Comprovante do sinal anexado", paymentSignal.comprovante.nome),
+      );
+    }
   }
   if (remainingPayment && !activeProposal?.snapshot?.pagamentoRestante) {
     historyEntries.push(
@@ -6320,6 +6715,11 @@ async function saveCurrentProposal(status, signalInfo = null) {
         `${formatMoney(remainingPayment.valor)} · ${formatSignalPaymentDate(remainingPayment.data)} · ${(remainingPayment.bancos || []).join(", ")}.`,
       ),
     );
+    if (remainingPayment.comprovante?.nome) {
+      historyEntries.push(
+        createCommercialHistoryEntry("anexo", "Comprovante do pagamento restante anexado", remainingPayment.comprovante.nome),
+      );
+    }
   }
   const snapshotWithHistory = withCommercialHistoryEntries(snapshot, historyEntries);
 
@@ -6349,6 +6749,8 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderInternalNotesPanel(data);
+  renderEventAttachmentsPanel(data);
   renderProposalNextStep();
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
@@ -6381,7 +6783,10 @@ async function loadProposalHistory() {
   renderHistory();
   renderPipeline();
   if (state.activeProposalId) {
-    renderCommercialTimeline(getActiveProposal());
+    const activeProposal = getActiveProposal();
+    renderCommercialTimeline(activeProposal);
+    renderInternalNotesPanel(activeProposal);
+    renderEventAttachmentsPanel(activeProposal);
     renderProposalNextStep();
   }
   await applyPendingDashboardTarget();
@@ -6412,6 +6817,8 @@ function applyProposalSnapshot(snapshot) {
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
   renderOperationalChecklist(getActiveProposal());
   renderCommercialTimeline(getActiveProposal());
+  renderInternalNotesPanel(getActiveProposal());
+  renderEventAttachmentsPanel(getActiveProposal());
 
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
@@ -6621,6 +7028,8 @@ function renderAll() {
   renderServiceCockpit();
   renderLeadReviewPanel();
   renderProposalNextStep();
+  renderInternalNotesPanel();
+  renderEventAttachmentsPanel();
   renderQuickReplies();
   renderSummary();
   renderSendReview();
@@ -6664,6 +7073,8 @@ function startNewProposal() {
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
+  renderInternalNotesPanel(null);
+  renderEventAttachmentsPanel(null);
   renderAll();
   scrollToClientData();
   showToast("Nova proposta pronta para preencher.");
@@ -7340,6 +7751,16 @@ function bindEvents() {
     const checkbox = event.target.closest("input[data-checklist-id]");
     if (!checkbox) return;
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
+  });
+  nodes.internalNotesPanel?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-add-internal-comment]");
+    if (!button) return;
+    addInternalComment(button.dataset.addInternalComment);
+  });
+  nodes.eventAttachmentsPanel?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-add-event-attachment]");
+    if (!button) return;
+    addEventAttachment(button.dataset.addEventAttachment);
   });
   document.querySelector("#copyClientFormLinkBtn")?.addEventListener("click", copyClientFormLink);
   nodes.historyList?.addEventListener("click", (event) => {
