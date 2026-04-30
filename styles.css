@@ -2684,6 +2684,183 @@ label.pipeline-status-control:focus-within select {
   border: 1px solid rgba(199, 71, 63, 0.28);
 }
 
+.service-cockpit {
+  background:
+    linear-gradient(135deg, rgba(24, 58, 45, 0.06), rgba(255, 255, 255, 0.94)),
+    var(--panel);
+  border: 1px solid rgba(24, 58, 45, 0.14);
+  border-left: 5px solid var(--verde);
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(24, 58, 45, 0.07);
+  display: grid;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px;
+}
+
+.service-cockpit.is-danger {
+  border-left-color: #b3362d;
+}
+
+.service-cockpit.is-warning,
+.service-cockpit.is-attention {
+  border-left-color: var(--amarelo);
+}
+
+.service-cockpit-head {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.service-cockpit-head div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.service-cockpit-head span,
+.service-cockpit-card span {
+  color: var(--amarelo);
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.service-cockpit-head strong {
+  color: var(--verde-escuro);
+  font-size: 1.14rem;
+}
+
+.service-cockpit-head small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.service-cockpit-progress {
+  align-items: center;
+  background: var(--verde-escuro);
+  border-radius: 8px;
+  color: #fff;
+  display: grid;
+  justify-items: center;
+  min-width: 76px;
+  padding: 9px 12px;
+}
+
+.service-cockpit-progress b {
+  color: #fff;
+  font-size: 1.12rem;
+}
+
+.service-cockpit-progress small {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.62rem;
+}
+
+.service-cockpit-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.15fr 1fr 1fr;
+}
+
+.service-cockpit-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.11);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.service-cockpit-card strong {
+  color: var(--verde-escuro);
+  font-size: 0.96rem;
+}
+
+.service-cockpit-card p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 790;
+  line-height: 1.32;
+  margin: 0;
+}
+
+.service-cockpit-card small {
+  color: var(--verde);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.service-template-card button,
+.service-client-context button {
+  justify-self: start;
+  min-height: 34px;
+  padding: 8px 12px;
+}
+
+.service-cockpit-bottom {
+  align-items: center;
+  border-top: 1px solid rgba(24, 58, 45, 0.1);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
+.service-checklist-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.service-check-mini {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 999px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
+}
+
+.service-check-mini b {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.62rem;
+  height: 18px;
+  justify-content: center;
+  width: 20px;
+}
+
+.service-check-mini.is-error b {
+  background: rgba(179, 54, 45, 0.13);
+  color: #9d2f28;
+}
+
+.service-check-mini.is-warning b {
+  background: rgba(245, 155, 30, 0.18);
+  color: #8a5a00;
+}
+
+.service-check-mini.is-ok b {
+  background: rgba(47, 111, 69, 0.12);
+  color: var(--verde);
+}
+
+.service-next-action {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .lead-review-panel {
   background:
     linear-gradient(135deg, rgba(24, 58, 45, 0.05), rgba(255, 255, 255, 0.9)),
@@ -6269,6 +6446,7 @@ input[type="range"] {
 
   .action-list,
   .client-command-center,
+  .service-cockpit-grid,
   .lead-review-grid,
   .upsell-grid,
   .library-summary {
@@ -6358,6 +6536,7 @@ input[type="range"] {
   .action-list,
   .client-command-center,
   .client-registry-metrics,
+  .service-cockpit-grid,
   .lead-review-grid,
   .upsell-grid,
   .report-insights,
@@ -6382,6 +6561,16 @@ input[type="range"] {
   .contact-primary-grid,
   .contact-secondary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .service-cockpit-head,
+  .service-cockpit-bottom {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-cockpit-progress {
+    justify-items: start;
   }
 
   .reports-header,
