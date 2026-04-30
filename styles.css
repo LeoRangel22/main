@@ -2257,6 +2257,57 @@ textarea[aria-invalid="true"] {
   font-weight: 850 !important;
 }
 
+.pipeline-card-next-action {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.055);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 5px 8px;
+}
+
+.pipeline-card-next-action span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.pipeline-card-next-action strong {
+  color: var(--verde-escuro);
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-align: right;
+}
+
+.pipeline-card-next-action.is-warning,
+.pipeline-card-next-action.is-warm,
+.pipeline-card-next-action.is-attention {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.pipeline-card-next-action.is-danger,
+.pipeline-card-next-action.is-critical {
+  background: rgba(168, 50, 39, 0.1);
+  border-color: rgba(168, 50, 39, 0.2);
+}
+
+.pipeline-card-next-action.is-success,
+.pipeline-card-next-action.is-operation,
+.pipeline-card-next-action.is-client {
+  background: rgba(47, 111, 69, 0.1);
+  border-color: rgba(47, 111, 69, 0.16);
+}
+
+.pipeline-card-next-action.is-muted {
+  background: rgba(107, 114, 128, 0.08);
+}
+
 .pipeline-client-response {
   background: rgba(92, 195, 189, 0.14);
   border-radius: 8px;
@@ -2764,7 +2815,7 @@ label.pipeline-status-control:focus-within select {
 .service-cockpit-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: 1.15fr 1fr 1fr;
+  grid-template-columns: minmax(240px, 1.25fr) repeat(3, minmax(180px, 1fr));
 }
 
 .service-cockpit-card {
@@ -2796,10 +2847,27 @@ label.pipeline-status-control:focus-within select {
 }
 
 .service-template-card button,
-.service-client-context button {
+.service-client-context button,
+.service-next-card button {
   justify-self: start;
   min-height: 34px;
   padding: 8px 12px;
+}
+
+.service-next-card {
+  background:
+    linear-gradient(135deg, rgba(24, 58, 45, 0.1), rgba(255, 255, 255, 0.9)),
+    #fff;
+  border-color: rgba(24, 58, 45, 0.18);
+}
+
+.service-next-card.is-danger {
+  border-color: rgba(168, 50, 39, 0.28);
+}
+
+.service-next-card.is-warning,
+.service-next-card.is-attention {
+  border-color: rgba(245, 158, 11, 0.34);
 }
 
 .service-cockpit-bottom {
@@ -2809,6 +2877,13 @@ label.pipeline-status-control:focus-within select {
   gap: 10px;
   justify-content: space-between;
   padding-top: 10px;
+}
+
+.service-cockpit-hint {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-left: auto;
 }
 
 .service-checklist-mini {
@@ -4417,6 +4492,48 @@ textarea {
   line-height: 1.25;
   max-width: 190px;
   text-align: right;
+}
+
+.send-review-command {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.send-review-command article {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.send-review-command span {
+  color: var(--amarelo);
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.send-review-command strong {
+  color: var(--verde-escuro);
+  font-size: 0.86rem;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.send-review-command small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .send-review-grid {
@@ -6965,6 +7082,10 @@ input[type="range"] {
   }
 
   .send-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .send-review-command {
     grid-template-columns: 1fr;
   }
 

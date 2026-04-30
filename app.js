@@ -1485,6 +1485,13 @@ function renderServiceCockpit() {
   const recommendation = getServiceTemplateRecommendation(context);
   const cockpitStatus = getServiceCockpitStatus(readiness, recommendation);
   const nextStep = getProposalNextStepConfig();
+  const primaryAction = nextStep || {
+    tone: cockpitStatus.tone,
+    title: cockpitStatus.title,
+    note: cockpitStatus.detail,
+    action: recommendation.eventKey ? "apply_recommended_template" : "focus_items",
+    actionLabel: recommendation.eventKey ? "Aplicar base" : "Ir para itens",
+  };
   const clientMatch = getServiceClientMatch(context);
   const soldCount = clientMatch?.items?.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status))).length || 0;
   const quotesCount = clientMatch?.items?.length || 0;
@@ -1539,6 +1546,12 @@ function renderServiceCockpit() {
             : ""
         }
       </article>
+      <article class="service-cockpit-card service-next-card is-${escapeHtml(primaryAction.tone || cockpitStatus.tone)}">
+        <span>O que fazer agora</span>
+        <strong>${escapeHtml(primaryAction.title)}</strong>
+        <p>${escapeHtml(primaryAction.note)}</p>
+        <button class="primary" type="button" data-service-next-action="${escapeHtml(primaryAction.action)}">${escapeHtml(primaryAction.actionLabel)}</button>
+      </article>
     </div>
     <div class="service-cockpit-bottom">
       <div class="service-checklist-mini">
@@ -1557,11 +1570,7 @@ function renderServiceCockpit() {
             : `<span class="service-check-mini is-ok"><b>OK</b><span>Checklist pronto</span></span>`
         }
       </div>
-      ${
-        nextStep
-          ? `<button class="primary service-next-action" type="button" data-service-next-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.actionLabel)}</button>`
-          : ""
-      }
+      <small class="service-cockpit-hint">Clique em qualquer pendência para ir direto ao campo certo.</small>
     </div>
   `;
 }
@@ -3806,6 +3815,13 @@ function renderSendReview() {
   if (!nodes.sendReviewPanel) return;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
+  const totals = getQuoteTotals();
+  const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
+  const eventLine = [
+    fields.eventDate.value ? formatDateFromIso(fields.eventDate.value) : "Data a definir",
+    fields.eventTime.value || "Horário a definir",
+    `${getGuestCount()} pax`,
+  ].join(" · ");
   const title = summary.ready ? "Pronto para enviar" : "Revise antes de enviar";
   const note = summary.ready
     ? summary.warnings
@@ -3821,6 +3837,23 @@ function renderSendReview() {
         <strong>${escapeHtml(title)}</strong>
       </div>
       <small>${escapeHtml(note)}</small>
+    </div>
+    <div class="send-review-command">
+      <article>
+        <span>Cliente</span>
+        <strong>${escapeHtml(fields.clientName.value.trim() || "Cliente não informado")}</strong>
+        <small>${escapeHtml(destination)}</small>
+      </article>
+      <article>
+        <span>Evento</span>
+        <strong>${escapeHtml(fields.eventType.value.trim() || "Formato a definir")}</strong>
+        <small>${escapeHtml(eventLine)}</small>
+      </article>
+      <article>
+        <span>Total</span>
+        <strong>${escapeHtml(formatMoney(totals.total))}</strong>
+        <small>${escapeHtml(`${getSelectedItems().length} item(ns) · validade ${fields.validity.value || "a definir"}`)}</small>
+      </article>
     </div>
     <div class="send-review-grid">
       ${items
@@ -4799,6 +4832,55 @@ function getProposalFollowUpInfo(item) {
   return { label, level };
 }
 
+function getPipelinePrimaryAction(item) {
+  const status = getReportStatus(item);
+  const age = getLeadAgeInfo(item);
+  const followUp = getProposalFollowUpInfo(item);
+  if (item.kind === "request" && status === "lead_recebido") {
+    return {
+      tone: age && ["danger", "critical"].includes(age.level) ? "danger" : age?.level === "warning" ? "warning" : "fresh",
+      eyebrow: "Próxima ação",
+      label: age && age.level !== "fresh" ? "Responder agora" : "Criar proposta",
+    };
+  }
+  if (status === "proposta_enviada") {
+    if (item.clientResponse === "confirmar") {
+      return { tone: "success", eyebrow: "Cliente aprovou", label: "Registrar sinal" };
+    }
+    return {
+      tone: followUp?.level || "fresh",
+      eyebrow: "Próxima ação",
+      label: followUp ? "Fazer follow-up" : "Aguardar retorno",
+    };
+  }
+  if (status === "negociacao") {
+    return { tone: item.clientResponse === "alteracao" ? "warning" : "warm", eyebrow: "Negociação", label: "Ajustar e reenviar" };
+  }
+  if (status === "confirmado") {
+    return {
+      tone: item.hasRemainingPayment ? "success" : "warning",
+      eyebrow: "Financeiro",
+      label: item.hasRemainingPayment ? "Enviar para planejamento" : "Cobrar saldo",
+    };
+  }
+  if (status === "pagamento_final") {
+    return { tone: item.hasRemainingProof ? "success" : "warning", eyebrow: "Financeiro", label: item.hasRemainingProof ? "Planejar evento" : "Anexar comprovante" };
+  }
+  if (status === "planejamento") {
+    return { tone: "operation", eyebrow: "Operação", label: "Fechar checklist" };
+  }
+  if (status === "evento_proximo") {
+    return { tone: "operation", eyebrow: "48h", label: "Revisão final" };
+  }
+  if (status === "pos_venda") {
+    return { tone: "client", eyebrow: "Relacionamento", label: "Registrar retorno" };
+  }
+  if (status === "cancelado") {
+    return { tone: "muted", eyebrow: "Encerrado", label: item.cancelReason || "Cancelado" };
+  }
+  return { tone: "fresh", eyebrow: "Próxima ação", label: "Abrir registro" };
+}
+
 function getSlaMeta(item) {
   const status = getReportStatus(item);
   if (item.kind === "request" && status === "lead_recebido") {
@@ -4976,6 +5058,39 @@ function getPipelineQuickFilterDefinitions() {
       id: "highScore",
       label: "Score alto",
       matches: (item) => getCommercialScore(item).value >= 80,
+    },
+    {
+      id: "noProposal",
+      label: "Sem proposta",
+      matches: (item) => item.kind === "request" && getReportStatus(item) === "lead_recebido",
+    },
+    {
+      id: "approved",
+      label: "Aprovou",
+      matches: (item) =>
+        item.kind === "proposal" &&
+        item.clientResponse === "confirmar" &&
+        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)),
+    },
+    {
+      id: "awaitingSignal",
+      label: "Falta sinal",
+      matches: (item) =>
+        item.kind === "proposal" &&
+        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)) &&
+        !item.snapshot?.pagamentoSinal,
+    },
+    {
+      id: "awaitingRemaining",
+      label: "Falta saldo",
+      matches: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado" && !item.hasRemainingPayment,
+    },
+    {
+      id: "missingProof",
+      label: "Sem comprovante",
+      matches: (item) =>
+        item.kind === "proposal" &&
+        ((item.snapshot?.pagamentoSinal && !item.hasSignalProof) || (item.hasRemainingPayment && !item.hasRemainingProof)),
     },
     {
       id: "next7days",
@@ -5800,6 +5915,13 @@ function renderPipelineCard(item) {
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
   const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} · ${commercialScore.value}</small>`;
+  const primaryAction = getPipelinePrimaryAction(item);
+  const primaryActionLine = `
+    <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}">
+      <span>${escapeHtml(primaryAction.eyebrow)}</span>
+      <strong>${escapeHtml(primaryAction.label)}</strong>
+    </div>
+  `;
   const clientResponseLine = item.clientResponse
     ? `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`
     : "";
@@ -5862,6 +5984,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
+      ${primaryActionLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
         <span class="pipeline-card-meta-group">
