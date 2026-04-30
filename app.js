@@ -661,6 +661,7 @@ const nodes = {
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   availabilityAlert: document.querySelector("#availabilityAlert"),
+  serviceCockpit: document.querySelector("#serviceCockpit"),
   leadReviewPanel: document.querySelector("#leadReviewPanel"),
   proposalNextStep: document.querySelector("#proposalNextStep"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
@@ -1276,6 +1277,206 @@ function renderProposalNextStep() {
     <div class="proposal-next-step-body">
       <p>${escapeHtml(config.note)}</p>
       <button class="secondary" type="button" data-next-step-action="${escapeHtml(config.action)}">${escapeHtml(config.actionLabel)}</button>
+    </div>
+  `;
+}
+
+function getActiveServiceContext() {
+  const proposal = getActiveProposal();
+  const request = getActiveQuoteRequest();
+  const context = getActiveCommercialContext();
+  const snapshot = proposal?.snapshot || request?.snapshot || {};
+  const client = snapshot.client || snapshot.cliente || {};
+  const qualification = snapshot.qualificacao || snapshot.qualification || {};
+  return {
+    proposal,
+    request,
+    snapshot,
+    clientName: fields.clientName.value.trim() || proposal?.cliente_nome || request?.cliente_nome || client.name || "Cliente",
+    company:
+      proposal?.snapshot?.client?.company ||
+      request?.empresa ||
+      request?.cliente_empresa ||
+      client.company ||
+      "",
+    email: fields.clientEmail.value.trim() || proposal?.cliente_email || request?.cliente_email || client.email || "",
+    phone: fields.clientPhone.value.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || client.phone || "",
+    eventType: fields.eventType.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
+    eventDate: fields.eventDate.value || proposal?.data_evento || request?.data_evento || "",
+    eventTime: fields.eventTime.value || proposal?.horario_evento || request?.horario_evento || "",
+    guests: getGuestCount() || Number(proposal?.convidados || request?.convidados || 0) || 0,
+    duration: getDuration() || Number(proposal?.duracao || request?.duracao || 1) || 1,
+    clientType: context.clientType || qualification.tipoCliente || "Cliente a classificar",
+    budgetRange: context.budgetRange || qualification.faixaInvestimento || "Sem faixa informada",
+    origin: context.origin || qualification.origem || "Origem não informada",
+    occasion: context.occasion || "",
+    extras: context.extras || "",
+    status: proposal?.status || request?.status || "lead_recebido",
+  };
+}
+
+function getServiceClientMatch(context = getActiveServiceContext()) {
+  const clients = getClientRegistry(getPipelineItems());
+  const email = normalizeSearchValue(context.email);
+  const phone = String(context.phone || "").replace(/\D/g, "");
+  const company = normalizeSearchValue(context.company);
+  const name = normalizeSearchValue(context.clientName);
+  return (
+    clients.find((client) => email && normalizeSearchValue(client.email) === email) ||
+    clients.find((client) => phone && String(client.phone || "").replace(/\D/g, "") === phone) ||
+    clients.find((client) => company && normalizeSearchValue(client.company) === company) ||
+    clients.find((client) => name && normalizeSearchValue(client.name) === name) ||
+    null
+  );
+}
+
+function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
+  const eventKey = getGuidedEventKeyFromType(context.eventType) || state.guided.event || "";
+  const template = smartEventTemplates[eventKey] || null;
+  const category = getEventCategoryFromRequest(context.eventType) || template?.label || "Formato a definir";
+  const selected = getSelectedItems();
+  const templateIds = template?.ids?.filter(itemExists) || [];
+  const missingIds = templateIds.filter((id) => !state.selectedIds.has(id));
+  const isApplied = Boolean(templateIds.length) && missingIds.length === 0;
+  return {
+    eventKey,
+    template,
+    category,
+    selected,
+    templateIds,
+    isApplied,
+    title: template?.label || category,
+    detail: template
+      ? `${templateIds.length} item(ns) sugerido(s) para começar rápido.`
+      : "Escolha o formato para o app sugerir os itens base.",
+  };
+}
+
+function getServiceCockpitStatus(readiness, recommendation) {
+  const errors = readiness.filter((item) => item.status === "error");
+  const warnings = readiness.filter((item) => item.status === "warning");
+  if (errors.length) {
+    return {
+      tone: "danger",
+      label: "Antes de enviar",
+      title: "Resolva os pontos obrigatórios",
+      detail: `${errors.length} item(ns) travando a proposta. Comece por ${errors[0].label.toLowerCase()}.`,
+    };
+  }
+  if (!recommendation.selected.length) {
+    return {
+      tone: "warning",
+      label: "Atendimento guiado",
+      title: "Aplique uma proposta base",
+      detail: "Os dados do lead estão encaminhados. Falta escolher o pacote principal.",
+    };
+  }
+  if (warnings.length) {
+    return {
+      tone: "attention",
+      label: "Pode avançar",
+      title: "Revise os alertas comerciais",
+      detail: `${warnings.length} ponto(s) podem melhorar conversão antes do envio.`,
+    };
+  }
+  return {
+    tone: "ready",
+    label: "Pronto",
+    title: "Proposta pronta para enviar",
+    detail: "Dados, itens, valor e próximos passos estão alinhados.",
+  };
+}
+
+function renderServiceCockpit() {
+  if (!nodes.serviceCockpit) return;
+  if (isQuoteWorkspaceEffectivelyEmpty()) {
+    nodes.serviceCockpit.className = "service-cockpit is-hidden";
+    nodes.serviceCockpit.innerHTML = "";
+    return;
+  }
+
+  const context = getActiveServiceContext();
+  const readiness = getLeadReadinessItems();
+  const recommendation = getServiceTemplateRecommendation(context);
+  const cockpitStatus = getServiceCockpitStatus(readiness, recommendation);
+  const nextStep = getProposalNextStepConfig();
+  const clientMatch = getServiceClientMatch(context);
+  const soldCount = clientMatch?.items?.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status))).length || 0;
+  const quotesCount = clientMatch?.items?.length || 0;
+  const totalValue = clientMatch?.totalValue || 0;
+  const criticalItems = readiness.filter((item) => item.status !== "ok").slice(0, 4);
+  const okItems = readiness.filter((item) => item.status === "ok").length;
+  const eventDateLabel = context.eventDate ? formatDateFromIso(context.eventDate) : "Data a definir";
+  const eventTimeLabel = context.eventTime ? String(context.eventTime).slice(0, 5) : "Horário a definir";
+  const selectedSummary = recommendation.selected.length
+    ? recommendation.selected.map((item) => item.nome).slice(0, 2).join(" + ") + (recommendation.selected.length > 2 ? "..." : "")
+    : "Nenhum item selecionado";
+
+  nodes.serviceCockpit.className = `service-cockpit is-${cockpitStatus.tone}`;
+  nodes.serviceCockpit.innerHTML = `
+    <div class="service-cockpit-head">
+      <div>
+        <span>${escapeHtml(cockpitStatus.label)}</span>
+        <strong>${escapeHtml(cockpitStatus.title)}</strong>
+        <small>${escapeHtml(cockpitStatus.detail)}</small>
+      </div>
+      <div class="service-cockpit-progress" aria-label="Checklist inteligente">
+        <b>${escapeHtml(String(okItems))}/${escapeHtml(String(readiness.length))}</b>
+        <small>pontos OK</small>
+      </div>
+    </div>
+    <div class="service-cockpit-grid">
+      <article class="service-cockpit-card service-lead-summary">
+        <span>Resumo para abordagem</span>
+        <strong>${escapeHtml(context.clientName)}${context.company ? ` · ${escapeHtml(context.company)}` : ""}</strong>
+        <p>${escapeHtml(eventDateLabel)} · ${escapeHtml(eventTimeLabel)} · ${escapeHtml(String(context.guests || 0))} pax · ${escapeHtml(context.eventType)}</p>
+        <small>${escapeHtml(context.clientType)} · ${escapeHtml(context.budgetRange)} · ${escapeHtml(context.origin)}</small>
+      </article>
+      <article class="service-cockpit-card service-template-card">
+        <span>Proposta recomendada</span>
+        <strong>${escapeHtml(recommendation.title)}</strong>
+        <p>${escapeHtml(recommendation.isApplied ? `Aplicada: ${selectedSummary}` : recommendation.detail)}</p>
+        <button class="secondary" type="button" data-service-action="apply_recommended_template">
+          ${escapeHtml(recommendation.isApplied ? "Reaplicar base" : recommendation.eventKey ? "Aplicar em 1 clique" : "Escolher formato")}
+        </button>
+      </article>
+      <article class="service-cockpit-card service-client-context">
+        <span>Histórico do cliente</span>
+        <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Novo relacionamento")}</strong>
+        <p>${
+          clientMatch
+            ? `Total registrado: ${escapeHtml(formatMoney(totalValue))}. Use o histórico para ajustar abordagem e follow-up.`
+            : "Ainda sem histórico encontrado. Capriche no primeiro contato e registre os próximos passos."
+        }</p>
+        ${
+          clientMatch?.items?.[0]
+            ? `<button class="ghost-button" type="button" data-service-action="open_client_last" data-service-target="${escapeHtml(clientMatch.items[0].id)}" data-service-kind="${escapeHtml(clientMatch.items[0].kind)}">Abrir último</button>`
+            : ""
+        }
+      </article>
+    </div>
+    <div class="service-cockpit-bottom">
+      <div class="service-checklist-mini">
+        ${
+          criticalItems.length
+            ? criticalItems
+                .map(
+                  (item) => `
+                    <button class="service-check-mini is-${escapeHtml(item.status)}" type="button" data-service-review-target="${escapeHtml(item.target)}">
+                      <b>${item.status === "error" ? "!" : "?"}</b>
+                      <span>${escapeHtml(item.label)}</span>
+                    </button>
+                  `,
+                )
+                .join("")
+            : `<span class="service-check-mini is-ok"><b>OK</b><span>Checklist pronto</span></span>`
+        }
+      </div>
+      ${
+        nextStep
+          ? `<button class="primary service-next-action" type="button" data-service-next-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.actionLabel)}</button>`
+          : ""
+      }
     </div>
   `;
 }
@@ -6417,6 +6618,7 @@ function renderAll() {
   renderPricesTable();
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
+  renderServiceCockpit();
   renderLeadReviewPanel();
   renderProposalNextStep();
   renderQuickReplies();
@@ -6760,6 +6962,39 @@ async function runProposalNextStepAction(action) {
   }
 }
 
+async function runServiceCockpitAction(action, button = null) {
+  switch (action) {
+    case "apply_recommended_template": {
+      const context = getActiveServiceContext();
+      const eventKey = getGuidedEventKeyFromType(context.eventType) || state.guided.event || "";
+      if (!eventKey) {
+        document.querySelector("#eventConfigSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast("Escolha o formato do evento para aplicar uma base.");
+        return;
+      }
+      const template = smartEventTemplates[eventKey];
+      const selectedIds = [...state.selectedIds];
+      const selectedDiffers =
+        selectedIds.length &&
+        (!template?.ids?.length || selectedIds.some((id) => !template.ids.includes(id)) || template.ids.some((id) => !state.selectedIds.has(id)));
+      if (selectedDiffers && !window.confirm("Aplicar a proposta recomendada e substituir os itens selecionados?")) return;
+      applyGuidedEvent(eventKey);
+      showToast("Proposta base aplicada. Revise detalhes e valor antes de enviar.");
+      break;
+    }
+    case "open_client_last": {
+      const id = button?.dataset.serviceTarget || "";
+      const kind = button?.dataset.serviceKind || "";
+      if (kind === "proposal") openSavedProposal(id);
+      else if (kind === "request") applyQuoteRequest(id);
+      break;
+    }
+    default:
+      await runProposalNextStepAction(action);
+      break;
+  }
+}
+
 async function openWhatsApp() {
   if (!ensureProposalReadyForSending()) return;
   const phone = fields.clientPhone.value.trim();
@@ -7067,6 +7302,20 @@ function bindEvents() {
     const button = event.target.closest("button[data-next-step-action]");
     if (!button) return;
     runProposalNextStepAction(button.dataset.nextStepAction);
+  });
+  nodes.serviceCockpit?.addEventListener("click", (event) => {
+    const reviewButton = event.target.closest("[data-service-review-target]");
+    if (reviewButton) {
+      scrollToReviewTarget(reviewButton.dataset.serviceReviewTarget);
+      return;
+    }
+    const nextButton = event.target.closest("button[data-service-next-action]");
+    if (nextButton) {
+      runServiceCockpitAction(nextButton.dataset.serviceNextAction, nextButton);
+      return;
+    }
+    const actionButton = event.target.closest("button[data-service-action]");
+    if (actionButton) runServiceCockpitAction(actionButton.dataset.serviceAction, actionButton);
   });
   nodes.leadReviewPanel?.addEventListener("click", (event) => {
     const upsellButton = event.target.closest("button[data-upsell-add]");
