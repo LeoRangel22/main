@@ -1,7 +1,7 @@
 -- Embaixada Carioca - Orcamentos de eventos
 -- Rode este arquivo no SQL Editor do Supabase.
 -- Politica escolhida: historico compartilhado apenas entre os e-mails da equipe.
--- E-mails autorizados: leorangel@gmail.com e eventos@embaixadacarioca.com.br.
+-- E-mails autorizados: leorangel@gmail.com, eventos@embaixadacarioca.com.br e financeiro@embaixadacarioca.com.br.
 
 create extension if not exists pgcrypto;
 
@@ -14,7 +14,8 @@ set search_path = ''
 as $$
   select lower(coalesce(auth.jwt() ->> 'email', '')) in (
     'leorangel@gmail.com',
-    'eventos@embaixadacarioca.com.br'
+    'eventos@embaixadacarioca.com.br',
+    'financeiro@embaixadacarioca.com.br'
   );
 $$;
 

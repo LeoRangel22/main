@@ -9,7 +9,7 @@ const DEFAULT_SUPABASE_ANON_KEY =
 const CANONICAL_APP_URL = "https://leorangel22.github.io/main/";
 const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
 const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
-const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "leorangel@gmail.com"];
+const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "financeiro@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SUPER_ADMIN_EMAILS = ["leorangel@gmail.com"];
 const HUMAN_EVENTS_EMAIL = "eventos@embaixadacarioca.com.br";
 const HUMAN_EVENTS_WHATSAPP = "+55 21 97142-6007";
@@ -3830,7 +3830,7 @@ function updateAuthUI() {
 
   nodes.authStatus.textContent = isLoggedIn
     ? `Conectado como ${state.session.user.email}.`
-    : "Use eventos@embaixadacarioca.com.br ou leorangel@gmail.com para receber o link de acesso.";
+    : "Use eventos@embaixadacarioca.com.br, financeiro@embaixadacarioca.com.br ou leorangel@gmail.com para receber o link de acesso.";
 }
 
 function renderHistory() {
