@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 type SendPayload = {
+  dryRun?: boolean;
   proposalId?: string;
   phone?: string;
   message?: string;
@@ -121,6 +122,28 @@ Deno.serve(async (req) => {
     }
 
     const payload = (await req.json()) as SendPayload;
+
+    if (payload.dryRun) {
+      const ready = Boolean(instanceId && zapiToken && clientToken);
+      return jsonResponse({
+        ok: ready,
+        mode: "dry-run",
+        message: ready
+          ? "Z-API configurada para envio direto."
+          : "Configure ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN nos secrets do Supabase.",
+        configured: {
+          instanceId: Boolean(instanceId),
+          token: Boolean(zapiToken),
+          clientToken: Boolean(clientToken),
+        },
+        diagnostic: {
+          instanceId: maskSecret(instanceId),
+          token: maskSecret(zapiToken),
+          hasClientToken: Boolean(clientToken),
+        },
+      });
+    }
+
     if (!payload.proposalId) {
       return jsonResponse({ ok: false, message: "Proposta não informada." }, 400);
     }

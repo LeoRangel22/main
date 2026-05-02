@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260430-eventos-v98" />
+    <link rel="stylesheet" href="./styles.css?v=20260501-eventos-v99" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -213,6 +213,35 @@
                 </div>
                 <div class="report-output" id="reportOutput">
                   <p>Entre com Supabase para ver relatórios.</p>
+                </div>
+              </div>
+            </details>
+            <details class="system-health-panel">
+              <summary>
+                <span>Saúde do sistema</span>
+                <strong>Cheque integrações e últimos envios em um clique</strong>
+              </summary>
+              <div class="system-health-body">
+                <div class="system-health-toolbar">
+                  <div>
+                    <h3>Pronto para operar?</h3>
+                    <p>Verifique Supabase, links públicos, e-mail de leads e WhatsApp direto sem enviar nada ao cliente.</p>
+                  </div>
+                  <button class="primary" id="runSystemHealthBtn" type="button">Verificar agora</button>
+                </div>
+                <div class="system-health-summary" id="systemHealthSummary">Nenhuma verificação rodada nesta sessão.</div>
+                <div class="system-health-grid" id="systemHealthGrid">
+                  <p>Use Verificar agora para conferir as integrações antes de começar o atendimento.</p>
+                </div>
+                <div class="integration-log-header">
+                  <div>
+                    <span>Diário de envios</span>
+                    <strong>Últimas ações de e-mail e WhatsApp</strong>
+                  </div>
+                  <button class="secondary" id="clearIntegrationLogBtn" type="button">Limpar diário</button>
+                </div>
+                <div class="integration-log-list" id="integrationLogList">
+                  <p>Nenhum envio registrado neste navegador.</p>
                 </div>
               </div>
             </details>
@@ -623,6 +652,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260430-eventos-v98"></script>
+    <script defer src="./app.js?v=20260501-eventos-v99"></script>
   </body>
 </html>

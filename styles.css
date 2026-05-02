@@ -4902,7 +4902,8 @@ textarea {
   gap: 10px;
 }
 
-.help-panel .reports-panel {
+.help-panel .reports-panel,
+.help-panel .system-health-panel {
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -4916,7 +4917,8 @@ textarea {
   padding: 0 0 12px;
 }
 
-.help-panel details.reports-panel {
+.help-panel details.reports-panel,
+.help-panel details.system-health-panel {
   display: block;
 }
 
@@ -4931,26 +4933,202 @@ textarea {
   font-weight: 900;
 }
 
-.help-panel .reports-panel summary {
+.help-panel .reports-panel summary,
+.help-panel .system-health-panel summary {
   align-items: baseline;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.help-panel .reports-panel summary span {
+.help-panel .reports-panel summary span,
+.help-panel .system-health-panel summary span,
+.integration-log-header span {
   color: var(--amarelo);
   font-size: 0.72rem;
   text-transform: uppercase;
 }
 
-.help-panel .reports-panel summary strong {
+.help-panel .reports-panel summary strong,
+.help-panel .system-health-panel summary strong,
+.integration-log-header strong {
   color: var(--verde-escuro);
   font-size: 1rem;
 }
 
-.help-panel .reports-panel[open] summary {
+.help-panel .reports-panel[open] summary,
+.help-panel .system-health-panel[open] summary {
   margin-bottom: 12px;
+}
+
+.system-health-body {
+  display: grid;
+  gap: 12px;
+}
+
+.system-health-toolbar,
+.integration-log-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.system-health-toolbar h3 {
+  color: var(--verde-escuro);
+  font-size: 1rem;
+  margin: 0 0 4px;
+}
+
+.system-health-toolbar p {
+  color: var(--muted);
+  font-weight: 780;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.system-health-toolbar button,
+.integration-log-header button {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.system-health-summary {
+  background: rgba(24, 58, 45, 0.06);
+  border-left: 4px solid var(--line);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-weight: 900;
+  padding: 10px 12px;
+}
+
+.system-health-summary.is-ok {
+  background: rgba(46, 125, 82, 0.1);
+  border-left-color: #2e7d52;
+}
+
+.system-health-summary.is-warning {
+  background: rgba(241, 151, 23, 0.12);
+  border-left-color: var(--amarelo);
+}
+
+.system-health-summary.is-error {
+  background: rgba(157, 67, 47, 0.12);
+  border-left-color: var(--danger);
+}
+
+.system-health-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.system-health-grid > p,
+.integration-log-list > p {
+  color: var(--muted);
+  font-weight: 800;
+  margin: 0;
+}
+
+.system-health-card {
+  background: rgba(24, 58, 45, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-height: 104px;
+  padding: 11px;
+}
+
+.system-health-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.system-health-card strong {
+  color: var(--verde-escuro);
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.system-health-card p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.system-health-card.is-ok {
+  border-color: rgba(46, 125, 82, 0.35);
+}
+
+.system-health-card.is-warning {
+  border-color: rgba(241, 151, 23, 0.45);
+}
+
+.system-health-card.is-error {
+  border-color: rgba(157, 67, 47, 0.45);
+}
+
+.integration-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.integration-log-entry {
+  align-items: start;
+  background: rgba(24, 58, 45, 0.04);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 12px;
+}
+
+.integration-log-entry.is-success,
+.integration-log-entry.is-opened {
+  border-left-color: #2e7d52;
+}
+
+.integration-log-entry.is-pending {
+  border-left-color: var(--amarelo);
+}
+
+.integration-log-entry.is-config,
+.integration-log-entry.is-error {
+  border-left-color: var(--danger);
+}
+
+.integration-log-entry.is-canceled {
+  border-left-color: var(--muted);
+}
+
+.integration-log-entry span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.integration-log-entry strong {
+  color: var(--verde-escuro);
+  display: block;
+  font-size: 0.92rem;
+  margin-top: 2px;
+}
+
+.integration-log-entry p,
+.integration-log-entry small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.3;
+  margin: 0;
 }
 
 .help-panel ol,
@@ -6852,6 +7030,7 @@ input[type="range"] {
   .filters,
   .event-details-grid,
   .briefing-text-grid,
+  .system-health-grid,
   .owner-metrics,
   .period-metrics,
   .action-list,
@@ -6911,6 +7090,18 @@ input[type="range"] {
 
   .reports-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .system-health-toolbar,
+  .integration-log-header,
+  .integration-log-entry {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .system-health-toolbar,
+  .integration-log-header {
+    display: grid;
   }
 
   .report-summary dl {
