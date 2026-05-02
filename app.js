@@ -3,6 +3,7 @@ const SELECTED_KEY = "embaixada_orcamentos_selecionados_v1";
 const PRIVATIZATION_KEY = "embaixada_orcamentos_privatizacao_v1";
 const TERMS_KEY = "embaixada_orcamentos_condicoes_v1";
 const SUPABASE_CONFIG_KEY = "embaixada_orcamentos_supabase_v1";
+const INTEGRATION_LOG_KEY = "embaixada_orcamentos_envios_v1";
 const DEFAULT_SUPABASE_URL = "https://pdgbnpztdnrvrphzdjas.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
@@ -593,6 +594,8 @@ const state = {
     email: false,
     whatsapp: false,
   },
+  integrationLogs: loadIntegrationLogs(),
+  systemHealthChecks: [],
 };
 
 const fields = {
@@ -699,12 +702,112 @@ const nodes = {
   globalSearchResults: document.querySelector("#globalSearchResults"),
   clientDirectory: document.querySelector("#clientDirectory"),
   clientRegistryMeta: document.querySelector("#clientRegistryMeta"),
+  systemHealthSummary: document.querySelector("#systemHealthSummary"),
+  systemHealthGrid: document.querySelector("#systemHealthGrid"),
+  integrationLogList: document.querySelector("#integrationLogList"),
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+function loadIntegrationLogs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(INTEGRATION_LOG_KEY) || "[]");
+    return Array.isArray(saved) ? saved.slice(0, 30) : [];
+  } catch (error) {
+    console.warn("Não foi possível carregar diário de envios.", error);
+    return [];
+  }
+}
+
+function saveIntegrationLogs() {
+  try {
+    localStorage.setItem(INTEGRATION_LOG_KEY, JSON.stringify(state.integrationLogs.slice(0, 30)));
+  } catch (error) {
+    console.warn("Não foi possível salvar diário de envios.", error);
+  }
+}
+
+function formatIntegrationLogTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function createIntegrationLog({ channel, status = "pending", title, detail = "", target = "", meta = {} }) {
+  const entry = {
+    id: `envio-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    at: new Date().toISOString(),
+    channel,
+    status,
+    title,
+    detail,
+    target,
+    actor: state.session?.user?.email || "",
+    meta,
+  };
+  state.integrationLogs = [entry, ...state.integrationLogs].slice(0, 30);
+  saveIntegrationLogs();
+  renderIntegrationLogs();
+  return entry.id;
+}
+
+function updateIntegrationLog(id, patch = {}) {
+  if (!id) return;
+  state.integrationLogs = state.integrationLogs.map((entry) =>
+    entry.id === id ? { ...entry, ...patch, updatedAt: new Date().toISOString() } : entry,
+  );
+  saveIntegrationLogs();
+  renderIntegrationLogs();
+}
+
+function getIntegrationLogLabel(entry = {}) {
+  const statusLabels = {
+    pending: "Aguardando",
+    success: "Enviado",
+    error: "Falhou",
+    config: "Configuração",
+    opened: "Aberto",
+    canceled: "Cancelado",
+  };
+  const channelLabels = {
+    whatsapp: "WhatsApp",
+    email: "E-mail",
+    health: "Saúde",
+  };
+  return `${channelLabels[entry.channel] || entry.channel || "Sistema"} · ${statusLabels[entry.status] || entry.status || "Registro"}`;
+}
+
+function renderIntegrationLogs() {
+  if (!nodes.integrationLogList) return;
+  if (!state.integrationLogs.length) {
+    nodes.integrationLogList.innerHTML = `<p>Nenhum envio registrado neste navegador.</p>`;
+    return;
+  }
+
+  nodes.integrationLogList.innerHTML = state.integrationLogs
+    .slice(0, 12)
+    .map(
+      (entry) => `
+        <article class="integration-log-entry is-${escapeHtml(entry.status || "pending")}">
+          <div>
+            <span>${escapeHtml(getIntegrationLogLabel(entry))}</span>
+            <strong>${escapeHtml(entry.title || "Registro de envio")}</strong>
+            <p>${escapeHtml(entry.detail || "Sem detalhes adicionais.")}</p>
+          </div>
+          <small>${escapeHtml([formatIntegrationLogTime(entry.updatedAt || entry.at), entry.target, entry.actor].filter(Boolean).join(" · "))}</small>
+        </article>
+      `,
+    )
+    .join("");
+}
 
 function loadPrices() {
   try {
@@ -2047,6 +2150,13 @@ async function runQuickReply(replyId, channel) {
     });
     if (!confirmed) {
       showToast("Abertura do e-mail cancelada.");
+      createIntegrationLog({
+        channel: "email",
+        status: "canceled",
+        title: preset.title,
+        detail: "A equipe cancelou a abertura do e-mail antes do envio.",
+        target: email,
+      });
       return;
     }
     if (needsLink) {
@@ -2059,6 +2169,13 @@ async function runQuickReply(replyId, channel) {
     state.sendLocks.email = true;
     const subject = encodeURIComponent(payload.subject);
     const body = encodeURIComponent(payload.message);
+    createIntegrationLog({
+      channel: "email",
+      status: "opened",
+      title: payload.title,
+      detail: "E-mail pronto aberto no aplicativo do navegador. Confirme o envio no cliente de e-mail.",
+      target: email,
+    });
     showToast(`Abrindo e-mail com "${payload.title}".`);
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
     window.setTimeout(() => {
@@ -4092,6 +4209,128 @@ function renderSupabaseStatus(message, connected = false) {
   if (!nodes.supabaseStatus) return;
   nodes.supabaseStatus.textContent = message;
   nodes.supabaseStatus.style.borderLeftColor = connected ? "var(--verde)" : "var(--verde-2)";
+}
+
+function getHealthTone(status) {
+  if (status === "ok") return "ok";
+  if (status === "warning") return "warning";
+  return "error";
+}
+
+function renderSystemHealth() {
+  if (!nodes.systemHealthGrid || !nodes.systemHealthSummary) return;
+  const checks = state.systemHealthChecks || [];
+  if (!checks.length) {
+    nodes.systemHealthSummary.textContent = "Nenhuma verificação rodada nesta sessão.";
+    nodes.systemHealthSummary.className = "system-health-summary";
+    nodes.systemHealthGrid.innerHTML = `<p>Use Verificar agora para conferir as integrações antes de começar o atendimento.</p>`;
+    return;
+  }
+
+  const errors = checks.filter((item) => item.status === "error").length;
+  const warnings = checks.filter((item) => item.status === "warning").length;
+  const ok = checks.filter((item) => item.status === "ok").length;
+  const summaryText = errors
+    ? `${errors} ponto(s) precisam de ajuste antes de operar com tranquilidade.`
+    : warnings
+      ? `${ok} item(ns) ok e ${warnings} ponto(s) de atenção.`
+      : "Tudo pronto para operar.";
+  nodes.systemHealthSummary.textContent = summaryText;
+  nodes.systemHealthSummary.className = `system-health-summary is-${errors ? "error" : warnings ? "warning" : "ok"}`;
+  nodes.systemHealthGrid.innerHTML = checks
+    .map(
+      (item) => `
+        <article class="system-health-card is-${escapeHtml(getHealthTone(item.status))}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.detail)}</p>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function getHealthErrorMessage(error) {
+  if (!error) return "";
+  return error.message || String(error);
+}
+
+async function checkPublicPage(path, label) {
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (response.ok) {
+      return { status: "ok", label, title: "Página disponível", detail: `${path} carregou normalmente.` };
+    }
+    return { status: "error", label, title: "Página indisponível", detail: `${path} retornou HTTP ${response.status}.` };
+  } catch (error) {
+    return { status: "error", label, title: "Não foi possível carregar", detail: getHealthErrorMessage(error) };
+  }
+}
+
+async function runSystemHealthCheck() {
+  if (!nodes.systemHealthGrid || !nodes.systemHealthSummary) return;
+  nodes.systemHealthSummary.textContent = "Verificando integrações...";
+  nodes.systemHealthSummary.className = "system-health-summary is-warning";
+  nodes.systemHealthGrid.innerHTML = `<p>Rodando checagem rápida. Nenhuma mensagem será enviada ao cliente.</p>`;
+
+  const checks = [];
+
+  if (state.supabase && state.session) {
+    try {
+      const { error } = await state.supabase.from("propostas").select("id", { count: "exact", head: true });
+      checks.push(
+        error
+          ? { status: "error", label: "Supabase", title: "Histórico com problema", detail: error.message || "Confira RLS e schema." }
+          : { status: "ok", label: "Supabase", title: "Histórico conectado", detail: "Login e tabela de propostas responderam corretamente." },
+      );
+    } catch (error) {
+      checks.push({ status: "error", label: "Supabase", title: "Falha na conexão", detail: getHealthErrorMessage(error) });
+    }
+  } else {
+    checks.push({ status: "warning", label: "Supabase", title: "Equipe não conectada", detail: "Entre com e-mail autorizado para salvar e enviar propostas." });
+  }
+
+  checks.push(await checkPublicPage("formulario.html", "Formulário"));
+  checks.push(await checkPublicPage("proposta.html", "Proposta pública"));
+  checks.push(await checkPublicPage("clientes.html", "Clientes"));
+  checks.push(await checkPublicPage("valores.html", "Valores"));
+
+  if (state.supabase && state.session) {
+    try {
+      const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", { body: { dryRun: true } });
+      checks.push(
+        error || data?.ok === false
+          ? { status: "error", label: "WhatsApp", title: "Z-API precisa de atenção", detail: data?.message || (await getFunctionErrorMessage(error)) || "Confira secrets da Z-API." }
+          : { status: "ok", label: "WhatsApp", title: "Z-API configurada", detail: "Função respondeu em modo teste, sem disparar mensagem." },
+      );
+    } catch (error) {
+      checks.push({ status: "error", label: "WhatsApp", title: "Falha ao testar Z-API", detail: getHealthErrorMessage(error) });
+    }
+
+    try {
+      const { data, error } = await state.supabase.functions.invoke("notify-new-lead", { body: { dryRun: true } });
+      checks.push(
+        error || data?.ok === false
+          ? { status: "warning", label: "E-mail de lead", title: "Não foi possível testar", detail: data?.message || (await getFunctionErrorMessage(error)) || "Confira deploy da função notify-new-lead." }
+          : { status: "ok", label: "E-mail de lead", title: "ZeptoMail configurado", detail: "Função respondeu em modo teste, sem enviar e-mail." },
+      );
+    } catch (error) {
+      checks.push({ status: "warning", label: "E-mail de lead", title: "Teste indisponível", detail: getHealthErrorMessage(error) });
+    }
+  } else {
+    checks.push({ status: "warning", label: "WhatsApp", title: "Login necessário", detail: "Conecte a equipe para testar o envio direto." });
+    checks.push({ status: "warning", label: "E-mail de lead", title: "Login necessário", detail: "Conecte a equipe para testar a função de aviso." });
+  }
+
+  state.systemHealthChecks = checks;
+  renderSystemHealth();
+  createIntegrationLog({
+    channel: "health",
+    status: checks.some((item) => item.status === "error") ? "error" : checks.some((item) => item.status === "warning") ? "config" : "success",
+    title: "Saúde do sistema verificada",
+    detail: `${checks.filter((item) => item.status === "ok").length} ok · ${checks.filter((item) => item.status === "warning").length} atenção · ${checks.filter((item) => item.status === "error").length} falha.`,
+    target: "Dashboard",
+  });
 }
 
 function getAuthRedirectUrl() {
@@ -7158,6 +7397,8 @@ function renderAll() {
   renderSendReview();
   renderCalculation();
   renderProposal();
+  renderSystemHealth();
+  renderIntegrationLogs();
 }
 
 function startNewProposal() {
@@ -7357,6 +7598,14 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 
   state.sendLocks.whatsapp = true;
+  const logId = createIntegrationLog({
+    channel: "whatsapp",
+    status: "pending",
+    title,
+    detail: "Enviando proposta pela Z-API.",
+    target: phone,
+    meta: { proposalId: proposal?.id || "" },
+  });
   try {
     showToast("Enviando proposta por WhatsApp...");
     const outboundMessage = appendBotWhatsAppNotice(message || buildProposalWhatsAppMessage(proposalUrl));
@@ -7373,13 +7622,28 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     if (error || data?.ok === false) {
       console.warn("Falha no envio direto por WhatsApp.", error || data);
       const functionMessage = data?.message || (await getFunctionErrorMessage(error));
+      updateIntegrationLog(logId, {
+        status: functionMessage?.toLowerCase().includes("config") || functionMessage?.toLowerCase().includes("token") ? "config" : "error",
+        detail: functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.",
+      });
       showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
       return false;
     }
 
+    updateIntegrationLog(logId, {
+      status: "success",
+      detail: `Proposta enviada para ${phone}.`,
+    });
     showToast("Proposta enviada por WhatsApp e registrada no histórico.");
     await loadProposalHistory();
     return true;
+  } catch (error) {
+    updateIntegrationLog(logId, {
+      status: "error",
+      detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar WhatsApp.",
+    });
+    showToast("Não foi possível enviar pela Z-API. Confira a conexão e tente novamente.");
+    return false;
   } finally {
     state.sendLocks.whatsapp = false;
   }
@@ -7404,6 +7668,13 @@ async function openEmail() {
   });
   if (!confirmed) {
     showToast("Abertura do e-mail cancelada.");
+    createIntegrationLog({
+      channel: "email",
+      status: "canceled",
+      title: "Proposta comercial",
+      detail: "A equipe cancelou a abertura do e-mail antes do envio.",
+      target: email,
+    });
     return;
   }
   state.sendLocks.email = true;
@@ -7425,6 +7696,13 @@ async function openEmail() {
       "Ficamos à disposição.",
     ].join("\n"),
   );
+  createIntegrationLog({
+    channel: "email",
+    status: "opened",
+    title: "Proposta comercial",
+    detail: "E-mail pronto aberto no aplicativo do navegador. Confirme o envio no cliente de e-mail.",
+    target: email,
+  });
   showToast("Link da proposta gerado. Abrindo e-mail.");
   window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   window.setTimeout(() => {
@@ -7769,6 +8047,14 @@ function bindEvents() {
     await loadProposalHistory();
     await loadQuoteRequests();
     renderDashboardReports(getPipelineItems());
+  });
+  document.querySelector("#runSystemHealthBtn")?.addEventListener("click", runSystemHealthCheck);
+  document.querySelector("#clearIntegrationLogBtn")?.addEventListener("click", () => {
+    if (!state.integrationLogs.length) return;
+    if (!window.confirm("Limpar o diário visual de envios deste navegador? O histórico comercial das propostas não será apagado.")) return;
+    state.integrationLogs = [];
+    saveIntegrationLogs();
+    renderIntegrationLogs();
   });
   document.querySelector("#applyCustomReportBtn")?.addEventListener("click", applyCustomReport);
   nodes.reportPresets?.addEventListener("click", (event) => {

@@ -19,6 +19,7 @@
 }
 
 type WebhookPayload = {
+  dryRun?: boolean
   type?: "INSERT" | "UPDATE" | "DELETE"
   table?: string
   schema?: string
@@ -28,6 +29,9 @@ type WebhookPayload = {
 
 const jsonHeaders = {
   "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
 function response(body: Record<string, unknown>, status = 200) {
@@ -404,8 +408,35 @@ async function sendZeptoEmail(record: LeadRecord) {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: jsonHeaders })
+  }
+
   if (req.method !== "POST") {
     return response({ ok: false, error: "Method not allowed" }, 405)
+  }
+
+  let payload: WebhookPayload
+  try {
+    payload = (await req.json()) as WebhookPayload
+  } catch (_error) {
+    return response({ ok: false, error: "Invalid JSON" }, 400)
+  }
+
+  if (payload.dryRun) {
+    const zeptoToken = Deno.env.get("ZEPTO_MAIL_TOKEN")
+    const fromEmail = Deno.env.get("LEAD_ALERT_FROM_EMAIL")
+    const toEmail = Deno.env.get("LEAD_ALERT_TO_EMAIL") || "eventos@embaixadacarioca.com.br"
+    return response({
+      ok: Boolean(zeptoToken && fromEmail && toEmail),
+      mode: "dry-run",
+      message: zeptoToken && fromEmail ? "ZeptoMail configurado para alertas de lead." : "Configure ZEPTO_MAIL_TOKEN e LEAD_ALERT_FROM_EMAIL.",
+      configured: {
+        token: Boolean(zeptoToken),
+        fromEmail: Boolean(fromEmail),
+        toEmail: Boolean(toEmail),
+      },
+    })
   }
 
   const configuredSecret = Deno.env.get("LEAD_WEBHOOK_SECRET")
@@ -417,7 +448,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = (await req.json()) as WebhookPayload
     if (payload.type !== "INSERT") {
       return response({ ok: true, skipped: true, reason: "Not an insert event" })
     }
