@@ -8,6 +8,14 @@ const subtitle = document.querySelector("#proposalPublicSubtitle");
 const token = new URLSearchParams(window.location.search).get("p") || "";
 const supabaseClient = window.supabase?.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
 
+const PAYMENT_INFO = {
+  bank: "Itaú (341)",
+  agency: "8383",
+  account: "07555-6",
+  cnpj: "11.399.715/0001-85",
+  pix: "11.399.715/0001-85",
+};
+
 let currentProposal = null;
 let proposalViewRecorded = false;
 
@@ -119,6 +127,65 @@ function renderError(message) {
   `;
 }
 
+function renderPaymentInfo() {
+  return `
+    <section class="public-payment-info" aria-label="Dados bancários para sinal de reserva">
+      <div class="public-payment-heading">
+        <span>Sinal de reserva</span>
+        <h3>Dados para pagamento do sinal</h3>
+        <p>A data e o horário ficam reservados após confirmação de disponibilidade pela equipe e pagamento do sinal de 50%.</p>
+      </div>
+      <div class="public-payment-grid">
+        <div><span>Banco</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
+        <div><span>Agência</span><strong>${escapeHtml(PAYMENT_INFO.agency)}</strong></div>
+        <div><span>Conta corrente</span><strong>${escapeHtml(PAYMENT_INFO.account)}</strong></div>
+        <div><span>CNPJ</span><strong>${escapeHtml(PAYMENT_INFO.cnpj)}</strong></div>
+      </div>
+      <div class="public-payment-pix">
+        <div>
+          <span>Chave Pix</span>
+          <strong>${escapeHtml(PAYMENT_INFO.pix)}</strong>
+        </div>
+        <button class="public-copy-pix" type="button" data-copy-pix>Copiar chave Pix</button>
+      </div>
+    </section>
+  `;
+}
+
+function copyTextFallback(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+async function copyPixKey(button) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(PAYMENT_INFO.pix);
+    } else if (!copyTextFallback(PAYMENT_INFO.pix)) {
+      throw new Error("Clipboard indisponível");
+    }
+    if (button) {
+      const original = button.textContent;
+      button.textContent = "Chave Pix copiada";
+      window.setTimeout(() => {
+        button.textContent = original || "Copiar chave Pix";
+      }, 2200);
+    }
+    setMessage("Chave Pix copiada. Agora é só colar no app do banco.", "success");
+  } catch (error) {
+    console.warn("Falha ao copiar chave Pix.", error);
+    setMessage(`Não foi possível copiar automaticamente. Chave Pix: ${PAYMENT_INFO.pix}`, "error");
+  }
+}
+
 function renderProposal(proposal) {
   currentProposal = proposal;
   const snapshot = proposal.snapshot || {};
@@ -166,7 +233,7 @@ function renderProposal(proposal) {
       <article>
         <span>02</span>
         <strong>Sinal de 50%</strong>
-        <p>A equipe envia as orientações para reservar a data.</p>
+        <p>Ao aprovar, os dados bancários e a chave Pix aparecem para facilitar o sinal.</p>
       </article>
       <article>
         <span>03</span>
@@ -199,6 +266,7 @@ function renderProposal(proposal) {
         ? `<div class="public-proposal-response"><strong>${escapeHtml(getActionLabel(response))}</strong>${responseMessage ? `<span>${escapeHtml(responseMessage)}</span>` : ""}</div>`
         : ""
     }
+    ${response === "confirmar" ? renderPaymentInfo() : ""}
 
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
@@ -231,6 +299,9 @@ function renderProposal(proposal) {
           Mensagem para a equipe
           <textarea id="publicResponseMessage" rows="4" placeholder="Conte o que precisa ajustar ou o motivo do cancelamento."></textarea>
         </label>
+        <div id="publicPaymentInfoSlot" hidden>
+          ${renderPaymentInfo()}
+        </div>
         <div class="public-proposal-form-actions">
           <button class="primary" type="submit">Enviar resposta</button>
           <button class="secondary" type="button" id="publicCancelResponse">Voltar</button>
@@ -290,12 +361,14 @@ function openResponseForm(action) {
   const form = document.querySelector("#publicProposalResponseForm");
   const actionInput = document.querySelector("#publicProposalAction");
   const message = document.querySelector("#publicResponseMessage");
+  const paymentSlot = document.querySelector("#publicPaymentInfoSlot");
   if (!form || !actionInput || !message) return;
   actionInput.value = action;
   form.hidden = false;
+  if (paymentSlot) paymentSlot.hidden = action !== "confirmar";
   if (action === "confirmar") {
-    message.placeholder = "Se quiser, deixe uma observação para a equipe.";
-    setMessage("Envie abaixo para avisar a equipe que deseja seguir com a proposta. A reserva é confirmada após o sinal.", "neutral");
+    message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
+    setMessage("Confira os dados bancários abaixo. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
   } else if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
     setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
@@ -337,7 +410,12 @@ async function submitPublicResponse(event) {
     return;
   }
 
-  setMessage("Resposta registrada. Nossa equipe recebeu sua atualização.", "success");
+  setMessage(
+    action === "confirmar"
+      ? "Aprovação registrada. Use os dados de pagamento do sinal e envie o comprovante para a equipe de eventos."
+      : "Resposta registrada. Nossa equipe recebeu sua atualização.",
+    "success",
+  );
   await loadProposal();
 }
 
@@ -377,6 +455,11 @@ async function recordProposalView() {
 }
 
 card.addEventListener("click", (event) => {
+  const copyPixButton = event.target.closest("[data-copy-pix]");
+  if (copyPixButton) {
+    copyPixKey(copyPixButton);
+    return;
+  }
   const actionButton = event.target.closest("[data-public-action]");
   if (actionButton) openResponseForm(actionButton.dataset.publicAction);
   if (event.target.closest("#publicCancelResponse")) {

@@ -6702,6 +6702,94 @@ input[type="range"] {
   font-weight: 750;
 }
 
+.public-payment-info {
+  background: linear-gradient(135deg, rgba(237, 226, 201, 0.72), rgba(255, 255, 255, 0.94));
+  border: 1px solid rgba(24, 58, 45, 0.16);
+  border-left: 5px solid var(--verde);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.public-payment-heading {
+  display: grid;
+  gap: 5px;
+}
+
+.public-payment-heading span,
+.public-payment-grid span,
+.public-payment-pix span {
+  color: var(--verde);
+  font-size: 0.7rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-payment-heading h3 {
+  color: var(--verde-escuro);
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.public-payment-heading p {
+  color: var(--muted);
+  font-weight: 780;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.public-payment-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.public-payment-grid div,
+.public-payment-pix {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+}
+
+.public-payment-grid div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.public-payment-grid strong,
+.public-payment-pix strong {
+  color: var(--verde-escuro);
+  font-size: 0.98rem;
+}
+
+.public-payment-pix {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.public-payment-pix div {
+  display: grid;
+  gap: 4px;
+}
+
+.public-copy-pix {
+  background: var(--verde-escuro);
+  color: var(--white);
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.public-copy-pix:hover {
+  background: var(--verde);
+}
+
 .public-proposal-next-steps {
   display: grid;
   gap: 10px;
@@ -7229,6 +7317,19 @@ input[type="range"] {
 
   .public-proposal-items article {
     grid-template-columns: 1fr;
+  }
+
+  .public-payment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-payment-pix {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .public-copy-pix {
+    width: 100%;
   }
 
   .timeline-heading {
