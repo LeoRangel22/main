@@ -7510,7 +7510,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
     "Segue o link da proposta comercial da Embaixada Carioca:",
     proposalUrl,
     "",
-    "Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados.",
+    "Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta.",
   ].join("\n");
 }
 
