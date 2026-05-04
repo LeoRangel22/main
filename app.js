@@ -7691,7 +7691,7 @@ async function openEmail() {
       "Segue o link da proposta comercial da Embaixada Carioca:",
       proposalUrl,
       "",
-      "Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados.",
+      "Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta.",
       "",
       "Ficamos à disposição.",
     ].join("\n"),

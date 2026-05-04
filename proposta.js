@@ -14,6 +14,7 @@ const PAYMENT_INFO = {
   account: "07555-6",
   cnpj: "11.399.715/0001-85",
   pix: "11.399.715/0001-85",
+  pixCopy: "11399715000185",
 };
 
 let currentProposal = null;
@@ -145,6 +146,7 @@ function renderPaymentInfo() {
         <div>
           <span>Chave Pix</span>
           <strong>${escapeHtml(PAYMENT_INFO.pix)}</strong>
+          <small>O botão copia apenas os números, para funcionar melhor no app do banco.</small>
         </div>
         <button class="public-copy-pix" type="button" data-copy-pix>Copiar chave Pix</button>
       </div>
@@ -168,8 +170,8 @@ function copyTextFallback(text) {
 async function copyPixKey(button) {
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(PAYMENT_INFO.pix);
-    } else if (!copyTextFallback(PAYMENT_INFO.pix)) {
+      await navigator.clipboard.writeText(PAYMENT_INFO.pixCopy);
+    } else if (!copyTextFallback(PAYMENT_INFO.pixCopy)) {
       throw new Error("Clipboard indisponível");
     }
     if (button) {
@@ -179,10 +181,10 @@ async function copyPixKey(button) {
         button.textContent = original || "Copiar chave Pix";
       }, 2200);
     }
-    setMessage("Chave Pix copiada. Agora é só colar no app do banco.", "success");
+    setMessage("Chave Pix copiada só com números. Agora é só colar no app do banco.", "success");
   } catch (error) {
     console.warn("Falha ao copiar chave Pix.", error);
-    setMessage(`Não foi possível copiar automaticamente. Chave Pix: ${PAYMENT_INFO.pix}`, "error");
+    setMessage(`Não foi possível copiar automaticamente. Chave Pix sem pontuação: ${PAYMENT_INFO.pixCopy}`, "error");
   }
 }
 
@@ -368,13 +370,13 @@ function openResponseForm(action) {
   if (paymentSlot) paymentSlot.hidden = action !== "confirmar";
   if (action === "confirmar") {
     message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
-    setMessage("Confira os dados bancários abaixo. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
+    setMessage("Confira os dados bancários nesta página. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
   } else if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
     setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
   } else {
     message.placeholder = "Conte qual data, horário, número de convidados ou detalhe precisa mudar.";
-    setMessage("Informe os ajustes desejados. Use os campos acima ou escreva no campo aberto.", "neutral");
+    setMessage("Informe os ajustes desejados nos campos da resposta ou escreva no campo aberto.", "neutral");
   }
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
