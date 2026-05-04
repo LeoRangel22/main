@@ -16,9 +16,14 @@ const PAYMENT_INFO = {
   pix: "11.399.715/0001-85",
   pixCopy: "11399715000185",
 };
+const DEFAULT_SIGNAL_DEADLINE_HOURS = 48;
+const PROOF_MAX_BYTES = 5 * 1024 * 1024;
+const PROOF_ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+const PROOF_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 
 let currentProposal = null;
 let proposalViewRecorded = false;
+let selectedProof = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -54,6 +59,127 @@ function formatDuration(value) {
 
 function formatMultiline(value) {
   return escapeHtml(value || "").replace(/\n/g, "<br />");
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch (error) {
+    return "";
+  }
+}
+
+function formatDeadlineHours(hours) {
+  const value = Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS);
+  if (value < 24) return `${value} horas`;
+  const days = value / 24;
+  return `${days} ${days === 1 ? "dia" : "dias"}`;
+}
+
+function getSignalDeadlineCopy(proposal = currentProposal) {
+  const event = proposal?.snapshot?.event || {};
+  const deadlineAt = formatDateTime(event.signalDeadlineAt);
+  if (deadlineAt) {
+    return `Para manter esta condição e priorizar a reserva, envie o sinal até ${deadlineAt}.`;
+  }
+  return `Prazo padrão para o sinal: ${formatDeadlineHours(event.signalDeadlineHours)}.`;
+}
+
+function isAllowedProofFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  return PROOF_ALLOWED_TYPES.has(file?.type) || PROOF_ALLOWED_EXTENSIONS.some((extension) => name.endsWith(extension));
+}
+
+function readProofFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("Arquivo não encontrado."));
+      return;
+    }
+    if (file.size > PROOF_MAX_BYTES) {
+      reject(new Error("O comprovante pode ter no máximo 5 MB."));
+      return;
+    }
+    if (!isAllowedProofFile(file)) {
+      reject(new Error("Use PDF, JPG, PNG, WebP, HEIC ou HEIF."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({
+        nome: file.name || "comprovante",
+        tipo: file.type || "application/octet-stream",
+        tamanho: file.size,
+        dataUrl: reader.result,
+        anexadoEm: new Date().toISOString(),
+      });
+    reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderProofUploader() {
+  return `
+    <section class="public-proof-uploader" aria-label="Anexar comprovante do sinal">
+      <div class="public-proof-heading">
+        <span>Comprovante</span>
+        <strong>Anexe o comprovante do sinal</strong>
+        <p>Opcional agora, mas agiliza a validação da equipe. Aceitamos PDF, JPG, PNG, WebP, HEIC ou HEIF até 5 MB.</p>
+      </div>
+      <label class="public-proof-dropzone" for="publicProofInput">
+        <input id="publicProofInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" />
+        <span>Arraste o arquivo aqui, clique para escolher ou cole uma imagem copiada.</span>
+      </label>
+      <p class="public-proof-status" id="publicProofStatus">Nenhum comprovante anexado.</p>
+    </section>
+  `;
+}
+
+function renderProofSummary(proof) {
+  if (!proof) return "";
+  const name = proof.nome || "comprovante anexado";
+  const href = proof.dataUrl || "";
+  return `
+    <div class="public-proof-summary">
+      <span>Comprovante anexado</span>
+      ${
+        href
+          ? `<a href="${escapeHtml(href)}" download="${escapeHtml(name)}">${escapeHtml(name)}</a>`
+          : `<strong>${escapeHtml(name)}</strong>`
+      }
+    </div>
+  `;
+}
+
+function updateProofStatus() {
+  const status = document.querySelector("#publicProofStatus");
+  if (!status) return;
+  if (!selectedProof) {
+    status.textContent = "Nenhum comprovante anexado.";
+    status.dataset.status = "empty";
+    return;
+  }
+  status.textContent = `Comprovante anexado: ${selectedProof.nome}`;
+  status.dataset.status = "ok";
+}
+
+async function selectProofFile(file) {
+  try {
+    selectedProof = await readProofFile(file);
+    updateProofStatus();
+    setMessage("Comprovante anexado. Agora é só enviar a resposta para a equipe.", "success");
+  } catch (error) {
+    selectedProof = null;
+    updateProofStatus();
+    setMessage(error.message || "Não foi possível anexar o comprovante.", "error");
+  }
 }
 
 function getStatusLabel(value) {
@@ -128,13 +254,14 @@ function renderError(message) {
   `;
 }
 
-function renderPaymentInfo() {
+function renderPaymentInfo({ proof = null } = {}) {
   return `
     <section class="public-payment-info" aria-label="Dados bancários para sinal de reserva">
       <div class="public-payment-heading">
         <span>Sinal de reserva</span>
         <h3>Dados para pagamento do sinal</h3>
         <p>A data e o horário ficam reservados após confirmação de disponibilidade pela equipe e pagamento do sinal de 50%.</p>
+        <p><strong>${escapeHtml(getSignalDeadlineCopy())}</strong></p>
       </div>
       <div class="public-payment-grid">
         <div><span>Banco</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
@@ -150,6 +277,7 @@ function renderPaymentInfo() {
         </div>
         <button class="public-copy-pix" type="button" data-copy-pix>Copiar chave Pix</button>
       </div>
+      ${renderProofSummary(proof)}
     </section>
   `;
 }
@@ -196,6 +324,7 @@ function renderProposal(proposal) {
   const selectedItems = Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems : [];
   const response = proposal.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const responseMessage = proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "";
+  const responseProof = proposal.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || null;
   const decision = getDecisionCopy(proposal);
   const eventTitle = event.type || proposal.tipo_evento || "Proposta de evento";
   const guests = proposal.convidados || event.guests || 0;
@@ -268,7 +397,7 @@ function renderProposal(proposal) {
         ? `<div class="public-proposal-response"><strong>${escapeHtml(getActionLabel(response))}</strong>${responseMessage ? `<span>${escapeHtml(responseMessage)}</span>` : ""}</div>`
         : ""
     }
-    ${response === "confirmar" ? renderPaymentInfo() : ""}
+    ${response === "confirmar" ? renderPaymentInfo({ proof: responseProof }) : ""}
 
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
@@ -303,6 +432,7 @@ function renderProposal(proposal) {
         </label>
         <div id="publicPaymentInfoSlot" hidden>
           ${renderPaymentInfo()}
+          ${renderProofUploader()}
         </div>
         <div class="public-proposal-form-actions">
           <button class="primary" type="submit">Enviar resposta</button>
@@ -368,10 +498,18 @@ function openResponseForm(action) {
   actionInput.value = action;
   form.hidden = false;
   if (paymentSlot) paymentSlot.hidden = action !== "confirmar";
+  if (action !== "confirmar") {
+    selectedProof = null;
+    updateProofStatus();
+  }
   if (action === "confirmar") {
     message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
-    setMessage("Confira os dados bancários nesta página. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
-  } else if (action === "cancelar") {
+    updateProofStatus();
+    setMessage("Confira os dados bancários nesta página, copie o Pix se preferir e anexe o comprovante quando tiver. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
     setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
   } else {
@@ -397,18 +535,43 @@ async function submitPublicResponse(event) {
   }
 
   setMessage("Enviando resposta...", "neutral");
-  const { data, error } = await supabaseClient.rpc("respond_public_proposal", {
+  const payload = {
     proposal_token: token,
     action,
     requested_date: requestedDate,
     requested_time: requestedTime,
     requested_guests: requestedGuests,
     message,
-  });
+    payment_proof: action === "confirmar" ? selectedProof : null,
+  };
+  let { data, error } = await supabaseClient.rpc("respond_public_proposal", payload);
+
+  if (error && payload.payment_proof) {
+    console.warn("Falha ao responder proposta com comprovante. Tentando registrar sem anexo.", error);
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.payment_proof;
+    ({ data, error } = await supabaseClient.rpc("respond_public_proposal", fallbackPayload));
+    if (!error && data?.[0]?.ok) {
+      setMessage("Aprovação registrada, mas o anexo ainda precisa da atualização do schema no Supabase. Envie o comprovante por e-mail ou WhatsApp para a equipe.", "error");
+      await loadProposal();
+      return;
+    }
+  }
 
   if (error || !data?.[0]?.ok) {
     console.warn("Falha ao responder proposta.", error);
     setMessage("Não foi possível registrar sua resposta. Tente novamente ou fale com a equipe.", "error");
+    return;
+  }
+
+  if (action === "confirmar") {
+    setMessage(
+      selectedProof
+        ? "Aprovação e comprovante registrados. A equipe vai validar o sinal e confirmar a reserva."
+        : "Aprovação registrada. Use os dados de pagamento do sinal e envie o comprovante para a equipe de eventos.",
+      "success",
+    );
+    await loadProposal();
     return;
   }
 
@@ -469,6 +632,40 @@ card.addEventListener("click", (event) => {
     if (form) form.hidden = true;
     setMessage(`Status atual: ${getStatusLabel(currentProposal?.status)}.`, "neutral");
   }
+});
+
+card.addEventListener("change", (event) => {
+  if (event.target.matches("#publicProofInput")) {
+    selectProofFile(event.target.files?.[0]);
+  }
+});
+
+card.addEventListener("dragover", (event) => {
+  const dropzone = event.target.closest(".public-proof-dropzone");
+  if (!dropzone) return;
+  event.preventDefault();
+  dropzone.classList.add("is-dragover");
+});
+
+card.addEventListener("dragleave", (event) => {
+  const dropzone = event.target.closest(".public-proof-dropzone");
+  if (dropzone) dropzone.classList.remove("is-dragover");
+});
+
+card.addEventListener("drop", (event) => {
+  const dropzone = event.target.closest(".public-proof-dropzone");
+  if (!dropzone) return;
+  event.preventDefault();
+  dropzone.classList.remove("is-dragover");
+  selectProofFile(event.dataTransfer?.files?.[0]);
+});
+
+card.addEventListener("paste", (event) => {
+  const form = document.querySelector("#publicProposalResponseForm");
+  const action = document.querySelector("#publicProposalAction")?.value || "";
+  if (!form || form.hidden || action !== "confirmar") return;
+  const file = Array.from(event.clipboardData?.files || [])[0];
+  if (file) selectProofFile(file);
 });
 
 card.addEventListener("submit", submitPublicResponse);

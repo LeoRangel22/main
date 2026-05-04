@@ -42,6 +42,9 @@ const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
   "50% restante até 72 horas antes do evento.",
 ];
+const DEFAULT_SIGNAL_DEADLINE_HOURS = 48;
+const MIN_SIGNAL_DEADLINE_HOURS = 12;
+const MAX_SIGNAL_DEADLINE_HOURS = 360;
 const signalPaymentBanks = ["Itaú", "Santander", "Nubank", "Stone"];
 
 const operationalChecklistItems = [
@@ -609,6 +612,7 @@ const fields = {
   guestCount: document.querySelector("#guestCount"),
   eventDuration: document.querySelector("#eventDuration"),
   validity: document.querySelector("#validity"),
+  signalDeadlineHours: document.querySelector("#signalDeadlineHours"),
   manualAdjustment: document.querySelector("#manualAdjustment"),
   manualAdjustmentLabel: document.querySelector("#manualAdjustmentLabel"),
   notes: document.querySelector("#notes"),
@@ -2908,7 +2912,7 @@ function getProposalReviewItems() {
       id: "value",
       label: "Valor final",
       status: totals.total > 0 ? "ok" : "error",
-      detail: totals.total > 0 ? `${formatMoney(totals.total)} · validade ${fields.validity.value || "a definir"}.` : "Monte os itens para calcular o total.",
+      detail: totals.total > 0 ? `${formatMoney(totals.total)} · sinal em ${formatSignalDeadlineHours()} · validade ${fields.validity.value || "a definir"}.` : "Monte os itens para calcular o total.",
       target: "items",
     },
   ];
@@ -3969,7 +3973,7 @@ function renderSendReview() {
       <article>
         <span>Total</span>
         <strong>${escapeHtml(formatMoney(totals.total))}</strong>
-        <small>${escapeHtml(`${getSelectedItems().length} item(ns) · validade ${fields.validity.value || "a definir"}`)}</small>
+        <small>${escapeHtml(`${getSelectedItems().length} item(ns) · sinal em ${formatSignalDeadlineHours()}`)}</small>
       </article>
     </div>
     <div class="send-review-grid">
@@ -4067,6 +4071,25 @@ function getTodayLabel() {
   }).format(new Date());
 }
 
+function getSignalDeadlineHours() {
+  const raw = Number(fields.signalDeadlineHours?.value || DEFAULT_SIGNAL_DEADLINE_HOURS);
+  if (!Number.isFinite(raw)) return DEFAULT_SIGNAL_DEADLINE_HOURS;
+  return Math.min(MAX_SIGNAL_DEADLINE_HOURS, Math.max(MIN_SIGNAL_DEADLINE_HOURS, raw));
+}
+
+function calculateSignalDeadlineAt(hours = getSignalDeadlineHours()) {
+  const deadline = new Date();
+  deadline.setHours(deadline.getHours() + Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS));
+  return deadline.toISOString();
+}
+
+function formatSignalDeadlineHours(hours = getSignalDeadlineHours()) {
+  const value = Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS);
+  if (value < 24) return `${value} horas`;
+  const days = value / 24;
+  return `${days} ${days === 1 ? "dia" : "dias"}`;
+}
+
 function buildProposalText() {
   const selected = getSelectedItems();
   const clientName = fields.clientName.value.trim() || "Cliente";
@@ -4083,6 +4106,7 @@ function buildProposalText() {
     `Convidados: ${getGuestCount()}`,
     `Duração: ${getDuration()}h`,
     `Validade: ${fields.validity.value.trim() || "14 dias"}`,
+    `Prazo para sinal: ${formatSignalDeadlineHours()}`,
   ];
 
   if (reason) lines.push(`Motivo: ${reason}`);
@@ -4122,6 +4146,13 @@ function getProposalSnapshot() {
   const selected = getSelectedItems();
   const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const activeProposal = getActiveProposal();
+  const signalDeadlineHours = getSignalDeadlineHours();
+  const previousSignalDeadlineHours = Number(activeProposal?.snapshot?.event?.signalDeadlineHours || 0);
+  const previousSignalDeadlineAt = activeProposal?.snapshot?.event?.signalDeadlineAt || "";
+  const signalDeadlineAt =
+    previousSignalDeadlineAt && previousSignalDeadlineHours === signalDeadlineHours
+      ? previousSignalDeadlineAt
+      : calculateSignalDeadlineAt(signalDeadlineHours);
   return {
     version: 1,
     referencia: activeRequest?.snapshot?.referencia || "",
@@ -4139,6 +4170,8 @@ function getProposalSnapshot() {
       guests: getGuestCount(),
       duration: getDuration(),
       validity: fields.validity.value.trim(),
+      signalDeadlineHours,
+      signalDeadlineAt,
       manualAdjustment: getManualAdjustment(),
       manualAdjustmentLabel: fields.manualAdjustmentLabel.value.trim(),
       reason: fields.eventReason.value.trim(),
@@ -7170,6 +7203,9 @@ function applyProposalSnapshot(snapshot) {
   fields.guestCount.value = snapshot.event?.guests || 30;
   fields.eventDuration.value = String(snapshot.event?.duration || 1);
   fields.validity.value = snapshot.event?.validity || "14 dias";
+  if (fields.signalDeadlineHours) {
+    fields.signalDeadlineHours.value = String(snapshot.event?.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS);
+  }
   fields.manualAdjustment.value = snapshot.event?.manualAdjustment || snapshot.totals?.adjustment || "";
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
   fields.eventReason.value = snapshot.event?.reason || "";
@@ -7292,7 +7328,8 @@ function renderProposal() {
       <div class="proposal-grid">
         <div><span>Formato</span>${escapeHtml(fields.eventType.value.trim() || "Evento")}</div>
         <div><span>Duração</span>${getDuration()}h</div>
-        <div><span>Validade</span>${escapeHtml(fields.validity.value.trim() || "14 dias")}</div>
+        <div><span>Validade da proposta</span>${escapeHtml(fields.validity.value.trim() || "14 dias")}</div>
+        <div><span>Prazo para sinal</span>${escapeHtml(formatSignalDeadlineHours())}</div>
         <div><span>Data da proposta</span>${escapeHtml(getTodayLabel())}</div>
         <div class="proposal-grid-wide"><span>Motivo</span>${escapeHtml(reason || "A definir")}</div>
       </div>
@@ -7427,6 +7464,7 @@ function startNewProposal() {
   fields.guestCount.value = "30";
   fields.eventDuration.value = "1";
   fields.validity.value = "14 dias";
+  if (fields.signalDeadlineHours) fields.signalDeadlineHours.value = String(DEFAULT_SIGNAL_DEADLINE_HOURS);
   fields.manualAdjustment.value = "";
   fields.manualAdjustmentLabel.value = "";
   fields.eventReason.value = "";
@@ -7510,7 +7548,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
     "Segue o link da proposta comercial da Embaixada Carioca:",
     proposalUrl,
     "",
-    "Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta.",
+    `Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta, com prazo de ${formatSignalDeadlineHours()} e opção de anexar o comprovante.`,
   ].join("\n");
 }
 
@@ -7691,7 +7729,7 @@ async function openEmail() {
       "Segue o link da proposta comercial da Embaixada Carioca:",
       proposalUrl,
       "",
-      "Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta.",
+      `Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta, com prazo de ${formatSignalDeadlineHours()} e opção de anexar o comprovante.`,
       "",
       "Ficamos à disposição.",
     ].join("\n"),
