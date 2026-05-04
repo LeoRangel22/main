@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260503-eventos-v100" />
+    <link rel="stylesheet" href="./styles.css?v=20260504-eventos-v101" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -388,6 +388,19 @@
                   <input id="validity" type="text" value="14 dias" />
                 </label>
                 <label>
+                  Prazo para sinal
+                  <select id="signalDeadlineHours">
+                    <option value="12">12 horas</option>
+                    <option value="24">24 horas</option>
+                    <option value="48" selected>2 dias</option>
+                    <option value="72">3 dias</option>
+                    <option value="120">5 dias</option>
+                    <option value="168">7 dias</option>
+                    <option value="360">15 dias</option>
+                  </select>
+                  <small>Prazo para o cliente aprovar e realizar o sinal.</small>
+                </label>
+                <label>
                   Ajuste comercial
                   <input id="manualAdjustment" type="text" inputmode="decimal" placeholder="Ex.: -500 ou 750" />
                   <small>Use valor negativo para desconto ou positivo para acréscimo.</small>
@@ -652,6 +665,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260503-eventos-v100"></script>
+    <script defer src="./app.js?v=20260504-eventos-v101"></script>
   </body>
 </html>

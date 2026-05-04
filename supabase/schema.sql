@@ -255,13 +255,17 @@ as $$
   limit 1;
 $$;
 
+drop function if exists public.respond_public_proposal(uuid, text, date, time, integer, text);
+drop function if exists public.respond_public_proposal(uuid, text, date, time, integer, text, jsonb);
+
 create or replace function public.respond_public_proposal(
   proposal_token uuid,
   action text,
   requested_date date default null,
   requested_time time default null,
   requested_guests integer default null,
-  message text default null
+  message text default null,
+  payment_proof jsonb default null
 )
 returns table (
   ok boolean,
@@ -277,6 +281,7 @@ declare
   clean_message text := nullif(trim(coalesce(message, '')), '');
   response_payload jsonb;
   history_entry jsonb;
+  clean_proof jsonb := null;
   next_status text;
   new_snapshot jsonb;
 begin
@@ -292,12 +297,23 @@ begin
     raise exception 'Mensagem obrigatoria.';
   end if;
 
+  if payment_proof is not null then
+    clean_proof := jsonb_strip_nulls(jsonb_build_object(
+      'nome', nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''),
+      'tipo', nullif(trim(coalesce(payment_proof ->> 'tipo', '')), ''),
+      'tamanho', nullif(trim(coalesce(payment_proof ->> 'tamanho', '')), ''),
+      'dataUrl', nullif(trim(coalesce(payment_proof ->> 'dataUrl', '')), ''),
+      'anexadoEm', coalesce(payment_proof ->> 'anexadoEm', now()::text)
+    ));
+  end if;
+
   response_payload := jsonb_strip_nulls(jsonb_build_object(
     'acao', normalized_action,
     'data', requested_date,
     'horario', requested_time,
     'convidados', requested_guests,
     'mensagem', clean_message,
+    'comprovante', clean_proof,
     'registradoEm', now()
   ));
 
@@ -309,7 +325,11 @@ begin
       when normalized_action = 'cancelar' then 'Cliente solicitou cancelamento'
       else 'Cliente solicitou alteração'
     end,
-    'detail', coalesce(clean_message, 'Resposta registrada pelo link público.'),
+    'detail', coalesce(clean_message, 'Resposta registrada pelo link público.') ||
+      case
+        when clean_proof is not null then ' Comprovante anexado: ' || coalesce(clean_proof ->> 'nome', 'arquivo')
+        else ''
+      end,
     'at', now(),
     'actor', 'Cliente'
   );
@@ -363,7 +383,7 @@ end;
 $$;
 
 grant execute on function public.get_public_proposal(uuid) to anon, authenticated;
-grant execute on function public.respond_public_proposal(uuid, text, date, time, integer, text) to anon, authenticated;
+grant execute on function public.respond_public_proposal(uuid, text, date, time, integer, text, jsonb) to anon, authenticated;
 grant execute on function public.record_public_proposal_view(uuid, text, text) to anon, authenticated;
 
 create index if not exists solicitacoes_cotacao_created_at_idx
