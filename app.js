@@ -7542,10 +7542,10 @@ function buildProposalWhatsAppMessage(proposalUrl) {
     "",
     "Sua proposta da Embaixada Carioca está pronta.",
     "",
-    "Acesse aqui:",
+    "Link seguro da proposta:",
     proposalUrl,
     "",
-    `No link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal. O prazo para o sinal é de ${formatSignalDeadlineHours()}.`,
+    `No link você pode aprovar, pedir ajustes e anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
   ].join("\n");
 }
 
@@ -7725,10 +7725,10 @@ async function openEmail() {
       "",
       "Sua proposta da Embaixada Carioca está pronta.",
       "",
-      "Ver proposta aqui:",
+      "Link seguro da proposta:",
       proposalUrl,
       "",
-      `No link você pode aprovar, cancelar, solicitar ajustes de data/horário/convidados ou anexar o comprovante do sinal. O prazo para o sinal é de ${formatSignalDeadlineHours()}.`,
+      `No link você pode aprovar, cancelar, solicitar ajustes de data/horário/convidados e anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
       "",
       "Ficamos à disposição.",
     ].join("\n"),

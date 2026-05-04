@@ -6544,6 +6544,11 @@ input[type="range"] {
   color: #9d432f;
 }
 
+.public-proposal-chip-deadline {
+  background: rgba(24, 58, 45, 0.08);
+  border-color: rgba(24, 58, 45, 0.18);
+}
+
 .public-proposal-stage {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(24, 58, 45, 0.12);
@@ -6602,6 +6607,38 @@ input[type="range"] {
   color: var(--verde-escuro);
   font-size: 1.08rem;
   line-height: 1.15;
+}
+
+.public-deadline-card {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(245, 155, 30, 0.34);
+  border-left: 5px solid var(--laranja);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.public-deadline-card span {
+  color: var(--laranja);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.public-deadline-card strong {
+  color: var(--verde-escuro);
+  font-size: 1.02rem;
+  line-height: 1.18;
+}
+
+.public-deadline-card p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .public-proposal-loading,
@@ -6760,6 +6797,20 @@ input[type="range"] {
   padding: 12px;
 }
 
+.public-payment-grid .public-payment-highlight {
+  background: linear-gradient(135deg, rgba(24, 58, 45, 0.96), rgba(45, 113, 74, 0.94));
+  border-color: rgba(24, 58, 45, 0.18);
+}
+
+.public-payment-grid .public-payment-highlight span,
+.public-payment-grid .public-payment-highlight strong {
+  color: var(--white);
+}
+
+.public-payment-grid .public-payment-highlight strong {
+  font-size: 1.18rem;
+}
+
 .public-payment-grid strong,
 .public-payment-pix strong {
   color: var(--verde-escuro);
@@ -6871,13 +6922,25 @@ input[type="range"] {
 
 .public-proof-status {
   color: var(--muted);
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   font-size: 0.84rem;
   font-weight: 820;
+  gap: 8px;
+  justify-content: space-between;
   margin: 0;
 }
 
 .public-proof-status[data-status="ok"] {
   color: var(--verde);
+}
+
+.public-proof-status button {
+  background: rgba(163, 54, 38, 0.1);
+  color: var(--danger);
+  min-height: 32px;
+  padding: 0 10px;
 }
 
 .public-proof-summary {

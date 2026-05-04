@@ -83,6 +83,13 @@ function formatDeadlineHours(hours) {
   return `${days} ${days === 1 ? "dia" : "dias"}`;
 }
 
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return "";
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
 function getSignalDeadlineCopy(proposal = currentProposal) {
   const event = proposal?.snapshot?.event || {};
   const deadlineAt = formatDateTime(event.signalDeadlineAt);
@@ -90,6 +97,27 @@ function getSignalDeadlineCopy(proposal = currentProposal) {
     return `Para manter esta condição e priorizar a reserva, envie o sinal até ${deadlineAt}.`;
   }
   return `Prazo padrão para o sinal: ${formatDeadlineHours(event.signalDeadlineHours)}.`;
+}
+
+function getSignalDeadlineLabel(proposal = currentProposal) {
+  const event = proposal?.snapshot?.event || {};
+  const deadlineAt = formatDateTime(event.signalDeadlineAt);
+  return deadlineAt ? `Sinal até ${deadlineAt}` : `Sinal em até ${formatDeadlineHours(event.signalDeadlineHours)}`;
+}
+
+function getSignalAmount(proposal = currentProposal) {
+  const total = Number(proposal?.total || proposal?.snapshot?.totals?.total || 0);
+  return total > 0 ? total * 0.5 : 0;
+}
+
+function renderDeadlineCard(proposal = currentProposal) {
+  return `
+    <div class="public-deadline-card">
+      <span>Prazo do sinal</span>
+      <strong>${escapeHtml(getSignalDeadlineLabel(proposal))}</strong>
+      <p>${escapeHtml(getSignalDeadlineCopy(proposal))}</p>
+    </div>
+  `;
 }
 
 function isAllowedProofFile(file) {
@@ -135,7 +163,7 @@ function renderProofUploader() {
       </div>
       <label class="public-proof-dropzone" for="publicProofInput">
         <input id="publicProofInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" />
-        <span>Arraste o arquivo aqui, clique para escolher ou cole uma imagem copiada.</span>
+        <span>Arraste o comprovante aqui, clique para escolher ou cole uma imagem copiada.</span>
       </label>
       <p class="public-proof-status" id="publicProofStatus">Nenhum comprovante anexado.</p>
     </section>
@@ -166,7 +194,11 @@ function updateProofStatus() {
     status.dataset.status = "empty";
     return;
   }
-  status.textContent = `Comprovante anexado: ${selectedProof.nome}`;
+  const size = formatFileSize(selectedProof.tamanho);
+  status.innerHTML = `
+    <span>Comprovante anexado: <strong>${escapeHtml(selectedProof.nome)}</strong>${size ? ` · ${escapeHtml(size)}` : ""}</span>
+    <button type="button" data-remove-proof>Remover</button>
+  `;
   status.dataset.status = "ok";
 }
 
@@ -255,15 +287,17 @@ function renderError(message) {
 }
 
 function renderPaymentInfo({ proof = null } = {}) {
+  const signalAmount = getSignalAmount();
   return `
     <section class="public-payment-info" aria-label="Dados bancários para sinal de reserva">
       <div class="public-payment-heading">
         <span>Sinal de reserva</span>
         <h3>Dados para pagamento do sinal</h3>
         <p>A data e o horário ficam reservados após confirmação de disponibilidade pela equipe e pagamento do sinal de 50%.</p>
-        <p><strong>${escapeHtml(getSignalDeadlineCopy())}</strong></p>
       </div>
+      ${renderDeadlineCard()}
       <div class="public-payment-grid">
+        ${signalAmount ? `<div class="public-payment-highlight"><span>Valor do sinal</span><strong>${formatMoney(signalAmount)}</strong></div>` : ""}
         <div><span>Banco</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
         <div><span>Agência</span><strong>${escapeHtml(PAYMENT_INFO.agency)}</strong></div>
         <div><span>Conta corrente</span><strong>${escapeHtml(PAYMENT_INFO.account)}</strong></div>
@@ -340,6 +374,7 @@ function renderProposal(proposal) {
       <span class="public-proposal-chip is-status">${escapeHtml(getStatusLabel(proposal.status))}</span>
       <span class="public-proposal-chip">${escapeHtml(eventTitle)}</span>
       <span class="public-proposal-chip">${escapeHtml(String(guests))} convidados</span>
+      <span class="public-proposal-chip public-proposal-chip-deadline">${escapeHtml(getSignalDeadlineLabel(proposal))}</span>
     </div>
 
     <div class="public-proposal-stage">
@@ -352,6 +387,7 @@ function renderProposal(proposal) {
         <span>Próximo passo</span>
         <strong>${escapeHtml(decision.title)}</strong>
         <p>${escapeHtml(decision.note)}</p>
+        ${renderDeadlineCard(proposal)}
       </div>
     </div>
 
@@ -435,7 +471,7 @@ function renderProposal(proposal) {
           ${renderProofUploader()}
         </div>
         <div class="public-proposal-form-actions">
-          <button class="primary" type="submit">Enviar resposta</button>
+          <button class="primary" id="publicSubmitResponse" type="submit">Enviar resposta</button>
           <button class="secondary" type="button" id="publicCancelResponse">Voltar</button>
         </div>
       </form>
@@ -494,6 +530,7 @@ function openResponseForm(action) {
   const actionInput = document.querySelector("#publicProposalAction");
   const message = document.querySelector("#publicResponseMessage");
   const paymentSlot = document.querySelector("#publicPaymentInfoSlot");
+  const submitButton = document.querySelector("#publicSubmitResponse");
   if (!form || !actionInput || !message) return;
   actionInput.value = action;
   form.hidden = false;
@@ -504,6 +541,7 @@ function openResponseForm(action) {
   }
   if (action === "confirmar") {
     message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
+    if (submitButton) submitButton.textContent = "Enviar aprovação à equipe";
     updateProofStatus();
     setMessage("Confira os dados bancários nesta página, copie o Pix se preferir e anexe o comprovante quando tiver. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
     form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -511,9 +549,11 @@ function openResponseForm(action) {
   }
   if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
+    if (submitButton) submitButton.textContent = "Enviar cancelamento";
     setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
   } else {
     message.placeholder = "Conte qual data, horário, número de convidados ou detalhe precisa mudar.";
+    if (submitButton) submitButton.textContent = "Enviar pedido de ajuste";
     setMessage("Informe os ajustes desejados nos campos da resposta ou escreva no campo aberto.", "neutral");
   }
   form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -623,6 +663,14 @@ card.addEventListener("click", (event) => {
   const copyPixButton = event.target.closest("[data-copy-pix]");
   if (copyPixButton) {
     copyPixKey(copyPixButton);
+    return;
+  }
+  if (event.target.closest("[data-remove-proof]")) {
+    selectedProof = null;
+    const input = document.querySelector("#publicProofInput");
+    if (input) input.value = "";
+    updateProofStatus();
+    setMessage("Comprovante removido. Você pode anexar outro arquivo antes de enviar.", "neutral");
     return;
   }
   const actionButton = event.target.closest("[data-public-action]");
