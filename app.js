@@ -4147,12 +4147,7 @@ function getProposalSnapshot() {
   const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const activeProposal = getActiveProposal();
   const signalDeadlineHours = getSignalDeadlineHours();
-  const previousSignalDeadlineHours = Number(activeProposal?.snapshot?.event?.signalDeadlineHours || 0);
-  const previousSignalDeadlineAt = activeProposal?.snapshot?.event?.signalDeadlineAt || "";
-  const signalDeadlineAt =
-    previousSignalDeadlineAt && previousSignalDeadlineHours === signalDeadlineHours
-      ? previousSignalDeadlineAt
-      : calculateSignalDeadlineAt(signalDeadlineHours);
+  const signalDeadlineAt = calculateSignalDeadlineAt(signalDeadlineHours);
   return {
     version: 1,
     referencia: activeRequest?.snapshot?.referencia || "",
