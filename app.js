@@ -7540,10 +7540,12 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return [
     `Olá${firstName ? `, ${firstName}` : ""}!`,
     "",
-    "Segue o link da proposta comercial da Embaixada Carioca:",
+    "Sua proposta da Embaixada Carioca está pronta.",
+    "",
+    "Acesse aqui:",
     proposalUrl,
     "",
-    `Pelo link você pode aprovar a proposta ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta, com prazo de ${formatSignalDeadlineHours()} e opção de anexar o comprovante.`,
+    `No link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal. O prazo para o sinal é de ${formatSignalDeadlineHours()}.`,
   ].join("\n");
 }
 
@@ -7719,12 +7721,14 @@ async function openEmail() {
   const subject = encodeURIComponent("Proposta de evento - Embaixada Carioca");
   const body = encodeURIComponent(
     [
-      "Olá,",
+      `Olá${fields.clientName.value.trim() ? `, ${fields.clientName.value.trim().split(/\s+/)[0]}` : ""}!`,
       "",
-      "Segue o link da proposta comercial da Embaixada Carioca:",
+      "Sua proposta da Embaixada Carioca está pronta.",
+      "",
+      "Ver proposta aqui:",
       proposalUrl,
       "",
-      `Pelo link você pode aprovar a proposta, cancelar ou solicitar ajustes de data, horário e convidados. Ao aprovar, os dados para o sinal de reserva aparecem na própria proposta, com prazo de ${formatSignalDeadlineHours()} e opção de anexar o comprovante.`,
+      `No link você pode aprovar, cancelar, solicitar ajustes de data/horário/convidados ou anexar o comprovante do sinal. O prazo para o sinal é de ${formatSignalDeadlineHours()}.`,
       "",
       "Ficamos à disposição.",
     ].join("\n"),
