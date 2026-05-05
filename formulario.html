@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260504-eventos-v110" />
+    <link rel="stylesheet" href="./styles.css?v=20260504-eventos-v111" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -319,6 +319,16 @@
                   <small id="companyHelp">Obrigatório para empresa e agência.</small>
                   <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Grupo Atlântico Eventos…" />
                 </label>
+                <label id="endClientField" class="conditional-contact-field is-hidden">
+                  <span id="endClientLabel">Cliente final</span>
+                  <small id="endClientHelp">Obrigatório para agências. Ex.: marca, empresa contratante ou família atendida.</small>
+                  <input id="requestEndClientName" name="cliente_final" type="text" autocomplete="organization" placeholder="Ex.: Grupo Aurora…" />
+                </label>
+                <label id="groupNameField" class="conditional-contact-field is-hidden">
+                  <span id="groupNameLabel">Nome do grupo</span>
+                  <small id="groupNameHelp">Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.</small>
+                  <input id="requestGroupName" name="nome_grupo" type="text" autocomplete="organization" placeholder="Ex.: Incentivo México 2026…" />
+                </label>
               </div>
 
               <div class="fields-grid contact-fields-grid contact-secondary-grid">
@@ -371,6 +381,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./formulario.js?v=20260504-eventos-v110"></script>
+    <script defer src="./formulario.js?v=20260504-eventos-v111"></script>
   </body>
 </html>

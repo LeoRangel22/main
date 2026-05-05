@@ -4296,6 +4296,8 @@ function getProposalSnapshot() {
       email: fields.clientEmail.value.trim(),
       phone: fields.clientPhone.value.trim(),
       company: activeRequest?.empresa || activeRequest?.cliente_empresa || activeRequest?.snapshot?.cliente?.empresa || "",
+      finalClient: getFinalClientFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
+      groupName: getGroupNameFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
     },
     event: {
       type: fields.eventType.value.trim(),
@@ -4687,6 +4689,26 @@ function getLeadSegment(request) {
   return qualification.tipoCliente || "Cliente direto";
 }
 
+function getFinalClientFromSnapshot(snapshot = {}) {
+  return (
+    snapshot?.cliente?.clienteFinal ||
+    snapshot?.client?.finalClient ||
+    snapshot?.qualificacao?.clienteFinal ||
+    snapshot?.qualification?.finalClient ||
+    ""
+  );
+}
+
+function getGroupNameFromSnapshot(snapshot = {}) {
+  return (
+    snapshot?.cliente?.nomeGrupo ||
+    snapshot?.client?.groupName ||
+    snapshot?.qualificacao?.nomeGrupo ||
+    snapshot?.qualification?.groupName ||
+    ""
+  );
+}
+
 function getPipelineItems() {
   const linkedRequests = new Set(state.proposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
   const requestItems = state.quoteRequests
@@ -4714,6 +4736,8 @@ function getPipelineItems() {
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
         snapshot: request.snapshot || {},
+        finalClient: getFinalClientFromSnapshot(request.snapshot || {}),
+        groupName: getGroupNameFromSnapshot(request.snapshot || {}),
         clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
@@ -4747,6 +4771,8 @@ function getPipelineItems() {
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: proposal.snapshot?.referencia || "",
       snapshot: proposal.snapshot || {},
+      finalClient: getFinalClientFromSnapshot(proposal.snapshot || {}),
+      groupName: getGroupNameFromSnapshot(proposal.snapshot || {}),
       clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
       hasSignalProof: Boolean(proposal.snapshot?.pagamentoSinal?.comprovante?.nome),
       signalProof: proposal.snapshot?.pagamentoSinal?.comprovante || null,
@@ -5616,6 +5642,8 @@ function getItemSearchText(item) {
     [
       item.name,
       item.company,
+      item.finalClient,
+      item.groupName,
       item.email,
       item.phone,
       phoneDigits,
@@ -5631,6 +5659,10 @@ function getItemSearchText(item) {
       item.status ? getProposalStatusLabel(item.status) : "",
       item.snapshot?.qualificacao?.origem,
       item.snapshot?.qualificacao?.faixaInvestimento,
+      item.snapshot?.qualificacao?.clienteFinal,
+      item.snapshot?.qualificacao?.nomeGrupo,
+      item.snapshot?.cliente?.clienteFinal,
+      item.snapshot?.cliente?.nomeGrupo,
       item.snapshot?.evento?.ocasiao,
       item.snapshot?.evento?.observacoes,
     ].filter(Boolean).join(" "),
@@ -5780,7 +5812,17 @@ function renderClientRegistryCard(client) {
       return `
         <li>
           <span class="client-history-chip client-history-${escapeHtml(eventKind.tone)}">${escapeHtml(eventKind.label)}</span>
-          <small>${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data a definir")} · ${escapeHtml(item.type || "Evento")} · ${escapeHtml(getProposalStatusLabel(item.status))}</small>
+          <small>${escapeHtml(
+            [
+              item.date ? formatDateFromIso(item.date) : "Data a definir",
+              item.type || "Evento",
+              item.finalClient ? `Cliente final: ${item.finalClient}` : "",
+              item.groupName ? `Grupo: ${item.groupName}` : "",
+              getProposalStatusLabel(item.status),
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          )}</small>
         </li>
       `;
     })
@@ -6412,6 +6454,9 @@ function renderPipelineCard(item) {
   const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
+  const finalClientLine = [item.finalClient ? `Cliente final: ${item.finalClient}` : "", item.groupName ? `Grupo: ${item.groupName}` : ""]
+    .filter(Boolean)
+    .join(" · ");
   const leadAge = getLeadAgeInfo(item);
   const commercialScore = getCommercialScore(item);
   const leadAgeBadge = leadAge
@@ -6501,6 +6546,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
+      ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
       ${riskAlertsLine}
       ${primaryActionLine}
       ${clientResponseLine}
@@ -6627,6 +6673,12 @@ function buildNotesFromRequest(request) {
   const lines = [];
   if (request.snapshot?.referencia) lines.push(`Referência do formulário: ${request.snapshot.referencia}`);
   if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
+  if (qualification.clienteFinal || request.snapshot?.cliente?.clienteFinal) {
+    lines.push(`Cliente final: ${qualification.clienteFinal || request.snapshot.cliente.clienteFinal}`);
+  }
+  if (qualification.nomeGrupo || request.snapshot?.cliente?.nomeGrupo) {
+    lines.push(`Nome do grupo: ${qualification.nomeGrupo || request.snapshot.cliente.nomeGrupo}`);
+  }
   if (qualification.tipoCliente) lines.push(`Tipo de cliente: ${qualification.tipoCliente}`);
   if (qualification.faixaInvestimento) lines.push(`Faixa de investimento: ${qualification.faixaInvestimento}`);
   if (qualification.origem) lines.push(`Origem: ${qualification.origem}`);
