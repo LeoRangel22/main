@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260504-eventos-v104" />
+    <link rel="stylesheet" href="./styles.css?v=20260504-eventos-v105" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -144,9 +144,10 @@
               <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
             </div>
             <div class="pipeline-guidance" aria-label="Como usar o funil">
-              <span><strong>1.</strong> Ações de hoje mostram o que exige resposta primeiro.</span>
-              <span><strong>2.</strong> Arraste o card ou use Mudar para atualizar a etapa.</span>
-              <span><strong>3.</strong> Abra a proposta para ajustar valores, enviar link e acompanhar histórico.</span>
+              <span><strong>1.</strong> Responda primeiro leads quentes, atrasados e propostas sem retorno.</span>
+              <span><strong>2.</strong> Abra a proposta, confira checklist, valor, data, horário e contato.</span>
+              <span><strong>3.</strong> Envie o link por WhatsApp/e-mail e registre o envio no histórico.</span>
+              <span><strong>4.</strong> Recebeu sinal? Marque o pagamento e leve para operação.</span>
             </div>
             <div class="pipeline-quick-filters" aria-label="Filtros rápidos do funil">
               <span>Filtros rápidos</span>
@@ -613,12 +614,12 @@
             <section class="send-review-panel" id="sendReviewPanel" aria-label="Revisão antes do envio"></section>
             <div class="send-actions">
               <button class="secondary" id="newProposalBtn" type="button">Nova proposta</button>
-              <button class="primary" id="saveProposalBtn" type="button">Salvar proposta enviada</button>
-              <button class="primary" id="printBtn" type="button">Criar PDF</button>
-              <button class="primary" id="emailBtn" type="button">Link + e-mail</button>
-              <button class="secondary" id="confirmEventBtn" type="button">Marcar sinal pago</button>
-              <button class="secondary" id="copyBtn" type="button">Copiar link</button>
-              <button class="secondary" id="whatsappBtn" type="button">Enviar WhatsApp</button>
+              <button class="primary" id="whatsappBtn" type="button">Enviar link por WhatsApp</button>
+              <button class="primary" id="emailBtn" type="button">Enviar link por e-mail</button>
+              <button class="primary" id="saveProposalBtn" type="button">Salvar como enviada</button>
+              <button class="secondary" id="copyBtn" type="button">Copiar link público</button>
+              <button class="secondary" id="printBtn" type="button">Criar PDF</button>
+              <button class="secondary" id="confirmEventBtn" type="button">Sinal pago</button>
             </div>
             <section class="quick-replies-panel" aria-label="Respostas rápidas">
               <div class="quick-replies-heading">
@@ -632,7 +633,7 @@
                 <p>Abra um lead ou uma proposta para liberar os textos prontos.</p>
               </div>
             </section>
-            <p class="proposal-link-hint">O link é gerado automaticamente ao enviar por e-mail, WhatsApp ou copiar.</p>
+            <p class="proposal-link-hint">Ritual 5 estrelas: revise o checklist, envie o link, registre o envio e acompanhe pelo funil até o sinal.</p>
             <div class="history-panel" aria-label="Historico de propostas">
               <div class="history-heading">
                 <span>Historico</span>
@@ -665,6 +666,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260504-eventos-v104"></script>
+    <script defer src="./app.js?v=20260504-eventos-v105"></script>
   </body>
 </html>

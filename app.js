@@ -3949,6 +3949,14 @@ function renderSendReview() {
       ? `${summary.warnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
       : "Dados essenciais, cardápio e valor estão coerentes."
     : `${summary.errors} pendência(s) impedem o envio. Corrija para evitar proposta errada.`;
+  const nextAction = summary.ready
+    ? "Enviar link por WhatsApp"
+    : summary.errors
+      ? "Corrigir pendências obrigatórias"
+      : "Conferir pontos de atenção";
+  const nextActionNote = summary.ready
+    ? "WhatsApp tende a acelerar a resposta; o link registra aprovação, ajuste ou comprovante."
+    : "Clique em um item abaixo para ir direto ao campo que precisa de revisão.";
 
   nodes.sendReviewPanel.className = `send-review-panel is-${summary.ready ? "ready" : "blocked"}`;
   nodes.sendReviewPanel.innerHTML = `
@@ -3960,6 +3968,11 @@ function renderSendReview() {
       <small>${escapeHtml(note)}</small>
     </div>
     <div class="send-review-command">
+      <article class="send-review-next-action">
+        <span>Próxima melhor ação</span>
+        <strong>${escapeHtml(nextAction)}</strong>
+        <small>${escapeHtml(nextActionNote)}</small>
+      </article>
       <article>
         <span>Cliente</span>
         <strong>${escapeHtml(fields.clientName.value.trim() || "Cliente não informado")}</strong>
