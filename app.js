@@ -5292,7 +5292,7 @@ function getSlaMeta(item) {
     const nextLimit = hours < 12 ? "12h" : hours < 24 ? "24h" : hours < 48 ? "48h" : "estourado";
     const level = hours >= 48 ? "critical" : hours >= 24 ? "danger" : hours >= 12 ? "warning" : "fresh";
     return {
-      label: `SLA lead: ${hours || "<1"}h · alvo ${nextLimit}`,
+      label: `Tempo sem resposta: ${hours || "<1"}h · limite ${nextLimit}`,
       level,
     };
   }
@@ -5301,12 +5301,12 @@ function getSlaMeta(item) {
     const nextLimit = hours < 24 ? "24h" : hours < 48 ? "48h" : hours < 72 ? "72h" : "estourado";
     const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : hours >= 24 ? "warning" : "fresh";
     return {
-      label: `SLA proposta: ${hours || "<1"}h · follow-up ${nextLimit}`,
+      label: `Sem retorno: ${hours || "<1"}h · follow-up ${nextLimit}`,
       level,
     };
   }
   if (item.kind === "proposal" && status === "confirmado") {
-    return { label: "SLA financeiro: cobrar saldo restante", level: "warning" };
+    return { label: "Atenção financeira: cobrar saldo restante", level: "warning" };
   }
   return null;
 }
@@ -5367,7 +5367,7 @@ function getCommercialScore(item) {
     const ageHours = getHoursSince(item.createdAt);
     if (ageHours >= 24) {
       score += 10;
-      reasons.push("SLA quente");
+      reasons.push("Resposta urgente");
     } else if (ageHours >= 12) {
       score += 6;
     }
@@ -5550,21 +5550,39 @@ function normalizeSearchValue(value) {
     .trim();
 }
 
+function getSearchDateVariants(value) {
+  if (!value) return [];
+  const iso = String(value).slice(0, 10);
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return [iso];
+  const [, year, month, day] = match;
+  return [iso, `${day}/${month}/${year}`, `${day}/${month}`, `${day}${month}${year}`, `${day}${month}`];
+}
+
 function getItemSearchText(item) {
+  const phoneDigits = String(item.phone || "").replace(/\D/g, "");
+  const dateVariants = getSearchDateVariants(item.date);
   return normalizeSearchValue(
     [
       item.name,
       item.company,
       item.email,
       item.phone,
+      phoneDigits,
       item.type,
       item.clientType,
       item.reference,
+      item.date,
+      ...dateVariants,
       item.date ? formatDateFromIso(item.date) : "",
       item.time,
       item.guests ? `${item.guests} pax` : "",
       item.meta?.join(" "),
       item.status ? getProposalStatusLabel(item.status) : "",
+      item.snapshot?.qualificacao?.origem,
+      item.snapshot?.qualificacao?.faixaInvestimento,
+      item.snapshot?.evento?.ocasiao,
+      item.snapshot?.evento?.observacoes,
     ].filter(Boolean).join(" "),
   );
 }
@@ -5612,6 +5630,7 @@ function getClientRegistry(items = getPipelineItems()) {
           client.company,
           client.email,
           client.phone,
+          String(client.phone || "").replace(/\D/g, ""),
           client.clientType,
           client.items.map((item) => getItemSearchText(item)).join(" "),
         ].join(" "),
@@ -5798,11 +5817,19 @@ function renderGlobalSearch(items = getPipelineItems()) {
   if (!nodes.globalSearchResults) return;
   const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
   if (!term) {
-    nodes.globalSearchResults.innerHTML = `<p>Digite para encontrar leads, propostas e clientes.</p>`;
+    nodes.globalSearchResults.innerHTML = `
+      <div class="search-empty-guide">
+        <strong>Busque qualquer pista do atendimento.</strong>
+        <span>Nome, empresa, celular sem máscara, data, referência EC, origem, tipo de evento ou faixa de investimento.</span>
+      </div>
+    `;
     return;
   }
-  const matchedItems = items.filter((item) => getItemSearchText(item).includes(term)).slice(0, 7);
-  const matchedClients = getClientRegistry(items).filter((client) => client.searchText.includes(term)).slice(0, 3);
+  const termDigits = term.replace(/\D/g, "");
+  const matchesSearch = (text) => text.includes(term) || (termDigits.length >= 4 && text.includes(termDigits));
+  const matchedItems = items.filter((item) => matchesSearch(getItemSearchText(item))).slice(0, 8);
+  const matchedClients = getClientRegistry(items).filter((client) => matchesSearch(client.searchText)).slice(0, 4);
+  const totalResults = matchedItems.length + matchedClients.length;
   const clientResults = matchedClients
     .map((client) => {
       const latest = client.items[0];
@@ -5810,12 +5837,12 @@ function renderGlobalSearch(items = getPipelineItems()) {
         latest?.kind === "proposal"
           ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(latest.id)}">Abrir</button>`
           : `<button class="secondary" type="button" data-use-request="${escapeHtml(latest?.id || "")}">Abrir</button>`;
-      return `<article class="global-search-hit"><span>Cliente</span><strong>${escapeHtml(client.name)}</strong><small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || `${client.items.length} registro(s)`)}</small>${actionButton}</article>`;
+      return `<article class="global-search-hit"><span>Cliente · ${escapeHtml(client.items.length)} registro(s)</span><strong>${escapeHtml(client.name)}</strong><small>${escapeHtml([client.company, client.email, client.phone].filter(Boolean).join(" · ") || "Sem contato completo")}</small>${actionButton}</article>`;
     })
     .join("");
   const itemResults = matchedItems.map(renderGlobalSearchItem).join("");
   nodes.globalSearchResults.innerHTML = clientResults || itemResults
-    ? `${clientResults}${itemResults}`
+    ? `<div class="global-search-summary">${totalResults} resultado(s) para "${escapeHtml(fields.globalSearchInput?.value || "")}"</div>${clientResults}${itemResults}`
     : `<p>Nada encontrado para essa busca.</p>`;
 }
 
@@ -6017,7 +6044,35 @@ function renderActionTasks(items = getPipelineItems()) {
     nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora. O funil está limpo para novos contatos e follow-ups.</p>`;
     return;
   }
-  nodes.actionList.innerHTML = tasks
+  const topTask = tasks[0];
+  const topItem = topTask.item;
+  const topActionButton =
+    topItem.kind === "proposal"
+      ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(topItem.id)}">Resolver agora</button>`
+      : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(topItem.id)}">Resolver agora</button>`;
+  const groupedCounts = tasks.reduce(
+    (acc, task) => {
+      const track = getActionTrack(task);
+      acc[track] = (acc[track] || 0) + 1;
+      return acc;
+    },
+    {},
+  );
+  const groupedLine = Object.entries(groupedCounts)
+    .map(([track, count]) => `<span>${escapeHtml(track)} <b>${count}</b></span>`)
+    .join("");
+  nodes.actionList.innerHTML = `
+    <article class="action-focus-card action-${getActionPriorityClass(topTask.priority)}">
+      <div>
+        <span>Prioridade agora</span>
+        <strong>${escapeHtml(topTask.title)}</strong>
+        <small>${escapeHtml(topItem.name || "Cliente")} · ${escapeHtml(topTask.meta)}</small>
+        <p>${escapeHtml(topTask.note)}</p>
+      </div>
+      ${topActionButton}
+    </article>
+    <div class="action-track-summary">${groupedLine}</div>
+    ${tasks
     .map((task) => {
       const item = task.item;
       const actionButton =
@@ -6044,7 +6099,8 @@ function renderActionTasks(items = getPipelineItems()) {
         </article>
       `;
     })
-    .join("");
+    .join("")}
+  `;
 }
 
 function renderFinanceCommandPanel(items = getPipelineItems()) {
@@ -7736,22 +7792,29 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
   const approvalItems = getLeadReadinessItems();
   const approvalErrors = approvalItems.filter((item) => item.status === "error");
   const approvalWarnings = approvalItems.filter((item) => item.status === "warning");
+  const requiredLine = approvalErrors.length
+    ? approvalErrors.map((item) => `${item.label}: ${item.detail}`).slice(0, 3).join("\n")
+    : "Sem bloqueios obrigatórios.";
+  const warningLine = approvalWarnings.length
+    ? approvalWarnings.map((item) => `${item.label}: ${item.detail}`).slice(0, 3).join("\n")
+    : "Sem alertas relevantes.";
   const details = [
-    "Confirmar envio ao cliente?",
+    "Revisão rápida antes de enviar",
     "",
     `Cliente: ${clientName}`,
     `Canal: ${channel}`,
     destination ? `Destino: ${destination}` : "",
-    title ? `Mensagem: ${title}` : "",
     eventType ? `Evento: ${eventType}` : "",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
-    approvalErrors.length || approvalWarnings.length ? "" : "",
-    approvalErrors.length ? "Pendências obrigatórias:" : "",
-    ...approvalErrors.map((item) => `- ${item.label}: ${item.detail}`),
-    approvalWarnings.length ? "Pontos de atenção:" : "",
-    ...approvalWarnings.map((item) => `- ${item.label}: ${item.detail}`),
+    title ? `Mensagem: ${title}` : "",
     "",
-    `Confirme apenas se a mensagem foi revisada. Ao confirmar, o app vai ${action}.`,
+    "Obrigatórios:",
+    requiredLine,
+    "",
+    "Atenção:",
+    warningLine,
+    "",
+    `Ao confirmar, o app vai ${action}.`,
     channel === "WhatsApp"
       ? `Atenção: este envio sai pelo número automático do bot. Atendimento humano: ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`
       : "",
