@@ -598,6 +598,7 @@ const state = {
     whatsapp: false,
     auth: false,
   },
+  sendReviewApprovedSignature: "",
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -3014,6 +3015,47 @@ function getProposalReviewSummary(items = getProposalReviewItems()) {
   };
 }
 
+function getSendReviewSignature(items = getProposalReviewItems()) {
+  const totals = getQuoteTotals();
+  return JSON.stringify({
+    client: fields.clientName.value.trim(),
+    email: fields.clientEmail.value.trim(),
+    phone: fields.clientPhone.value.trim(),
+    eventType: fields.eventType.value.trim(),
+    date: fields.eventDate.value,
+    time: fields.eventTime.value,
+    guests: getGuestCount(),
+    duration: getDuration(),
+    validity: fields.validity.value.trim(),
+    signalDeadline: fields.signalDeadlineHours.value,
+    selectedIds: [...state.selectedIds].sort(),
+    total: roundCurrency(totals.total),
+    adjustment: fields.manualAdjustment.value.trim(),
+    notes: fields.notes.value.trim(),
+    reason: fields.eventReason.value.trim(),
+    review: items.map((item) => [item.id, item.status, item.detail]),
+  });
+}
+
+function isSendReviewApproved(items = getProposalReviewItems()) {
+  return Boolean(state.sendReviewApprovedSignature && state.sendReviewApprovedSignature === getSendReviewSignature(items));
+}
+
+function approveSendReview() {
+  const items = getProposalReviewItems();
+  const summary = getProposalReviewSummary(items);
+  if (!summary.ready) {
+    const firstError = items.find((item) => item.status === "error");
+    showToast(firstError?.detail || "Corrija os pontos obrigatórios antes de aprovar.");
+    scrollToReviewTarget(firstError?.target || "client");
+    return false;
+  }
+  state.sendReviewApprovedSignature = getSendReviewSignature(items);
+  renderSendReview();
+  showToast("Revisão aprovada. Agora pode enviar a proposta com segurança.");
+  return true;
+}
+
 function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) {
   if (!summary.ready) {
     const firstIssue = items.find((item) => item.status === "error") || items.find((item) => item.status === "warning");
@@ -3022,6 +3064,14 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) 
       label: "Corrigir antes de enviar",
       detail: firstIssue ? `${firstIssue.label}: ${firstIssue.detail}` : "Revise os dados destacados abaixo.",
       target: firstIssue?.target || "client",
+    };
+  }
+  if (!isSendReviewApproved(items)) {
+    return {
+      action: "approve",
+      label: "Revisado, pode enviar",
+      detail: "Confirme que data, horário, pax, cardápio, valor, sinal, contato e observações foram conferidos.",
+      target: "review",
     };
   }
   const hasPhone = Boolean(fields.clientPhone.value.trim().replace(/\D/g, ""));
@@ -4058,6 +4108,7 @@ function renderSendReview() {
   if (!nodes.sendReviewPanel) return;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
+  const approved = isSendReviewApproved(items);
   const command = getSendReviewPrimaryCommand(summary, items);
   const totals = getQuoteTotals();
   const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
@@ -4066,9 +4117,11 @@ function renderSendReview() {
     fields.eventTime.value || "Horário a definir",
     `${getGuestCount()} pax`,
   ].join(" · ");
-  const title = summary.ready ? "Pronto para enviar" : "Revise antes de enviar";
+  const title = summary.ready ? (approved ? "Revisão aprovada" : "Pronto para revisar") : "Revise antes de enviar";
   const note = summary.ready
-    ? summary.warnings
+    ? approved
+      ? "Checklist confirmado. Use WhatsApp ou e-mail para enviar sem risco de disparo acidental."
+      : summary.warnings
       ? `${summary.warnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
       : "Dados essenciais, cardápio e valor estão coerentes."
     : `${summary.errors} pendência(s) impedem o envio. Corrija para evitar proposta errada.`;
@@ -4081,7 +4134,7 @@ function renderSendReview() {
     ? "WhatsApp tende a acelerar a resposta; o link registra aprovação, ajuste ou comprovante."
     : "Clique em um item abaixo para ir direto ao campo que precisa de revisão.";
 
-  nodes.sendReviewPanel.className = `send-review-panel is-${summary.ready ? "ready" : "blocked"}`;
+  nodes.sendReviewPanel.className = `send-review-panel is-${summary.ready ? "ready" : "blocked"}${approved ? " is-approved" : ""}`;
   nodes.sendReviewPanel.innerHTML = `
     <div class="send-review-heading">
       <div>
@@ -4092,7 +4145,7 @@ function renderSendReview() {
     </div>
     <div class="send-review-command">
       <article class="send-review-next-action">
-        <span>Próxima melhor ação</span>
+        <span>${approved ? "Pronto para enviar" : "Próxima melhor ação"}</span>
         <strong>${escapeHtml(command.label || nextAction)}</strong>
         <small>${escapeHtml(command.detail || nextActionNote)}</small>
         <button class="send-review-primary-button" type="button" data-send-review-action="${escapeHtml(command.action)}" data-review-target="${escapeHtml(command.target || "client")}">
@@ -4108,6 +4161,11 @@ function renderSendReview() {
         <span>Evento</span>
         <strong>${escapeHtml(fields.eventType.value.trim() || "Formato a definir")}</strong>
         <small>${escapeHtml(eventLine)}</small>
+      </article>
+      <article>
+        <span>Revisão</span>
+        <strong>${escapeHtml(approved ? "Confirmada" : summary.ready ? "Falta aprovar" : "Pendente")}</strong>
+        <small>${escapeHtml(approved ? "Checklist travado para esta versão." : "Clique em “Revisado, pode enviar” antes do disparo.")}</small>
       </article>
       <article>
         <span>Total</span>
@@ -6123,6 +6181,30 @@ function getActionTasks(items = getPipelineItems()) {
   return rankedTasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
 }
 
+function getActionTaskSteps(task = {}) {
+  const title = String(task.title || "").toLowerCase();
+  const track = getActionTrack(task);
+  if (title.includes("responder lead")) {
+    return ["Abrir lead", "Conferir data, horário, pax e contato", "Enviar proposta ou resposta inicial"];
+  }
+  if (title.includes("follow-up")) {
+    return ["Abrir proposta", "Ver último envio e resposta", "Reenviar link ou ligar para destravar"];
+  }
+  if (title.includes("registrar sinal")) {
+    return ["Abrir proposta", "Enviar dados bancários se necessário", "Registrar sinal e comprovante"];
+  }
+  if (title.includes("pagamento restante") || title.includes("saldo")) {
+    return ["Abrir proposta", "Conferir valor restante", "Registrar banco, data e comprovante"];
+  }
+  if (title.includes("checklist") || title.includes("48h") || track === "Operação") {
+    return ["Abrir evento", "Checar cardápio, extras e responsáveis", "Marcar operação como pronta"];
+  }
+  if (title.includes("agenda") || track === "Agenda") {
+    return ["Abrir registro", "Conferir sobreposição de horários", "Ajustar etapa ou negociar alternativa"];
+  }
+  return ["Abrir registro", "Revisar próximo passo", "Registrar ação no histórico"];
+}
+
 function renderActionTasks(items = getPipelineItems()) {
   if (!nodes.actionList) return;
   const tasks = getActionTasks(items);
@@ -6140,8 +6222,8 @@ function renderActionTasks(items = getPipelineItems()) {
   const topItem = topTask.item;
   const topActionButton =
     topItem.kind === "proposal"
-      ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(topItem.id)}">Resolver agora</button>`
-      : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(topItem.id)}">Resolver agora</button>`;
+      ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(topItem.id)}">Abrir e resolver</button>`
+      : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(topItem.id)}">Abrir e resolver</button>`;
   const groupedCounts = tasks.reduce(
     (acc, task) => {
       const track = getActionTrack(task);
@@ -6153,6 +6235,9 @@ function renderActionTasks(items = getPipelineItems()) {
   const groupedLine = Object.entries(groupedCounts)
     .map(([track, count]) => `<span>${escapeHtml(track)} <b>${count}</b></span>`)
     .join("");
+  const topSteps = getActionTaskSteps(topTask)
+    .map((step) => `<li>${escapeHtml(step)}</li>`)
+    .join("");
   nodes.actionList.innerHTML = `
     <article class="action-focus-card action-${getActionPriorityClass(topTask.priority)}">
       <div>
@@ -6160,6 +6245,7 @@ function renderActionTasks(items = getPipelineItems()) {
         <strong>${escapeHtml(topTask.title)}</strong>
         <small>${escapeHtml(topItem.name || "Cliente")} · ${escapeHtml(topTask.meta)}</small>
         <p>${escapeHtml(topTask.note)}</p>
+        <ol class="action-focus-steps">${topSteps}</ol>
       </div>
       ${topActionButton}
     </article>
@@ -7347,6 +7433,18 @@ async function saveCurrentProposal(status, signalInfo = null) {
   let remainingPayment = null;
 
   if (normalizedNext === "proposta_enviada") {
+    const reviewItems = getProposalReviewItems();
+    const reviewSummary = getProposalReviewSummary(reviewItems);
+    if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
+      renderSendReview();
+      showToast(
+        reviewSummary.ready
+          ? "Antes de salvar como enviada, aprove o checklist de revisão."
+          : "Antes de salvar como enviada, corrija o checklist de revisão.",
+      );
+      nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return null;
+    }
     const blockingItems = getReadinessBlockingItems();
     if (blockingItems.length) {
       const confirmed = window.confirm(
@@ -7834,6 +7932,7 @@ function scrollToReviewTarget(target) {
     client: "#clientDataSection",
     items: "#eventConfigSection",
     notes: "#notes",
+    review: "#sendReviewPanel",
   };
   const selector = targets[target] || "#sendReviewPanel";
   const node = document.querySelector(selector);
@@ -7845,7 +7944,12 @@ function ensureProposalReadyForSending() {
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   renderSendReview();
-  if (summary.ready) return true;
+  if (summary.ready && isSendReviewApproved(items)) return true;
+  if (summary.ready) {
+    showToast("Aprove o checklist: clique em “Revisado, pode enviar” antes de mandar ao cliente.");
+    nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return false;
+  }
   const firstError = items.find((item) => item.status === "error");
   showToast(firstError?.detail || "Revise os pontos obrigatórios antes de enviar.");
   nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -8537,6 +8641,10 @@ function bindEvents() {
       }
       if (action === "email") {
         openEmail();
+        return;
+      }
+      if (action === "approve") {
+        approveSendReview();
         return;
       }
       scrollToReviewTarget(actionButton.dataset.reviewTarget || "client");
