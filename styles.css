@@ -4747,6 +4747,28 @@ textarea {
   white-space: normal;
 }
 
+.send-review-primary-button {
+  align-items: center;
+  appearance: none;
+  background: var(--bege);
+  border: 0;
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 950;
+  justify-content: center;
+  margin-top: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.send-review-primary-button:hover {
+  background: #f5e7c7;
+}
+
 .send-review-grid {
   display: grid;
   gap: 8px;

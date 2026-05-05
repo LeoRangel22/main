@@ -1310,7 +1310,7 @@ function getHistoryBadge(entry = {}) {
     client: "CLIENTE",
     stage: "ETAPA",
     operation: "OP",
-    audit: "LOG",
+    audit: "EQUIPE",
     muted: "AJUSTE",
     proposal: "PROP",
   };
@@ -1345,8 +1345,8 @@ function getCompactCommercialHistory(history = []) {
     const groupedTechnicalEntry = {
       id: "technical-updates-group",
       type: "tecnico_agrupado",
-      title: `${technicalEntries.length} registro(s) técnico(s) agrupado(s)`,
-      detail: "Logs de edição e auditoria ficam compactados para priorizar decisões comerciais.",
+      title: `${technicalEntries.length} ajuste(s) interno(s) agrupado(s)`,
+      detail: "Edições repetidas ficam compactadas para priorizar decisões comerciais.",
       at: latestTechnical.at,
       actor: latestTechnical.actor || "Equipe",
       groupedCount: technicalEntries.length,
@@ -1838,8 +1838,8 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
       value: `${compactHistory.keyCount || 0} ação(ões)`,
       detail:
         compactHistory.technicalCount || compactHistory.routineCount
-          ? `${(compactHistory.technicalCount || 0) + (compactHistory.routineCount || 0)} registro(s) técnico(s) agrupado(s).`
-          : "Sem ruído técnico agrupado.",
+          ? `${(compactHistory.technicalCount || 0) + (compactHistory.routineCount || 0)} ajuste(s) interno(s) agrupado(s).`
+          : "Sem ajustes internos agrupados.",
     },
   ];
 }
@@ -3014,6 +3014,42 @@ function getProposalReviewSummary(items = getProposalReviewItems()) {
   };
 }
 
+function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) {
+  if (!summary.ready) {
+    const firstIssue = items.find((item) => item.status === "error") || items.find((item) => item.status === "warning");
+    return {
+      action: "fix",
+      label: "Corrigir antes de enviar",
+      detail: firstIssue ? `${firstIssue.label}: ${firstIssue.detail}` : "Revise os dados destacados abaixo.",
+      target: firstIssue?.target || "client",
+    };
+  }
+  const hasPhone = Boolean(fields.clientPhone.value.trim().replace(/\D/g, ""));
+  const hasEmail = Boolean(fields.clientEmail.value.trim());
+  if (hasPhone) {
+    return {
+      action: "whatsapp",
+      label: "Enviar por WhatsApp",
+      detail: "Canal mais rápido para aprovação, ajustes e comprovante.",
+      target: "client",
+    };
+  }
+  if (hasEmail) {
+    return {
+      action: "email",
+      label: "Enviar por e-mail",
+      detail: "Abre o e-mail revisado com link seguro da proposta.",
+      target: "client",
+    };
+  }
+  return {
+    action: "fix",
+    label: "Informar canal de envio",
+    detail: "Inclua celular ou e-mail do cliente.",
+    target: "client",
+  };
+}
+
 function getActiveCommercialContext() {
   const request = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const proposal = state.proposals.find((item) => item.id === state.activeProposalId);
@@ -4022,6 +4058,7 @@ function renderSendReview() {
   if (!nodes.sendReviewPanel) return;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
+  const command = getSendReviewPrimaryCommand(summary, items);
   const totals = getQuoteTotals();
   const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
   const eventLine = [
@@ -4056,8 +4093,11 @@ function renderSendReview() {
     <div class="send-review-command">
       <article class="send-review-next-action">
         <span>Próxima melhor ação</span>
-        <strong>${escapeHtml(nextAction)}</strong>
-        <small>${escapeHtml(nextActionNote)}</small>
+        <strong>${escapeHtml(command.label || nextAction)}</strong>
+        <small>${escapeHtml(command.detail || nextActionNote)}</small>
+        <button class="send-review-primary-button" type="button" data-send-review-action="${escapeHtml(command.action)}" data-review-target="${escapeHtml(command.target || "client")}">
+          ${escapeHtml(command.label || nextAction)}
+        </button>
       </article>
       <article>
         <span>Cliente</span>
@@ -5282,7 +5322,17 @@ function getPipelineRiskAlerts(item) {
     alerts.push({ level: "success", label: "Oportunidade alta" });
   }
 
-  return alerts.slice(0, 3);
+  const priority = { critical: 5, danger: 4, warning: 3, success: 2, fresh: 1 };
+  const seen = new Set();
+  return alerts
+    .filter((alert) => {
+      const key = normalizeSearchValue(alert.label);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (priority[b.level] || 0) - (priority[a.level] || 0))
+    .slice(0, 2);
 }
 
 function getSlaMeta(item) {
@@ -8426,6 +8476,20 @@ function bindEvents() {
     if (reviewButton) scrollToReviewTarget(reviewButton.dataset.reviewTarget);
   });
   nodes.sendReviewPanel?.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("button[data-send-review-action]");
+    if (actionButton) {
+      const action = actionButton.dataset.sendReviewAction;
+      if (action === "whatsapp") {
+        openWhatsApp();
+        return;
+      }
+      if (action === "email") {
+        openEmail();
+        return;
+      }
+      scrollToReviewTarget(actionButton.dataset.reviewTarget || "client");
+      return;
+    }
     const button = event.target.closest("button[data-review-target]");
     if (!button) return;
     scrollToReviewTarget(button.dataset.reviewTarget);
