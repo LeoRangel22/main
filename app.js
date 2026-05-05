@@ -1277,9 +1277,17 @@ function isRoutineProposalUpdate(entry = {}) {
   return entry.type === "proposta" && String(entry.title || "").toLowerCase().includes("atualizada");
 }
 
+function isTechnicalHistoryEntry(entry = {}) {
+  if (isRoutineProposalUpdate(entry)) return true;
+  const text = `${entry.title || ""} ${entry.detail || ""}`.toLowerCase();
+  if (entry.type !== "auditoria") return false;
+  return !text.includes("cancel") && !text.includes("etapa") && !text.includes("sinal") && !text.includes("pagamento");
+}
+
 function getHistoryTone(entry = {}) {
   const text = `${entry.type || ""} ${entry.title || ""}`.toLowerCase();
   if (entry.type === "proposta_agrupada") return "muted";
+  if (entry.type === "tecnico_agrupado") return "muted";
   if (entry.type === "auditoria") return "audit";
   if (entry.type === "comentario") return "client";
   if (entry.type === "anexo") return "operation";
@@ -1311,7 +1319,8 @@ function getHistoryBadge(entry = {}) {
 
 function getCompactCommercialHistory(history = []) {
   const routineUpdates = history.filter(isRoutineProposalUpdate);
-  const keyEntries = history.filter((entry) => !isRoutineProposalUpdate(entry));
+  const technicalEntries = history.filter((entry) => isTechnicalHistoryEntry(entry) && !isRoutineProposalUpdate(entry));
+  const keyEntries = history.filter((entry) => !isRoutineProposalUpdate(entry) && !isTechnicalHistoryEntry(entry));
   const visible = keyEntries.slice(0, 7);
 
   if (routineUpdates.length) {
@@ -1331,9 +1340,25 @@ function getCompactCommercialHistory(history = []) {
     visible.splice(insertionIndex, 0, groupedEntry);
   }
 
+  if (technicalEntries.length) {
+    const latestTechnical = technicalEntries[0];
+    const groupedTechnicalEntry = {
+      id: "technical-updates-group",
+      type: "tecnico_agrupado",
+      title: `${technicalEntries.length} registro(s) técnico(s) agrupado(s)`,
+      detail: "Logs de edição e auditoria ficam compactados para priorizar decisões comerciais.",
+      at: latestTechnical.at,
+      actor: latestTechnical.actor || "Equipe",
+      groupedCount: technicalEntries.length,
+    };
+    const insertionIndex = Math.min(visible.length, routineUpdates.length ? 4 : 3);
+    visible.splice(insertionIndex, 0, groupedTechnicalEntry);
+  }
+
   return {
     visible: visible.slice(0, 8),
     routineCount: routineUpdates.length,
+    technicalCount: technicalEntries.length,
     keyCount: keyEntries.length,
   };
 }
@@ -1695,6 +1720,7 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
   const compactHistory = getCompactCommercialHistory(history);
   const lastRelevantEntry = compactHistory.visible.find((entry) => entry.id !== "proposal-updates-group") || history[0] || null;
   const lifecycle = getProposalLifecycle(proposal);
+  const timelineSummaryCards = getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry);
   nodes.commercialTimeline.classList.remove("is-hidden");
   nodes.commercialTimeline.innerHTML = `
     <div class="timeline-heading">
@@ -1707,6 +1733,19 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
           ? `<p>Último movimento: <b>${escapeHtml(lastRelevantEntry.title || "Atualização")}</b> · ${escapeHtml(formatCommercialHistoryDate(lastRelevantEntry.at))}</p>`
           : `<p>Salve, envie ou registre pagamentos para criar o histórico deste evento.</p>`
       }
+    </div>
+    <div class="timeline-executive-summary">
+      ${timelineSummaryCards
+        .map(
+          (card) => `
+            <article class="timeline-summary-card is-${escapeHtml(card.tone)}">
+              <span>${escapeHtml(card.label)}</span>
+              <strong>${escapeHtml(card.value)}</strong>
+              <small>${escapeHtml(card.detail)}</small>
+            </article>
+          `,
+        )
+        .join("")}
     </div>
     <div class="timeline-progress">
       ${lifecycle
@@ -1757,6 +1796,52 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
       }
     </div>
   `;
+}
+
+function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
+  const status = normalizeProposalStatus(proposal.status);
+  const snapshot = proposal.snapshot || {};
+  const clientResponse = proposal.cliente_resposta || snapshot.clienteResposta?.acao || snapshot.clientResponse?.action || "";
+  const signal = snapshot.pagamentoSinal;
+  const remaining = snapshot.pagamentoRestante;
+  const responseLabels = {
+    confirmar: "Aprovou",
+    alteracao: "Pediu ajuste",
+    cancelar: "Cancelou",
+  };
+  return [
+    {
+      tone: "stage",
+      label: "Etapa atual",
+      value: getProposalStatusLabel(status),
+      detail: lastRelevantEntry ? `Último movimento: ${formatCommercialHistoryDate(lastRelevantEntry.at)}` : "Ainda sem movimento relevante.",
+    },
+    {
+      tone: clientResponse ? "client" : "muted",
+      label: "Resposta do cliente",
+      value: responseLabels[clientResponse] || "Sem resposta",
+      detail: clientResponse ? "Priorize o próximo passo comercial." : "Acompanhar retorno e fazer follow-up no prazo.",
+    },
+    {
+      tone: remaining ? "money" : signal ? "warning" : "muted",
+      label: "Financeiro",
+      value: remaining ? "Saldo registrado" : signal ? "Sinal registrado" : "Sem sinal",
+      detail: remaining
+        ? `${formatMoney(Number(remaining.valor) || 0)} · ${formatSignalPaymentDate(remaining.data)}`
+        : signal
+          ? `${formatMoney(Number(signal.valor) || 0)} · falta saldo`
+          : "Aguardando avanço comercial.",
+    },
+    {
+      tone: compactHistory.technicalCount || compactHistory.routineCount ? "muted" : "stage",
+      label: "Leitura limpa",
+      value: `${compactHistory.keyCount || 0} ação(ões)`,
+      detail:
+        compactHistory.technicalCount || compactHistory.routineCount
+          ? `${(compactHistory.technicalCount || 0) + (compactHistory.routineCount || 0)} registro(s) técnico(s) agrupado(s).`
+          : "Sem ruído técnico agrupado.",
+    },
+  ];
 }
 
 function renderInternalNotesPanel(proposal = getActiveProposal()) {
@@ -5122,44 +5207,82 @@ function getPipelinePrimaryAction(item) {
       tone: age && ["danger", "critical"].includes(age.level) ? "danger" : age?.level === "warning" ? "warning" : "fresh",
       eyebrow: "Próxima ação",
       label: age && age.level !== "fresh" ? "Responder agora" : "Criar proposta",
+      note: age && age.level !== "fresh" ? "Lead esfriando. Abra, revise e envie proposta." : "Qualifique e monte a primeira proposta.",
     };
   }
   if (status === "proposta_enviada") {
     if (item.clientResponse === "confirmar") {
-      return { tone: "success", eyebrow: "Cliente aprovou", label: "Registrar sinal" };
+      return { tone: "success", eyebrow: "Cliente aprovou", label: "Registrar sinal", note: "Enviar dados bancários e registrar pagamento." };
     }
     return {
       tone: followUp?.level || "fresh",
       eyebrow: "Próxima ação",
       label: followUp ? "Fazer follow-up" : "Aguardar retorno",
+      note: followUp ? "Retomar enquanto a proposta ainda está quente." : "Monitorar retorno ou visualização do cliente.",
     };
   }
   if (status === "negociacao") {
-    return { tone: item.clientResponse === "alteracao" ? "warning" : "warm", eyebrow: "Negociação", label: "Ajustar e reenviar" };
+    return { tone: item.clientResponse === "alteracao" ? "warning" : "warm", eyebrow: "Negociação", label: "Ajustar e reenviar", note: "Registrar combinado e deixar próximo passo claro." };
   }
   if (status === "confirmado") {
     return {
       tone: item.hasRemainingPayment ? "success" : "warning",
       eyebrow: "Financeiro",
       label: item.hasRemainingPayment ? "Enviar para planejamento" : "Cobrar saldo",
+      note: item.hasRemainingPayment ? "Saldo ok. Próximo passo é operação." : "Venda fechada, mas ainda falta saldo final.",
     };
   }
   if (status === "pagamento_final") {
-    return { tone: item.hasRemainingProof ? "success" : "warning", eyebrow: "Financeiro", label: item.hasRemainingProof ? "Planejar evento" : "Anexar comprovante" };
+    return { tone: item.hasRemainingProof ? "success" : "warning", eyebrow: "Financeiro", label: item.hasRemainingProof ? "Planejar evento" : "Anexar comprovante", note: "Fechar pagamento antes de avançar operação." };
   }
   if (status === "planejamento") {
-    return { tone: "operation", eyebrow: "Operação", label: "Fechar checklist" };
+    return { tone: "operation", eyebrow: "Operação", label: "Fechar checklist", note: "Cardápio, extras, responsáveis e observações." };
   }
   if (status === "evento_proximo") {
-    return { tone: "operation", eyebrow: "48h", label: "Revisão final" };
+    return { tone: "operation", eyebrow: "48h", label: "Revisão final", note: "Conferir execução, horário e responsável do dia." };
   }
   if (status === "pos_venda") {
-    return { tone: "client", eyebrow: "Relacionamento", label: "Registrar retorno" };
+    return { tone: "client", eyebrow: "Relacionamento", label: "Registrar retorno", note: "Pedir feedback e mapear próxima oportunidade." };
   }
   if (status === "cancelado") {
-    return { tone: "muted", eyebrow: "Encerrado", label: item.cancelReason || "Cancelado" };
+    return { tone: "muted", eyebrow: "Encerrado", label: item.cancelReason || "Cancelado", note: "Motivo registrado para aprendizado comercial." };
   }
-  return { tone: "fresh", eyebrow: "Próxima ação", label: "Abrir registro" };
+  return { tone: "fresh", eyebrow: "Próxima ação", label: "Abrir registro", note: "Revisar dados e definir caminho." };
+}
+
+function getPipelineRiskAlerts(item) {
+  const alerts = [];
+  const status = getReportStatus(item);
+  const daysUntil = getDaysUntilEvent(item);
+  const age = getLeadAgeInfo(item);
+  const followUp = getProposalFollowUpInfo(item);
+  const score = getCommercialScore(item);
+
+  if (age && age.level !== "fresh") {
+    alerts.push({ level: age.level, label: age.level === "critical" ? "Lead 48h+" : age.level === "danger" ? "Lead 24h+" : "Lead 12h+" });
+  }
+  if (followUp) {
+    alerts.push({ level: followUp.level, label: followUp.level === "critical" ? "Follow-up 72h+" : followUp.level === "danger" ? "Follow-up 48h+" : "Follow-up hoje" });
+  }
+  if (item.clientResponse === "confirmar") {
+    alerts.push({ level: "success", label: "Cliente aprovou" });
+  }
+  if (daysUntil !== null && daysUntil >= 0 && daysUntil <= 7 && !operationStatuses.has(status)) {
+    alerts.push({ level: "danger", label: `Evento em ${daysUntil || "hoje"}` });
+  } else if (daysUntil !== null && daysUntil >= 0 && daysUntil <= 14) {
+    alerts.push({ level: "warning", label: `Janela ${daysUntil}d` });
+  }
+  if (status === "confirmado" && !item.hasRemainingPayment) {
+    alerts.push({ level: "warning", label: "Falta saldo" });
+  }
+  if (status === "planejamento" && hasIncompleteChecklist(item.snapshot || {})) {
+    alerts.push({ level: "warning", label: "Checklist aberto" });
+  }
+  if (score.level === "high") {
+    alerts.push({ level: "success", label: "Oportunidade alta" });
+  }
+
+  return alerts.slice(0, 3);
 }
 
 function getSlaMeta(item) {
@@ -6201,8 +6324,15 @@ function renderPipelineCard(item) {
     <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}">
       <span>${escapeHtml(primaryAction.eyebrow)}</span>
       <strong>${escapeHtml(primaryAction.label)}</strong>
+      <small>${escapeHtml(primaryAction.note || "")}</small>
     </div>
   `;
+  const riskAlerts = getPipelineRiskAlerts(item);
+  const riskAlertsLine = riskAlerts.length
+    ? `<div class="pipeline-card-alerts">${riskAlerts
+        .map((alert) => `<small class="pipeline-alert pipeline-alert-${escapeHtml(alert.level)}">${escapeHtml(alert.label)}</small>`)
+        .join("")}</div>`
+    : "";
   const clientResponseLine = item.clientResponse
     ? `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`
     : "";
@@ -6265,6 +6395,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
+      ${riskAlertsLine}
       ${primaryActionLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
