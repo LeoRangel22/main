@@ -2366,6 +2366,17 @@ textarea[aria-invalid="true"] {
   font-weight: 850 !important;
 }
 
+.pipeline-card-final-client {
+  color: var(--verde-escuro);
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pipeline-card-alerts {
   align-items: center;
   display: flex;
@@ -6562,6 +6573,11 @@ input[type="range"] {
 
 .contact-fields-grid label > small[data-tone="success"] {
   color: var(--verde);
+}
+
+.conditional-contact-field {
+  border-left: 3px solid rgba(24, 58, 45, 0.24);
+  padding-left: 12px;
 }
 
 .contact-reassurance {
