@@ -382,11 +382,11 @@ const copy = {
       { value: "travel", label: "Grupo turístico / receptivo", icon: "06" },
       { value: "suggestion", label: "Me ajudem a definir", icon: "07" },
     ],
-    profileSupport: "Essas respostas ajudam a equipe a priorizar o atendimento e montar uma proposta mais certeira.",
-    occasionSupport: "Ocasião do evento · marque uma ou mais opções",
+    profileSupport: "Primeiro diga quem está organizando. Depois marque a ocasião. Pode marcar mais de uma opção; se tiver dúvida, escolha “Me ajudem a definir”.",
+    occasionSupport: "Ocasião do evento · marque uma ou mais opções. Se não souber, use “Me ajudem a definir”.",
     recommendationTitle: "Experiências mais indicadas",
-    recommendationEmpty: "Escolha o momento e o perfil para ver as experiências mais indicadas.",
-    recommendationReady: (moment) => `Baseado no que nos contou, já deixamos a opção mais indicada selecionada para ${moment.toLowerCase()}. Você pode trocar se preferir.`,
+    recommendationEmpty: "Escolha o momento e o perfil para ver as sugestões. A equipe também pode ajustar depois.",
+    recommendationReady: (moment) => `Selecionamos uma sugestão inicial para ${moment.toLowerCase()}. Se outra experiência fizer mais sentido, pode trocar sem problema.`,
     labels: {
       eventDate: "Data desejada",
       eventDateHelp: "Se ainda não houver data fechada, conte a janela aproximada abaixo.",
@@ -398,7 +398,7 @@ const copy = {
       time: "Horário de chegada",
       timeHelp: "O horário acordado orienta a operação. Atrasos podem gerar hora extra ou manter o término original.",
       duration: "Duração estimada",
-      briefingSupport: "Selecione o que ajuda a equipe a montar uma proposta mais precisa. Se não souber, deixe em branco.",
+      briefingSupport: "Marque só o que for importante. Se não tiver certeza, deixe em branco; a equipe completa com você depois.",
       reason: "Motivo do evento",
       preferences: "Preferências de alimentos e bebidas",
       notes: "Há algo importante que devemos considerar para montar sua proposta?",
@@ -427,8 +427,8 @@ const copy = {
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
       finalReviewEyebrow: "Antes de enviar",
       finalReviewTitle: "Confira se está tudo certo",
-      finalReviewBody: "Esse é o resumo que nossa equipe vai usar para preparar sua proposta.",
-      submit: "Solicitar minha proposta",
+      finalReviewBody: "Revise o essencial. Se algo estiver errado, clique no bloco para voltar direto ao ponto.",
+      submit: "Enviar solicitação de proposta",
       preferenceLegend: "O que não pode faltar?",
       extrasLegend: "Extras de produção",
     },
@@ -461,6 +461,8 @@ const copy = {
       loadError: "Não foi possível carregar a conexão. Tente novamente em instantes.",
       submitError: "Não foi possível enviar. Confira os dados e tente novamente.",
       missingFields: (fieldsList) => `Falta completar: ${fieldsList}. Ajuste esses pontos e envie novamente.`,
+      fixThisPointTitle: "Ajuste este ponto para continuar:",
+      fixThisPointFooter: "Depois de corrigir, clique em Enviar solicitação de proposta.",
       missingRequired: "Falta só escolher o momento, a ocasião, o formato, o período e os dados de contato para seguirmos.",
       missingDate: "Informe uma data desejada ou uma janela aproximada para a equipe avaliar disponibilidade.",
       requiredName: "Para seguir, conte seu nome completo. Ex.: Marina Costa.",
@@ -557,11 +559,11 @@ const copy = {
       { value: "travel", label: "Tourism / receptive group", icon: "06" },
       { value: "suggestion", label: "Help me define it", icon: "07" },
     ],
-    profileSupport: "These answers help our team prioritize the lead and build a sharper proposal.",
-    occasionSupport: "Event occasion · choose one or more options",
+    profileSupport: "First tell us who is organizing it. Then choose the occasion. You may select more than one option; if unsure, choose “Help me define it”.",
+    occasionSupport: "Event occasion · choose one or more options. If unsure, choose “Help me define it”.",
     recommendationTitle: "Best experiences for your event",
-    recommendationEmpty: "Choose the moment and profile to see the most suitable experiences.",
-    recommendationReady: (moment) => `Based on what you shared, we have already selected the best fit for ${moment.toLowerCase()}. You can still change it if you prefer.`,
+    recommendationEmpty: "Choose the moment and profile to see suggestions. Our team can still adjust it later.",
+    recommendationReady: (moment) => `We selected an initial suggestion for ${moment.toLowerCase()}. If another experience feels better, you can change it anytime.`,
     labels: {
       eventDate: "Preferred date",
       eventDateHelp: "If the date is not set yet, share an approximate window below.",
@@ -573,7 +575,7 @@ const copy = {
       time: "Arrival time",
       timeHelp: "The agreed arrival time guides the operation. Delays may trigger extra time charges or keep the original end time.",
       duration: "Estimated duration",
-      briefingSupport: "Select what helps our team build a more accurate proposal. If you are unsure, you can leave it blank.",
+      briefingSupport: "Select only what matters. If you are unsure, leave it blank; our team can complete it with you later.",
       reason: "Event goal",
       preferences: "Food and beverage preferences",
       notes: "Is there anything important we should consider when preparing your proposal?",
@@ -602,8 +604,8 @@ const copy = {
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
       finalReviewEyebrow: "Before sending",
       finalReviewTitle: "Review your request",
-      finalReviewBody: "This is the summary our team will use to prepare your proposal.",
-      submit: "Request my proposal",
+      finalReviewBody: "Review the essentials. If something is wrong, click the block to go straight back to that point.",
+      submit: "Send proposal request",
       preferenceLegend: "What cannot be missing?",
       extrasLegend: "Production extras",
     },
@@ -636,6 +638,8 @@ const copy = {
       loadError: "We could not load the connection. Please try again in a moment.",
       submitError: "We could not send your request. Please review the information and try again.",
       missingFields: (fieldsList) => `Please complete: ${fieldsList}. Review these items and send again.`,
+      fixThisPointTitle: "Please adjust this item to continue:",
+      fixThisPointFooter: "After correcting it, click Send proposal request.",
       missingRequired: "We only need the moment, occasion, format, period and contact details to move forward.",
       missingDate: "Please provide either a preferred date or an approximate date window so the team can assess availability.",
       requiredName: "Please share your full name so we can prepare the proposal properly. Example: Marina Costa.",
@@ -868,6 +872,18 @@ function setLanguage(language) {
 function setStatus(message, type = "neutral") {
   statusNode.textContent = message;
   statusNode.dataset.status = type;
+}
+
+function setStatusChecklist(title, items, footer = "") {
+  const cleanItems = items.filter(Boolean);
+  statusNode.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    <ul>
+      ${cleanItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+    </ul>
+    ${footer ? `<span>${escapeHtml(footer)}</span>` : ""}
+  `;
+  statusNode.dataset.status = "error";
 }
 
 function resetStatusIfError() {
@@ -1465,7 +1481,8 @@ function getPayload(snapshot) {
 }
 
 function failValidation(field, stepName, message) {
-  setStatus(message, "error");
+  const current = getCopy();
+  setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [message], current.messages.fixThisPointFooter || "");
   setStepValidity(stepName, false);
   setFieldValidity(field, false);
   field?.focus();
@@ -1503,17 +1520,20 @@ function validateSnapshot(snapshot) {
 
   const firstInvalid = required.find(([, valid]) => !valid);
   if (firstInvalid) {
-    const fieldsList = required
+    const missingItems = required
       .filter(([, valid]) => !valid)
-      .map(([, , , label]) => label)
-      .join(", ");
-    setStatus(current.messages.missingFields ? current.messages.missingFields(fieldsList) : current.messages.missingRequired, "error");
+      .map(([, , , label]) => label);
+    setStatusChecklist(
+      uiState.language === "en" ? "Complete these items before sending:" : "Complete estes pontos antes de enviar:",
+      missingItems,
+      uiState.language === "en" ? "The first incomplete section is highlighted above." : "A primeira seção incompleta está destacada acima.",
+    );
     scrollToStep(firstInvalid[2], true);
     return false;
   }
 
   if (!hasEventDateOrWindow) {
-    setStatus(current.messages.missingDate, "error");
+    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.missingDate], current.messages.fixThisPointFooter || "");
     setStepValidity("eventDetails", false);
     setFieldValidity(fields.date, false);
     setFieldValidity(fields.dateFlex, false);
@@ -1534,7 +1554,7 @@ function validateSnapshot(snapshot) {
   }
 
   if (!isValidEmail(snapshot.cliente.email)) {
-    setStatus(current.messages.invalidEmail, "error");
+    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidEmail], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.email, false);
     fields.email.focus();
@@ -1547,7 +1567,7 @@ function validateSnapshot(snapshot) {
   }
 
   if (!isValidContactPhone(snapshot.cliente.whatsapp)) {
-    setStatus(current.messages.invalidPhone, "error");
+    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidPhone], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
     fields.phone.focus();
