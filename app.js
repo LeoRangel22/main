@@ -5231,7 +5231,7 @@ function renderStatusSelect(item) {
   const options = item.kind === "request" ? requestStatusOptions : getProposalTransitionOptions(item.status);
   return `
     <details class="pipeline-status-control">
-      <summary>Mudar</summary>
+      <summary title="Mudar etapa deste registro">Mudar etapa</summary>
       <label>
         Etapa
         <select data-pipeline-status-kind="${escapeHtml(item.kind)}" data-pipeline-status-id="${escapeHtml(item.id)}">
@@ -6497,21 +6497,21 @@ function renderPipelineCard(item) {
       : "";
   const signalButton =
     item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
-      ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}">Sinal Pago!</button>`
+      ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
   const remainingButton =
     item.kind === "proposal" && item.status === "pagamento_final" && !item.hasRemainingPayment
-      ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}">PG Restante!</button>`
+      ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}" title="Registrar pagamento restante">Registrar saldo</button>`
       : "";
   const topAction = remainingButton || remainingProofLink || signalProofLink || signalButton;
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">ABRIR</button>`
-      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}">ABRIR</button>`;
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">Abrir proposta</button>`
+      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">Abrir lead</button>`;
   const cancelButton =
     item.status === "cancelado"
       ? ""
-      : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}">Cancelar</button>`;
+      : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}" title="Cancelar e registrar motivo">Cancelar</button>`;
   const deleteTestButton = canDeletePipelineItem(item)
     ? `<button class="secondary danger-light pipeline-delete-chip" type="button" data-delete-kind="${escapeHtml(item.kind)}" data-delete-id="${escapeHtml(item.id)}">Apagar teste</button>`
     : "";

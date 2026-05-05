@@ -2291,7 +2291,7 @@ textarea[aria-invalid="true"] {
   font-size: 0.58rem;
   height: 20px;
   min-height: 20px;
-  padding: 0 7px;
+  padding: 0 8px;
 }
 
 .pipeline-card-title strong,
@@ -2317,8 +2317,10 @@ textarea[aria-invalid="true"] {
   height: 20px;
   line-height: 1;
   margin-left: 0;
+  max-width: 92px;
   min-height: 20px;
-  padding: 0 7px;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 .pipeline-card small {
@@ -2571,9 +2573,13 @@ textarea[aria-invalid="true"] {
   height: 20px;
   justify-content: center;
   line-height: 1;
+  max-width: 108px;
   min-height: 20px;
-  padding: 0 7px;
+  overflow: hidden;
+  padding: 0 8px;
   text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline-proof-download {
@@ -2588,7 +2594,7 @@ textarea[aria-invalid="true"] {
   background: var(--amarelo);
   color: var(--verde-escuro) !important;
   font-weight: 900 !important;
-  min-width: 74px;
+  min-width: 88px;
 }
 
 .pipeline-signal-action:hover {
@@ -2598,7 +2604,7 @@ textarea[aria-invalid="true"] {
 .pipeline-final-payment-action {
   background: #2f7f7f;
   color: var(--white) !important;
-  min-width: 86px;
+  min-width: 88px;
 }
 
 .pipeline-final-payment-action:hover {
@@ -5174,9 +5180,13 @@ textarea {
   height: 20px;
   justify-content: center;
   line-height: 1;
+  max-width: 86px;
   min-height: 20px;
-  padding: 0 7px;
+  overflow: hidden;
+  padding: 0 8px;
   text-transform: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-chip.confirmed {
@@ -6716,6 +6726,23 @@ input[type="range"] {
   border-radius: 8px;
   color: var(--danger);
   padding: 12px 14px;
+}
+
+.public-form-actions p[data-status="error"] strong {
+  color: var(--danger);
+  font-size: 0.98rem;
+}
+
+.public-form-actions p[data-status="error"] ul {
+  color: var(--verde-escuro);
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+
+.public-form-actions p[data-status="error"] span {
+  color: var(--muted);
 }
 
 .consult-step[data-invalid] .section-heading h2::after {
