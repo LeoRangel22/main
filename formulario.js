@@ -1482,16 +1482,23 @@ async function submitRequest(event) {
   submitButton.disabled = true;
   setStatus(current.messages.submitting, "neutral");
 
-  const client = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
-  const { error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot));
+  try {
+    const client = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+    const { error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot));
 
-  submitButton.disabled = false;
-
-  if (error) {
-    console.warn("Falha ao enviar solicitacao.", error);
+    if (error) {
+      console.warn("Falha ao enviar solicitacao.", error);
+      setStatus(getFriendlySubmitError(error, current), "error");
+      scrollToStep("contact", true);
+      return;
+    }
+  } catch (error) {
+    console.warn("Falha inesperada ao enviar solicitacao.", error);
     setStatus(getFriendlySubmitError(error, current), "error");
     scrollToStep("contact", true);
     return;
+  } finally {
+    submitButton.disabled = false;
   }
 
   form.reset();
