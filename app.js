@@ -596,6 +596,7 @@ const state = {
   sendLocks: {
     email: false,
     whatsapp: false,
+    auth: false,
   },
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
@@ -6905,6 +6906,11 @@ async function loginWithEmail() {
     return;
   }
 
+  if (state.sendLocks.auth) {
+    showToast("O link de acesso já está sendo preparado.");
+    return;
+  }
+
   const email = normalizeEmail(fields.loginEmail.value);
   if (!email) {
     showToast("Preencha o e-mail da equipe.");
@@ -6916,19 +6922,48 @@ async function loginWithEmail() {
     return;
   }
 
-  const { error } = await state.supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: getAuthRedirectUrl() },
-  });
-
-  if (error) {
-    console.warn("Falha no login.", error);
-    showToast("Não foi possível enviar o link de acesso.");
-    return;
+  state.sendLocks.auth = true;
+  const loginButton = document.querySelector("#loginBtn");
+  if (loginButton) {
+    loginButton.disabled = true;
+    loginButton.textContent = "Enviando...";
   }
 
-  nodes.authStatus.textContent = "Link de acesso enviado. Abra o e-mail neste navegador.";
-  showToast("Link de acesso enviado.");
+  try {
+    const { error } = await state.supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: getAuthRedirectUrl() },
+    });
+
+    if (error) {
+      const message = getMagicLinkErrorMessage(error);
+      nodes.authStatus.textContent = message;
+      showToast(message);
+      return;
+    }
+
+    nodes.authStatus.textContent = "Link de acesso enviado. Abra o e-mail neste navegador.";
+    showToast("Link de acesso enviado.");
+  } finally {
+    state.sendLocks.auth = false;
+    if (loginButton) {
+      loginButton.disabled = false;
+      loginButton.textContent = "Entrar por e-mail";
+    }
+  }
+}
+
+function getMagicLinkErrorMessage(error) {
+  const text = `${error?.message || ""} ${error?.name || ""}`.toLowerCase();
+  const match = text.match(/after\s+(\d+)\s+seconds?/);
+  if (text.includes("security purposes") || text.includes("rate limit") || match) {
+    const seconds = match?.[1] || "alguns";
+    return `Aguarde ${seconds} segundos antes de pedir outro link. O Supabase protege o acesso contra cliques repetidos.`;
+  }
+  if (text.includes("invalid") || text.includes("email")) {
+    return "Não foi possível enviar o link. Confira se o e-mail autorizado está correto.";
+  }
+  return "Não foi possível enviar o link agora. Tente novamente em instantes.";
 }
 
 function extractSessionFromMagicLink(rawUrl) {
