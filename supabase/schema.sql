@@ -281,9 +281,12 @@ declare
   clean_message text := nullif(trim(coalesce(message, '')), '');
   response_payload jsonb;
   history_entry jsonb;
+  signal_history_entry jsonb := null;
   clean_proof jsonb := null;
+  signal_payment jsonb := null;
   next_status text;
   new_snapshot jsonb;
+  proposal_total numeric := 0;
 begin
   if normalized_action not in ('confirmar', 'cancelar', 'alteracao') then
     raise exception 'Acao invalida.';
@@ -336,11 +339,14 @@ begin
 
   next_status := case
     when normalized_action = 'cancelar' then 'cancelado'
+    when normalized_action = 'confirmar' and clean_proof is not null then 'confirmado'
     else 'negociacao'
   end;
 
-  select jsonb_set(coalesce(p.snapshot, '{}'::jsonb), '{clienteResposta}', response_payload, true)
-    into new_snapshot
+  select
+    jsonb_set(coalesce(p.snapshot, '{}'::jsonb), '{clienteResposta}', response_payload, true),
+    coalesce(p.total, 0)
+    into new_snapshot, proposal_total
   from public.propostas p
   where p.public_token = proposal_token;
 
@@ -361,10 +367,37 @@ begin
     );
   end if;
 
+  if normalized_action = 'confirmar' and clean_proof is not null then
+    signal_payment := jsonb_strip_nulls(jsonb_build_object(
+      'valor', round(coalesce(proposal_total, 0) * 0.5, 2),
+      'data', current_date,
+      'bancos', jsonb_build_array('A validar'),
+      'comprovante', clean_proof,
+      'registradoEm', now(),
+      'registradoPor', 'Cliente via proposta pública',
+      'origem', 'proposta_publica',
+      'validacaoPendente', true
+    ));
+
+    signal_history_entry := jsonb_build_object(
+      'id', 'sinal-cliente-' || extract(epoch from now())::text,
+      'type', 'sinal',
+      'title', 'Sinal enviado pelo cliente',
+      'detail', 'Comprovante anexado pelo link público. Validar no banco antes da confirmação operacional: ' || coalesce(clean_proof ->> 'nome', 'arquivo'),
+      'at', now(),
+      'actor', 'Cliente'
+    );
+
+    new_snapshot := jsonb_set(new_snapshot, '{pagamentoSinal}', signal_payment, true);
+  end if;
+
   new_snapshot := jsonb_set(
     new_snapshot,
     '{commercialHistory}',
-    jsonb_build_array(history_entry) || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
+    (case
+      when signal_history_entry is not null then jsonb_build_array(signal_history_entry, history_entry)
+      else jsonb_build_array(history_entry)
+    end) || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
     true
   );
 
