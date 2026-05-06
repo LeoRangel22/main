@@ -5579,13 +5579,20 @@ textarea {
 }
 
 .pipeline-cancel-chip,
-.pipeline-delete-chip {
+.pipeline-delete-chip,
+.pipeline-reopen-chip {
   flex: 0 0 auto;
   font-size: 0.58rem;
   height: 20px;
   min-height: 20px;
   padding: 0 7px;
   text-transform: none;
+}
+
+.pipeline-reopen-chip {
+  background: rgba(47, 111, 69, 0.12);
+  border-color: rgba(47, 111, 69, 0.2);
+  color: var(--verde-escuro);
 }
 
 .pipeline-delete-chip {

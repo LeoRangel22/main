@@ -5703,7 +5703,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
 
 function getProposalTransitionOptions(currentStatus) {
   const status = normalizeProposalStatus(currentStatus);
-  if (status === "cancelado") return ["cancelado"];
+  if (status === "cancelado") return ["cancelado", "negociacao"];
   return ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"];
 }
 
@@ -7020,12 +7020,17 @@ function renderPipelineCard(item) {
     item.status === "cancelado"
       ? ""
       : `<button class="secondary danger-light pipeline-cancel-chip" type="button" data-cancel-kind="${escapeHtml(item.kind)}" data-cancel-id="${escapeHtml(item.id)}" title="Cancelar e registrar motivo">Cancelar</button>`;
+  const reopenButton =
+    item.status === "cancelado"
+      ? `<button class="secondary pipeline-reopen-chip" type="button" data-reopen-kind="${escapeHtml(item.kind)}" data-reopen-id="${escapeHtml(item.id)}" title="Reabrir este cancelamento para atendimento">Reabrir</button>`
+      : "";
   const deleteTestButton = canDeletePipelineItem(item)
     ? `<button class="secondary danger-light pipeline-delete-chip" type="button" data-delete-kind="${escapeHtml(item.kind)}" data-delete-id="${escapeHtml(item.id)}">Apagar teste</button>`
     : "";
   const actionButtons = `
     <span class="pipeline-card-actions">
       ${cancelButton}
+      ${reopenButton}
       ${renderStatusSelect(item)}
       ${deleteTestButton}
       ${openButton}
@@ -7325,7 +7330,9 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
   if (!proposalStatusOptions.includes(next)) {
     return { ok: false, message: "Propostas só podem avançar pelas etapas comerciais e operacionais." };
   }
-  if (current === "cancelado") return { ok: false, message: "Este evento está cancelado. Reative manualmente em uma nova proposta." };
+  if (current === "cancelado" && !["negociacao", "proposta_enviada"].includes(next)) {
+    return { ok: false, message: "Reabra primeiro para negociação antes de avançar para outra etapa." };
+  }
   if (next === "cancelado") return { ok: false, message: "Use o botão Cancelar para registrar o motivo." };
   if (next === "confirmado") return { ok: true };
   if (next === "pagamento_final" && !operationStatuses.has(current)) {
@@ -7341,6 +7348,22 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
     return { ok: false, message: "Pós-venda vem depois da etapa Evento hoje/amanhã." };
   }
   return { ok: true };
+}
+
+function buildReopenedSnapshot(snapshot = {}, nextStatus = "negociacao") {
+  const { cancelamento, cancelamentosAnteriores, ...rest } = snapshot || {};
+  const previousCancelations = Array.isArray(cancelamentosAnteriores) ? cancelamentosAnteriores : [];
+  const reopenedSnapshot = {
+    ...rest,
+    ...(cancelamento ? { cancelamentosAnteriores: [cancelamento, ...previousCancelations].slice(0, 10) } : {}),
+  };
+  return withCommercialHistoryEntries(reopenedSnapshot, [
+    createCommercialHistoryEntry(
+      "reabertura",
+      "Cancelamento revertido",
+      `Registro reaberto para ${getProposalStatusLabel(nextStatus)}. Motivo anterior: ${cancelamento?.motivo || "sem motivo informado"}.`,
+    ),
+  ]);
 }
 
 function getCancelReason() {
@@ -7394,6 +7417,59 @@ async function deleteTestPipelineItem(kind, id) {
   renderPipeline();
   renderAll();
   showToast("Teste apagado do histórico.");
+}
+
+async function reopenPipelineItem(kind, id, targetStatus = "") {
+  if (!state.supabase || !state.session) return;
+  const isRequest = kind === "request";
+  const collection = isRequest ? state.quoteRequests : state.proposals;
+  const item = collection.find((entry) => entry.id === id);
+  if (!item) {
+    showToast("Não encontrei este registro para reabrir.");
+    renderPipeline();
+    return;
+  }
+
+  const currentStatus = isRequest ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
+  if (currentStatus !== "cancelado") {
+    showToast("Este registro não está cancelado.");
+    renderPipeline();
+    return;
+  }
+
+  const nextStatus = targetStatus || (isRequest ? "lead_recebido" : "negociacao");
+  const label = item.cliente_nome || item.clienteNome || item.name || "este registro";
+  const confirmed = window.confirm(
+    `Reabrir ${label}?\n\nO motivo do cancelamento fica salvo no histórico e o registro volta para ${getProposalStatusLabel(nextStatus)}.`,
+  );
+  if (!confirmed) {
+    renderPipeline();
+    return;
+  }
+
+  if (!isRequest) {
+    await updateProposalStatus(id, nextStatus);
+    return;
+  }
+
+  const snapshot = buildReopenedSnapshot(item.snapshot || {}, nextStatus);
+  const { data, error } = await state.supabase
+    .from("solicitacoes_cotacao")
+    .update({ status: nextStatus, snapshot })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.warn("Falha ao reabrir lead cancelado.", error);
+    showToast("Não foi possível reabrir este lead.");
+    renderPipeline();
+    return;
+  }
+
+  state.quoteRequests = state.quoteRequests.map((entry) => (entry.id === id ? data : entry));
+  renderPipeline();
+  showToast("Lead reaberto para atendimento.");
 }
 
 async function cancelPipelineItem(kind, id) {
@@ -7470,6 +7546,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   }
 
   const normalizedNext = normalizeProposalStatus(nextStatus);
+  const wasCanceled = normalizeProposalStatus(proposal.status) === "cancelado" && normalizedNext !== "cancelado";
   const finalPaymentRequiredStatuses = new Set(["planejamento", "evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
   let remainingPayment = null;
@@ -7531,9 +7608,10 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     }
   }
 
+  const snapshotBase = wasCanceled ? buildReopenedSnapshot(proposal.snapshot || {}, normalizedNext) : proposal.snapshot || {};
   const snapshot = withCommercialHistoryEntries(
     {
-      ...(proposal.snapshot || {}),
+      ...snapshotBase,
       ...(normalizedNext === "confirmado" && paymentSignal ? { pagamentoSinal: paymentSignal } : {}),
       ...(remainingPayment ? { pagamentoRestante: remainingPayment } : {}),
     },
@@ -7567,7 +7645,9 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     renderProposalNextStep();
   }
   showToast(
-    nextStatus === "confirmado"
+    wasCanceled
+      ? "Cancelamento revertido. Registro voltou para atendimento."
+      : nextStatus === "confirmado"
       ? "Sinal pago: evento confirmado."
       : remainingPayment
         ? "Pagamento restante registrado. Etapa atualizada."
@@ -7578,6 +7658,11 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
 async function movePipelineItem(kind, id, nextStatus) {
   if (!nextStatus) return;
   if (kind === "request") {
+    const request = state.quoteRequests.find((item) => item.id === id);
+    if (normalizeRequestStatus(request?.status) === "cancelado" && nextStatus !== "cancelado") {
+      await reopenPipelineItem(kind, id, nextStatus);
+      return;
+    }
     if (!requestStatusOptions.includes(nextStatus)) {
       showToast("Para avançar para proposta, abra o lead e salve a proposta enviada.");
       renderPipeline();
@@ -7591,6 +7676,11 @@ async function movePipelineItem(kind, id, nextStatus) {
     return;
   }
 
+  const proposal = state.proposals.find((item) => item.id === id);
+  if (normalizeProposalStatus(proposal?.status) === "cancelado" && nextStatus !== "cancelado") {
+    await reopenPipelineItem(kind, id, nextStatus);
+    return;
+  }
   if (nextStatus === "cancelado") {
     await cancelPipelineItem(kind, id);
     return;
@@ -9167,6 +9257,8 @@ function bindEvents() {
     if (markButton) markQuoteRequestAnalyzed(markButton.dataset.markRequest);
     const cancelButton = event.target.closest("button[data-cancel-id]");
     if (cancelButton) cancelPipelineItem(cancelButton.dataset.cancelKind, cancelButton.dataset.cancelId);
+    const reopenButton = event.target.closest("button[data-reopen-id]");
+    if (reopenButton) reopenPipelineItem(reopenButton.dataset.reopenKind, reopenButton.dataset.reopenId);
     const deleteButton = event.target.closest("button[data-delete-id]");
     if (deleteButton) deleteTestPipelineItem(deleteButton.dataset.deleteKind, deleteButton.dataset.deleteId);
   });
