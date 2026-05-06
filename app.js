@@ -2892,6 +2892,12 @@ function getDuration() {
   return Math.max(1, toNumber(fields.eventDuration.value) || 1);
 }
 
+function getValidityDays() {
+  const raw = fields.validity?.value || "";
+  const match = String(raw).match(/\d+/);
+  return match ? Math.max(1, Number(match[0]) || 0) : 0;
+}
+
 function getBillableGuests(item) {
   return Math.max(getGuestCount(), toNumber(item.minimo) || 0);
 }
@@ -2989,6 +2995,7 @@ function getAllowedCategoriesForEvent(eventType = "") {
 function getProposalReviewItems() {
   const selected = getSelectedItems();
   const totals = getQuoteTotals();
+  const context = getActiveCommercialContext();
   const clientName = fields.clientName.value.trim();
   const clientEmail = fields.clientEmail.value.trim();
   const clientPhone = fields.clientPhone.value.trim();
@@ -2996,9 +3003,14 @@ function getProposalReviewItems() {
   const eventTime = fields.eventTime.value;
   const eventType = fields.eventType.value.trim();
   const guests = getGuestCount();
+  const validityDays = getValidityDays();
+  const signalDeadlineHours = getSignalDeadlineHours();
   const allowedCategories = getAllowedCategoriesForEvent(eventType);
   const requiredCategory = getEventCategoryFromRequest(eventType);
   const availability = getAvailabilityReviewStatus();
+  const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(context.clientType);
+  const finalClient = context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot);
+  const groupName = context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot);
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
     selected.length > 0 &&
@@ -3018,6 +3030,24 @@ function getProposalReviewItems() {
           : "Inclua celular ou e-mail antes de enviar."
         : "Informe o nome do cliente.",
       target: "client",
+    },
+    {
+      id: "client_context",
+      label: "Cliente final",
+      status: !isAgency || finalClient || groupName ? "ok" : "warning",
+      detail: isAgency
+        ? finalClient || groupName
+          ? [finalClient ? `Cliente final: ${finalClient}` : "", groupName ? `Grupo: ${groupName}` : ""].filter(Boolean).join(" · ")
+          : "Para agência, registre cliente final ou nome do grupo antes de automatizar."
+        : "Cliente direto ou empresa sem intermediário identificado.",
+      target: "notes",
+    },
+    {
+      id: "format",
+      label: "Formato",
+      status: eventType ? "ok" : "error",
+      detail: eventType ? `Formato principal: ${eventType}.` : "Informe o formato do evento antes de enviar.",
+      target: "items",
     },
     {
       id: "date",
@@ -3048,10 +3078,10 @@ function getProposalReviewItems() {
     {
       id: "items",
       label: "Cardápio",
-      status: selected.length ? (hasCategoryMismatch || missingBaseCategory ? "warning" : "ok") : "error",
+      status: selected.length ? (hasCategoryMismatch ? "error" : missingBaseCategory ? "warning" : "ok") : "error",
       detail: selected.length
         ? hasCategoryMismatch
-          ? `Pedido: ${eventType || "evento"}. Confira se os itens escolhidos combinam com o formato.`
+          ? `Pedido: ${eventType || "evento"}. Troque itens ou formato: a categoria escolhida não combina.`
           : missingBaseCategory
             ? `Confira o produto base de ${requiredCategory}. Há complementos, mas falta o item principal.`
           : `${selected.length} item(ns): ${selected.map((item) => item.nome).slice(0, 3).join(", ")}${selected.length > 3 ? "..." : ""}.`
@@ -3071,6 +3101,16 @@ function getProposalReviewItems() {
       status: totals.total > 0 ? "ok" : "error",
       detail: totals.total > 0 ? `${formatMoney(totals.total)} · sinal em ${formatSignalDeadlineHours()} · validade ${fields.validity.value || "a definir"}.` : "Monte os itens para calcular o total.",
       target: "items",
+    },
+    {
+      id: "conditions",
+      label: "Validade e sinal",
+      status: validityDays > 0 && signalDeadlineHours >= 12 && signalDeadlineHours <= 360 ? "ok" : "error",
+      detail:
+        validityDays > 0 && signalDeadlineHours >= 12 && signalDeadlineHours <= 360
+          ? `Validade ${validityDays} dia(s) · prazo do sinal ${formatSignalDeadlineHours()}.`
+          : "Defina validade e prazo do sinal entre 12h e 15 dias.",
+      target: "review",
     },
   ];
 }
@@ -3097,8 +3137,8 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
   const hasError = (id) => items.some((item) => item.id === id && item.status === "error");
   const push = (level, title, detail, target = "review", kind = "risco") => alerts.push({ level, title, detail, target, kind });
 
-  if (hasError("contact") || hasError("date") || hasError("items") || hasError("value")) {
-    push("danger", "Envio bloqueado", "Resolva contato, data/horário, cardápio ou valor antes de falar com o cliente.", "review", "bloqueio");
+  if (hasError("contact") || hasError("format") || hasError("date") || hasError("items") || hasError("value") || hasError("conditions")) {
+    push("danger", "Envio bloqueado", "Resolva contato, formato, data/horário, cardápio, valor e condições antes de falar com o cliente.", "review", "bloqueio");
   }
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Comidas")) {
@@ -3162,6 +3202,95 @@ function getProposalConfidence(items = getProposalReviewItems(), alerts = getSma
   return { score, status, label, note };
 }
 
+function getProposalAutomationReadiness(items = getProposalReviewItems(), alerts = getSmartProposalAlerts(items), confidence = getProposalConfidence(items, alerts)) {
+  const blockers = items.filter((item) => item.status === "error");
+  const attention = items.filter((item) => item.status === "warning");
+  const commercialAlerts = alerts.filter((item) => ["warning", "opportunity"].includes(item.level));
+  const status = blockers.length
+    ? "humano_obrigatorio"
+    : confidence.score >= 95 && !attention.length
+      ? "candidato_automatico"
+      : "humano_rapido";
+  const label =
+    status === "humano_obrigatorio"
+      ? "Humano obrigatório"
+      : status === "candidato_automatico"
+        ? "Candidato a automação futura"
+        : "Revisão humana rápida";
+  const note =
+    status === "humano_obrigatorio"
+      ? "Existe bloqueio real. O sistema não deve disparar automaticamente."
+      : status === "candidato_automatico"
+        ? "Todos os fatores críticos estão consistentes. Bom caso para aprender padrão de envio automático."
+        : "Pode ser enviado por humano com revisão curta. Alertas comerciais ainda melhoram conversão.";
+  return {
+    status,
+    label,
+    note,
+    blockers: blockers.map((item) => item.id),
+    attention: attention.map((item) => item.id),
+    commercialAlerts: commercialAlerts.map((item) => item.kind),
+  };
+}
+
+function getCustomerDecisionLoop(proposal = getActiveProposal()) {
+  const snapshot = proposal?.snapshot || {};
+  const response = proposal?.cliente_resposta || snapshot.clienteResposta?.acao || "";
+  const proof = proposal?.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || snapshot.pagamentoSinal?.comprovante || null;
+  const hasPublicLink = Boolean(proposal?.public_token);
+  const sent = ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal?.status));
+  const steps = [
+    {
+      id: "proposal",
+      label: "Proposta",
+      title: sent ? "Link enviado/salvo" : "Gerar link público",
+      status: hasPublicLink && sent ? "done" : hasPublicLink ? "current" : "pending",
+      detail: hasPublicLink ? "Cliente recebe um link único para decidir." : "Salve a proposta para criar o link seguro.",
+    },
+    {
+      id: "client",
+      label: "Cliente",
+      title: response ? getClientResponseLabel(response) : "Aguardar decisão",
+      status: response ? "done" : sent ? "current" : "pending",
+      detail: response ? "Resposta voltou para o funil." : "Cliente pode aprovar, pedir ajuste ou encerrar pedido.",
+    },
+    {
+      id: "signal",
+      label: "Sinal",
+      title: proof ? "Comprovante anexado" : "Capturar sinal",
+      status: proof ? "done" : response === "confirmar" ? "current" : "pending",
+      detail: proof ? "Equipe valida o pagamento e confirma a reserva." : "Ao aprovar, o cliente vê Pix/dados bancários e pode anexar comprovante.",
+    },
+  ];
+  const current = steps.find((step) => step.status === "current") || steps.find((step) => step.status === "pending") || steps[steps.length - 1];
+  return { steps, current, response, hasPublicLink, proof };
+}
+
+function renderCustomerDecisionLoop(loop = getCustomerDecisionLoop()) {
+  return `
+    <div class="customer-decision-loop">
+      <div class="customer-decision-heading">
+        <span>Ciclo proposta → cliente → decisão</span>
+        <strong>${escapeHtml(loop.current?.title || "Próximo passo do cliente")}</strong>
+        <small>${escapeHtml(loop.current?.detail || "O link público registra aprovação, ajuste, cancelamento e comprovante.")}</small>
+      </div>
+      <div class="customer-decision-steps">
+        ${loop.steps
+          .map(
+            (step) => `
+              <article class="customer-decision-step is-${escapeHtml(step.status)}">
+                <span>${escapeHtml(step.label)}</span>
+                <strong>${escapeHtml(step.title)}</strong>
+                <small>${escapeHtml(step.detail)}</small>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
 function getSendReviewSignature(items = getProposalReviewItems()) {
   const totals = getQuoteTotals();
   return JSON.stringify({
@@ -3193,6 +3322,7 @@ function approveSendReview() {
   const summary = getProposalReviewSummary(items);
   const alerts = getSmartProposalAlerts(items);
   const confidence = getProposalConfidence(items, alerts);
+  const automation = getProposalAutomationReadiness(items, alerts, confidence);
   if (!summary.ready) {
     const firstError = items.find((item) => item.status === "error");
     showToast(firstError?.detail || "Corrija os pontos obrigatórios antes de aprovar.");
@@ -3207,6 +3337,8 @@ function approveSendReview() {
     actorRole: getTeamProfile().label,
     confidence: confidence.score,
     status: confidence.status,
+    automation,
+    checklist: items.map((item) => ({ id: item.id, label: item.label, status: item.status, detail: item.detail })),
     alerts: alerts.map((item) => ({ level: item.level, title: item.title, detail: item.detail, kind: item.kind })),
   };
   renderSendReview();
@@ -3288,9 +3420,12 @@ function getLeadReadinessItems() {
   const hasCommercialProfile = Boolean(context.clientType || context.budgetRange || context.origin);
   const hasBriefing = Boolean(fields.eventReason.value.trim() || fields.notes.value.trim() || context.occasion || context.extras);
   const contact = review.find((item) => item.id === "contact");
+  const clientContext = review.find((item) => item.id === "client_context");
+  const format = review.find((item) => item.id === "format");
   const agenda = review.find((item) => item.id === "availability");
   const items = review.find((item) => item.id === "items");
   const value = review.find((item) => item.id === "value");
+  const conditions = review.find((item) => item.id === "conditions");
 
   return [
     {
@@ -3308,6 +3443,20 @@ function getLeadReadinessItems() {
         ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
         : "Classifique cliente, investimento ou origem para priorizar follow-up.",
       target: "notes",
+    },
+    {
+      id: "client_context",
+      label: "Cliente final/grupo",
+      status: clientContext?.status || "ok",
+      detail: clientContext?.detail || "Contexto comercial revisado.",
+      target: "notes",
+    },
+    {
+      id: "format",
+      label: "Formato do evento",
+      status: format?.status || "error",
+      detail: format?.detail || "Defina o formato antes de montar a proposta.",
+      target: "items",
     },
     {
       id: "agenda",
@@ -3336,6 +3485,13 @@ function getLeadReadinessItems() {
       status: value?.status || "error",
       detail: value?.status === "ok" ? value.detail : "Monte o valor antes de enviar.",
       target: "items",
+    },
+    {
+      id: "conditions",
+      label: "Condições",
+      status: conditions?.status || "error",
+      detail: conditions?.detail || "Confirme validade e prazo do sinal.",
+      target: "review",
     },
   ];
 }
@@ -3500,6 +3656,7 @@ function renderLeadReviewPanel() {
   const approval = getProposalApprovalMessage(items);
   const smartAlerts = getSmartProposalAlerts(items);
   const confidence = getProposalConfidence(items, smartAlerts);
+  const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
@@ -3518,7 +3675,7 @@ function renderLeadReviewPanel() {
         <span>Nota de confiança</span>
         <strong>${escapeHtml(String(confidence.score))}%</strong>
       </div>
-      <p>${escapeHtml(confidence.note)}</p>
+      <p>${escapeHtml(confidence.note)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
     </div>
     <div class="smart-alerts">
       <div class="smart-alerts-heading">
@@ -4299,6 +4456,8 @@ function renderSendReview() {
   const command = getSendReviewPrimaryCommand(summary, items);
   const smartAlerts = getSmartProposalAlerts(items);
   const confidence = getProposalConfidence(items, smartAlerts);
+  const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
+  const decisionLoop = getCustomerDecisionLoop();
   const totals = getQuoteTotals();
   const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
   const eventLine = [
@@ -4360,7 +4519,7 @@ function renderSendReview() {
         <span>Confiança para envio</span>
         <strong>${escapeHtml(String(confidence.score))}%</strong>
       </div>
-      <p>${escapeHtml(confidence.label)} · ${escapeHtml(confidence.note)}</p>
+      <p>${escapeHtml(confidence.label)} · ${escapeHtml(confidence.note)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
     </div>
     <div class="review-sixty">
       <div>
@@ -4368,11 +4527,12 @@ function renderSendReview() {
         <strong>Confira nesta ordem: lead, agenda, itens, valor e canal.</strong>
       </div>
       <ol>
-        <li>Cliente, empresa/grupo e WhatsApp/e-mail corretos.</li>
-        <li>Data, horário, pax, duração e disponibilidade coerentes.</li>
-        <li>Cardápio, upsell útil, valor final, validade e prazo do sinal revisados.</li>
+        <li>Cliente, empresa/agência, cliente final ou grupo e WhatsApp/e-mail corretos.</li>
+        <li>Formato, data, horário, pax, duração e disponibilidade coerentes.</li>
+        <li>Cardápio, upsell útil, valor final, validade, prazo do sinal e observações revisados.</li>
       </ol>
     </div>
+    ${renderCustomerDecisionLoop(decisionLoop)}
     <div class="send-smart-alerts">
       ${smartAlerts
         .map(
@@ -4591,12 +4751,15 @@ function getProposalSnapshot() {
   const reviewItems = getProposalReviewItems();
   const reviewAlerts = getSmartProposalAlerts(reviewItems);
   const reviewConfidence = getProposalConfidence(reviewItems, reviewAlerts);
+  const automationReadiness = getProposalAutomationReadiness(reviewItems, reviewAlerts, reviewConfidence);
+  const customerDecisionLoop = getCustomerDecisionLoop(activeProposal);
   const reviewApproval =
     isSendReviewApproved(reviewItems) && state.sendReviewApproval?.signature === state.sendReviewApprovedSignature
       ? {
           ...state.sendReviewApproval,
           confidence: reviewConfidence.score,
           status: reviewConfidence.status,
+          automation: automationReadiness,
         }
       : null;
   return {
@@ -4659,7 +4822,9 @@ function getProposalSnapshot() {
     commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
     sendReviewApproval: reviewApproval,
     reviewConfidence,
+    automationReadiness,
     smartAlerts: reviewAlerts,
+    customerDecisionLoop,
     internalComments: getInternalComments(activeProposal?.snapshot || {}),
     eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
     proposalText: buildProposalText(),
@@ -7788,9 +7953,11 @@ async function saveCurrentProposal(status, signalInfo = null) {
       createCommercialHistoryEntry(
         "aprovacao",
         "Checklist aprovado para envio",
-        `Nota de confiança ${snapshot.reviewConfidence?.score || snapshot.sendReviewApproval.confidence || 0}%. ${snapshot.reviewConfidence?.label || "Revisão humana registrada"}.`,
+        `Nota de confiança ${snapshot.reviewConfidence?.score || snapshot.sendReviewApproval.confidence || 0}%. ${snapshot.reviewConfidence?.label || "Revisão humana registrada"}. ${snapshot.automationReadiness?.label || snapshot.sendReviewApproval.automation?.label || ""}`,
         {
           approval: snapshot.sendReviewApproval,
+          automationReadiness: snapshot.automationReadiness,
+          customerDecisionLoop: snapshot.customerDecisionLoop,
           smartAlerts: snapshot.smartAlerts,
         },
       ),
@@ -8275,6 +8442,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
   const reviewItems = getProposalReviewItems();
   const smartAlerts = getSmartProposalAlerts(reviewItems);
   const confidence = getProposalConfidence(reviewItems, smartAlerts);
+  const automation = getProposalAutomationReadiness(reviewItems, smartAlerts, confidence);
   const totals = getQuoteTotals();
   const requiredLine = approvalErrors.length
     ? approvalErrors.map((item) => `${item.label}: ${item.detail}`).slice(0, 3).join("\n")
@@ -8297,6 +8465,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
     `Pax: ${getGuestCount()} · Total: ${formatMoney(totals.total)} · Confiança: ${confidence.score}%`,
     title ? `Mensagem: ${title}` : "",
+    `Automação futura: ${automation.label} - ${automation.note}`,
     "",
     "Obrigatórios:",
     requiredLine,
