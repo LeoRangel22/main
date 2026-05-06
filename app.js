@@ -1571,6 +1571,53 @@ function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
   };
 }
 
+function getServiceApproachTip(context = getActiveServiceContext(), recommendation = getServiceTemplateRecommendation(context), readiness = getLeadReadinessItems()) {
+  const firstError = readiness.find((item) => item.status === "error");
+  if (firstError) {
+    return `Comece conferindo ${firstError.label.toLowerCase()}. Sem isso, a proposta pode sair incompleta ou difícil de aprovar.`;
+  }
+  if (!recommendation.selected.length) {
+    return "Escolha uma proposta base antes de falar em valor. O cliente entende melhor quando formato, duração e itens aparecem juntos.";
+  }
+  const type = normalizarTextoSeguro(context.eventType || recommendation.category || "");
+  if (type.includes("cafe") || type.includes("break") || type.includes("brunch")) {
+    return "Abordagem sugerida: destaque a chegada no Morro da Urca, vista e pontualidade. Depois confirme se o grupo precisa de opção reforçada.";
+  }
+  if (type.includes("almoco")) {
+    return "Abordagem sugerida: confirme horário de chegada e perfil do grupo. O Almoço Carioca vende melhor quando a experiência é apresentada como pausa completa.";
+  }
+  if (type.includes("coquetel")) {
+    return "Abordagem sugerida: confirme se o grupo quer só bebidas ou uma experiência mais completa com comidas e, quando fizer sentido, workshop.";
+  }
+  if (type.includes("welcome")) {
+    return "Abordagem sugerida: venda como recepção elegante e rápida. Pergunte se faz sentido incluir snack para sustentar melhor o grupo.";
+  }
+  if (type.includes("workshop")) {
+    return "Abordagem sugerida: destaque experiência interativa, memória do Rio e integração do grupo. É ótimo para agências e eventos corporativos.";
+  }
+  return "Abordagem sugerida: confirme objetivo, horário e perfil do grupo antes de enviar. A proposta deve parecer feita para aquele cliente, não genérica.";
+}
+
+function getUpsellOfferLine(item) {
+  const text = normalizarTextoSeguro(`${item.title || ""} ${item.detail || ""}`);
+  if (text.includes("brasileiro") || text.includes("snack")) {
+    return "Pergunte se o grupo vai precisar de algo para acompanhar as bebidas.";
+  }
+  if (text.includes("workshop") || text.includes("experiencia")) {
+    return "Ofereça como experiência memorável, principalmente para agência, DMC e relacionamento.";
+  }
+  if (text.includes("cafe completo")) {
+    return "Sugira quando a reunião for longa ou o público for mais premium.";
+  }
+  if (text.includes("bebida livre")) {
+    return "Apresente como conforto e previsibilidade para o cliente e para a operação.";
+  }
+  if (text.includes("espumante")) {
+    return "Use para chegada mais elegante, lançamento ou convidados especiais.";
+  }
+  return "Ofereça como opção, sem pressionar: ajuda a deixar a experiência mais completa.";
+}
+
 function getServiceCockpitStatus(readiness, recommendation) {
   const errors = readiness.filter((item) => item.status === "error");
   const warnings = readiness.filter((item) => item.status === "warning");
@@ -1637,6 +1684,7 @@ function renderServiceCockpit() {
   const selectedSummary = recommendation.selected.length
     ? recommendation.selected.map((item) => item.nome).slice(0, 2).join(" + ") + (recommendation.selected.length > 2 ? "..." : "")
     : "Nenhum item selecionado";
+  const approachTip = getServiceApproachTip(context, recommendation, readiness);
 
   nodes.serviceCockpit.className = `service-cockpit is-${cockpitStatus.tone}`;
   nodes.serviceCockpit.innerHTML = `
@@ -1667,6 +1715,10 @@ function renderServiceCockpit() {
         <strong>Checklist</strong>
         <small>revisar e enviar</small>
       </button>
+    </div>
+    <div class="service-coach-note">
+      <span>Como conduzir</span>
+      <strong>${escapeHtml(approachTip)}</strong>
     </div>
     <div class="service-cockpit-grid">
       <article class="service-cockpit-card service-lead-summary">
@@ -3399,8 +3451,8 @@ function renderLeadReviewPanel() {
       upsells.length
         ? `<div class="upsell-strip">
             <div class="upsell-strip-heading">
-              <span>Sugestões para vender melhor</span>
-              <small>Um clique adiciona ou troca o item recomendado.</small>
+              <span>Oportunidades de upsell</span>
+              <small>Ofereça só se fizer sentido para o objetivo do cliente.</small>
             </div>
             <div class="upsell-grid">
               ${upsells
@@ -3410,6 +3462,7 @@ function renderLeadReviewPanel() {
                       <span>${escapeHtml(item.title)}</span>
                       <strong>${escapeHtml(item.detail)}</strong>
                       <small>${escapeHtml(item.reason)}</small>
+                      <em>${escapeHtml(getUpsellOfferLine(item))}</em>
                     </button>
                   `,
                 )
@@ -4182,6 +4235,7 @@ function renderSendReview() {
         <small>${escapeHtml(command.label || nextAction)}</small>
       </button>
     </div>
+    <p class="send-review-safe-note">Fluxo seguro: nada é enviado sem checklist aprovado e confirmação final do canal.</p>
     <div class="send-review-command">
       <article class="send-review-next-action">
         <span>${approved ? "Pronto para enviar" : "Próxima melhor ação"}</span>
