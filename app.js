@@ -599,6 +599,7 @@ const state = {
     auth: false,
   },
   sendReviewApprovedSignature: "",
+  sendReviewApproval: null,
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -3084,6 +3085,83 @@ function getProposalReviewSummary(items = getProposalReviewItems()) {
   };
 }
 
+function getSmartProposalAlerts(items = getProposalReviewItems()) {
+  const alerts = [];
+  const selected = getSelectedItems();
+  const selectedCategories = new Set(selected.map((item) => item.tipoEvento));
+  const context = getActiveServiceContext();
+  const category = getEventCategoryFromRequest(fields.eventType.value || context.eventType);
+  const guests = getGuestCount();
+  const totals = getQuoteTotals();
+  const eventDate = fields.eventDate.value;
+  const hasError = (id) => items.some((item) => item.id === id && item.status === "error");
+  const push = (level, title, detail, target = "review", kind = "risco") => alerts.push({ level, title, detail, target, kind });
+
+  if (hasError("contact") || hasError("date") || hasError("items") || hasError("value")) {
+    push("danger", "Envio bloqueado", "Resolva contato, data/horário, cardápio ou valor antes de falar com o cliente.", "review", "bloqueio");
+  }
+
+  if (category === "Coquetel" && selected.length && !selectedCategories.has("Comidas")) {
+    push("warning", "Coquetel sem comida", "Confirme se o cliente quer apenas bebidas. Muitas propostas convertem melhor com Brasileiro I ou II.", "items", "upsell");
+  }
+
+  if (category === "Coquetel" && selected.length && !selectedCategories.has("Workshop de Caipirinha")) {
+    push("opportunity", "Experiência adicional possível", "Workshop pode aumentar valor percebido para agência, DMC, relacionamento e grupos internacionais.", "items", "upsell");
+  }
+
+  if (["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(context.clientType)) {
+    const hasFinalClient = Boolean(context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot));
+    const hasGroupName = Boolean(context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot));
+    if (!hasFinalClient && !hasGroupName) {
+      push("warning", "Agência sem cliente final ou grupo", "Registre nome do cliente final ou grupo. Isso ajuda a localizar, evitar confusão e personalizar follow-up.", "notes", "qualificação");
+    }
+  }
+
+  if (guests >= 40) {
+    push("warning", "Grupo grande", "Confira fluxo de chegada, privatização, equipe, cardápio e tempo de serviço antes de enviar.", "client", "operação");
+  }
+
+  if (totals.privatization?.amount > 0) {
+    push("warning", "Privatização no valor", "Explique a exclusividade/necessidade operacional para o cliente entender o investimento.", "items", "preço");
+  }
+
+  if (eventDate) {
+    const start = new Date(`${eventDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.ceil((start.getTime() - today.getTime()) / 86400000);
+    if (days >= 0 && days <= 7) {
+      push("warning", "Data próxima", "Priorize resposta e sinal. Quanto mais perto, maior o risco de agenda e operação.", "client", "tempo");
+    }
+  }
+
+  if (!alerts.length) {
+    push("success", "Sem alerta crítico", "A proposta está coerente para revisão humana e envio com segurança.", "review", "ok");
+  }
+
+  return alerts.slice(0, 5);
+}
+
+function getProposalConfidence(items = getProposalReviewItems(), alerts = getSmartProposalAlerts(items)) {
+  const errors = items.filter((item) => item.status === "error").length;
+  const warnings = items.filter((item) => item.status === "warning").length;
+  const dangerAlerts = alerts.filter((item) => item.level === "danger").length;
+  const warningAlerts = alerts.filter((item) => item.level === "warning").length;
+  const opportunityAlerts = alerts.filter((item) => item.level === "opportunity").length;
+  const score = Math.max(0, Math.min(100, 100 - errors * 24 - warnings * 7 - dangerAlerts * 18 - warningAlerts * 6 - opportunityAlerts * 2));
+  const status = errors || dangerAlerts ? "blocked" : score >= 90 ? "ready" : "attention";
+  const label = status === "blocked" ? "Bloqueado" : score >= 95 ? "Pronto para envio automático futuro" : score >= 90 ? "Alta confiança" : "Revisão humana recomendada";
+  const note =
+    status === "blocked"
+      ? "Ainda existe risco de envio errado. Corrija os pontos obrigatórios."
+      : score >= 95
+        ? "Checklist, valor, agenda e contexto estão fortes para envio com mínima intervenção."
+        : score >= 90
+          ? "Pode avançar com revisão rápida. Confira alertas comerciais antes do disparo."
+          : "Use a revisão em 60 segundos para reduzir atrito e aumentar conversão.";
+  return { score, status, label, note };
+}
+
 function getSendReviewSignature(items = getProposalReviewItems()) {
   const totals = getQuoteTotals();
   return JSON.stringify({
@@ -3113,6 +3191,8 @@ function isSendReviewApproved(items = getProposalReviewItems()) {
 function approveSendReview() {
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
+  const alerts = getSmartProposalAlerts(items);
+  const confidence = getProposalConfidence(items, alerts);
   if (!summary.ready) {
     const firstError = items.find((item) => item.status === "error");
     showToast(firstError?.detail || "Corrija os pontos obrigatórios antes de aprovar.");
@@ -3120,6 +3200,15 @@ function approveSendReview() {
     return false;
   }
   state.sendReviewApprovedSignature = getSendReviewSignature(items);
+  state.sendReviewApproval = {
+    signature: state.sendReviewApprovedSignature,
+    approvedAt: new Date().toISOString(),
+    approvedBy: getCommercialActor(),
+    actorRole: getTeamProfile().label,
+    confidence: confidence.score,
+    status: confidence.status,
+    alerts: alerts.map((item) => ({ level: item.level, title: item.title, detail: item.detail, kind: item.kind })),
+  };
   renderSendReview();
   showToast("Revisão aprovada. Agora pode enviar a proposta com segurança.");
   return true;
@@ -3409,6 +3498,8 @@ function renderLeadReviewPanel() {
   const upsells = getUpsellRecommendations();
   const criticalItems = items.filter((item) => item.status !== "ok").slice(0, 3);
   const approval = getProposalApprovalMessage(items);
+  const smartAlerts = getSmartProposalAlerts(items);
+  const confidence = getProposalConfidence(items, smartAlerts);
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
@@ -3421,6 +3512,32 @@ function renderLeadReviewPanel() {
     <div class="lead-approval-gate is-${escapeHtml(approval.tone)}">
       <strong>${escapeHtml(approval.title)}</strong>
       <span>${escapeHtml(approval.note)}</span>
+    </div>
+    <div class="approval-confidence is-${escapeHtml(confidence.status)}">
+      <div>
+        <span>Nota de confiança</span>
+        <strong>${escapeHtml(String(confidence.score))}%</strong>
+      </div>
+      <p>${escapeHtml(confidence.note)}</p>
+    </div>
+    <div class="smart-alerts">
+      <div class="smart-alerts-heading">
+        <span>Alertas inteligentes</span>
+        <small>O sistema aponta riscos e oportunidades antes do envio.</small>
+      </div>
+      <div class="smart-alerts-grid">
+        ${smartAlerts
+          .map(
+            (alert) => `
+              <button class="smart-alert is-${escapeHtml(alert.level)}" type="button" data-review-target="${escapeHtml(alert.target)}">
+                <span>${escapeHtml(alert.kind)}</span>
+                <strong>${escapeHtml(alert.title)}</strong>
+                <small>${escapeHtml(alert.detail)}</small>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
     </div>
     ${
       criticalItems.length
@@ -4180,6 +4297,8 @@ function renderSendReview() {
   const summary = getProposalReviewSummary(items);
   const approved = isSendReviewApproved(items);
   const command = getSendReviewPrimaryCommand(summary, items);
+  const smartAlerts = getSmartProposalAlerts(items);
+  const confidence = getProposalConfidence(items, smartAlerts);
   const totals = getQuoteTotals();
   const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
   const eventLine = [
@@ -4236,6 +4355,37 @@ function renderSendReview() {
       </button>
     </div>
     <p class="send-review-safe-note">Fluxo seguro: nada é enviado sem checklist aprovado e confirmação final do canal.</p>
+    <div class="send-review-confidence is-${escapeHtml(confidence.status)}">
+      <div>
+        <span>Confiança para envio</span>
+        <strong>${escapeHtml(String(confidence.score))}%</strong>
+      </div>
+      <p>${escapeHtml(confidence.label)} · ${escapeHtml(confidence.note)}</p>
+    </div>
+    <div class="review-sixty">
+      <div>
+        <span>Revisão em 60 segundos</span>
+        <strong>Confira nesta ordem: lead, agenda, itens, valor e canal.</strong>
+      </div>
+      <ol>
+        <li>Cliente, empresa/grupo e WhatsApp/e-mail corretos.</li>
+        <li>Data, horário, pax, duração e disponibilidade coerentes.</li>
+        <li>Cardápio, upsell útil, valor final, validade e prazo do sinal revisados.</li>
+      </ol>
+    </div>
+    <div class="send-smart-alerts">
+      ${smartAlerts
+        .map(
+          (alert) => `
+            <button class="smart-alert is-${escapeHtml(alert.level)}" type="button" data-review-target="${escapeHtml(alert.target)}">
+              <span>${escapeHtml(alert.kind)}</span>
+              <strong>${escapeHtml(alert.title)}</strong>
+              <small>${escapeHtml(alert.detail)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
     <div class="send-review-command">
       <article class="send-review-next-action">
         <span>${approved ? "Pronto para enviar" : "Próxima melhor ação"}</span>
@@ -4438,6 +4588,17 @@ function getProposalSnapshot() {
   const activeProposal = getActiveProposal();
   const signalDeadlineHours = getSignalDeadlineHours();
   const signalDeadlineAt = calculateSignalDeadlineAt(signalDeadlineHours);
+  const reviewItems = getProposalReviewItems();
+  const reviewAlerts = getSmartProposalAlerts(reviewItems);
+  const reviewConfidence = getProposalConfidence(reviewItems, reviewAlerts);
+  const reviewApproval =
+    isSendReviewApproved(reviewItems) && state.sendReviewApproval?.signature === state.sendReviewApprovedSignature
+      ? {
+          ...state.sendReviewApproval,
+          confidence: reviewConfidence.score,
+          status: reviewConfidence.status,
+        }
+      : null;
   return {
     version: 1,
     referencia: activeRequest?.snapshot?.referencia || "",
@@ -4496,6 +4657,9 @@ function getProposalSnapshot() {
     paymentTerms,
     operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
     commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
+    sendReviewApproval: reviewApproval,
+    reviewConfidence,
+    smartAlerts: reviewAlerts,
     internalComments: getInternalComments(activeProposal?.snapshot || {}),
     eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
     proposalText: buildProposalText(),
@@ -7615,6 +7779,23 @@ async function saveCurrentProposal(status, signalInfo = null) {
       );
     }
   }
+  if (
+    normalizedNext === "proposta_enviada" &&
+    snapshot.sendReviewApproval?.signature &&
+    snapshot.sendReviewApproval.signature !== activeProposal?.snapshot?.sendReviewApproval?.signature
+  ) {
+    historyEntries.push(
+      createCommercialHistoryEntry(
+        "aprovacao",
+        "Checklist aprovado para envio",
+        `Nota de confiança ${snapshot.reviewConfidence?.score || snapshot.sendReviewApproval.confidence || 0}%. ${snapshot.reviewConfidence?.label || "Revisão humana registrada"}.`,
+        {
+          approval: snapshot.sendReviewApproval,
+          smartAlerts: snapshot.smartAlerts,
+        },
+      ),
+    );
+  }
   if (paymentSignal && !activeProposal?.snapshot?.pagamentoSinal) {
     historyEntries.push(
       createCommercialHistoryEntry("sinal", "Sinal registrado", `${formatMoney(paymentSignal.valor)} · ${formatSignalPaymentDate(paymentSignal.data)} · ${(paymentSignal.bancos || []).join(", ")}.`),
@@ -8091,12 +8272,21 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
   const approvalItems = getLeadReadinessItems();
   const approvalErrors = approvalItems.filter((item) => item.status === "error");
   const approvalWarnings = approvalItems.filter((item) => item.status === "warning");
+  const reviewItems = getProposalReviewItems();
+  const smartAlerts = getSmartProposalAlerts(reviewItems);
+  const confidence = getProposalConfidence(reviewItems, smartAlerts);
+  const totals = getQuoteTotals();
   const requiredLine = approvalErrors.length
     ? approvalErrors.map((item) => `${item.label}: ${item.detail}`).slice(0, 3).join("\n")
     : "Sem bloqueios obrigatórios.";
   const warningLine = approvalWarnings.length
     ? approvalWarnings.map((item) => `${item.label}: ${item.detail}`).slice(0, 3).join("\n")
     : "Sem alertas relevantes.";
+  const alertLine = smartAlerts
+    .filter((item) => item.level !== "success")
+    .map((item) => `${item.title}: ${item.detail}`)
+    .slice(0, 3)
+    .join("\n");
   const details = [
     "Revisão rápida antes de enviar",
     "",
@@ -8105,6 +8295,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     destination ? `Destino: ${destination}` : "",
     eventType ? `Evento: ${eventType}` : "",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
+    `Pax: ${getGuestCount()} · Total: ${formatMoney(totals.total)} · Confiança: ${confidence.score}%`,
     title ? `Mensagem: ${title}` : "",
     "",
     "Obrigatórios:",
@@ -8112,6 +8303,9 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     "",
     "Atenção:",
     warningLine,
+    "",
+    "Alertas inteligentes:",
+    alertLine || "Sem alertas críticos ou oportunidades obrigatórias.",
     "",
     `Ao confirmar, o app vai ${action}.`,
     channel === "WhatsApp"

@@ -3335,6 +3335,149 @@ label.pipeline-status-control:focus-within select {
   border: 1px solid rgba(47, 111, 69, 0.18);
 }
 
+.approval-confidence,
+.send-review-confidence {
+  align-items: center;
+  background: rgba(24, 58, 45, 0.06);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px 12px;
+}
+
+.approval-confidence div,
+.send-review-confidence div {
+  align-items: center;
+  background: var(--verde-escuro);
+  border-radius: 8px;
+  color: var(--white);
+  display: grid;
+  min-width: 94px;
+  padding: 8px 10px;
+}
+
+.approval-confidence span,
+.send-review-confidence span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.58rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.approval-confidence strong,
+.send-review-confidence strong {
+  color: var(--white);
+  font-size: 1.18rem;
+}
+
+.approval-confidence p,
+.send-review-confidence p {
+  color: var(--verde-escuro);
+  font-size: 0.78rem;
+  font-weight: 830;
+  line-height: 1.28;
+  margin: 0;
+}
+
+.approval-confidence.is-blocked,
+.send-review-confidence.is-blocked {
+  background: rgba(168, 50, 39, 0.08);
+  border-color: rgba(168, 50, 39, 0.18);
+}
+
+.approval-confidence.is-attention,
+.send-review-confidence.is-attention {
+  background: rgba(245, 155, 30, 0.1);
+  border-color: rgba(245, 155, 30, 0.18);
+}
+
+.smart-alerts,
+.send-smart-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+.smart-alerts-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.smart-alerts-heading span {
+  color: var(--amarelo);
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.smart-alerts-heading small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.smart-alerts-grid,
+.send-smart-alerts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.smart-alert {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  text-align: left;
+}
+
+.smart-alert span {
+  color: var(--amarelo);
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.smart-alert strong {
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  line-height: 1.1;
+}
+
+.smart-alert small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 760;
+  line-height: 1.24;
+}
+
+.smart-alert.is-danger {
+  background: rgba(168, 50, 39, 0.08);
+  border-color: rgba(168, 50, 39, 0.2);
+}
+
+.smart-alert.is-warning {
+  background: rgba(245, 155, 30, 0.1);
+  border-color: rgba(245, 155, 30, 0.22);
+}
+
+.smart-alert.is-opportunity {
+  background: rgba(237, 226, 201, 0.58);
+}
+
+.smart-alert.is-success {
+  background: rgba(47, 111, 69, 0.08);
+  border-color: rgba(47, 111, 69, 0.16);
+}
+
 .lead-review-grid {
   display: grid;
   gap: 8px;
@@ -4943,6 +5086,42 @@ textarea {
   line-height: 1.25;
   margin: 0;
   padding: 9px 10px;
+}
+
+.review-sixty {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 58, 45, 0.11);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+}
+
+.review-sixty span {
+  color: var(--amarelo);
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.review-sixty strong {
+  color: var(--verde-escuro);
+  font-size: 0.88rem;
+}
+
+.review-sixty ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.review-sixty li {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 790;
+  line-height: 1.25;
 }
 
 .send-review-panel.is-approved .send-review-next-action {
@@ -8087,6 +8266,31 @@ input[type="range"] {
 
   .send-review-primary-button {
     min-height: 44px;
+  }
+
+  .approval-confidence,
+  .send-review-confidence {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .approval-confidence div,
+  .send-review-confidence div {
+    min-width: 0;
+  }
+
+  .smart-alerts-heading {
+    align-items: start;
+    display: grid;
+  }
+
+  .smart-alerts-heading small {
+    text-align: left;
+  }
+
+  .smart-alerts-grid,
+  .send-smart-alerts {
+    grid-template-columns: 1fr;
   }
 
   .pipeline-card {
