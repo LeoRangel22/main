@@ -580,6 +580,9 @@ const state = {
   quoteRequests: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
+  activeEditorContext: null,
+  loadedEditorSignature: "",
+  pendingOpenSourceLabel: "",
   pendingDashboardLeadId: "",
   pendingDashboardProposalId: "",
   lastAppliedDashboardTarget: "",
@@ -690,6 +693,7 @@ const nodes = {
   operationsAgenda: document.querySelector("#operationsAgenda"),
   operationsAgendaMeta: document.querySelector("#operationsAgendaMeta"),
   pipelineQuickFilters: document.querySelector("#pipelineQuickFilters"),
+  loadedEditorBar: document.querySelector("#loadedEditorBar"),
   quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
@@ -707,6 +711,7 @@ const nodes = {
   quickReplies: document.querySelector("#quickReplies"),
   startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
+  openNextPriorityBtn: document.querySelector("#openNextPriorityBtn"),
   globalSearchResults: document.querySelector("#globalSearchResults"),
   clientDirectory: document.querySelector("#clientDirectory"),
   clientRegistryMeta: document.querySelector("#clientRegistryMeta"),
@@ -4117,20 +4122,26 @@ function scrollToClientData() {
   document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.") {
+function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.", targetMode = "auto") {
   const section = document.querySelector("#clientDataSection");
   const layout = document.querySelector(".quote-layout");
   const proposalPaper = document.querySelector("#proposalPaper");
-  const target = section || layout;
+  const reviewPanel = nodes.sendReviewPanel;
+  const hasErrors = getProposalReviewItems().some((item) => item.status === "error");
+  const target =
+    targetMode === "review" || (targetMode === "auto" && state.activeProposalId && (hasErrors || state.selectedIds.size))
+      ? reviewPanel || section || layout
+      : section || layout;
   if (!target) return;
 
   renderSummary();
   renderSendReview();
   renderCalculation();
   renderProposal();
+  renderLoadedEditorBar();
 
   target.scrollIntoView({ behavior: "smooth", block: "start" });
-  [section, layout, proposalPaper].filter(Boolean).forEach((node) => {
+  [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
     node.classList.remove("is-loaded-focus");
     void node.offsetWidth;
     node.classList.add("is-loaded-focus");
@@ -4146,7 +4157,7 @@ function getPipelineStageTitle(stageId) {
 
 function jumpToPipelineStage(stageId) {
   if (!stageId) return;
-  state.activePipelineFilter = "all";
+  state.activePipelineFilter = stageId;
   renderPipeline();
   window.requestAnimationFrame(() => {
     const safeStageId = String(stageId).replace(/[^a-z0-9_-]/gi, "");
@@ -4208,7 +4219,7 @@ async function applyPendingDashboardTarget() {
   if (state.pendingDashboardProposalId) {
     const proposal = state.proposals.find((item) => item.id === state.pendingDashboardProposalId);
     if (!proposal) return false;
-    openSavedProposal(proposal.id);
+    openSavedProposal(proposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
   }
@@ -4219,14 +4230,14 @@ async function applyPendingDashboardTarget() {
       item.snapshot?.activeQuoteRequestId === state.pendingDashboardLeadId,
   );
   if (linkedProposal) {
-    openSavedProposal(linkedProposal.id);
+    openSavedProposal(linkedProposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
   }
 
   const request = state.quoteRequests.find((item) => item.id === state.pendingDashboardLeadId);
   if (!request) return false;
-  await applyQuoteRequest(request.id);
+  await applyQuoteRequest(request.id, "Link direto");
   state.lastAppliedDashboardTarget = targetKey;
   return true;
 }
@@ -6122,14 +6133,34 @@ function getPipelineQuickFilterDefinitions() {
 function getFilteredPipelineItems(items = getPipelineItems()) {
   const activeFilter = state.activePipelineFilter || "all";
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
-  if (!definition || activeFilter === "all") return items;
+  if (activeFilter === "all") return items;
+  if (!definition) {
+    const stage = funnelStages.find((item) => item.id === activeFilter);
+    return stage ? items.filter((item) => item.stage === stage.id) : items;
+  }
   return items.filter((item) => definition.matches(item));
+}
+
+function getActivePipelineFilterLabel() {
+  const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter === "all") return "";
+  const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
+  if (definition) return definition.label;
+  const stage = funnelStages.find((item) => item.id === activeFilter);
+  return stage?.title || "";
 }
 
 function renderPipelineQuickFilters(items = getPipelineItems()) {
   if (!nodes.pipelineQuickFilters) return;
   const definitions = getPipelineQuickFilterDefinitions();
-  nodes.pipelineQuickFilters.innerHTML = definitions
+  const activeLabel = getActivePipelineFilterLabel();
+  const activeNotice =
+    activeLabel && state.activePipelineFilter !== "all"
+      ? `<button class="pipeline-active-filter" type="button" data-pipeline-filter="all"><span>Mostrando: ${escapeHtml(activeLabel)}</span><b>limpar</b></button>`
+      : "";
+  nodes.pipelineQuickFilters.innerHTML =
+    activeNotice +
+    definitions
     .map((filter) => {
       const total = items.filter((item) => filter.matches(item)).length;
       return `
@@ -6497,6 +6528,114 @@ function isQuoteWorkspaceEffectivelyEmpty() {
   );
 }
 
+function getCurrentEditorSignature() {
+  return JSON.stringify({
+    activeProposalId: state.activeProposalId || "",
+    activeQuoteRequestId: state.activeQuoteRequestId || "",
+    client: fields.clientName?.value.trim() || "",
+    email: fields.clientEmail?.value.trim() || "",
+    phone: fields.clientPhone?.value.trim() || "",
+    eventType: fields.eventType?.value.trim() || "",
+    date: fields.eventDate?.value || "",
+    time: fields.eventTime?.value || "",
+    guests: getGuestCount(),
+    duration: getDuration(),
+    validity: fields.validity?.value.trim() || "",
+    signalDeadlineHours: fields.signalDeadlineHours?.value || "",
+    adjustment: fields.manualAdjustment?.value.trim() || "",
+    adjustmentLabel: fields.manualAdjustmentLabel?.value.trim() || "",
+    reason: fields.eventReason?.value.trim() || "",
+    notes: fields.notes?.value.trim() || "",
+    selectedIds: [...state.selectedIds].sort(),
+    guided: state.guided,
+    privatizationChoice: state.privatizationChoice || "",
+  });
+}
+
+function getEditorContextFromCurrent(kind = state.activeProposalId ? "proposal" : "request", sourceLabel = "") {
+  const proposal = getActiveProposal();
+  const request = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId) || null;
+  const status = proposal ? normalizeProposalStatus(proposal.status) : request ? normalizeRequestStatus(request.status) : "";
+  const stageId = getPipelineStage(status || "lead_recebido");
+  return {
+    kind,
+    id: kind === "proposal" ? state.activeProposalId : state.activeQuoteRequestId,
+    name: fields.clientName?.value.trim() || proposal?.cliente_nome || request?.cliente_nome || "Cliente",
+    date: fields.eventDate?.value || proposal?.data_evento || request?.data_evento || "",
+    time: fields.eventTime?.value || proposal?.horario_evento || request?.horario_evento || "",
+    type: fields.eventType?.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
+    status,
+    stageId,
+    sourceLabel: sourceLabel || state.pendingOpenSourceLabel || (status ? `Funil: ${getProposalStatusLabel(status)}` : "Edição manual"),
+  };
+}
+
+function markEditorClean(context = null) {
+  state.activeEditorContext = context || getEditorContextFromCurrent();
+  state.loadedEditorSignature = getCurrentEditorSignature();
+  state.pendingOpenSourceLabel = "";
+  renderLoadedEditorBar();
+}
+
+function hasUnsavedEditorChanges() {
+  if (isQuoteWorkspaceEffectivelyEmpty() || !state.loadedEditorSignature) return false;
+  return getCurrentEditorSignature() !== state.loadedEditorSignature;
+}
+
+function renderLoadedEditorBar() {
+  if (!nodes.loadedEditorBar) return;
+  const context = state.activeEditorContext;
+  if (!context || isQuoteWorkspaceEffectivelyEmpty()) {
+    nodes.loadedEditorBar.classList.add("is-hidden");
+    nodes.loadedEditorBar.innerHTML = "";
+    return;
+  }
+  const dirty = hasUnsavedEditorChanges();
+  const dateLabel = context.date ? formatDateFromIso(context.date) : "Data a definir";
+  const timeLabel = context.time ? String(context.time).slice(0, 5) : "Horário a definir";
+  const stageLabel = getProposalStatusLabel(context.status || "lead_recebido");
+  nodes.loadedEditorBar.classList.remove("is-hidden");
+  nodes.loadedEditorBar.innerHTML = `
+    <div class="loaded-editor-main">
+      <span>${escapeHtml(context.sourceLabel || "Carregado do funil")}</span>
+      <strong>Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
+      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${dirty ? " · alterações não salvas" : ""}</small>
+    </div>
+    <div class="loaded-editor-actions">
+      ${dirty ? `<span class="loaded-editor-dirty">Não salvo</span>` : `<span class="loaded-editor-saved">Atualizado</span>`}
+      <button class="secondary" type="button" data-return-pipeline-stage="${escapeHtml(context.stageId || "lead_recebido")}">Voltar ao funil</button>
+    </div>
+  `;
+}
+
+async function confirmEditorSwitch() {
+  if (!hasUnsavedEditorChanges()) return true;
+  const saveFirst = window.confirm(
+    "Você alterou esta proposta. Deseja salvar antes de abrir outro lead?\n\nOK: salvar agora.\nCancelar: continuar revisando antes de trocar.",
+  );
+  if (!saveFirst) return false;
+  const activeStatus = getActiveProposal()?.status || "proposta_enviada";
+  const saved = await saveCurrentProposal(activeStatus);
+  if (!saved) return false;
+  markEditorClean(getEditorContextFromCurrent("proposal", "Salva antes de trocar"));
+  return true;
+}
+
+function getOpenSourceLabelForItem(item, fallback = "Funil") {
+  if (!item) return fallback;
+  return `${fallback}: ${getProposalStatusLabel(item.status)}`;
+}
+
+async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
+  if (!(await confirmEditorSwitch())) return;
+  openSavedProposal(proposalId, sourceLabel);
+}
+
+async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
+  if (!(await confirmEditorSwitch())) return;
+  await applyQuoteRequest(requestId, sourceLabel);
+}
+
 function renderQuoteWorkspaceGuide() {
   if (!nodes.quoteEmptyState) return;
   const shouldShow = isQuoteWorkspaceEffectivelyEmpty() && !state.quoteGuideDismissed;
@@ -6752,6 +6891,21 @@ function renderActionTasks(items = getPipelineItems()) {
   `;
 }
 
+async function openNextPriorityItem() {
+  const [task] = getActionTasks(getPipelineItems());
+  if (!task?.item) {
+    showToast("Nenhuma prioridade crítica agora. O funil está limpo.");
+    document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const source = `Prioridade agora: ${task.title}`;
+  if (task.item.kind === "proposal") {
+    await safeOpenSavedProposal(task.item.id, source);
+  } else {
+    await safeApplyQuoteRequest(task.item.id, source);
+  }
+}
+
 function renderFinanceCommandPanel(items = getPipelineItems()) {
   if (!nodes.financeCommandPanel) return;
   if (!state.session || !isFinanceSession()) {
@@ -7002,6 +7156,20 @@ function canDeletePipelineItem(item) {
   return isTestCancelReason(item.cancelReason || "");
 }
 
+function getPipelineOpenButtonLabel(item, primaryAction) {
+  const status = getReportStatus(item);
+  if (item.status === "cancelado") return "Abrir";
+  if (item.kind === "request" || status === "lead_recebido") return "Responder";
+  if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
+  if (status === "negociacao") return "Ajustar";
+  if (status === "confirmado") return item.hasRemainingPayment ? "Planejar" : "Cobrar saldo";
+  if (status === "pagamento_final") return item.hasRemainingPayment ? "Planejar" : "Registrar saldo";
+  if (status === "planejamento") return "Planejar";
+  if (status === "evento_proximo") return "Revisar 48h";
+  if (status === "pos_venda") return "Pós-venda";
+  return primaryAction?.label || "Abrir";
+}
+
 function renderPipelineCard(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -7063,8 +7231,8 @@ function renderPipelineCard(item) {
   const topAction = remainingButton || remainingProofLink || signalProofLink || signalButton;
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">Abrir proposta</button>`
-      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">Abrir lead</button>`;
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
+      : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`;
   const cancelButton =
     item.status === "cancelado"
       ? ""
@@ -7089,6 +7257,8 @@ function renderPipelineCard(item) {
     <article
       class="pipeline-card"
       draggable="true"
+      tabindex="0"
+      aria-label="Abrir ${escapeHtml(displayName)} no editor"
       data-pipeline-card-kind="${escapeHtml(item.kind)}"
       data-pipeline-card-id="${escapeHtml(item.id)}"
       data-pipeline-card-status="${escapeHtml(item.status)}"
@@ -7124,6 +7294,26 @@ function renderPipelineCard(item) {
   `;
 }
 
+function renderPipelineEmptyState(stage) {
+  const nextFocus = {
+    lead_recebido: "Sem leads aqui. Próximo foco: propostas sem resposta e negociações.",
+    proposta_enviada: "Sem propostas paradas aqui. Próximo foco: leads novos e negociações abertas.",
+    negociacao: "Sem negociação ativa. Próximo foco: leads e propostas sem resposta.",
+    confirmado: "Sem sinal novo agora. Próximo foco: propostas aprovadas e cobrança de sinal.",
+    pagamento_final: "Sem saldo pendente. Próximo foco: planejamento e eventos próximos.",
+    planejamento: "Sem evento aguardando planejamento. Próximo foco: pagamentos restantes e 48h.",
+    evento_proximo: "Sem evento hoje ou amanhã. Próximo foco: planejamento da semana.",
+    pos_venda: "Sem pós-venda pendente. Próximo foco: clientes realizados e recompra.",
+    cancelado: "Sem cancelados nesta visão. Motivos registrados aparecem aqui quando houver.",
+  };
+  return `
+    <div class="pipeline-empty-state">
+      <strong>${escapeHtml(stage.description || "Nada nesta etapa.")}</strong>
+      <small>${escapeHtml(nextFocus[stage.id] || "Sem itens aqui agora. Siga pela próxima prioridade do sistema.")}</small>
+    </div>
+  `;
+}
+
 function renderPipelineStage(stage, items) {
   const stageItems = items.filter((item) => item.stage === stage.id);
   if (stage.row === "archive") {
@@ -7135,7 +7325,7 @@ function renderPipelineStage(stage, items) {
             <strong>${stageItems.length}</strong>
           </summary>
           <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
-            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
+            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : renderPipelineEmptyState(stage)}
           </div>
         </details>
       </section>
@@ -7148,7 +7338,7 @@ function renderPipelineStage(stage, items) {
         <strong>${stageItems.length}</strong>
       </div>
       <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
-        ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : `<small>Nada nesta etapa.</small>`}
+        ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : renderPipelineEmptyState(stage)}
       </div>
     </section>
   `;
@@ -7304,7 +7494,7 @@ function resetProposalDraftState() {
   setChoiceState(nodes.optionalPrivatizationControls, "", "privatizationChoice");
 }
 
-async function applyQuoteRequest(requestId) {
+async function applyQuoteRequest(requestId, sourceLabel = "") {
   const request = state.quoteRequests.find((item) => item.id === requestId);
   if (!request) return;
 
@@ -7344,7 +7534,8 @@ async function applyQuoteRequest(requestId) {
   renderEventAttachmentsPanel(null);
 
   renderAll();
-  focusLoadedProposalEditor("Lead carregado. Revise dados, itens, valor e checklist antes de enviar.");
+  markEditorClean(getEditorContextFromCurrent("request", sourceLabel || "Funil: Lead"));
+  focusLoadedProposalEditor("Lead carregado. Revise dados, itens, valor e checklist antes de enviar.", "client");
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
@@ -7957,6 +8148,9 @@ async function logoutSupabase() {
   state.proposals = [];
   state.quoteRequests = [];
   state.activeProposalId = "";
+  state.activeQuoteRequestId = "";
+  state.activeEditorContext = null;
+  state.loadedEditorSignature = "";
   updateAuthUI();
   renderHistory();
   renderConfirmedEvents();
@@ -8156,6 +8350,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderInternalNotesPanel(data);
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
+  markEditorClean(getEditorContextFromCurrent("proposal", `Funil: ${getProposalStatusLabel(data.status)}`));
   showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
   return data;
 }
@@ -8249,14 +8444,15 @@ function applyProposalSnapshot(snapshot) {
   showToast("Proposta reaberta.");
 }
 
-function openSavedProposal(proposalId) {
+function openSavedProposal(proposalId, sourceLabel = "") {
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
   state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
-  focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.");
+  markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
+  focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
 }
 
 function formatDateFromIso(value) {
@@ -8434,6 +8630,7 @@ function renderAll() {
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
   renderServiceCockpit();
+  renderLoadedEditorBar();
   renderLeadReviewPanel();
   renderProposalNextStep();
   renderInternalNotesPanel();
@@ -8457,6 +8654,8 @@ function startNewProposal() {
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.activeEditorContext = null;
+  state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
@@ -8487,6 +8686,17 @@ function startNewProposal() {
   renderInternalNotesPanel(null);
   renderEventAttachmentsPanel(null);
   renderAll();
+  markEditorClean({
+    kind: "manual",
+    id: "",
+    name: "Nova proposta manual",
+    date: "",
+    time: "",
+    type: "Evento a definir",
+    status: "proposta_enviada",
+    stageId: "proposta_enviada",
+    sourceLabel: "Edição manual",
+  });
   scrollToClientData();
   showToast("Nova proposta pronta para preencher.");
 }
@@ -8533,6 +8743,21 @@ function ensureProposalReadyForSending() {
   showToast(firstError?.detail || "Revise os pontos obrigatórios antes de enviar.");
   nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
   return false;
+}
+
+function isInteractivePipelineTarget(target) {
+  if (!target || typeof target.closest !== "function") return false;
+  return Boolean(target.closest("button, a, input, select, textarea, details, summary, label"));
+}
+
+async function openPipelineCardElement(card) {
+  if (!card) return;
+  const source = `Funil: ${getProposalStatusLabel(card.dataset.pipelineCardStatus)}`;
+  if (card.dataset.pipelineCardKind === "proposal") {
+    await safeOpenSavedProposal(card.dataset.pipelineCardId, source);
+  } else {
+    await safeApplyQuoteRequest(card.dataset.pipelineCardId, source);
+  }
 }
 
 async function ensureProposalForSharing() {
@@ -8882,8 +9107,8 @@ async function runServiceCockpitAction(action, button = null) {
     case "open_client_last": {
       const id = button?.dataset.serviceTarget || "";
       const kind = button?.dataset.serviceKind || "";
-      if (kind === "proposal") openSavedProposal(id);
-      else if (kind === "request") applyQuoteRequest(id);
+      if (kind === "proposal") await safeOpenSavedProposal(id, "Atendimento guiado");
+      else if (kind === "request") await safeApplyQuoteRequest(id, "Atendimento guiado");
       break;
     }
     default:
@@ -8992,6 +9217,7 @@ function bindEvents() {
     const refreshFormOutputs = () => {
       renderPriceList();
       renderAvailabilityAlert();
+      renderLoadedEditorBar();
       renderSummary();
       renderSendReview();
       renderCalculation();
@@ -9103,8 +9329,14 @@ function bindEvents() {
   document.querySelector("#emailBtn")?.addEventListener("click", openEmail);
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
+  nodes.openNextPriorityBtn?.addEventListener("click", () => openNextPriorityItem());
   nodes.jumpToPipelineBtn?.addEventListener("click", () => {
     document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  nodes.loadedEditorBar?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-return-pipeline-stage]");
+    if (!button) return;
+    jumpToPipelineStage(button.dataset.returnPipelineStage);
   });
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
@@ -9147,55 +9379,55 @@ function bindEvents() {
     if (!button) return;
     selectReportPreset(button.dataset.reportPreset);
   });
-  nodes.reportOutput?.addEventListener("click", (event) => {
+  nodes.reportOutput?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
-      openSavedProposal(proposalButton.dataset.proposalId);
+      await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Relatório");
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Relatório");
   });
-  nodes.actionList?.addEventListener("click", (event) => {
+  nodes.actionList?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
-      openSavedProposal(proposalButton.dataset.proposalId);
+      await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Prioridade agora");
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Prioridade agora");
   });
-  nodes.operationsAgenda?.addEventListener("click", (event) => {
+  nodes.operationsAgenda?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
-      openSavedProposal(proposalButton.dataset.proposalId);
+      await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Agenda operacional");
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Agenda operacional");
   });
   fields.globalSearchInput?.addEventListener("input", () => {
     const items = getPipelineItems();
     renderGlobalSearch(items);
     renderClientRegistry(items);
   });
-  nodes.globalSearchResults?.addEventListener("click", (event) => {
+  nodes.globalSearchResults?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
-      openSavedProposal(proposalButton.dataset.proposalId);
+      await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Busca global");
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Busca global");
   });
-  nodes.clientDirectory?.addEventListener("click", (event) => {
+  nodes.clientDirectory?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
-      openSavedProposal(proposalButton.dataset.proposalId);
+      await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Cadastro de clientes");
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) applyQuoteRequest(requestButton.dataset.useRequest);
+    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Cadastro de clientes");
   });
   nodes.pipelineQuickFilters?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-pipeline-filter]");
@@ -9280,15 +9512,15 @@ function bindEvents() {
     addEventAttachment(button.dataset.addEventAttachment);
   });
   document.querySelector("#copyClientFormLinkBtn")?.addEventListener("click", copyClientFormLink);
-  nodes.historyList?.addEventListener("click", (event) => {
+  nodes.historyList?.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (!button) return;
-    openSavedProposal(button.dataset.proposalId);
+    await safeOpenSavedProposal(button.dataset.proposalId, "Histórico");
   });
-  nodes.pipelineBoard?.addEventListener("click", (event) => {
+  nodes.pipelineBoard?.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-proposal-id]");
     if (button) {
-      openSavedProposal(button.dataset.proposalId);
+      await safeOpenSavedProposal(button.dataset.proposalId, "Funil");
       return;
     }
     const paidButton = event.target.closest("button[data-mark-paid]");
@@ -9303,7 +9535,7 @@ function bindEvents() {
     }
     const useButton = event.target.closest("button[data-use-request]");
     if (useButton) {
-      applyQuoteRequest(useButton.dataset.useRequest);
+      await safeApplyQuoteRequest(useButton.dataset.useRequest, "Funil: Lead");
       return;
     }
     const markButton = event.target.closest("button[data-mark-request]");
@@ -9314,6 +9546,17 @@ function bindEvents() {
     if (reopenButton) reopenPipelineItem(reopenButton.dataset.reopenKind, reopenButton.dataset.reopenId);
     const deleteButton = event.target.closest("button[data-delete-id]");
     if (deleteButton) deleteTestPipelineItem(deleteButton.dataset.deleteKind, deleteButton.dataset.deleteId);
+    const card = event.target.closest("[data-pipeline-card-id]");
+    if (card && !isInteractivePipelineTarget(event.target)) {
+      await openPipelineCardElement(card);
+    }
+  });
+  nodes.pipelineBoard?.addEventListener("keydown", async (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    const card = event.target.closest?.("[data-pipeline-card-id]");
+    if (!card || event.target !== card) return;
+    event.preventDefault();
+    await openPipelineCardElement(card);
   });
   nodes.pipelineBoard?.addEventListener("change", (event) => {
     const select = event.target.closest("select[data-pipeline-status-id]");

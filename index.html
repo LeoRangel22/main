@@ -141,7 +141,10 @@
                 <span>Funil de eventos</span>
                 <strong>LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</strong>
               </div>
-              <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
+              <div class="pipeline-header-actions">
+                <button class="primary" id="openNextPriorityBtn" type="button">Abrir próxima prioridade</button>
+                <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
+              </div>
             </div>
             <div class="pipeline-guidance" aria-label="Como usar o funil">
               <span><strong>1.</strong> Responda primeiro leads quentes, atrasados e propostas sem retorno.</span>
@@ -310,6 +313,7 @@
               <a href="#quoteCalcSection">Cálculos</a>
               <a href="#quoteTermsSection">Condições</a>
             </nav>
+            <section class="loaded-editor-bar is-hidden" id="loadedEditorBar" aria-live="polite"></section>
             <section class="quote-empty-state" id="quoteEmptyState" aria-label="Como começar uma proposta">
               <div class="quote-empty-copy">
                 <span>Nova proposta</span>
