@@ -4120,11 +4120,17 @@ function scrollToClientData() {
 function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.") {
   const section = document.querySelector("#clientDataSection");
   const layout = document.querySelector(".quote-layout");
+  const proposalPaper = document.querySelector("#proposalPaper");
   const target = section || layout;
   if (!target) return;
 
+  renderSummary();
+  renderSendReview();
+  renderCalculation();
+  renderProposal();
+
   target.scrollIntoView({ behavior: "smooth", block: "start" });
-  [section, layout].filter(Boolean).forEach((node) => {
+  [section, layout, proposalPaper].filter(Boolean).forEach((node) => {
     node.classList.remove("is-loaded-focus");
     void node.offsetWidth;
     node.classList.add("is-loaded-focus");

@@ -806,7 +806,8 @@ textarea[aria-invalid="true"] {
 }
 
 .form-section.is-loaded-focus,
-.quote-layout.is-loaded-focus {
+.quote-layout.is-loaded-focus,
+.proposal-paper.is-loaded-focus {
   animation: loadedProposalPulse 1.5s ease;
 }
 
