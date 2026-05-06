@@ -3068,6 +3068,29 @@ label.pipeline-status-control:focus-within select {
   line-height: 1.15;
 }
 
+.service-coach-note {
+  background: rgba(24, 58, 45, 0.06);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.service-coach-note span {
+  color: var(--amarelo);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.service-coach-note strong {
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.28;
+}
+
 .service-cockpit-grid {
   display: grid;
   gap: 10px;
@@ -3416,6 +3439,18 @@ label.pipeline-status-control:focus-within select {
   font-size: 0.7rem;
   font-weight: 750;
   line-height: 1.25;
+}
+
+.upsell-card em {
+  background: rgba(24, 58, 45, 0.06);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  display: block;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 820;
+  line-height: 1.25;
+  padding: 7px 8px;
 }
 
 .proposal-next-step {
@@ -4896,6 +4931,18 @@ textarea {
 .send-review-route .is-primary strong,
 .send-review-route .is-primary small {
   color: #fff;
+}
+
+.send-review-safe-note {
+  background: rgba(24, 58, 45, 0.06);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.25;
+  margin: 0;
+  padding: 9px 10px;
 }
 
 .send-review-panel.is-approved .send-review-next-action {
