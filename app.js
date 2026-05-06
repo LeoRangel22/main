@@ -675,6 +675,7 @@ const nodes = {
   authStatus: document.querySelector("#authStatus"),
   historyList: document.querySelector("#historyList"),
   pipelineBoard: document.querySelector("#pipelineBoard"),
+  ownerMetrics: document.querySelector(".owner-metrics"),
   metricStageLead: document.querySelector("#metricStageLead"),
   metricStageSemResposta: document.querySelector("#metricStageSemResposta"),
   metricStageNegociacao: document.querySelector("#metricStageNegociacao"),
@@ -4116,6 +4117,48 @@ function scrollToClientData() {
   document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.") {
+  const section = document.querySelector("#clientDataSection");
+  const layout = document.querySelector(".quote-layout");
+  const target = section || layout;
+  if (!target) return;
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  [section, layout].filter(Boolean).forEach((node) => {
+    node.classList.remove("is-loaded-focus");
+    void node.offsetWidth;
+    node.classList.add("is-loaded-focus");
+    window.setTimeout(() => node.classList.remove("is-loaded-focus"), 1700);
+  });
+  window.setTimeout(() => fields.clientName?.focus?.({ preventScroll: true }), 350);
+  showToast(message);
+}
+
+function getPipelineStageTitle(stageId) {
+  return funnelStages.find((stage) => stage.id === stageId)?.title || "Funil";
+}
+
+function jumpToPipelineStage(stageId) {
+  if (!stageId) return;
+  state.activePipelineFilter = "all";
+  renderPipeline();
+  window.requestAnimationFrame(() => {
+    const safeStageId = String(stageId).replace(/[^a-z0-9_-]/gi, "");
+    const stage = document.querySelector(`.pipeline-stage-${safeStageId}`);
+    if (!stage) {
+      showToast("Etapa ainda não encontrada no funil.");
+      return;
+    }
+    stage.querySelector("details")?.setAttribute("open", "");
+    stage.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    stage.classList.remove("is-stage-focus");
+    void stage.offsetWidth;
+    stage.classList.add("is-stage-focus");
+    window.setTimeout(() => stage.classList.remove("is-stage-focus"), 1600);
+    showToast(`Atalho aberto: ${getPipelineStageTitle(stageId)}.`);
+  });
+}
+
 function extractDashboardDeepLink() {
   try {
     const url = new URL(window.location.href);
@@ -7295,8 +7338,7 @@ async function applyQuoteRequest(requestId) {
   renderEventAttachmentsPanel(null);
 
   renderAll();
-  showToast("Solicitação carregada para revisão.");
-  scrollToClientData();
+  focusLoadedProposalEditor("Lead carregado. Revise dados, itens, valor e checklist antes de enviar.");
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
@@ -8208,7 +8250,7 @@ function openSavedProposal(proposalId) {
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
   state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
-  scrollToClientData();
+  focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.");
 }
 
 function formatDateFromIso(value) {
@@ -9154,6 +9196,11 @@ function bindEvents() {
     if (!button) return;
     state.activePipelineFilter = button.dataset.pipelineFilter || "all";
     renderPipeline();
+  });
+  nodes.ownerMetrics?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-pipeline-stage-jump]");
+    if (!button) return;
+    jumpToPipelineStage(button.dataset.pipelineStageJump);
   });
   nodes.proposalNextStep?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-next-step-action]");

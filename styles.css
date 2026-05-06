@@ -714,16 +714,31 @@ textarea[aria-invalid="true"] {
   grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
-.owner-metrics div {
+.owner-metrics button {
+  appearance: none;
   background: var(--verde-escuro);
   border-radius: 8px;
+  border: 0;
   box-shadow: 0 10px 22px rgba(24, 58, 45, 0.1);
   color: var(--white);
+  cursor: pointer;
   display: grid;
   gap: 2px;
+  font: inherit;
   min-width: 0;
   min-height: 54px;
   padding: 8px 10px;
+  text-align: left;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.owner-metrics button:hover,
+.owner-metrics button:focus-visible {
+  box-shadow: 0 14px 28px rgba(24, 58, 45, 0.16);
+  filter: saturate(1.06);
+  outline: 2px solid rgba(24, 58, 45, 0.22);
+  outline-offset: 2px;
+  transform: translateY(-1px);
 }
 
 .owner-metrics .metric-stage-lead {
@@ -783,6 +798,40 @@ textarea[aria-invalid="true"] {
 
 .owner-metrics .metric-stage-sinal strong {
   color: var(--verde-escuro);
+}
+
+.pipeline-column.is-stage-focus {
+  animation: stageFocusPulse 1.4s ease;
+  box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.24), 0 18px 40px rgba(24, 58, 45, 0.14);
+}
+
+.form-section.is-loaded-focus,
+.quote-layout.is-loaded-focus {
+  animation: loadedProposalPulse 1.5s ease;
+}
+
+@keyframes stageFocusPulse {
+  0% {
+    transform: translateY(-2px);
+  }
+  45% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes loadedProposalPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 149, 0, 0);
+  }
+  30% {
+    box-shadow: 0 0 0 4px rgba(255, 149, 0, 0.24);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 149, 0, 0);
+  }
 }
 
 .period-metrics {

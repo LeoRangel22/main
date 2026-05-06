@@ -76,38 +76,38 @@
 
         <section class="team-panel" aria-label="Equipe e historico">
           <div class="owner-metrics" aria-label="Resumo do funil">
-            <div class="metric-stage-lead">
+            <button class="metric-stage-lead" type="button" data-pipeline-stage-jump="lead_recebido" aria-label="Ir para leads no funil">
               <span>Lead</span>
               <strong id="metricStageLead">0</strong>
-            </div>
-            <div class="metric-stage-sem-resposta">
+            </button>
+            <button class="metric-stage-sem-resposta" type="button" data-pipeline-stage-jump="proposta_enviada" aria-label="Ir para propostas sem resposta no funil">
               <span>Sem resposta</span>
               <strong id="metricStageSemResposta">0</strong>
-            </div>
-            <div class="metric-stage-negociacao">
+            </button>
+            <button class="metric-stage-negociacao" type="button" data-pipeline-stage-jump="negociacao" aria-label="Ir para propostas em negociação no funil">
               <span>Negociação</span>
               <strong id="metricStageNegociacao">0</strong>
-            </div>
-            <div class="metric-stage-sinal">
+            </button>
+            <button class="metric-stage-sinal" type="button" data-pipeline-stage-jump="confirmado" aria-label="Ir para eventos com sinal recebido no funil">
               <span>Sinal</span>
               <strong id="metricStageSinal">0</strong>
-            </div>
-            <div class="metric-stage-pg-restante">
+            </button>
+            <button class="metric-stage-pg-restante" type="button" data-pipeline-stage-jump="pagamento_final" aria-label="Ir para pagamentos restantes no funil">
               <span>PG restante</span>
               <strong id="metricStagePgRestante">0</strong>
-            </div>
-            <div class="metric-stage-planejamento">
+            </button>
+            <button class="metric-stage-planejamento" type="button" data-pipeline-stage-jump="planejamento" aria-label="Ir para planejamento no funil">
               <span>Planejamento</span>
               <strong id="metricStagePlanejamento">0</strong>
-            </div>
-            <div class="metric-stage-48h">
+            </button>
+            <button class="metric-stage-48h" type="button" data-pipeline-stage-jump="evento_proximo" aria-label="Ir para eventos de hoje e amanhã no funil">
               <span>48h</span>
               <strong id="metricStage48h">0</strong>
-            </div>
-            <div class="metric-stage-pos-venda">
+            </button>
+            <button class="metric-stage-pos-venda" type="button" data-pipeline-stage-jump="pos_venda" aria-label="Ir para pós-venda no funil">
               <span>Pós-venda</span>
               <strong id="metricStagePosVenda">0</strong>
-            </div>
+            </button>
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
