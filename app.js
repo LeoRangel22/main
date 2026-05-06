@@ -1651,6 +1651,23 @@ function renderServiceCockpit() {
         <small>pontos OK</small>
       </div>
     </div>
+    <div class="service-mobile-path" aria-label="Rota rápida para atendimento no celular">
+      <button type="button" data-service-next-action="focus_client">
+        <span>1</span>
+        <strong>Lead</strong>
+        <small>contato, data e pax</small>
+      </button>
+      <button type="button" data-service-next-action="focus_items">
+        <span>2</span>
+        <strong>Itens</strong>
+        <small>cardápio e valor</small>
+      </button>
+      <button type="button" data-service-next-action="focus_review">
+        <span>3</span>
+        <strong>Checklist</strong>
+        <small>revisar e enviar</small>
+      </button>
+    </div>
     <div class="service-cockpit-grid">
       <article class="service-cockpit-card service-lead-summary">
         <span>Resumo para abordagem</span>
@@ -1704,7 +1721,7 @@ function renderServiceCockpit() {
             : `<span class="service-check-mini is-ok"><b>OK</b><span>Checklist pronto</span></span>`
         }
       </div>
-      <small class="service-cockpit-hint">Clique em qualquer pendência para ir direto ao campo certo.</small>
+      <small class="service-cockpit-hint">No celular, siga a rota rápida ou toque em uma pendência para ir direto ao campo certo.</small>
     </div>
   `;
 }
@@ -4142,6 +4159,28 @@ function renderSendReview() {
         <strong>${escapeHtml(title)}</strong>
       </div>
       <small>${escapeHtml(note)}</small>
+    </div>
+    <div class="send-review-route" aria-label="Rota rápida de conferência e envio">
+      <button type="button" data-review-target="client">
+        <span>1</span>
+        <strong>Dados</strong>
+        <small>cliente e contato</small>
+      </button>
+      <button type="button" data-review-target="items">
+        <span>2</span>
+        <strong>Itens</strong>
+        <small>cardápio e valor</small>
+      </button>
+      <button type="button" data-review-target="review">
+        <span>3</span>
+        <strong>Checklist</strong>
+        <small>segurança do envio</small>
+      </button>
+      <button class="is-primary" type="button" data-send-review-action="${escapeHtml(command.action)}" data-review-target="${escapeHtml(command.target || "client")}">
+        <span>4</span>
+        <strong>${escapeHtml(command.action === "whatsapp" ? "Enviar" : command.action === "approve" ? "Aprovar" : "Resolver")}</strong>
+        <small>${escapeHtml(command.label || nextAction)}</small>
+      </button>
     </div>
     <div class="send-review-command">
       <article class="send-review-next-action">
@@ -8244,8 +8283,14 @@ async function runProposalNextStepAction(action) {
     case "mark_remaining":
       if (activeProposal) await updateProposalStatus(activeProposal.id, "planejamento");
       break;
+    case "focus_client":
+      scrollToReviewTarget("client");
+      break;
     case "focus_items":
       scrollToItems();
+      break;
+    case "focus_review":
+      scrollToReviewTarget("review");
       break;
     case "focus_checklist":
       nodes.operationalChecklist?.scrollIntoView({ behavior: "smooth", block: "start" });

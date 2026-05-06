@@ -3010,6 +3010,64 @@ label.pipeline-status-control:focus-within select {
   font-size: 0.62rem;
 }
 
+.service-mobile-path {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.service-mobile-path button,
+.send-review-route button {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-height: 52px;
+  padding: 9px 10px;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.service-mobile-path button:hover,
+.send-review-route button:hover {
+  border-color: rgba(24, 58, 45, 0.28);
+  box-shadow: 0 10px 22px rgba(24, 58, 45, 0.08);
+  transform: translateY(-1px);
+}
+
+.service-mobile-path span,
+.send-review-route span {
+  align-items: center;
+  background: rgba(245, 155, 30, 0.16);
+  border-radius: 999px;
+  color: var(--laranja);
+  display: inline-flex;
+  font-size: 0.64rem;
+  font-weight: 950;
+  height: 20px;
+  justify-content: center;
+  width: 24px;
+}
+
+.service-mobile-path strong,
+.send-review-route strong {
+  color: var(--verde-escuro);
+  font-size: 0.78rem;
+  line-height: 1.05;
+}
+
+.service-mobile-path small,
+.send-review-route small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
 .service-cockpit-grid {
   display: grid;
   gap: 10px;
@@ -4817,6 +4875,27 @@ textarea {
 .send-review-command .send-review-next-action small {
   opacity: 0.88;
   white-space: normal;
+}
+
+.send-review-route {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.send-review-route .is-primary {
+  background: linear-gradient(135deg, var(--verde-escuro), #2f6f45);
+  border-color: transparent;
+}
+
+.send-review-route .is-primary span {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.send-review-route .is-primary strong,
+.send-review-route .is-primary small {
+  color: #fff;
 }
 
 .send-review-panel.is-approved .send-review-next-action {
@@ -7689,6 +7768,32 @@ input[type="range"] {
     flex-direction: column;
   }
 
+  .service-cockpit {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .service-mobile-path {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .service-mobile-path button {
+    min-height: 56px;
+    padding: 8px;
+  }
+
+  .service-mobile-path strong {
+    font-size: 0.74rem;
+  }
+
+  .service-mobile-path small {
+    font-size: 0.6rem;
+  }
+
+  .service-next-card {
+    order: -1;
+  }
+
   .action-focus-card {
     align-items: stretch;
     grid-template-columns: 1fr;
@@ -7696,6 +7801,7 @@ input[type="range"] {
 
   .action-focus-card .action-open-button {
     justify-self: stretch;
+    min-height: 44px;
     width: 100%;
   }
 
@@ -7917,6 +8023,76 @@ input[type="range"] {
 
   .send-review-command {
     grid-template-columns: 1fr;
+  }
+
+  .send-review-panel {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .send-review-route {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .send-review-route button {
+    min-height: 58px;
+  }
+
+  .send-review-primary-button {
+    min-height: 44px;
+  }
+
+  .pipeline-card {
+    gap: 5px;
+    padding: 10px;
+  }
+
+  .pipeline-card-kicker {
+    gap: 5px;
+  }
+
+  .pipeline-card-event-row,
+  .pipeline-card-name-row,
+  .pipeline-card-title {
+    gap: 8px;
+  }
+
+  .pipeline-card-event-line,
+  .pipeline-card-final-client,
+  .pipeline-card-meta {
+    white-space: normal;
+  }
+
+  .pipeline-card-name {
+    -webkit-line-clamp: 2;
+  }
+
+  .pipeline-card-next-action {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-card-next-action strong {
+    text-align: left;
+  }
+
+  .pipeline-card-bottom-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-card-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .pipeline-open-button,
+  .pipeline-top-action,
+  .pipeline-proof-download,
+  .pipeline-card-kicker .pipeline-status-control summary {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 10px;
   }
 
   .proposal-next-step-body {
