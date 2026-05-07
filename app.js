@@ -4122,17 +4122,48 @@ function scrollToClientData() {
   document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function getScrollableAncestors(node) {
+  const ancestors = [];
+  let parent = node?.parentElement;
+  while (parent && parent !== document.body && parent !== document.documentElement) {
+    const style = window.getComputedStyle(parent);
+    const overflowY = `${style.overflowY} ${style.overflow}`;
+    if (/(auto|scroll)/.test(overflowY) && parent.scrollHeight > parent.clientHeight + 8) {
+      ancestors.push(parent);
+    }
+    parent = parent.parentElement;
+  }
+  return ancestors;
+}
+
 function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
   if (!target) return;
   const scroll = (scrollBehavior = behavior) => {
     const rect = target.getBoundingClientRect();
     const top = Math.max(0, rect.top + window.scrollY - offset);
-    window.scrollTo({ top, behavior: scrollBehavior });
+    const root = document.scrollingElement || document.documentElement;
+    try {
+      window.scrollTo({ top, behavior: scrollBehavior });
+    } catch (_) {
+      window.scrollTo(0, top);
+    }
+    if (scrollBehavior === "auto") {
+      if (root) root.scrollTop = top;
+      document.documentElement.scrollTop = top;
+      document.body.scrollTop = top;
+    }
+    getScrollableAncestors(target).forEach((ancestor) => {
+      const ancestorRect = ancestor.getBoundingClientRect();
+      const delta = target.getBoundingClientRect().top - ancestorRect.top - offset;
+      ancestor.scrollTop += delta;
+    });
   };
 
   scroll();
   window.requestAnimationFrame(() => scroll());
-  window.setTimeout(() => scroll("auto"), 220);
+  window.setTimeout(() => scroll("auto"), 140);
+  window.setTimeout(() => scroll("auto"), 340);
+  window.setTimeout(() => scroll("auto"), 760);
 }
 
 function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.", targetMode = "auto") {
@@ -4149,7 +4180,7 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
 
   const editorAnchor =
     nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : section || layout;
-  const target = targetMode === "review" ? section || editorAnchor || layout : editorAnchor || section || layout;
+  const target = section || editorAnchor || layout;
   if (!target) return;
 
   scrollToNodeReliably(target);
@@ -5333,6 +5364,8 @@ function getPipelineItems() {
       remainingProof: proposal.snapshot?.pagamentoRestante?.comprovante || null,
       clientResponse: proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao || "",
       clientMessage: proposal.cliente_mensagem || proposal.snapshot?.clienteResposta?.mensagem || "",
+      clientRequest: proposal.cliente_solicitacao || proposal.snapshot?.clienteResposta || null,
+      clientResponseAt: proposal.cliente_resposta_em || proposal.snapshot?.clienteResposta?.registradoEm || "",
       meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
       cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
       eventDate: parseLocalIsoDate(proposal.data_evento || ""),
@@ -6711,10 +6744,11 @@ function getActionTasks(items = getPipelineItems()) {
     }
 
     if (item.kind === "proposal" && status === "negociacao") {
+      const changeDetails = item.clientResponse === "alteracao" ? getClientChangeDetails(item) : null;
       tasks.push({
         ...base,
         title: "Avançar negociação",
-        note: item.clientResponse === "alteracao" ? "Cliente pediu ajuste na proposta." : "Ajuste comercial em andamento.",
+        note: changeDetails ? `Cliente pediu alteração: ${changeDetails.summary}` : "Ajuste comercial em andamento.",
         priority: item.clientResponse === "alteracao" ? 74 : 50,
         track: "Comercial",
       });
@@ -6905,6 +6939,7 @@ function renderActionTasks(items = getPipelineItems()) {
         item.kind === "proposal"
           ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
           : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+      const clientChangeBlock = item.clientResponse === "alteracao" ? renderClientResponseBlock(item) : "";
       return `
         <article
           class="action-task action-${getActionPriorityClass(task.priority)}"
@@ -6924,6 +6959,7 @@ function renderActionTasks(items = getPipelineItems()) {
             ${task.sla ? `<small class="action-task-sla sla-${escapeHtml(task.sla.level)}">${escapeHtml(task.sla.label)}</small>` : ""}
             <p>${escapeHtml(task.note)}</p>
           </div>
+          ${clientChangeBlock}
           <div class="action-task-footer">
             <small>${escapeHtml([item.type || item.clientType || "Lead", item.updatedAt ? `atualizado ${formatSavedAt(item.updatedAt)}` : ""].filter(Boolean).join(" · "))}</small>
             ${actionButton}
@@ -7200,6 +7236,155 @@ function getClientResponseLabel(response) {
   return labels[response] || "";
 }
 
+function normalizeClientRequestPayload(payload) {
+  if (!payload) return {};
+  if (typeof payload === "string") {
+    try {
+      return JSON.parse(payload);
+    } catch (_) {
+      return { mensagem: payload };
+    }
+  }
+  return typeof payload === "object" ? payload : {};
+}
+
+function firstClientRequestValue(payload, keys = []) {
+  for (const key of keys) {
+    const value = payload?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) return value;
+  }
+  return "";
+}
+
+function formatClientRequestDate(value) {
+  if (!value) return "";
+  return formatDateFromIso(String(value).slice(0, 10));
+}
+
+function formatClientRequestTime(value) {
+  if (!value) return "";
+  return String(value).slice(0, 5);
+}
+
+function getClientChangeDetails(item = {}) {
+  const payload = normalizeClientRequestPayload(item.clientRequest || item.snapshot?.clienteResposta || {});
+  const message = (
+    item.clientMessage ||
+    firstClientRequestValue(payload, ["mensagem", "message", "observacao", "observacoes"]) ||
+    ""
+  ).trim();
+  const requestedDate = firstClientRequestValue(payload, ["data", "requested_date", "requestedDate", "novaData"]);
+  const requestedTime = firstClientRequestValue(payload, ["horario", "requested_time", "requestedTime", "novoHorario"]);
+  const requestedGuests = firstClientRequestValue(payload, ["convidados", "requested_guests", "requestedGuests", "pax", "novoPax"]);
+  const responseAt = item.clientResponseAt || firstClientRequestValue(payload, ["registradoEm", "created_at", "at"]);
+  const metaParts = [
+    requestedDate ? `Data: ${formatClientRequestDate(requestedDate)}` : "",
+    requestedTime ? `Horário: ${formatClientRequestTime(requestedTime)}` : "",
+    requestedGuests ? `Público: ${requestedGuests}` : "",
+  ].filter(Boolean);
+  const fallbackMessage = "Cliente pediu ajuste, mas não deixou detalhes no campo aberto.";
+  return {
+    message: message || fallbackMessage,
+    metaParts,
+    responseAt,
+    summary: [message || fallbackMessage, ...metaParts].filter(Boolean).join(" · "),
+  };
+}
+
+function renderClientResponseBlock(item) {
+  if (!item.clientResponse) return "";
+  if (item.clientResponse === "alteracao") {
+    const details = getClientChangeDetails(item);
+    return `
+      <button
+        class="pipeline-client-change"
+        type="button"
+        data-client-change-kind="${escapeHtml(item.kind)}"
+        data-client-change-id="${escapeHtml(item.id)}"
+        title="Ver pedido completo de alteração do cliente"
+      >
+        <span>Cliente pediu alteração</span>
+        <strong>${escapeHtml(details.message)}</strong>
+        <small>${escapeHtml(details.metaParts.length ? details.metaParts.join(" · ") : "Clique para ver o pedido completo e ajustar a proposta")}</small>
+      </button>
+    `;
+  }
+  return `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`;
+}
+
+function findPipelineItem(kind, id) {
+  return getPipelineItems().find((item) => item.kind === kind && item.id === id);
+}
+
+function closeClientChangeDialog() {
+  document.querySelector(".client-change-dialog-backdrop")?.remove();
+}
+
+function showClientChangeDetails(kind, id) {
+  const item = findPipelineItem(kind, id);
+  if (!item) {
+    showToast("Não encontrei os detalhes desta alteração. Atualize o funil e tente de novo.");
+    return;
+  }
+  const details = getClientChangeDetails(item);
+  closeClientChangeDialog();
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div class="client-change-dialog-backdrop" role="presentation">
+        <section class="client-change-dialog" role="dialog" aria-modal="true" aria-labelledby="clientChangeDialogTitle">
+          <div class="client-change-dialog-header">
+            <span>Pedido do cliente</span>
+            <h2 id="clientChangeDialogTitle">Alteração solicitada na proposta</h2>
+            <button class="icon-button" type="button" data-close-client-change aria-label="Fechar">×</button>
+          </div>
+          <div class="client-change-dialog-summary">
+            <div>
+              <span>Cliente</span>
+              <strong>${escapeHtml(item.name || "Cliente")}</strong>
+              <small>${escapeHtml([item.type, item.date ? formatDateFromIso(item.date) : "", item.time ? String(item.time).slice(0, 5) : ""].filter(Boolean).join(" · "))}</small>
+            </div>
+            ${
+              details.responseAt
+                ? `<div><span>Recebido</span><strong>${escapeHtml(formatSavedAt(details.responseAt))}</strong><small>Resposta pelo link público</small></div>`
+                : ""
+            }
+          </div>
+          <div class="client-change-dialog-message">
+            <span>O que o cliente pediu</span>
+            <p>${escapeHtml(details.message)}</p>
+          </div>
+          ${
+            details.metaParts.length
+              ? `<div class="client-change-dialog-meta">${details.metaParts.map((part) => `<strong>${escapeHtml(part)}</strong>`).join("")}</div>`
+              : ""
+          }
+          <div class="client-change-dialog-actions">
+            <button class="secondary" type="button" data-close-client-change>Fechar</button>
+            <button class="primary" type="button" data-open-client-change data-client-change-kind="${escapeHtml(item.kind)}" data-client-change-id="${escapeHtml(item.id)}">Abrir e ajustar proposta</button>
+          </div>
+        </section>
+      </div>
+    `,
+  );
+  const dialog = document.querySelector(".client-change-dialog-backdrop");
+  dialog?.addEventListener("click", async (event) => {
+    if (event.target === dialog || event.target.closest("[data-close-client-change]")) {
+      closeClientChangeDialog();
+      return;
+    }
+    const openButton = event.target.closest("[data-open-client-change]");
+    if (!openButton) return;
+    closeClientChangeDialog();
+    if (openButton.dataset.clientChangeKind === "proposal") {
+      await safeOpenSavedProposal(openButton.dataset.clientChangeId, "Alteração do cliente");
+    } else {
+      await safeApplyQuoteRequest(openButton.dataset.clientChangeId, "Alteração do cliente");
+    }
+  });
+  dialog?.querySelector("[data-open-client-change]")?.focus?.();
+}
+
 function isTestCancelReason(reason) {
   return slugify(reason).includes("teste");
 }
@@ -7263,9 +7448,7 @@ function renderPipelineCard(item) {
         .map((alert) => `<small class="pipeline-alert pipeline-alert-${escapeHtml(alert.level)}">${escapeHtml(alert.label)}</small>`)
         .join("")}</div>`
     : "";
-  const clientResponseLine = item.clientResponse
-    ? `<small class="pipeline-client-response">${escapeHtml(getClientResponseLabel(item.clientResponse))}${item.clientMessage ? ` · ${escapeHtml(item.clientMessage)}` : ""}</small>`
-    : "";
+  const clientResponseLine = renderClientResponseBlock(item);
   const signalProofLink =
     item.hasSignalProof && item.signalProof?.dataUrl
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.signalProof.dataUrl)}" download="${escapeHtml(item.signalProof.nome || "comprovante-sinal")}">Comprovante</a>`
@@ -9443,6 +9626,11 @@ function bindEvents() {
     if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Relatório");
   });
   nodes.actionList?.addEventListener("click", async (event) => {
+    const changeButton = event.target.closest("[data-client-change-id]");
+    if (changeButton) {
+      showClientChangeDetails(changeButton.dataset.clientChangeKind, changeButton.dataset.clientChangeId);
+      return;
+    }
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
       await safeOpenSavedProposal(proposalButton.dataset.proposalId, "Prioridade agora");
@@ -9585,6 +9773,11 @@ function bindEvents() {
     await safeOpenSavedProposal(button.dataset.proposalId, "Histórico");
   });
   nodes.pipelineBoard?.addEventListener("click", async (event) => {
+    const changeButton = event.target.closest("[data-client-change-id]");
+    if (changeButton) {
+      showClientChangeDetails(changeButton.dataset.clientChangeKind, changeButton.dataset.clientChangeId);
+      return;
+    }
     const button = event.target.closest("button[data-proposal-id]");
     if (button) {
       await safeOpenSavedProposal(button.dataset.proposalId, "Funil");
@@ -9617,6 +9810,9 @@ function bindEvents() {
     if (card && !isInteractivePipelineTarget(event.target)) {
       await openPipelineCardElement(card);
     }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeClientChangeDialog();
   });
   nodes.pipelineBoard?.addEventListener("keydown", async (event) => {
     if (!["Enter", " "].includes(event.key)) return;
