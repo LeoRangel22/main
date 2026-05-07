@@ -4122,17 +4122,24 @@ function scrollToClientData() {
   document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
+  if (!target) return;
+  const scroll = (scrollBehavior = behavior) => {
+    const rect = target.getBoundingClientRect();
+    const top = Math.max(0, rect.top + window.scrollY - offset);
+    window.scrollTo({ top, behavior: scrollBehavior });
+  };
+
+  scroll();
+  window.requestAnimationFrame(() => scroll());
+  window.setTimeout(() => scroll("auto"), 220);
+}
+
 function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.", targetMode = "auto") {
   const section = document.querySelector("#clientDataSection");
   const layout = document.querySelector(".quote-layout");
   const proposalPaper = document.querySelector("#proposalPaper");
   const reviewPanel = nodes.sendReviewPanel;
-  const hasErrors = getProposalReviewItems().some((item) => item.status === "error");
-  const target =
-    targetMode === "review" || (targetMode === "auto" && state.activeProposalId && (hasErrors || state.selectedIds.size))
-      ? reviewPanel || section || layout
-      : section || layout;
-  if (!target) return;
 
   renderSummary();
   renderSendReview();
@@ -4140,7 +4147,12 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
   renderProposal();
   renderLoadedEditorBar();
 
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  const editorAnchor =
+    nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : section || layout;
+  const target = targetMode === "review" ? section || editorAnchor || layout : editorAnchor || section || layout;
+  if (!target) return;
+
+  scrollToNodeReliably(target);
   [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
     node.classList.remove("is-loaded-focus");
     void node.offsetWidth;
