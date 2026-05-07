@@ -6611,12 +6611,16 @@ function renderLoadedEditorBar() {
 async function confirmEditorSwitch() {
   if (!hasUnsavedEditorChanges()) return true;
   const saveFirst = window.confirm(
-    "Você alterou esta proposta. Deseja salvar antes de abrir outro lead?\n\nOK: salvar agora.\nCancelar: continuar revisando antes de trocar.",
+    "Você alterou esta proposta.\n\nOK: salvar antes de abrir outro lead.\nCancelar: abrir outro lead sem salvar estas alterações.",
   );
-  if (!saveFirst) return false;
+  if (!saveFirst) {
+    return window.confirm("Abrir sem salvar? As alterações feitas neste editor serão descartadas.");
+  }
   const activeStatus = getActiveProposal()?.status || "proposta_enviada";
   const saved = await saveCurrentProposal(activeStatus);
-  if (!saved) return false;
+  if (!saved) {
+    return window.confirm("Não consegui salvar automaticamente. Abrir outro lead mesmo assim e descartar as alterações locais?");
+  }
   markEditorClean(getEditorContextFromCurrent("proposal", "Salva antes de trocar"));
   return true;
 }
@@ -6627,11 +6631,27 @@ function getOpenSourceLabelForItem(item, fallback = "Funil") {
 }
 
 async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
+  if (!proposalId) {
+    showToast("Não encontrei o código desta proposta. Atualize o funil e tente de novo.");
+    return;
+  }
+  if (!state.proposals.some((item) => item.id === proposalId)) {
+    showToast("Não encontrei essa proposta no histórico carregado. Clique em Atualizar e tente novamente.");
+    return;
+  }
   if (!(await confirmEditorSwitch())) return;
   openSavedProposal(proposalId, sourceLabel);
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
+  if (!requestId) {
+    showToast("Não encontrei o código deste lead. Atualize o funil e tente de novo.");
+    return;
+  }
+  if (!state.quoteRequests.some((item) => item.id === requestId)) {
+    showToast("Não encontrei esse lead carregado. Clique em Atualizar e tente novamente.");
+    return;
+  }
   if (!(await confirmEditorSwitch())) return;
   await applyQuoteRequest(requestId, sourceLabel);
 }
@@ -6849,7 +6869,13 @@ function renderActionTasks(items = getPipelineItems()) {
     .map((step) => `<li>${escapeHtml(step)}</li>`)
     .join("");
   nodes.actionList.innerHTML = `
-    <article class="action-focus-card action-${getActionPriorityClass(topTask.priority)}">
+    <article
+      class="action-focus-card action-${getActionPriorityClass(topTask.priority)}"
+      tabindex="0"
+      data-action-kind="${escapeHtml(topItem.kind)}"
+      data-action-id="${escapeHtml(topItem.id)}"
+      aria-label="Abrir prioridade agora de ${escapeHtml(topItem.name || "Cliente")}"
+    >
       <div>
         <span>Prioridade agora</span>
         <strong>${escapeHtml(topTask.title)}</strong>
@@ -6868,7 +6894,13 @@ function renderActionTasks(items = getPipelineItems()) {
           ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
           : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
       return `
-        <article class="action-task action-${getActionPriorityClass(task.priority)}">
+        <article
+          class="action-task action-${getActionPriorityClass(task.priority)}"
+          tabindex="0"
+          data-action-kind="${escapeHtml(item.kind)}"
+          data-action-id="${escapeHtml(item.id)}"
+          aria-label="Abrir ação de ${escapeHtml(item.name || "Cliente")}"
+        >
           <div class="action-task-topline">
             <span class="action-task-track">${escapeHtml(getActionTrack(task))}</span>
             <b class="action-task-urgency">${escapeHtml(getActionUrgencyLabel(task.priority))}</b>
@@ -6903,6 +6935,16 @@ async function openNextPriorityItem() {
     await safeOpenSavedProposal(task.item.id, source);
   } else {
     await safeApplyQuoteRequest(task.item.id, source);
+  }
+}
+
+async function openActionElement(element, sourceLabel = "Prioridade agora") {
+  if (!element) return;
+  const { actionKind, actionId } = element.dataset;
+  if (actionKind === "proposal") {
+    await safeOpenSavedProposal(actionId, sourceLabel);
+  } else if (actionKind === "request") {
+    await safeApplyQuoteRequest(actionId, sourceLabel);
   }
 }
 
@@ -9395,7 +9437,20 @@ function bindEvents() {
       return;
     }
     const requestButton = event.target.closest("button[data-use-request]");
-    if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Prioridade agora");
+    if (requestButton) {
+      await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Prioridade agora");
+      return;
+    }
+    if (!isInteractivePipelineTarget(event.target)) {
+      await openActionElement(event.target.closest("[data-action-id]"), "Prioridade agora");
+    }
+  });
+  nodes.actionList?.addEventListener("keydown", async (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    const action = event.target.closest?.("[data-action-id]");
+    if (!action || event.target !== action) return;
+    event.preventDefault();
+    await openActionElement(action, "Prioridade agora");
   });
   nodes.operationsAgenda?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");

@@ -2312,6 +2312,18 @@ textarea[aria-invalid="true"] {
   outline: none;
 }
 
+.action-focus-card,
+.action-task {
+  cursor: pointer;
+}
+
+.action-focus-card:focus-visible,
+.action-task:focus-visible {
+  box-shadow: 0 0 0 3px rgba(245, 155, 30, 0.24);
+  outline: 2px solid rgba(245, 155, 30, 0.72);
+  outline-offset: 2px;
+}
+
 .pipeline-card[draggable="true"] {
   cursor: pointer;
 }
