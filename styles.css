@@ -3443,6 +3443,64 @@ label.pipeline-status-control:focus-within select {
   border-color: rgba(47, 111, 69, 0.18);
 }
 
+.form-source-edit {
+  background: rgba(24, 58, 45, 0.045);
+  border: 1px solid rgba(24, 58, 45, 0.1);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.form-source-edit > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.form-source-edit > div:first-child span,
+.form-source-edit-field span {
+  color: var(--amarelo);
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.form-source-edit > div:first-child strong {
+  color: var(--verde-escuro);
+  font-size: 0.9rem;
+}
+
+.form-source-edit-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-source-edit-field {
+  display: grid;
+  gap: 5px;
+}
+
+.form-source-edit-field input,
+.form-source-edit-field select {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(24, 58, 45, 0.18);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  font-weight: 850;
+  min-height: 42px;
+  padding: 10px;
+}
+
+.form-source-edit-field input:focus,
+.form-source-edit-field select:focus {
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgba(24, 58, 45, 0.1);
+  outline: none;
+}
+
 .form-source-grid {
   display: grid;
   gap: 8px;
@@ -8793,6 +8851,7 @@ input[type="range"] {
   .action-list,
   .client-command-center,
   .service-cockpit-grid,
+  .form-source-edit-grid,
   .form-source-grid,
   .form-source-briefing,
   .lead-review-grid,
@@ -8920,6 +8979,7 @@ input[type="range"] {
   }
 
   .form-source-grid,
+  .form-source-edit-grid,
   .form-source-briefing {
     grid-template-columns: 1fr;
   }
