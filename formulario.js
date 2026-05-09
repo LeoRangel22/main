@@ -1459,21 +1459,7 @@ function getPayload(snapshot) {
     duracao: snapshot.evento.duracao,
     motivo_evento: snapshot.evento.motivo || null,
     preferencias: snapshot.evento.preferencias || null,
-    observacoes:
-      [
-        snapshot.evento.extras ? `Extras: ${snapshot.evento.extras}` : "",
-        snapshot.qualificacao?.tipoCliente ? `Tipo de cliente: ${snapshot.qualificacao.tipoCliente}` : "",
-        snapshot.qualificacao?.clienteFinal ? `Cliente final: ${snapshot.qualificacao.clienteFinal}` : "",
-        snapshot.qualificacao?.nomeGrupo ? `Grupo: ${snapshot.qualificacao.nomeGrupo}` : "",
-        snapshot.qualificacao?.origem ? `Origem: ${snapshot.qualificacao.origem}` : "",
-        snapshot.qualificacao?.faixaInvestimento
-          ? `Faixa de investimento: ${snapshot.qualificacao.faixaInvestimento}`
-          : "",
-        snapshot.evento.dataFlexivelStatus ? `Data flexível: ${snapshot.evento.dataFlexivelStatus}` : "",
-        snapshot.evento.observacoes || "",
-      ]
-        .filter(Boolean)
-        .join("\n") || null,
+    observacoes: snapshot.evento.observacoes || null,
     origem: "formulario",
     proposta_id: null,
     snapshot,

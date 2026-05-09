@@ -699,6 +699,7 @@ const nodes = {
   reportPresets: document.querySelector(".report-presets"),
   clientFormLink: document.querySelector("#clientFormLink"),
   availabilityAlert: document.querySelector("#availabilityAlert"),
+  formSourcePanel: document.querySelector("#formSourcePanel"),
   serviceCockpit: document.querySelector("#serviceCockpit"),
   leadReviewPanel: document.querySelector("#leadReviewPanel"),
   proposalNextStep: document.querySelector("#proposalNextStep"),
@@ -3082,7 +3083,7 @@ function getProposalReviewItems() {
           ? [finalClient ? `Cliente final: ${finalClient}` : "", groupName ? `Grupo: ${groupName}` : ""].filter(Boolean).join(" · ")
           : "Para agência, registre cliente final ou nome do grupo antes de automatizar."
         : "Cliente direto ou empresa sem intermediário identificado.",
-      target: "notes",
+      target: "source",
     },
     {
       id: "format",
@@ -3195,7 +3196,7 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
     const hasFinalClient = Boolean(context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot));
     const hasGroupName = Boolean(context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot));
     if (!hasFinalClient && !hasGroupName) {
-      push("warning", "Agência sem cliente final ou grupo", "Registre nome do cliente final ou grupo. Isso ajuda a localizar, evitar confusão e personalizar follow-up.", "notes", "qualificação");
+      push("warning", "Agência sem cliente final ou grupo", "Registre nome do cliente final ou grupo. Isso ajuda a localizar, evitar confusão e personalizar follow-up.", "source", "qualificação");
     }
   }
 
@@ -3435,7 +3436,7 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) 
 function getActiveCommercialContext() {
   const request = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const proposal = state.proposals.find((item) => item.id === state.activeProposalId);
-  const snapshot = proposal?.snapshot || request?.snapshot || {};
+  const snapshot = proposal?.snapshot?.sourceRequestSnapshot || proposal?.snapshot || request?.snapshot || {};
   const qualification = snapshot.qualificacao || snapshot.qualification || {};
   const event = snapshot.evento || snapshot.event || {};
   return {
@@ -3453,6 +3454,184 @@ function getActiveCommercialContext() {
     occasion: event.ocasiao || event.perfil || event.occasion || "",
     extras: event.extras || "",
   };
+}
+
+const structuredObservationPrefixes = [
+  "extras:",
+  "tipo de cliente:",
+  "cliente final:",
+  "grupo:",
+  "origem:",
+  "faixa de investimento:",
+  "data flexível:",
+  "data é flexível:",
+  "momento informado:",
+  "ocasião:",
+  "formato escolhido:",
+  "janela de data flexível:",
+  "período do dia:",
+  "horário de chegada:",
+];
+
+function cleanClientObservationText(request = null, snapshot = {}) {
+  const eventSnapshot = snapshot?.evento || snapshot?.event || {};
+  const directObservation = eventSnapshot.observacoes || eventSnapshot.observations || "";
+  if (String(directObservation || "").trim()) return String(directObservation).trim();
+  return String(request?.observacoes || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !structuredObservationPrefixes.some((prefix) => line.toLowerCase().startsWith(prefix)))
+    .join("\n")
+    .trim();
+}
+
+function normalizeSourceValue(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+  return String(value || "").trim();
+}
+
+function getFormSourceData() {
+  const request = getActiveQuoteRequest();
+  const proposal = getActiveProposal();
+  const proposalSnapshot = proposal?.snapshot || {};
+  const snapshot = request?.snapshot || proposalSnapshot.sourceRequestSnapshot || proposalSnapshot || {};
+  const client = snapshot.cliente || snapshot.client || {};
+  const event = snapshot.evento || snapshot.event || {};
+  const qualification = snapshot.qualificacao || snapshot.qualification || proposalSnapshot.qualificacao || {};
+  const reference = snapshot.referencia || proposalSnapshot.referencia || "";
+  const clientType = normalizeSourceValue(qualification.tipoCliente || qualification.clientType || client.tipoCliente);
+  const finalClient = normalizeSourceValue(
+    qualification.clienteFinal ||
+      qualification.finalClient ||
+      client.clienteFinal ||
+      client.finalClient ||
+      getFinalClientFromSnapshot(snapshot) ||
+      getFinalClientFromSnapshot(proposalSnapshot),
+  );
+  const groupName = normalizeSourceValue(
+    qualification.nomeGrupo ||
+      qualification.groupName ||
+      client.nomeGrupo ||
+      client.groupName ||
+      getGroupNameFromSnapshot(snapshot) ||
+      getGroupNameFromSnapshot(proposalSnapshot),
+  );
+
+  return {
+    hasSource: Boolean(request || snapshot.origem === "formulario" || reference || clientType || qualification.faixaInvestimento),
+    reference,
+    company: normalizeSourceValue(client.empresa || client.company || proposalSnapshot.client?.company || request?.empresa || request?.cliente_empresa),
+    clientType,
+    finalClient,
+    groupName,
+    budgetRange: normalizeSourceValue(qualification.faixaInvestimento || qualification.budgetRange),
+    origin: normalizeSourceValue(qualification.origem || qualification.origin),
+    moment: normalizeSourceValue(event.momento || event.moment),
+    occasion: normalizeSourceValue(event.ocasiao || event.perfil || event.occasion),
+    eventType: normalizeSourceValue(request?.tipo_evento || event.tipo || event.type || fields.eventType?.value),
+    flexibleDate: normalizeSourceValue(event.dataFlexivel || event.flexibleDate),
+    flexibleDateStatus: normalizeSourceValue(event.dataFlexivelStatus || event.flexibleDateStatus),
+    timeRange: normalizeSourceValue(event.faixaHorario || event.timeRange),
+    arrivalTime: normalizeSourceValue(event.horario || event.time),
+    guests: normalizeSourceValue(event.convidados || event.guests || request?.convidados),
+    duration: normalizeSourceValue(event.duracaoTexto || event.durationLabel || (event.duracao ? `${event.duracao}h` : "")),
+    extras: normalizeSourceValue(event.extras),
+    preferences: normalizeSourceValue(request?.preferencias || event.preferencias || event.preferences),
+    observations: cleanClientObservationText(request, snapshot),
+    reason: normalizeSourceValue(request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value),
+  };
+}
+
+function getFormSourceMissingItems(data = getFormSourceData()) {
+  const missing = [];
+  const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(data.clientType);
+  if (!data.clientType) missing.push("tipo de cliente");
+  if (isAgency && !data.finalClient && !data.groupName) missing.push("cliente final ou nome do grupo");
+  if (!data.budgetRange) missing.push("faixa de investimento");
+  if (!data.origin) missing.push("origem");
+  if (!data.moment) missing.push("momento");
+  if (!data.occasion) missing.push("ocasião");
+  return missing;
+}
+
+function renderSourceValue(value, fallback = "Não veio no formulário") {
+  const text = normalizeSourceValue(value);
+  return text ? escapeHtml(text) : `<em>${escapeHtml(fallback)}</em>`;
+}
+
+function renderSourceCard(label, value, { important = false, fallback } = {}) {
+  const missing = !normalizeSourceValue(value);
+  return `
+    <article class="form-source-card ${missing && important ? "is-missing" : missing ? "is-empty" : ""}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${renderSourceValue(value, fallback)}</strong>
+    </article>
+  `;
+}
+
+function renderFormSourcePanel() {
+  if (!nodes.formSourcePanel) return;
+  const data = getFormSourceData();
+  if (!data.hasSource) {
+    nodes.formSourcePanel.className = "form-source-panel is-hidden";
+    nodes.formSourcePanel.innerHTML = "";
+    return;
+  }
+
+  const missing = getFormSourceMissingItems(data);
+  const clientContext = [data.finalClient ? `Cliente final: ${data.finalClient}` : "", data.groupName ? `Grupo: ${data.groupName}` : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const flexibility = [data.flexibleDateStatus, data.flexibleDate ? `Janela: ${data.flexibleDate}` : ""].filter(Boolean).join(" · ");
+  const timeContext = [data.timeRange, data.arrivalTime ? `Chegada: ${data.arrivalTime}` : ""].filter(Boolean).join(" · ");
+  const briefingBlocks = [
+    ["Motivo do evento", data.reason],
+    ["Preferências de alimentos e bebidas", data.preferences],
+    ["Extras solicitados", data.extras],
+    ["Observação livre do cliente", data.observations],
+  ].filter(([, value]) => normalizeSourceValue(value));
+
+  nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
+  nodes.formSourcePanel.innerHTML = `
+    <div class="form-source-head">
+      <div>
+        <span>Dados recebidos do formulário</span>
+        <strong>Contexto original do cliente para montar a proposta</strong>
+        <p>Os campos editáveis ficam acima. Aqui está o que o cliente respondeu no formulário, sem misturar com observações internas.</p>
+      </div>
+      <small>${missing.length ? `Melhor completar: ${escapeHtml(missing.join(", "))}` : "Formulário bem preenchido"}</small>
+    </div>
+    <div class="form-source-grid">
+      ${renderSourceCard("Referência", data.reference, { fallback: "Sem referência" })}
+      ${renderSourceCard("Tipo de cliente", data.clientType, { important: true, fallback: "Classifique para priorizar" })}
+      ${renderSourceCard("Empresa ou agência", data.company, { fallback: "Não informado" })}
+      ${renderSourceCard("Cliente final / grupo", clientContext, { important: ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(data.clientType), fallback: "Peça cliente final ou grupo" })}
+      ${renderSourceCard("Faixa de investimento", data.budgetRange, { important: true, fallback: "Não definida" })}
+      ${renderSourceCard("Origem do lead", data.origin, { fallback: "Não informada" })}
+      ${renderSourceCard("Momento desejado", data.moment, { important: true })}
+      ${renderSourceCard("Ocasião", data.occasion, { important: true })}
+      ${renderSourceCard("Flexibilidade de data", flexibility, { fallback: "Não informada" })}
+      ${renderSourceCard("Período e chegada", timeContext, { fallback: "Use data e horário acima" })}
+      ${renderSourceCard("Pax e duração do formulário", [data.guests ? `${data.guests} pax` : "", data.duration].filter(Boolean).join(" · "), { fallback: "Usar campos acima" })}
+      ${renderSourceCard("Formato solicitado", data.eventType, { fallback: "Definir na configuração" })}
+    </div>
+    <div class="form-source-briefing ${briefingBlocks.length ? "" : "is-empty"}">
+      ${
+        briefingBlocks.length
+          ? briefingBlocks
+              .map(
+                ([label, value]) => `
+                  <article>
+                    <span>${escapeHtml(label)}</span>
+                    <p>${escapeHtml(value).replace(/\n/g, "<br>")}</p>
+                  </article>
+                `,
+              )
+              .join("")
+          : `<article><span>Briefing adicional</span><p>O cliente não deixou observações livres. Se descobrir algo importante no atendimento, registre no campo Observações.</p></article>`
+      }
+    </div>
+  `;
 }
 
 function getLeadReadinessItems() {
@@ -3484,14 +3663,14 @@ function getLeadReadinessItems() {
       detail: hasCommercialProfile
         ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
         : "Opcional, mas útil: classifique tipo de cliente, faixa de investimento ou origem para priorizar follow-up.",
-      target: "notes",
+      target: "source",
     },
     {
       id: "client_context",
       label: "Cliente final/grupo",
       status: clientContext?.status || "ok",
       detail: clientContext?.detail || "Contexto comercial revisado.",
-      target: "notes",
+      target: "source",
     },
     {
       id: "format",
@@ -5107,6 +5286,7 @@ function getProposalSnapshot() {
     privatizationChoice: state.privatizationChoice,
     activeQuoteRequestId: state.activeQuoteRequestId,
     qualificacao: activeRequest?.snapshot?.qualificacao || {},
+    sourceRequestSnapshot: activeRequest?.snapshot || activeProposal?.snapshot?.sourceRequestSnapshot || null,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
     paymentTerms,
@@ -7847,30 +8027,13 @@ async function loadQuoteRequests() {
 
 function buildNotesFromRequest(request) {
   const eventSnapshot = request.snapshot?.evento || {};
-  const qualification = request.snapshot?.qualificacao || {};
   const lines = [];
-  if (request.snapshot?.referencia) lines.push(`Referência do formulário: ${request.snapshot.referencia}`);
-  if (request.empresa) lines.push(`Empresa: ${request.empresa}`);
-  if (qualification.clienteFinal || request.snapshot?.cliente?.clienteFinal) {
-    lines.push(`Cliente final: ${qualification.clienteFinal || request.snapshot.cliente.clienteFinal}`);
-  }
-  if (qualification.nomeGrupo || request.snapshot?.cliente?.nomeGrupo) {
-    lines.push(`Nome do grupo: ${qualification.nomeGrupo || request.snapshot.cliente.nomeGrupo}`);
-  }
-  if (qualification.tipoCliente) lines.push(`Tipo de cliente: ${qualification.tipoCliente}`);
-  if (qualification.faixaInvestimento) lines.push(`Faixa de investimento: ${qualification.faixaInvestimento}`);
-  if (qualification.origem) lines.push(`Origem: ${qualification.origem}`);
-  if (eventSnapshot.momento) lines.push(`Momento informado: ${eventSnapshot.momento}`);
-  if (eventSnapshot.ocasiao || eventSnapshot.perfil) lines.push(`Ocasião: ${eventSnapshot.ocasiao || eventSnapshot.perfil}`);
-  if (request.tipo_evento) lines.push(`Formato escolhido: ${request.tipo_evento}`);
-  if (eventSnapshot.dataFlexivel) lines.push(`Janela de data flexível: ${eventSnapshot.dataFlexivel}`);
-  if (eventSnapshot.dataFlexivelStatus) lines.push(`Data é flexível: ${eventSnapshot.dataFlexivelStatus}`);
-  if (eventSnapshot.faixaHorario) lines.push(`Período do dia: ${eventSnapshot.faixaHorario}`);
-  if (eventSnapshot.horario) lines.push(`Horário de chegada: ${eventSnapshot.horario}`);
   if (eventSnapshot.extras) lines.push(`Extras: ${eventSnapshot.extras}`);
-  if (request.preferencias) lines.push(`Preferências de A&B: ${request.preferencias}`);
-  if (request.observacoes) lines.push(`Briefing do cliente: ${request.observacoes}`);
-  lines.push(`Solicitação recebida via formulário em ${formatSavedAt(request.created_at)}.`);
+  if (request.preferencias || eventSnapshot.preferencias) {
+    lines.push(`Preferências de A&B: ${request.preferencias || eventSnapshot.preferencias}`);
+  }
+  const clientObservation = cleanClientObservationText(request, request.snapshot || {});
+  if (clientObservation) lines.push(`Observação do cliente: ${clientObservation}`);
   return lines.join("\n");
 }
 
@@ -9055,6 +9218,7 @@ function renderAll() {
   renderPricesTable();
   renderCommercialLibrarySummary();
   renderAvailabilityAlert();
+  renderFormSourcePanel();
   renderServiceCockpit();
   renderLoadedEditorBar();
   renderLeadReviewPanel();
@@ -9145,6 +9309,7 @@ function getPublicProposalUrl(proposal) {
 function scrollToReviewTarget(target) {
   const targets = {
     client: "#clientDataSection",
+    source: "#formSourcePanel",
     items: "#eventConfigSection",
     notes: "#notes",
     review: "#sendReviewPanel",

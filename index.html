@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260509-eventos-v119" />
+    <link rel="stylesheet" href="./styles.css?v=20260509-eventos-v120" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -416,6 +416,7 @@
                 </label>
               </div>
               <div class="availability-alert is-hidden" id="availabilityAlert"></div>
+              <div class="form-source-panel is-hidden" id="formSourcePanel"></div>
               <div class="lead-review-panel is-hidden" id="leadReviewPanel"></div>
               <div class="proposal-next-step is-hidden" id="proposalNextStep"></div>
               <div class="signal-summary is-hidden" id="signalPaymentInfo"></div>
@@ -424,8 +425,8 @@
               <div class="internal-notes-panel is-hidden" id="internalNotesPanel"></div>
               <div class="event-attachments-panel is-hidden" id="eventAttachmentsPanel"></div>
               <label>
-                Observações
-                <textarea id="notes" rows="3" placeholder="Preferências, restrições, horários, detalhes de montagem..."></textarea>
+                Observações do atendimento
+                <textarea id="notes" rows="3" placeholder="Briefing livre, restrições, montagem, combinado com o cliente..."></textarea>
               </label>
             </div>
 
@@ -670,6 +671,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260509-eventos-v119"></script>
+    <script defer src="./app.js?v=20260509-eventos-v120"></script>
   </body>
 </html>
