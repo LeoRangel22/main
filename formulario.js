@@ -383,7 +383,7 @@ const copy = {
       { value: "suggestion", label: "Me ajudem a definir", icon: "07" },
     ],
     profileSupport: "Primeiro diga quem está organizando. Depois marque a ocasião. Pode marcar mais de uma opção; se tiver dúvida, escolha “Me ajudem a definir”.",
-    occasionSupport: "Ocasião do evento · marque uma ou mais opções. Se não souber, use “Me ajudem a definir”.",
+    occasionSupport: "Ocasião do evento · escolha pelo menos uma opção. Se não souber, use “Me ajudem a definir”.",
     recommendationTitle: "Experiências mais indicadas",
     recommendationEmpty: "Escolha o momento e o perfil para ver as sugestões. A equipe também pode ajustar depois.",
     recommendationReady: (moment) => `Selecionamos uma sugestão inicial para ${moment.toLowerCase()}. Se outra experiência fizer mais sentido, pode trocar sem problema.`,
@@ -560,7 +560,7 @@ const copy = {
       { value: "suggestion", label: "Help me define it", icon: "07" },
     ],
     profileSupport: "First tell us who is organizing it. Then choose the occasion. You may select more than one option; if unsure, choose “Help me define it”.",
-    occasionSupport: "Event occasion · choose one or more options. If unsure, choose “Help me define it”.",
+    occasionSupport: "Event occasion · choose at least one option. If unsure, choose “Help me define it”.",
     recommendationTitle: "Best experiences for your event",
     recommendationEmpty: "Choose the moment and profile to see suggestions. Our team can still adjust it later.",
     recommendationReady: (moment) => `We selected an initial suggestion for ${moment.toLowerCase()}. If another experience feels better, you can change it anytime.`,
@@ -981,11 +981,31 @@ function renderFinalReview() {
   if (!finalReviewGrid) return;
   const current = getCopy();
   const pendingLabel = uiState.language === "en" ? "To be defined" : "A definir";
+  const selectedPreferences = getSelectedPreferenceLabels();
+  const selectedExtras = getSelectedExtraLabels();
+  const preferenceSummary = [
+    selectedPreferences.length
+      ? selectedPreferences.join(", ")
+      : uiState.language === "en"
+        ? "No essential item selected"
+        : "Sem item obrigatório marcado",
+    selectedExtras.length ? `${uiState.language === "en" ? "Extras" : "Extras"}: ${selectedExtras.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const items = [
     {
       label: uiState.language === "en" ? "Format" : "Formato",
       value: fields.eventType.value || (uiState.language === "en" ? "To be suggested" : "A sugerir"),
       step: "recommendation",
+    },
+    {
+      label: uiState.language === "en" ? "Context" : "Contexto",
+      value: [
+        getClientTypeDisplayLabel() || (uiState.language === "en" ? "client type pending" : "tipo de cliente pendente"),
+        getSelectedProfileDisplayLabels().join(", ") || (uiState.language === "en" ? "occasion pending" : "ocasião pendente"),
+      ].join(" · "),
+      step: "profile",
     },
     {
       label: uiState.language === "en" ? "Date and arrival" : "Data e chegada",
@@ -999,6 +1019,11 @@ function renderFinalReview() {
       label: uiState.language === "en" ? "Group" : "Grupo",
       value: `${fields.guests.value || 30} ${uiState.language === "en" ? "guests" : "pessoas"} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
+    },
+    {
+      label: uiState.language === "en" ? "Preferences" : "Preferências",
+      value: preferenceSummary,
+      step: "briefing",
     },
     {
       label: uiState.language === "en" ? "Contact" : "Contato",
@@ -1265,6 +1290,19 @@ function setProfileChoice(value) {
 
 function getSelectedProfileLabels() {
   return [...selectedProfiles].map((profile) => canonicalProfileLabels[profile]).filter(Boolean);
+}
+
+function getSelectedProfileDisplayLabels() {
+  const current = getCopy();
+  return [...selectedProfiles]
+    .map((profile) => current.profiles.find((item) => item.value === profile)?.label || canonicalProfileLabels[profile])
+    .filter(Boolean);
+}
+
+function getClientTypeDisplayLabel() {
+  const current = getCopy();
+  const selected = fields.clientType.value;
+  return current.clientTypes.find((item) => item.value === selected)?.title || canonicalClientTypeLabels[selected] || "";
 }
 
 function getSelectedPreferenceLabels() {
