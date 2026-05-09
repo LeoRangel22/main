@@ -3092,6 +3092,17 @@ function getProposalReviewItems() {
   const selected = getSelectedItems();
   const totals = getQuoteTotals();
   const context = getActiveCommercialContext();
+  const sourceData = getFormSourceData();
+  const commercialContext = {
+    clientType: context.clientType || sourceData.clientType,
+    budgetRange: context.budgetRange || sourceData.budgetRange,
+    origin: context.origin || sourceData.origin,
+    finalClient: context.finalClient || sourceData.finalClient,
+    groupName: context.groupName || sourceData.groupName,
+    occasion: context.occasion || sourceData.occasion,
+    moment: context.moment || sourceData.moment,
+    extras: context.extras || sourceData.extras,
+  };
   const contact = getCurrentContactValues();
   const eventDate = fields.eventDate.value;
   const eventTime = fields.eventTime.value;
@@ -3102,9 +3113,17 @@ function getProposalReviewItems() {
   const allowedCategories = getAllowedCategoriesForEvent(eventType);
   const requiredCategory = getEventCategoryFromRequest(eventType);
   const availability = getAvailabilityReviewStatus();
-  const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(context.clientType);
-  const finalClient = context.finalClient || context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot);
-  const groupName = context.groupName || context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot);
+  const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(commercialContext.clientType);
+  const finalClient =
+    commercialContext.finalClient ||
+    context.snapshot?.client?.finalClient ||
+    context.snapshot?.clienteFinal ||
+    getFinalClientFromSnapshot(context.snapshot);
+  const groupName =
+    commercialContext.groupName ||
+    context.snapshot?.client?.groupName ||
+    context.snapshot?.nomeGrupo ||
+    getGroupNameFromSnapshot(context.snapshot);
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
     selected.length > 0 &&
@@ -3134,15 +3153,15 @@ function getProposalReviewItems() {
     },
     {
       id: "commercial_profile",
-      label: "Origem e prioridade",
-      status: context.clientType && context.budgetRange && context.origin ? "ok" : "warning",
+      label: "Perfil comercial",
+      status: commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin ? "ok" : "warning",
       detail:
-        context.clientType && context.budgetRange && context.origin
-          ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).join(" · ")
+        commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin
+          ? [commercialContext.clientType, commercialContext.budgetRange, commercialContext.origin].filter(Boolean).join(" · ")
           : `Complete para automação futura: ${[
-              !context.clientType ? "tipo de cliente" : "",
-              !context.budgetRange ? "faixa de investimento" : "",
-              !context.origin ? "origem do lead" : "",
+              !commercialContext.clientType ? "tipo de cliente" : "",
+              !commercialContext.budgetRange ? "faixa de investimento" : "",
+              !commercialContext.origin ? "origem do lead" : "",
             ]
               .filter(Boolean)
               .join(", ")}.`,
@@ -3645,11 +3664,16 @@ function getFormSourceMissingItems(data = getFormSourceData()) {
   const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(data.clientType);
   if (!data.clientType) missing.push("tipo de cliente");
   if (isAgency && !data.finalClient && !data.groupName) missing.push("cliente final ou nome do grupo");
-  if (!data.budgetRange) missing.push("faixa de investimento");
-  if (!data.origin) missing.push("origem");
   if (!data.moment) missing.push("momento");
   if (!data.occasion) missing.push("ocasião");
   return missing;
+}
+
+function getFormSourceRecommendedItems(data = getFormSourceData()) {
+  const recommended = [];
+  if (!data.budgetRange) recommended.push("faixa de investimento");
+  if (!data.origin) recommended.push("origem");
+  return recommended;
 }
 
 function renderSourceValue(value, fallback = "Não veio no formulário") {
@@ -3702,6 +3726,7 @@ function renderFormSourcePanel() {
   }
 
   const missing = getFormSourceMissingItems(data);
+  const recommended = getFormSourceRecommendedItems(data);
   const clientContext = [data.finalClient ? `Cliente final: ${data.finalClient}` : "", data.groupName ? `Grupo: ${data.groupName}` : ""]
     .filter(Boolean)
     .join(" · ");
@@ -3722,7 +3747,13 @@ function renderFormSourcePanel() {
         <strong>Base para proposta segura e automação futura</strong>
         <p>Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.</p>
       </div>
-      <small>${missing.length ? `Melhor completar: ${escapeHtml(missing.join(", "))}` : "Formulário bem preenchido"}</small>
+      <small>${
+        missing.length
+          ? `Complete antes do envio: ${escapeHtml(missing.join(", "))}`
+          : recommended.length
+            ? `Boa prática comercial: ${escapeHtml(recommended.join(", "))}`
+            : "Formulário bem preenchido"
+      }</small>
     </div>
     <div class="form-source-edit">
       <div>
@@ -3798,8 +3829,19 @@ function handleFormSourceFieldChange(event) {
 function getLeadReadinessItems() {
   const review = getProposalReviewItems();
   const context = getActiveCommercialContext();
+  const sourceData = getFormSourceData();
   const selected = getSelectedItems();
-  const hasBriefing = Boolean(fields.eventReason.value.trim() || fields.notes.value.trim() || context.occasion || context.extras);
+  const hasBriefing = Boolean(
+    fields.eventReason.value.trim() ||
+      fields.notes.value.trim() ||
+      sourceData.reason ||
+      sourceData.preferences ||
+      sourceData.observations ||
+      context.occasion ||
+      sourceData.occasion ||
+      context.extras ||
+      sourceData.extras,
+  );
   const contact = review.find((item) => item.id === "contact");
   const clientContext = review.find((item) => item.id === "client_context");
   const commercialProfile = review.find((item) => item.id === "commercial_profile");
@@ -3968,7 +4010,8 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
-    { label: "Contato e perfil", ids: ["contact", "client_context", "profile", "commercial_profile"], target: "source" },
+    { label: "Contato do cliente", ids: ["contact"], target: "client" },
+    { label: "Perfil comercial", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
@@ -4704,7 +4747,18 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
   const target = section || editorAnchor || layout;
   if (!target) return;
 
+  if (target.id) {
+    const nextHash = `#${target.id}`;
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    try {
+      window.history.replaceState(null, "", nextUrl);
+    } catch (_) {
+      window.location.hash = nextHash;
+    }
+  }
   scrollToNodeReliably(target);
+  target.setAttribute("tabindex", "-1");
+  target.focus?.({ preventScroll: true });
   [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
     node.classList.remove("is-loaded-focus");
     void node.offsetWidth;
