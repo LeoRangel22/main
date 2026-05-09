@@ -46,6 +46,27 @@ const DEFAULT_SIGNAL_DEADLINE_HOURS = 48;
 const MIN_SIGNAL_DEADLINE_HOURS = 12;
 const MAX_SIGNAL_DEADLINE_HOURS = 360;
 const signalPaymentBanks = ["Itaú", "Santander", "Nubank", "Stone"];
+const sourceClientTypeOptions = [
+  "Agência de turismo receptivo / DMC",
+  "Agência de marketing / eventos",
+  "Empresa",
+  "Pessoa física",
+];
+const sourceBudgetRangeOptions = [
+  "Até R$ 15 mil",
+  "R$ 15 mil a R$ 30 mil",
+  "R$ 30 mil a R$ 60 mil",
+  "Acima de R$ 60 mil",
+  "Ainda não definido",
+];
+const sourceOriginOptions = [
+  "Indicação",
+  "Google / Instagram",
+  "Agência / parceiro",
+  "Já conheço o restaurante",
+  "Parque Bondinho",
+  "Outro",
+];
 
 const operationalChecklistItems = [
   { id: "saldo_agendado", label: "Pagamento restante alinhado" },
@@ -589,6 +610,7 @@ const state = {
   activeReportPreset: "currentMonth",
   activePipelineFilter: "all",
   quoteGuideDismissed: false,
+  sourceOverrides: {},
   guided: {
     event: "",
     beverageId: "",
@@ -3056,8 +3078,8 @@ function getProposalReviewItems() {
   const requiredCategory = getEventCategoryFromRequest(eventType);
   const availability = getAvailabilityReviewStatus();
   const isAgency = ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(context.clientType);
-  const finalClient = context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot);
-  const groupName = context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot);
+  const finalClient = context.finalClient || context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot);
+  const groupName = context.groupName || context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot);
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
     selected.length > 0 &&
@@ -3083,6 +3105,22 @@ function getProposalReviewItems() {
           ? [finalClient ? `Cliente final: ${finalClient}` : "", groupName ? `Grupo: ${groupName}` : ""].filter(Boolean).join(" · ")
           : "Para agência, registre cliente final ou nome do grupo antes de automatizar."
         : "Cliente direto ou empresa sem intermediário identificado.",
+      target: "source",
+    },
+    {
+      id: "commercial_profile",
+      label: "Origem e prioridade",
+      status: context.clientType && context.budgetRange && context.origin ? "ok" : "warning",
+      detail:
+        context.clientType && context.budgetRange && context.origin
+          ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).join(" · ")
+          : `Complete para automação futura: ${[
+              !context.clientType ? "tipo de cliente" : "",
+              !context.budgetRange ? "faixa de investimento" : "",
+              !context.origin ? "origem do lead" : "",
+            ]
+              .filter(Boolean)
+              .join(", ")}.`,
       target: "source",
     },
     {
@@ -3193,8 +3231,8 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
   }
 
   if (["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(context.clientType)) {
-    const hasFinalClient = Boolean(context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot));
-    const hasGroupName = Boolean(context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot));
+    const hasFinalClient = Boolean(context.finalClient || context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot));
+    const hasGroupName = Boolean(context.groupName || context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot));
     if (!hasFinalClient && !hasGroupName) {
       push("warning", "Agência sem cliente final ou grupo", "Registre nome do cliente final ou grupo. Isso ajuda a localizar, evitar confusão e personalizar follow-up.", "source", "qualificação");
     }
@@ -3436,22 +3474,27 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) 
 function getActiveCommercialContext() {
   const request = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const proposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const proposalSnapshot = proposal?.snapshot || {};
   const snapshot = proposal?.snapshot?.sourceRequestSnapshot || proposal?.snapshot || request?.snapshot || {};
-  const qualification = snapshot.qualificacao || snapshot.qualification || {};
+  const overrides = getCurrentSourceOverrides();
+  const qualification = {
+    ...(snapshot.qualificacao || snapshot.qualification || {}),
+    ...(proposalSnapshot.qualificacao || proposalSnapshot.qualification || {}),
+    ...(proposalSnapshot.sourceOverrides || {}),
+    ...overrides,
+  };
   const event = snapshot.evento || snapshot.event || {};
   return {
     request,
     proposal,
     snapshot,
-    clientType:
-      qualification.tipoCliente ||
-      qualification.clientType ||
-      proposal?.snapshot?.clientType ||
-      request?.tipo_cliente ||
-      "",
-    budgetRange: qualification.faixaInvestimento || qualification.budgetRange || "",
-    origin: qualification.origem || qualification.origin || "",
-    occasion: event.ocasiao || event.perfil || event.occasion || "",
+    clientType: qualification.clientType || qualification.tipoCliente || proposalSnapshot.clientType || request?.tipo_cliente || "",
+    budgetRange: qualification.budgetRange || qualification.faixaInvestimento || request?.faixa_investimento || "",
+    origin: qualification.origin || qualification.origem || request?.origem || "",
+    finalClient: qualification.finalClient || qualification.clienteFinal || getFinalClientFromSnapshot(proposalSnapshot) || getFinalClientFromSnapshot(snapshot),
+    groupName: qualification.groupName || qualification.nomeGrupo || getGroupNameFromSnapshot(proposalSnapshot) || getGroupNameFromSnapshot(snapshot),
+    occasion: qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion || "",
+    moment: qualification.moment || qualification.momento || event.momento || event.moment || "",
     extras: event.extras || "",
   };
 }
@@ -3485,6 +3528,28 @@ function cleanClientObservationText(request = null, snapshot = {}) {
     .trim();
 }
 
+function getSourceOverrideKey() {
+  if (state.activeProposalId) return `proposal:${state.activeProposalId}`;
+  if (state.activeQuoteRequestId) return `request:${state.activeQuoteRequestId}`;
+  return "";
+}
+
+function getCurrentSourceOverrides() {
+  const key = getSourceOverrideKey();
+  return key ? state.sourceOverrides[key] || {} : {};
+}
+
+function setCurrentSourceOverride(field, value) {
+  const key = getSourceOverrideKey();
+  if (!key || !field) return;
+  state.sourceOverrides[key] = {
+    ...(state.sourceOverrides[key] || {}),
+    [field]: String(value || "").trim(),
+  };
+  state.sendReviewApprovedSignature = "";
+  state.sendReviewApproval = null;
+}
+
 function normalizeSourceValue(value) {
   if (Array.isArray(value)) return value.filter(Boolean).join(", ");
   return String(value || "").trim();
@@ -3497,20 +3562,28 @@ function getFormSourceData() {
   const snapshot = request?.snapshot || proposalSnapshot.sourceRequestSnapshot || proposalSnapshot || {};
   const client = snapshot.cliente || snapshot.client || {};
   const event = snapshot.evento || snapshot.event || {};
-  const qualification = snapshot.qualificacao || snapshot.qualification || proposalSnapshot.qualificacao || {};
+  const overrides = getCurrentSourceOverrides();
+  const qualification = {
+    ...(snapshot.qualificacao || snapshot.qualification || {}),
+    ...(proposalSnapshot.qualificacao || proposalSnapshot.qualification || {}),
+    ...(proposalSnapshot.sourceOverrides || {}),
+    ...overrides,
+  };
   const reference = snapshot.referencia || proposalSnapshot.referencia || "";
-  const clientType = normalizeSourceValue(qualification.tipoCliente || qualification.clientType || client.tipoCliente);
+  const clientType = normalizeSourceValue(qualification.clientType || qualification.tipoCliente || client.tipoCliente || request?.tipo_cliente);
   const finalClient = normalizeSourceValue(
-    qualification.clienteFinal ||
-      qualification.finalClient ||
+    qualification.finalClient ||
+      qualification.clienteFinal ||
+      request?.cliente_final ||
       client.clienteFinal ||
       client.finalClient ||
       getFinalClientFromSnapshot(snapshot) ||
       getFinalClientFromSnapshot(proposalSnapshot),
   );
   const groupName = normalizeSourceValue(
-    qualification.nomeGrupo ||
-      qualification.groupName ||
+    qualification.groupName ||
+      qualification.nomeGrupo ||
+      request?.nome_grupo ||
       client.nomeGrupo ||
       client.groupName ||
       getGroupNameFromSnapshot(snapshot) ||
@@ -3524,10 +3597,10 @@ function getFormSourceData() {
     clientType,
     finalClient,
     groupName,
-    budgetRange: normalizeSourceValue(qualification.faixaInvestimento || qualification.budgetRange),
-    origin: normalizeSourceValue(qualification.origem || qualification.origin),
-    moment: normalizeSourceValue(event.momento || event.moment),
-    occasion: normalizeSourceValue(event.ocasiao || event.perfil || event.occasion),
+    budgetRange: normalizeSourceValue(qualification.budgetRange || qualification.faixaInvestimento || request?.faixa_investimento),
+    origin: normalizeSourceValue(qualification.origin || qualification.origem || request?.origem),
+    moment: normalizeSourceValue(qualification.moment || qualification.momento || event.momento || event.moment),
+    occasion: normalizeSourceValue(qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion),
     eventType: normalizeSourceValue(request?.tipo_evento || event.tipo || event.type || fields.eventType?.value),
     flexibleDate: normalizeSourceValue(event.dataFlexivel || event.flexibleDate),
     flexibleDateStatus: normalizeSourceValue(event.dataFlexivelStatus || event.flexibleDateStatus),
@@ -3569,6 +3642,31 @@ function renderSourceCard(label, value, { important = false, fallback } = {}) {
   `;
 }
 
+function renderSourceSelect(field, label, value, options, placeholder = "Selecionar") {
+  const current = normalizeSourceValue(value);
+  const fullOptions = current && !options.includes(current) ? [current, ...options] : options;
+  return `
+    <label class="form-source-edit-field">
+      <span>${escapeHtml(label)}</span>
+      <select data-source-field="${escapeHtml(field)}">
+        <option value="">${escapeHtml(placeholder)}</option>
+        ${fullOptions
+          .map((option) => `<option value="${escapeHtml(option)}" ${option === current ? "selected" : ""}>${escapeHtml(option)}</option>`)
+          .join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderSourceInput(field, label, value, placeholder) {
+  return `
+    <label class="form-source-edit-field">
+      <span>${escapeHtml(label)}</span>
+      <input data-source-field="${escapeHtml(field)}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(placeholder)}" />
+    </label>
+  `;
+}
+
 function renderFormSourcePanel() {
   if (!nodes.formSourcePanel) return;
   const data = getFormSourceData();
@@ -3596,10 +3694,24 @@ function renderFormSourcePanel() {
     <div class="form-source-head">
       <div>
         <span>Dados recebidos do formulário</span>
-        <strong>Contexto original do cliente para montar a proposta</strong>
-        <p>Os campos editáveis ficam acima. Aqui está o que o cliente respondeu no formulário, sem misturar com observações internas.</p>
+        <strong>Base para proposta segura e automação futura</strong>
+        <p>Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.</p>
       </div>
       <small>${missing.length ? `Melhor completar: ${escapeHtml(missing.join(", "))}` : "Formulário bem preenchido"}</small>
+    </div>
+    <div class="form-source-edit">
+      <div>
+        <span>Campos críticos</span>
+        <strong>O que a automação precisa entender</strong>
+      </div>
+      <div class="form-source-edit-grid">
+        ${renderSourceSelect("clientType", "Tipo de cliente", data.clientType, sourceClientTypeOptions)}
+        ${renderSourceInput("finalClient", "Cliente final", data.finalClient, "Ex.: Booking Brasil, L'Oréal, Família Almeida")}
+        ${renderSourceInput("groupName", "Nome do grupo", data.groupName, "Ex.: Incentivo México 2026")}
+        ${renderSourceSelect("budgetRange", "Faixa de investimento", data.budgetRange, sourceBudgetRangeOptions)}
+        ${renderSourceSelect("origin", "Origem do lead", data.origin, sourceOriginOptions)}
+        ${renderSourceInput("occasion", "Ocasião", data.occasion, "Ex.: confraternização, incentivo, lançamento")}
+      </div>
     </div>
     <div class="form-source-grid">
       ${renderSourceCard("Referência", data.reference, { fallback: "Sem referência" })}
@@ -3634,14 +3746,25 @@ function renderFormSourcePanel() {
   `;
 }
 
+function handleFormSourceFieldChange(event) {
+  const field = event.target.closest("[data-source-field]");
+  if (!field) return;
+  setCurrentSourceOverride(field.dataset.sourceField, field.value);
+  renderServiceCockpit();
+  renderLeadReviewPanel();
+  renderSendReview();
+  renderLoadedEditorBar();
+  renderFormSourcePanel();
+}
+
 function getLeadReadinessItems() {
   const review = getProposalReviewItems();
   const context = getActiveCommercialContext();
   const selected = getSelectedItems();
-  const hasCommercialProfile = Boolean(context.clientType || context.budgetRange || context.origin);
   const hasBriefing = Boolean(fields.eventReason.value.trim() || fields.notes.value.trim() || context.occasion || context.extras);
   const contact = review.find((item) => item.id === "contact");
   const clientContext = review.find((item) => item.id === "client_context");
+  const commercialProfile = review.find((item) => item.id === "commercial_profile");
   const format = review.find((item) => item.id === "format");
   const agenda = review.find((item) => item.id === "availability");
   const items = review.find((item) => item.id === "items");
@@ -3659,10 +3782,8 @@ function getLeadReadinessItems() {
     {
       id: "profile",
       label: "Perfil comercial",
-      status: hasCommercialProfile ? "ok" : "warning",
-      detail: hasCommercialProfile
-        ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
-        : "Opcional, mas útil: classifique tipo de cliente, faixa de investimento ou origem para priorizar follow-up.",
+      status: commercialProfile?.status || "warning",
+      detail: commercialProfile?.detail || "Complete tipo de cliente, faixa de investimento e origem para reduzir ajustes antes do envio.",
       target: "source",
     },
     {
@@ -3809,7 +3930,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
-    { label: "Contato e perfil", ids: ["contact", "client_context", "profile"], target: "client" },
+    { label: "Contato e perfil", ids: ["contact", "client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
@@ -5224,6 +5345,18 @@ function getProposalSnapshot() {
   const reviewConfidence = getProposalConfidence(reviewItems, reviewAlerts);
   const automationReadiness = getProposalAutomationReadiness(reviewItems, reviewAlerts, reviewConfidence);
   const customerDecisionLoop = getCustomerDecisionLoop(activeProposal);
+  const sourceData = getFormSourceData();
+  const sourceQualification = {
+    ...(activeRequest?.snapshot?.qualificacao || {}),
+    ...(activeProposal?.snapshot?.qualificacao || {}),
+    ...(sourceData.clientType ? { tipoCliente: sourceData.clientType } : {}),
+    ...(sourceData.finalClient ? { clienteFinal: sourceData.finalClient } : {}),
+    ...(sourceData.groupName ? { nomeGrupo: sourceData.groupName } : {}),
+    ...(sourceData.origin ? { origem: sourceData.origin } : {}),
+    ...(sourceData.budgetRange ? { faixaInvestimento: sourceData.budgetRange } : {}),
+    ...(sourceData.moment ? { momento: sourceData.moment } : {}),
+    ...(sourceData.occasion ? { ocasiao: sourceData.occasion } : {}),
+  };
   const reviewApproval =
     isSendReviewApproved(reviewItems) && state.sendReviewApproval?.signature === state.sendReviewApprovedSignature
       ? {
@@ -5242,8 +5375,8 @@ function getProposalSnapshot() {
       email: fields.clientEmail.value.trim(),
       phone: fields.clientPhone.value.trim(),
       company: activeRequest?.empresa || activeRequest?.cliente_empresa || activeRequest?.snapshot?.cliente?.empresa || "",
-      finalClient: getFinalClientFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
-      groupName: getGroupNameFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
+      finalClient: sourceData.finalClient || getFinalClientFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
+      groupName: sourceData.groupName || getGroupNameFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
     },
     event: {
       type: fields.eventType.value.trim(),
@@ -5285,7 +5418,8 @@ function getProposalSnapshot() {
     guided: state.guided,
     privatizationChoice: state.privatizationChoice,
     activeQuoteRequestId: state.activeQuoteRequestId,
-    qualificacao: activeRequest?.snapshot?.qualificacao || {},
+    qualificacao: sourceQualification,
+    sourceOverrides: getCurrentSourceOverrides(),
     sourceRequestSnapshot: activeRequest?.snapshot || activeProposal?.snapshot?.sourceRequestSnapshot || null,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
@@ -6963,6 +7097,7 @@ function getCurrentEditorSignature() {
     selectedIds: [...state.selectedIds].sort(),
     guided: state.guided,
     privatizationChoice: state.privatizationChoice || "",
+    sourceOverrides: getCurrentSourceOverrides(),
   });
 }
 
@@ -10068,6 +10203,7 @@ function bindEvents() {
     const actionButton = event.target.closest("button[data-service-action]");
     if (actionButton) runServiceCockpitAction(actionButton.dataset.serviceAction, actionButton);
   });
+  nodes.formSourcePanel?.addEventListener("change", handleFormSourceFieldChange);
   nodes.leadReviewPanel?.addEventListener("click", (event) => {
     const upsellButton = event.target.closest("button[data-upsell-add]");
     if (upsellButton) {
