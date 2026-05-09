@@ -3039,11 +3039,36 @@ function getCurrentContactValues() {
   const proposal = getActiveProposal();
   const request = getActiveQuoteRequest();
   const snapshot = proposal?.snapshot || request?.snapshot || {};
+  const sourceSnapshot = proposal?.snapshot?.sourceRequestSnapshot || request?.snapshot || {};
   const client = snapshot.client || snapshot.cliente || {};
+  const sourceClient = sourceSnapshot.client || sourceSnapshot.cliente || {};
+  const readField = (field, selector) => String(field?.value || document.querySelector(selector)?.value || "").trim();
   return {
-    name: fields.clientName?.value?.trim() || proposal?.cliente_nome || request?.cliente_nome || client.name || client.nome || "",
-    email: fields.clientEmail?.value?.trim() || proposal?.cliente_email || request?.cliente_email || client.email || "",
-    phone: fields.clientPhone?.value?.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || client.phone || client.whatsapp || "",
+    name:
+      readField(fields.clientName, "#clientName") ||
+      proposal?.cliente_nome ||
+      request?.cliente_nome ||
+      client.name ||
+      client.nome ||
+      sourceClient.name ||
+      sourceClient.nome ||
+      "",
+    email:
+      readField(fields.clientEmail, "#clientEmail") ||
+      proposal?.cliente_email ||
+      request?.cliente_email ||
+      client.email ||
+      sourceClient.email ||
+      "",
+    phone:
+      readField(fields.clientPhone, "#clientPhone") ||
+      proposal?.cliente_whatsapp ||
+      request?.cliente_whatsapp ||
+      client.phone ||
+      client.whatsapp ||
+      sourceClient.phone ||
+      sourceClient.whatsapp ||
+      "",
   };
 }
 
@@ -3746,15 +3771,28 @@ function renderFormSourcePanel() {
   `;
 }
 
-function handleFormSourceFieldChange(event) {
+function refreshReviewSurfaces({ includeSourcePanel = false } = {}) {
+  renderServiceCockpit();
+  renderLeadReviewPanel();
+  renderProposalNextStep();
+  renderQuickReplies();
+  renderSummary();
+  renderSendReview();
+  renderCalculation();
+  renderProposal();
+  renderLoadedEditorBar();
+  if (includeSourcePanel) renderFormSourcePanel();
+}
+
+function handleFormSourceFieldInput(event, { includeSourcePanel = false } = {}) {
   const field = event.target.closest("[data-source-field]");
   if (!field) return;
   setCurrentSourceOverride(field.dataset.sourceField, field.value);
-  renderServiceCockpit();
-  renderLeadReviewPanel();
-  renderSendReview();
-  renderLoadedEditorBar();
-  renderFormSourcePanel();
+  refreshReviewSurfaces({ includeSourcePanel });
+}
+
+function handleFormSourceFieldChange(event) {
+  handleFormSourceFieldInput(event, { includeSourcePanel: true });
 }
 
 function getLeadReadinessItems() {
@@ -9943,6 +9981,11 @@ function bindEvents() {
     const refreshFormOutputs = () => {
       renderPriceList();
       renderAvailabilityAlert();
+      renderFormSourcePanel();
+      renderServiceCockpit();
+      renderLeadReviewPanel();
+      renderProposalNextStep();
+      renderQuickReplies();
       renderLoadedEditorBar();
       renderSummary();
       renderSendReview();
@@ -10203,6 +10246,7 @@ function bindEvents() {
     const actionButton = event.target.closest("button[data-service-action]");
     if (actionButton) runServiceCockpitAction(actionButton.dataset.serviceAction, actionButton);
   });
+  nodes.formSourcePanel?.addEventListener("input", handleFormSourceFieldInput);
   nodes.formSourcePanel?.addEventListener("change", handleFormSourceFieldChange);
   nodes.leadReviewPanel?.addEventListener("click", (event) => {
     const upsellButton = event.target.closest("button[data-upsell-add]");
