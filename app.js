@@ -1673,13 +1673,32 @@ function renderServiceCockpit() {
   const recommendation = getServiceTemplateRecommendation(context);
   const cockpitStatus = getServiceCockpitStatus(readiness, recommendation);
   const nextStep = getProposalNextStepConfig();
-  const primaryAction = nextStep || {
+  const firstBlockingItem = readiness.find((item) => item.status === "error");
+  const reviewGuide = getReviewGuide(readiness, false);
+  const reviewTargetAction =
+    reviewGuide.target === "items"
+      ? "focus_items"
+      : reviewGuide.target === "review"
+        ? "focus_review"
+        : reviewGuide.target === "notes"
+          ? "focus_notes"
+          : "focus_client";
+  const fallbackAction = {
     tone: cockpitStatus.tone,
     title: cockpitStatus.title,
     note: cockpitStatus.detail,
     action: recommendation.eventKey ? "apply_recommended_template" : "focus_items",
     actionLabel: recommendation.eventKey ? "Aplicar base" : "Ir para itens",
   };
+  const primaryAction = firstBlockingItem
+    ? {
+        tone: "danger",
+        title: reviewGuide.title,
+        note: reviewGuide.detail,
+        action: reviewTargetAction,
+        actionLabel: reviewGuide.actionLabel,
+      }
+    : nextStep || fallbackAction;
   const clientMatch = getServiceClientMatch(context);
   const soldCount = clientMatch?.items?.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status))).length || 0;
   const quotesCount = clientMatch?.items?.length || 0;
@@ -1691,7 +1710,9 @@ function renderServiceCockpit() {
   const selectedSummary = recommendation.selected.length
     ? recommendation.selected.map((item) => item.nome).slice(0, 2).join(" + ") + (recommendation.selected.length > 2 ? "..." : "")
     : "Nenhum item selecionado";
-  const approachTip = getServiceApproachTip(context, recommendation, readiness);
+  const approachTip = firstBlockingItem
+    ? `${reviewGuide.title}. Toque em "${reviewGuide.actionLabel}" ou na pendência abaixo; o sistema leva ao campo certo.`
+    : getServiceApproachTip(context, recommendation, readiness);
 
   nodes.serviceCockpit.className = `service-cockpit is-${cockpitStatus.tone}`;
   nodes.serviceCockpit.innerHTML = `
@@ -3532,6 +3553,110 @@ function getProposalApprovalMessage(items = getLeadReadinessItems()) {
   };
 }
 
+function getReviewStatusLabel(status) {
+  if (status === "ok") return "OK";
+  if (status === "warning") return "Atenção";
+  return "Obrigatório";
+}
+
+function getReviewActionLabel(item) {
+  if (!item) return "Conferir proposta";
+  if (item.status === "warning") return "Conferir";
+  return "Corrigir agora";
+}
+
+function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
+  const errors = items.filter((item) => item.status === "error");
+  const warnings = items.filter((item) => item.status === "warning");
+  const firstIssue = errors[0] || warnings[0] || null;
+  if (errors.length) {
+    return {
+      tone: "blocker",
+      eyebrow: "Comece aqui",
+      title: `Corrigir: ${firstIssue.label}`,
+      detail: `${firstIssue.detail} Este ponto bloqueia o envio para evitar proposta incompleta ou erro comercial.`,
+      actionLabel: "Ir para correção",
+      target: firstIssue.target || "client",
+      statusLabel: `${errors.length} obrigatório(s)`,
+    };
+  }
+  if (warnings.length) {
+    return {
+      tone: "warning",
+      eyebrow: "Atenção antes de enviar",
+      title: `Conferir: ${firstIssue.label}`,
+      detail: `${firstIssue.detail} Dá para avançar, mas essa conferência aumenta a chance de resposta e fechamento.`,
+      actionLabel: "Conferir agora",
+      target: firstIssue.target || "review",
+      statusLabel: `${warnings.length} atenção`,
+    };
+  }
+  if (!approved) {
+    return {
+      tone: "ready",
+      eyebrow: "Último passo",
+      title: "Aprovar revisão e salvar envio",
+      detail: "Cliente, agenda, cardápio, valor e condições estão coerentes. Faça a aprovação humana antes de disparar.",
+      actionLabel: "Revisado, pode enviar",
+      target: "review",
+      statusLabel: "Pronto",
+    };
+  }
+  return {
+    tone: "approved",
+    eyebrow: "Pronto para cliente",
+    title: "Enviar proposta pelo canal escolhido",
+    detail: "Checklist aprovado nesta versão. Envie por WhatsApp ou e-mail e acompanhe o retorno pelo funil.",
+    actionLabel: "Enviar proposta",
+    target: "client",
+    statusLabel: "Aprovado",
+  };
+}
+
+function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
+  const groups = [
+    { label: "Cliente e canal", ids: ["contact", "client_context", "profile"], target: "client" },
+    { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
+    { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
+    { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
+  ];
+  return groups.map((group, index) => {
+    const groupItems = items.filter((item) => group.ids.includes(item.id));
+    const status = groupItems.some((item) => item.status === "error")
+      ? "error"
+      : groupItems.some((item) => item.status === "warning")
+        ? "warning"
+        : "ok";
+    const firstIssue = groupItems.find((item) => item.status !== "ok");
+    return {
+      ...group,
+      number: index + 1,
+      status,
+      statusLabel: getReviewStatusLabel(status),
+      detail: firstIssue?.detail || "Conferido",
+      target: firstIssue?.target || group.target,
+    };
+  });
+}
+
+function renderReviewWorkflow(items = getLeadReadinessItems()) {
+  return `
+    <div class="review-workflow" aria-label="Roteiro de revisão da proposta">
+      ${getReviewWorkflowSteps(items)
+        .map(
+          (step) => `
+            <button class="review-workflow-step is-${escapeHtml(step.status)}" type="button" data-review-target="${escapeHtml(step.target)}">
+              <span>${escapeHtml(String(step.number))}</span>
+              <strong>${escapeHtml(step.label)}</strong>
+              <small>${escapeHtml(step.statusLabel)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function pushUpsellRecommendation(recommendations, itemId, title, detail, reason) {
   if (!itemExists(itemId) || state.selectedIds.has(itemId) || recommendations.some((item) => item.itemId === itemId)) return;
   recommendations.push({ itemId, title, detail, reason });
@@ -3663,6 +3788,7 @@ function renderLeadReviewPanel() {
   const smartAlerts = getSmartProposalAlerts(items);
   const confidence = getProposalConfidence(items, smartAlerts);
   const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
+  const guide = getReviewGuide(items, false);
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
@@ -3672,21 +3798,29 @@ function renderLeadReviewPanel() {
       </div>
       <small>${escapeHtml(approval.label)}</small>
     </div>
-    <div class="lead-approval-gate is-${escapeHtml(approval.tone)}">
-      <strong>${escapeHtml(approval.title)}</strong>
-      <span>${escapeHtml(approval.note)}</span>
+    <div class="review-command-center is-${escapeHtml(guide.tone)}">
+      <div class="review-command-copy">
+        <span>${escapeHtml(guide.eyebrow)}</span>
+        <strong>${escapeHtml(guide.title)}</strong>
+        <p>${escapeHtml(guide.detail)}</p>
+      </div>
+      <div class="review-command-side">
+        <b>${escapeHtml(guide.statusLabel)}</b>
+        <button class="primary" type="button" data-review-target="${escapeHtml(guide.target)}">${escapeHtml(guide.actionLabel)}</button>
+      </div>
     </div>
+    ${renderReviewWorkflow(items)}
     <div class="approval-confidence is-${escapeHtml(confidence.status)}">
       <div>
-        <span>Nota de confiança</span>
+        <span>Confiança</span>
         <strong>${escapeHtml(String(confidence.score))}%</strong>
       </div>
-      <p>${escapeHtml(confidence.note)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
+      <p>${escapeHtml(confidence.label)} · ${escapeHtml(confidence.note)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
     </div>
     <div class="smart-alerts">
       <div class="smart-alerts-heading">
-        <span>Alertas inteligentes</span>
-        <small>O sistema aponta riscos e oportunidades antes do envio.</small>
+        <span>Riscos e oportunidades</span>
+        <small>Use estes avisos para evitar erro caro e melhorar conversão.</small>
       </div>
       <div class="smart-alerts-grid">
         ${smartAlerts
@@ -3705,9 +3839,9 @@ function renderLeadReviewPanel() {
     ${
       criticalItems.length
         ? `<div class="lead-review-priority">
-            <span>Revisar agora</span>
+            <span>Itens pendentes</span>
             <strong>${escapeHtml(criticalItems.map((item) => item.label).join(" · "))}</strong>
-            <small>Clique nos blocos abaixo para ir direto ao ponto antes de salvar ou enviar.</small>
+            <small>Clique nos cartões abaixo. Cada cartão leva direto ao campo certo.</small>
           </div>`
         : `<div class="lead-review-priority is-clear">
             <span>Envio liberado</span>
@@ -3722,6 +3856,7 @@ function renderLeadReviewPanel() {
               <span>${item.status === "ok" ? "OK" : item.status === "warning" ? "!" : "!"}</span>
               <strong>${escapeHtml(item.label)}</strong>
               <small>${escapeHtml(item.detail)}</small>
+              <em>${escapeHtml(item.status === "ok" ? "Conferido" : getReviewActionLabel(item))}</em>
             </button>
           `,
         )
@@ -4561,6 +4696,7 @@ function renderSendReview() {
   const confidence = getProposalConfidence(items, smartAlerts);
   const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
   const decisionLoop = getCustomerDecisionLoop();
+  const guide = getReviewGuide(items, approved);
   const totals = getQuoteTotals();
   const destination = fields.clientEmail.value.trim() || fields.clientPhone.value.trim() || "Sem canal";
   const eventLine = [
@@ -4594,6 +4730,20 @@ function renderSendReview() {
       </div>
       <small>${escapeHtml(note)}</small>
     </div>
+    <div class="review-command-center is-${escapeHtml(guide.tone)}">
+      <div class="review-command-copy">
+        <span>${escapeHtml(guide.eyebrow)}</span>
+        <strong>${escapeHtml(guide.title)}</strong>
+        <p>${escapeHtml(guide.detail)}</p>
+      </div>
+      <div class="review-command-side">
+        <b>${escapeHtml(guide.statusLabel)}</b>
+        <button class="primary" type="button" data-send-review-action="${escapeHtml(command.action)}" data-review-target="${escapeHtml(command.target || guide.target || "client")}">
+          ${escapeHtml(summary.ready ? command.label : guide.actionLabel)}
+        </button>
+      </div>
+    </div>
+    ${renderReviewWorkflow(items)}
     <div class="send-review-route" aria-label="Rota rápida de conferência e envio">
       <button type="button" data-review-target="client">
         <span>1</span>
@@ -4687,6 +4837,7 @@ function renderSendReview() {
               <span>${item.status === "ok" ? "OK" : item.status === "warning" ? "!" : "!"}</span>
               <strong>${escapeHtml(item.label)}</strong>
               <small>${escapeHtml(item.detail)}</small>
+              <em>${escapeHtml(item.status === "ok" ? "Conferido" : getReviewActionLabel(item))}</em>
             </button>
           `,
         )
