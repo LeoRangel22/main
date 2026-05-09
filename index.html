@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260509-eventos-v122" />
+    <link rel="stylesheet" href="./styles.css?v=20260509-eventos-v123" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -407,8 +407,8 @@
                 </label>
                 <label>
                   Ajuste comercial
-                  <input id="manualAdjustment" type="text" inputmode="decimal" placeholder="Ex.: -500 ou 750" />
-                  <small>Use valor negativo para desconto ou positivo para acréscimo.</small>
+                  <input id="manualAdjustment" type="text" inputmode="decimal" value="0" placeholder="Ex.: -500 ou 750" />
+                  <small>Use 0 quando não houver ajuste. Valor negativo dá desconto; positivo acrescenta.</small>
                 </label>
                 <label>
                   Motivo do ajuste
@@ -671,6 +671,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260509-eventos-v122"></script>
+    <script defer src="./app.js?v=20260509-eventos-v123"></script>
   </body>
 </html>

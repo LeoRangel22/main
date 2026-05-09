@@ -3412,7 +3412,7 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     signalDeadline: fields.signalDeadlineHours.value,
     selectedIds: [...state.selectedIds].sort(),
     total: roundCurrency(totals.total),
-    adjustment: fields.manualAdjustment.value.trim(),
+    adjustment: roundCurrency(getManualAdjustment()),
     notes: fields.notes.value.trim(),
     reason: fields.eventReason.value.trim(),
     review: items.map((item) => [item.id, item.status, item.detail]),
@@ -4279,6 +4279,16 @@ function getServiceFee() {
 
 function getManualAdjustment() {
   return toNumber(fields.manualAdjustment?.value) || 0;
+}
+
+function getManualAdjustmentInputValue(...values) {
+  const explicitValue = values.find((value) => value !== null && value !== undefined && String(value).trim() !== "");
+  if (explicitValue === null || explicitValue === undefined) return "0";
+  return String(explicitValue);
+}
+
+function hasMeaningfulManualAdjustment() {
+  return getManualAdjustment() !== 0 || Boolean(fields.manualAdjustmentLabel?.value.trim());
 }
 
 function getManualAdjustmentLabel() {
@@ -7110,7 +7120,7 @@ function isQuoteWorkspaceEffectivelyEmpty() {
     !fields.eventType.value.trim() &&
     !fields.eventReason.value.trim() &&
     !fields.notes.value.trim() &&
-    !fields.manualAdjustment.value.trim()
+    !hasMeaningfulManualAdjustment()
   );
 }
 
@@ -7128,7 +7138,7 @@ function getCurrentEditorSignature() {
     duration: getDuration(),
     validity: fields.validity?.value.trim() || "",
     signalDeadlineHours: fields.signalDeadlineHours?.value || "",
-    adjustment: fields.manualAdjustment?.value.trim() || "",
+    adjustment: roundCurrency(getManualAdjustment()),
     adjustmentLabel: fields.manualAdjustmentLabel?.value.trim() || "",
     reason: fields.eventReason?.value.trim() || "",
     notes: fields.notes?.value.trim() || "",
@@ -8240,7 +8250,7 @@ function resetProposalDraftState() {
   state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
   state.privatizationChoice = "";
   saveSelectedIds();
-  fields.manualAdjustment.value = "";
+  fields.manualAdjustment.value = "0";
   fields.manualAdjustmentLabel.value = "";
   fields.searchPrice.value = "";
   fields.categoryFilter.value = "";
@@ -9172,7 +9182,7 @@ function applyProposalSnapshot(snapshot) {
   if (fields.signalDeadlineHours) {
     fields.signalDeadlineHours.value = String(snapshot.event?.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS);
   }
-  fields.manualAdjustment.value = snapshot.event?.manualAdjustment || snapshot.totals?.adjustment || "";
+  fields.manualAdjustment.value = getManualAdjustmentInputValue(snapshot.event?.manualAdjustment, snapshot.totals?.adjustment);
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
@@ -9436,7 +9446,7 @@ function startNewProposal() {
   fields.eventDuration.value = "1";
   fields.validity.value = "14 dias";
   if (fields.signalDeadlineHours) fields.signalDeadlineHours.value = String(DEFAULT_SIGNAL_DEADLINE_HOURS);
-  fields.manualAdjustment.value = "";
+  fields.manualAdjustment.value = "0";
   fields.manualAdjustmentLabel.value = "";
   fields.eventReason.value = "";
   fields.notes.value = "";
