@@ -862,7 +862,6 @@ function setLanguage(language) {
   });
   renderLocalizedChoices();
   applyStaticCopy();
-  resetFlexibleDateField();
   fillTimeOptions();
   renderRecommendations();
   updateGuestOutput();
@@ -1033,9 +1032,11 @@ function renderFinalReview() {
 function fillTimeOptions(range = fields.timeRange.value) {
   const current = getCopy();
   const times = timeOptionsByRange[range] || [];
+  const previousTime = fields.time.value;
   const options = [`<option value="">${current.select.timePlaceholder}</option>`];
   times.forEach((time) => options.push(`<option value="${time}">${time.replace(":", "h")}</option>`));
   fields.time.innerHTML = options.join("");
+  if (previousTime && times.includes(previousTime)) fields.time.value = previousTime;
 }
 
 function toNumber(value) {
