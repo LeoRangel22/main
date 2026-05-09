@@ -3789,6 +3789,12 @@ function renderLeadReviewPanel() {
   const confidence = getProposalConfidence(items, smartAlerts);
   const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
   const guide = getReviewGuide(items, false);
+  const visibleSmartAlerts = smartAlerts.filter((alert) => alert.level !== "success").slice(0, errors ? 1 : 2);
+  const focusNote = errors
+    ? "Resolva o primeiro bloqueio acima. Depois confira o roteiro e salve a proposta."
+    : warnings
+      ? "A proposta pode avançar, mas estes pontos aumentam a chance de resposta e fechamento."
+      : "Tudo essencial está no lugar. Faça a aprovação humana antes do envio ao cliente.";
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
     <div class="lead-review-heading">
@@ -3810,32 +3816,30 @@ function renderLeadReviewPanel() {
       </div>
     </div>
     ${renderReviewWorkflow(items)}
-    <div class="approval-confidence is-${escapeHtml(confidence.status)}">
+    <div class="review-focus-note is-${escapeHtml(confidence.status)}">
       <div>
-        <span>Confiança</span>
-        <strong>${escapeHtml(String(confidence.score))}%</strong>
+        <span>Estado da revisão</span>
+        <strong>${escapeHtml(String(confidence.score))}% · ${escapeHtml(confidence.label)}</strong>
       </div>
-      <p>${escapeHtml(confidence.label)} · ${escapeHtml(confidence.note)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
+      <p>${escapeHtml(focusNote)} ${escapeHtml(automation.label)}: ${escapeHtml(automation.note)}</p>
     </div>
-    <div class="smart-alerts">
-      <div class="smart-alerts-heading">
-        <span>Riscos e oportunidades</span>
-        <small>Use estes avisos para evitar erro caro e melhorar conversão.</small>
-      </div>
-      <div class="smart-alerts-grid">
-        ${smartAlerts
-          .map(
-            (alert) => `
-              <button class="smart-alert is-${escapeHtml(alert.level)}" type="button" data-review-target="${escapeHtml(alert.target)}">
-                <span>${escapeHtml(alert.kind)}</span>
-                <strong>${escapeHtml(alert.title)}</strong>
-                <small>${escapeHtml(alert.detail)}</small>
-              </button>
-            `,
-          )
-          .join("")}
-      </div>
-    </div>
+    ${
+      visibleSmartAlerts.length
+        ? `<div class="review-compact-alerts" aria-label="Riscos principais da proposta">
+            ${visibleSmartAlerts
+              .map(
+                (alert) => `
+                  <button class="smart-alert is-${escapeHtml(alert.level)}" type="button" data-review-target="${escapeHtml(alert.target)}">
+                    <span>${escapeHtml(alert.kind)}</span>
+                    <strong>${escapeHtml(alert.title)}</strong>
+                    <small>${escapeHtml(alert.detail)}</small>
+                  </button>
+                `,
+              )
+              .join("")}
+          </div>`
+        : ""
+    }
     ${
       criticalItems.length
         ? `<div class="lead-review-priority">
@@ -3862,6 +3866,25 @@ function renderLeadReviewPanel() {
         )
         .join("")}
     </div>
+    <details class="smart-alerts is-detail">
+      <summary class="smart-alerts-heading">
+        <span>Leitura completa</span>
+        <small>Use quando quiser revisar riscos, oportunidades e automação com mais calma.</small>
+      </summary>
+      <div class="smart-alerts-grid">
+        ${smartAlerts
+          .map(
+            (alert) => `
+              <button class="smart-alert is-${escapeHtml(alert.level)}" type="button" data-review-target="${escapeHtml(alert.target)}">
+                <span>${escapeHtml(alert.kind)}</span>
+                <strong>${escapeHtml(alert.title)}</strong>
+                <small>${escapeHtml(alert.detail)}</small>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    </details>
     ${
       upsells.length
         ? `<div class="upsell-strip">
