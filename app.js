@@ -3076,8 +3076,11 @@ function getContactReviewDetail(contact) {
   const missing = [];
   if (!contact.name) missing.push("nome do cliente");
   if (!contact.email && !contact.phone) missing.push("e-mail ou celular/WhatsApp de retorno");
-  if (!missing.length) return "Nome e retorno preenchidos: e-mail ou celular/WhatsApp.";
-  return `Falta ${missing.join(" e ")}. Corrija nos campos de Dados do cliente.`;
+  if (!missing.length) {
+    const channel = contact.phone ? "celular/WhatsApp" : "e-mail";
+    return `Contato pronto: ${contact.name} com ${channel} para retorno.`;
+  }
+  return `Falta ${missing.join(" e ")}. Corrija em Dados do cliente antes de enviar.`;
 }
 
 function getAllowedCategoriesForEvent(eventType = "") {
@@ -3854,16 +3857,16 @@ function getLeadReadinessItems() {
   return [
     {
       id: "contact",
-      label: "Contato do cliente",
+      label: "Contato e canal",
       status: contact?.status || "error",
       detail: contact?.detail || "Confira nome, e-mail ou celular/WhatsApp de retorno.",
       target: "client",
     },
     {
       id: "profile",
-      label: "Perfil comercial",
+      label: "Classificação comercial",
       status: commercialProfile?.status || "warning",
-      detail: commercialProfile?.detail || "Complete tipo de cliente, faixa de investimento e origem para reduzir ajustes antes do envio.",
+      detail: commercialProfile?.detail || "Opcional, mas recomendado: tipo de cliente, faixa de investimento e origem ajudam no follow-up.",
       target: "source",
     },
     {
@@ -3960,6 +3963,19 @@ function getReviewActionLabel(item) {
   return "Corrigir agora";
 }
 
+function getReviewGuideActionLabel(item) {
+  if (!item) return "Conferir proposta";
+  const actionByTarget = {
+    client: item.id === "contact" ? "Conferir contato" : "Conferir data e pax",
+    source: "Abrir dados do formulário",
+    items: "Escolher formato e itens",
+    notes: "Completar briefing",
+    review: "Conferir condições",
+  };
+  if (item.status === "warning") return actionByTarget[item.target] || "Conferir agora";
+  return actionByTarget[item.target] || "Ir para correção";
+}
+
 function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
   const errors = items.filter((item) => item.status === "error");
   const warnings = items.filter((item) => item.status === "warning");
@@ -3970,7 +3986,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       eyebrow: "Comece aqui",
       title: `Corrigir: ${firstIssue.label}`,
       detail: `${firstIssue.detail} Este ponto bloqueia o envio para evitar proposta incompleta ou erro comercial.`,
-      actionLabel: "Ir para correção",
+      actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "client",
       statusLabel: `${errors.length} obrigatório(s)`,
     };
@@ -3981,7 +3997,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       eyebrow: "Atenção antes de enviar",
       title: `Conferir: ${firstIssue.label}`,
       detail: `${firstIssue.detail} Dá para avançar, mas essa conferência aumenta a chance de resposta e fechamento.`,
-      actionLabel: "Conferir agora",
+      actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "review",
       statusLabel: `${warnings.length} atenção`,
     };
@@ -4010,8 +4026,8 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
-    { label: "Contato do cliente", ids: ["contact"], target: "client" },
-    { label: "Perfil comercial", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
+    { label: "Contato e canal", ids: ["contact"], target: "client" },
+    { label: "Cliente e contexto", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },

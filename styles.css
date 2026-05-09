@@ -3074,12 +3074,16 @@ label.pipeline-status-control:focus-within select {
   align-items: center;
   background: linear-gradient(135deg, rgba(24, 58, 45, 0.95), rgba(47, 111, 69, 0.9));
   border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(24, 58, 45, 0.14);
   color: var(--white);
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   margin: 8px 0 12px;
   padding: 10px 12px;
+  position: sticky;
+  top: 8px;
+  z-index: 24;
 }
 
 .loaded-editor-bar.is-hidden {
