@@ -1513,20 +1513,21 @@ function getActiveServiceContext() {
   const context = getActiveCommercialContext();
   const snapshot = proposal?.snapshot || request?.snapshot || {};
   const client = snapshot.client || snapshot.cliente || {};
+  const contact = getCurrentContactValues();
   const qualification = snapshot.qualificacao || snapshot.qualification || {};
   return {
     proposal,
     request,
     snapshot,
-    clientName: fields.clientName.value.trim() || proposal?.cliente_nome || request?.cliente_nome || client.name || "Cliente",
+    clientName: contact.name || "Cliente",
     company:
       proposal?.snapshot?.client?.company ||
       request?.empresa ||
       request?.cliente_empresa ||
       client.company ||
       "",
-    email: fields.clientEmail.value.trim() || proposal?.cliente_email || request?.cliente_email || client.email || "",
-    phone: fields.clientPhone.value.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || client.phone || "",
+    email: contact.email,
+    phone: contact.phone,
     eventType: fields.eventType.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
     eventDate: fields.eventDate.value || proposal?.data_evento || request?.data_evento || "",
     eventTime: fields.eventTime.value || proposal?.horario_evento || request?.horario_evento || "",
@@ -1581,7 +1582,7 @@ function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
 function getServiceApproachTip(context = getActiveServiceContext(), recommendation = getServiceTemplateRecommendation(context), readiness = getLeadReadinessItems()) {
   const firstError = readiness.find((item) => item.status === "error");
   if (firstError) {
-    return `Comece conferindo ${firstError.label.toLowerCase()}. Sem isso, a proposta pode sair incompleta ou difícil de aprovar.`;
+    return `Comece por ${firstError.label.toLowerCase()}: ${firstError.detail}`;
   }
   if (!recommendation.selected.length) {
     return "Escolha uma proposta base antes de falar em valor. O cliente entende melhor quando formato, duração e itens aparecem juntos.";
@@ -3011,6 +3012,26 @@ function getSelectedItems() {
     .map((item) => ({ ...item, calc: calculateItem(item) }));
 }
 
+function getCurrentContactValues() {
+  const proposal = getActiveProposal();
+  const request = getActiveQuoteRequest();
+  const snapshot = proposal?.snapshot || request?.snapshot || {};
+  const client = snapshot.client || snapshot.cliente || {};
+  return {
+    name: fields.clientName?.value?.trim() || proposal?.cliente_nome || request?.cliente_nome || client.name || client.nome || "",
+    email: fields.clientEmail?.value?.trim() || proposal?.cliente_email || request?.cliente_email || client.email || "",
+    phone: fields.clientPhone?.value?.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || client.phone || client.whatsapp || "",
+  };
+}
+
+function getContactReviewDetail(contact) {
+  const missing = [];
+  if (!contact.name) missing.push("nome do cliente");
+  if (!contact.email && !contact.phone) missing.push("e-mail ou celular/WhatsApp de retorno");
+  if (!missing.length) return "Nome e retorno preenchidos: e-mail ou celular/WhatsApp.";
+  return `Falta ${missing.join(" e ")}. Corrija nos campos de Dados do cliente.`;
+}
+
 function getAllowedCategoriesForEvent(eventType = "") {
   const mainCategory = getEventCategoryFromRequest(eventType);
   if (mainCategory === "Coquetel") return ["Coquetel", "Comidas", "Workshop de Caipirinha", "Snacks"];
@@ -3023,9 +3044,7 @@ function getProposalReviewItems() {
   const selected = getSelectedItems();
   const totals = getQuoteTotals();
   const context = getActiveCommercialContext();
-  const clientName = fields.clientName.value.trim();
-  const clientEmail = fields.clientEmail.value.trim();
-  const clientPhone = fields.clientPhone.value.trim();
+  const contact = getCurrentContactValues();
   const eventDate = fields.eventDate.value;
   const eventTime = fields.eventTime.value;
   const eventType = fields.eventType.value.trim();
@@ -3049,13 +3068,9 @@ function getProposalReviewItems() {
   return [
     {
       id: "contact",
-      label: "Contato",
-      status: clientName && (clientPhone || clientEmail) ? "ok" : "error",
-      detail: clientName
-        ? clientPhone || clientEmail
-          ? "Cliente e canal de retorno ok."
-          : "Inclua celular ou e-mail antes de enviar."
-        : "Informe o nome do cliente.",
+      label: "Contato do cliente",
+      status: contact.name && (contact.phone || contact.email) ? "ok" : "error",
+      detail: getContactReviewDetail(contact),
       target: "client",
     },
     {
@@ -3457,9 +3472,9 @@ function getLeadReadinessItems() {
   return [
     {
       id: "contact",
-      label: "Cliente e canal",
+      label: "Contato do cliente",
       status: contact?.status || "error",
-      detail: contact?.status === "ok" ? "Nome e canal de retorno revisados." : contact?.detail || "Complete nome, e-mail ou celular.",
+      detail: contact?.detail || "Confira nome, e-mail ou celular/WhatsApp de retorno.",
       target: "client",
     },
     {
@@ -3468,7 +3483,7 @@ function getLeadReadinessItems() {
       status: hasCommercialProfile ? "ok" : "warning",
       detail: hasCommercialProfile
         ? [context.clientType, context.budgetRange, context.origin].filter(Boolean).slice(0, 2).join(" · ")
-        : "Classifique cliente, investimento ou origem para priorizar follow-up.",
+        : "Opcional, mas útil: classifique tipo de cliente, faixa de investimento ou origem para priorizar follow-up.",
       target: "notes",
     },
     {
@@ -3615,7 +3630,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
-    { label: "Cliente e canal", ids: ["contact", "client_context", "profile"], target: "client" },
+    { label: "Contato e perfil", ids: ["contact", "client_context", "profile"], target: "client" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
