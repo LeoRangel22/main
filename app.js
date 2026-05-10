@@ -3087,15 +3087,59 @@ function getCurrentContactValues() {
   };
 }
 
-function getContactReviewDetail(contact) {
+function isLikelyEmailAddress(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(text);
+}
+
+function isLikelyPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return false;
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function getContactReviewState(contact) {
   const missing = [];
   if (!contact.name) missing.push("nome do cliente");
   if (!contact.email && !contact.phone) missing.push("e-mail ou celular/WhatsApp de retorno");
-  if (!missing.length) {
-    const channel = contact.phone ? "celular/WhatsApp" : "e-mail";
-    return `Contato pronto: ${contact.name} com ${channel} para retorno.`;
+  if (missing.length) {
+    return {
+      status: "error",
+      detail: `Falta ${missing.join(" e ")}. Corrija em Dados do cliente antes de enviar.`,
+    };
   }
-  return `Falta ${missing.join(" e ")}. Corrija em Dados do cliente antes de enviar.`;
+
+  const emailOk = contact.email ? isLikelyEmailAddress(contact.email) : false;
+  const phoneOk = contact.phone ? isLikelyPhoneNumber(contact.phone) : false;
+  const invalid = [];
+  if (contact.email && !emailOk) invalid.push("e-mail");
+  if (contact.phone && !phoneOk) invalid.push("celular/WhatsApp");
+
+  if (!emailOk && !phoneOk) {
+    return {
+      status: "error",
+      detail: `Revise ${invalid.join(" e ")}. O sistema precisa de pelo menos um canal válido para enviar a proposta.`,
+    };
+  }
+
+  if (invalid.length) {
+    const validChannel = phoneOk ? "celular/WhatsApp" : "e-mail";
+    return {
+      status: "warning",
+      detail: `${validChannel} válido para envio. Revise também ${invalid.join(" e ")} para evitar perda de retorno.`,
+    };
+  }
+
+  const channels = [phoneOk ? "celular/WhatsApp" : "", emailOk ? "e-mail" : ""].filter(Boolean).join(" e ");
+  return {
+    status: "ok",
+    detail: `Contato pronto: ${contact.name} com ${channels} para retorno.`,
+  };
+}
+
+function getContactReviewDetail(contact) {
+  return getContactReviewState(contact).detail;
 }
 
 function getAllowedCategoriesForEvent(eventType = "") {
@@ -3149,13 +3193,14 @@ function getProposalReviewItems() {
   const missingBaseCategory = requiredCategory && selected.length > 0 && !selected.some((item) => item.tipoEvento === requiredCategory);
   const minimumWarnings = selected.filter((item) => guests < (toNumber(item.minimo) || 0));
   const hasNotes = fields.notes.value.trim() || fields.eventReason.value.trim();
+  const contactReview = getContactReviewState(contact);
 
   return [
     {
       id: "contact",
       label: "Contato do cliente",
-      status: contact.name && (contact.phone || contact.email) ? "ok" : "error",
-      detail: getContactReviewDetail(contact),
+      status: contactReview.status,
+      detail: contactReview.detail,
       target: "client",
     },
     {
