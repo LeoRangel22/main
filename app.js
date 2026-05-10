@@ -67,6 +67,13 @@ const sourceOriginOptions = [
   "Parque Bondinho",
   "Outro",
 ];
+const sourceMomentOptions = [
+  "Manhã em dia de semana",
+  "Início do almoço",
+  "Fim de tarde",
+  "Noite (19h-21h)",
+  "Ainda estou avaliando",
+];
 
 const operationalChecklistItems = [
   { id: "saldo_agendado", label: "Pagamento restante alinhado" },
@@ -3161,7 +3168,7 @@ function getProposalReviewItems() {
       detail:
         commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin
           ? [commercialContext.clientType, commercialContext.budgetRange, commercialContext.origin].filter(Boolean).join(" · ")
-          : `Complete para automação futura: ${[
+          : `Opcional, mas ajuda a priorizar e automatizar melhor: ${[
               !commercialContext.clientType ? "tipo de cliente" : "",
               !commercialContext.budgetRange ? "faixa de investimento" : "",
               !commercialContext.origin ? "origem do lead" : "",
@@ -3760,16 +3767,18 @@ function renderFormSourcePanel() {
     </div>
     <div class="form-source-edit">
       <div>
-        <span>Campos críticos</span>
-        <strong>O que a automação precisa entender</strong>
+        <span>Dados para liberar envio seguro</span>
+        <strong>Confira o que veio do cliente e complete só o que faltar</strong>
+        <p>Esses campos alimentam a revisão, o histórico do cliente e a futura resposta automática.</p>
       </div>
       <div class="form-source-edit-grid">
         ${renderSourceSelect("clientType", "Tipo de cliente", data.clientType, sourceClientTypeOptions)}
-        ${renderSourceInput("finalClient", "Cliente final", data.finalClient, "Ex.: Booking Brasil, L'Oréal, Família Almeida")}
-        ${renderSourceInput("groupName", "Nome do grupo", data.groupName, "Ex.: Incentivo México 2026")}
+        ${renderSourceInput("finalClient", "Cliente final", data.finalClient, "Ex.: TV Globo, Booking Brasil, Família Almeida")}
+        ${renderSourceInput("groupName", "Nome do grupo", data.groupName, "Ex.: Incentivo México 2026, Grupo Rio 40 pax")}
         ${renderSourceSelect("budgetRange", "Faixa de investimento", data.budgetRange, sourceBudgetRangeOptions)}
-        ${renderSourceSelect("origin", "Origem do lead", data.origin, sourceOriginOptions)}
-        ${renderSourceInput("occasion", "Ocasião", data.occasion, "Ex.: confraternização, incentivo, lançamento")}
+        ${renderSourceSelect("origin", "Como chegou até nós", data.origin, sourceOriginOptions)}
+        ${renderSourceSelect("moment", "Momento desejado", data.moment, sourceMomentOptions)}
+        ${renderSourceInput("occasion", "Ocasião / objetivo", data.occasion, "Ex.: reunião corporativa, incentivo, lançamento")}
       </div>
     </div>
     <div class="form-source-grid">
@@ -3849,10 +3858,21 @@ function getLeadReadinessItems() {
   const clientContext = review.find((item) => item.id === "client_context");
   const commercialProfile = review.find((item) => item.id === "commercial_profile");
   const format = review.find((item) => item.id === "format");
+  const date = review.find((item) => item.id === "date");
   const agenda = review.find((item) => item.id === "availability");
+  const guests = review.find((item) => item.id === "guests");
   const items = review.find((item) => item.id === "items");
   const value = review.find((item) => item.id === "value");
   const conditions = review.find((item) => item.id === "conditions");
+  const dateStatus =
+    date?.status === "error" || guests?.status === "error"
+      ? "error"
+      : agenda?.status === "error"
+        ? "error"
+        : agenda?.status === "warning" || guests?.status === "warning"
+          ? "warning"
+          : "ok";
+  const dateDetail = [date?.detail, guests?.detail, agenda?.status !== "ok" ? agenda?.detail : ""].filter(Boolean).join(" · ");
 
   return [
     {
@@ -3886,8 +3906,8 @@ function getLeadReadinessItems() {
     {
       id: "agenda",
       label: "Data e horário",
-      status: agenda?.status || "error",
-      detail: agenda?.detail || "Cheque data, horário e conflito de agenda.",
+      status: dateStatus,
+      detail: dateDetail || "Cheque data, horário, pax e conflito de agenda.",
       target: "client",
     },
     {
@@ -3966,8 +3986,13 @@ function getReviewActionLabel(item) {
 function getReviewGuideActionLabel(item) {
   if (!item) return "Conferir proposta";
   const actionByTarget = {
-    client: item.id === "contact" ? "Conferir contato" : "Conferir data e pax",
-    source: "Abrir dados do formulário",
+    client: item.id === "contact" ? "Conferir contato" : "Conferir data, hora e pax",
+    source:
+      item.id === "client_context"
+        ? "Informar cliente final/grupo"
+        : item.id === "profile"
+          ? "Completar classificação"
+          : "Abrir dados do formulário",
     items: "Escolher formato e itens",
     notes: "Completar briefing",
     review: "Conferir condições",
@@ -3985,7 +4010,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       tone: "blocker",
       eyebrow: "Comece aqui",
       title: `Corrigir: ${firstIssue.label}`,
-      detail: `${firstIssue.detail} Este ponto bloqueia o envio para evitar proposta incompleta ou erro comercial.`,
+      detail: `${firstIssue.detail} O sistema só libera envio quando este ponto estiver claro.`,
       actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "client",
       statusLabel: `${errors.length} obrigatório(s)`,
@@ -3996,7 +4021,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       tone: "warning",
       eyebrow: "Atenção antes de enviar",
       title: `Conferir: ${firstIssue.label}`,
-      detail: `${firstIssue.detail} Dá para avançar, mas essa conferência aumenta a chance de resposta e fechamento.`,
+      detail: `${firstIssue.detail} Esta conferência melhora a resposta do cliente sem bloquear o envio.`,
       actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "review",
       statusLabel: `${warnings.length} atenção`,
@@ -4699,7 +4724,7 @@ function scrollToItems() {
 }
 
 function scrollToClientData() {
-  document.querySelector("#clientDataSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollToNodeReliably(document.querySelector("#clientDataSection"), { behavior: "smooth", offset: 14 });
 }
 
 function getScrollableAncestors(node) {
@@ -4771,8 +4796,15 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
     } catch (_) {
       window.location.hash = nextHash;
     }
+    if (window.location.hash !== nextHash) {
+      window.setTimeout(() => {
+        try {
+          window.location.hash = nextHash;
+        } catch (_) {}
+      }, 20);
+    }
   }
-  scrollToNodeReliably(target);
+  scrollToNodeReliably(target, { behavior: targetMode === "auto" ? "auto" : "smooth", offset: 14 });
   target.setAttribute("tabindex", "-1");
   target.focus?.({ preventScroll: true });
   [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
@@ -9569,8 +9601,30 @@ function scrollToReviewTarget(target) {
   };
   const selector = targets[target] || "#sendReviewPanel";
   const node = document.querySelector(selector);
-  node?.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (target === "notes") fields.notes?.focus();
+  scrollToNodeReliably(node, { behavior: "smooth", offset: 14 });
+  window.setTimeout(() => {
+    if (target === "source") {
+      const data = getFormSourceData();
+      const missing = getFormSourceMissingItems(data);
+      const fieldByMissing = {
+        "tipo de cliente": "clientType",
+        "cliente final ou nome do grupo": data.finalClient ? "groupName" : "finalClient",
+        momento: "moment",
+        "ocasião": "occasion",
+      };
+      const firstField = fieldByMissing[missing[0]] || "clientType";
+      document.querySelector(`[data-source-field="${firstField}"]`)?.focus?.({ preventScroll: true });
+      return;
+    }
+    if (target === "client") {
+      const contact = getCurrentContactValues();
+      if (!contact.name) fields.clientName?.focus?.({ preventScroll: true });
+      else if (!contact.email && !contact.phone) fields.clientPhone?.focus?.({ preventScroll: true });
+      else if (!fields.eventDate?.value || !fields.eventTime?.value) fields.eventDateTime?.focus?.({ preventScroll: true });
+      return;
+    }
+    if (target === "notes") fields.notes?.focus?.({ preventScroll: true });
+  }, 180);
 }
 
 function ensureProposalReadyForSending() {

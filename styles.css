@@ -3475,6 +3475,14 @@ label.pipeline-status-control:focus-within select {
   font-size: 0.9rem;
 }
 
+.form-source-edit > div:first-child p {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.28;
+  margin: 0;
+}
+
 .form-source-edit-grid {
   display: grid;
   gap: 8px;
