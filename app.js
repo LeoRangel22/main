@@ -888,16 +888,16 @@ function mergeCatalogLabels(prices) {
 }
 
 function getDefaultCommercialPriority(item) {
-  const type = String(item.tipoEvento || "").toLowerCase();
-  if (type.includes("coquetel") || type.includes("welcome") || type.includes("café") || type.includes("coffee")) return "alta";
+  const type = normalizarTextoSeguro(item.tipoEvento);
+  if (type.includes("coquetel") || type.includes("welcome") || type.includes("cafe") || type.includes("coffee")) return "alta";
   if (type.includes("snacks")) return "baixa";
   return "media";
 }
 
 function getDefaultRecommendedWindows(item) {
-  const type = String(item.tipoEvento || "").toLowerCase();
-  if (type.includes("café") || type.includes("coffee")) return "Manhã de 2ª a 6ª";
-  if (type.includes("almoço")) return "Início do almoço em dias úteis";
+  const type = normalizarTextoSeguro(item.tipoEvento);
+  if (type.includes("cafe") || type.includes("coffee")) return "Manhã de 2ª a 6ª";
+  if (type.includes("almoco")) return "Início do almoço em dias úteis";
   if (type.includes("welcome") || type.includes("coquetel")) return "Após 17h e 19h-21h";
   if (type.includes("workshop")) return "Manhã, fim de tarde ou noite";
   return "Sob consulta";
@@ -1021,6 +1021,14 @@ function toNumber(value) {
       : text;
   const number = Number(normalized);
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizarTextoSeguro(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function escapeHtml(value) {
@@ -8359,12 +8367,12 @@ function buildNotesFromRequest(request) {
 }
 
 function getEventCategoryFromRequest(type) {
-  const normalized = String(type || "").toLowerCase();
+  const normalized = normalizarTextoSeguro(type);
   if (!normalized) return "";
-  if (normalized.includes("café") || normalized.includes("coffee") || normalized.includes("brunch")) {
+  if (normalized.includes("cafe") || normalized.includes("coffee") || normalized.includes("brunch")) {
     return "Café da Manhã / Coffee Break";
   }
-  if (normalized.includes("almoço")) return "Almoço Carioca";
+  if (normalized.includes("almoco")) return "Almoço Carioca";
   if (normalized.includes("coquetel")) return "Coquetel";
   if (normalized.includes("workshop")) return "Workshop de Caipirinha";
   if (normalized.includes("welcome")) return "Welcome Drink";
