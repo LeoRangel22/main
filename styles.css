@@ -3082,6 +3082,7 @@ label.pipeline-status-control:focus-within select {
   margin: 8px 0 12px;
   padding: 10px 12px;
   position: sticky;
+  scroll-margin-top: 12px;
   top: 8px;
   z-index: 24;
 }
@@ -5097,6 +5098,7 @@ label.pipeline-status-control:focus-within select {
   display: grid;
   gap: 26px;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  scroll-margin-top: 12px;
 }
 
 .quote-section-nav {

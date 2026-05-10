@@ -3607,20 +3607,37 @@ function getActiveCommercialContext() {
 }
 
 const structuredObservationPrefixes = [
+  "referência do formulário:",
+  "referencia do formulario:",
+  "empresa:",
   "extras:",
   "tipo de cliente:",
   "cliente final:",
   "grupo:",
+  "nome do grupo:",
   "origem:",
+  "como conheceu:",
   "faixa de investimento:",
   "data flexível:",
   "data é flexível:",
   "momento informado:",
+  "momento desejado:",
   "ocasião:",
+  "ocasiao:",
   "formato escolhido:",
+  "formato solicitado:",
   "janela de data flexível:",
   "período do dia:",
+  "periodo do dia:",
   "horário de chegada:",
+  "horario de chegada:",
+  "pax e duração:",
+  "pax e duracao:",
+  "motivo do evento:",
+  "preferências de alimentos e bebidas:",
+  "preferencias de alimentos e bebidas:",
+  "observação livre do cliente:",
+  "observacao livre do cliente:",
 ];
 
 function cleanClientObservationText(request = null, snapshot = {}) {
@@ -3662,6 +3679,63 @@ function normalizeSourceValue(value) {
   return String(value || "").trim();
 }
 
+function getStructuredObservationKey(label = "") {
+  const normalized = normalizarTextoSeguro(label);
+  if (!normalized) return "";
+  if (normalized.includes("referencia") && normalized.includes("formulario")) return "reference";
+  if (normalized === "empresa" || normalized.includes("empresa ou agencia")) return "company";
+  if (normalized.includes("tipo") && normalized.includes("cliente")) return "clientType";
+  if (normalized.includes("cliente final")) return "finalClient";
+  if (normalized.includes("nome do grupo") || normalized === "grupo") return "groupName";
+  if (normalized.includes("faixa") && normalized.includes("investimento")) return "budgetRange";
+  if (normalized.includes("origem") || normalized.includes("como conheceu")) return "origin";
+  if (normalized.includes("momento")) return "moment";
+  if (normalized.includes("ocasiao") || normalized.includes("objetivo")) return "occasion";
+  if (normalized.includes("formato")) return "eventType";
+  if (normalized.includes("janela") && normalized.includes("data")) return "flexibleDate";
+  if (normalized.includes("data") && normalized.includes("flexivel")) return "flexibleDateStatus";
+  if (normalized.includes("periodo")) return "timeRange";
+  if (normalized.includes("horario") && normalized.includes("chegada")) return "arrivalTime";
+  if (normalized.includes("pax") || normalized.includes("convidados")) return "guestsDuration";
+  if (normalized.includes("duracao")) return "duration";
+  if (normalized.includes("motivo")) return "reason";
+  if (normalized.includes("preferencias") || normalized.includes("alimentos") || normalized.includes("bebidas")) return "preferences";
+  if (normalized.includes("extras")) return "extras";
+  if (normalized.includes("observacao")) return "observations";
+  return "";
+}
+
+function parseStructuredObservationText(...sources) {
+  const parsed = {};
+  const lines = sources
+    .filter(Boolean)
+    .flatMap((source) => String(source).split(/\n+/))
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  lines.forEach((line) => {
+    const separator = line.indexOf(":");
+    if (separator <= 0) return;
+    const label = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    if (!value) return;
+    const key = getStructuredObservationKey(label);
+    if (!key) return;
+
+    if (key === "guestsDuration") {
+      const guestsMatch = value.match(/(\d{1,3})\s*(?:pax|pessoa|convidado)?/i);
+      const durationMatch = value.match(/(\d+(?:[,.]\d+)?)\s*h/i);
+      if (guestsMatch && !parsed.guests) parsed.guests = guestsMatch[1];
+      if (durationMatch && !parsed.duration) parsed.duration = `${durationMatch[1].replace(",", ".")}h`;
+      return;
+    }
+
+    if (!parsed[key]) parsed[key] = value;
+  });
+
+  return parsed;
+}
+
 function getFormSourceData() {
   const request = getActiveQuoteRequest();
   const proposal = getActiveProposal();
@@ -3669,6 +3743,13 @@ function getFormSourceData() {
   const snapshot = request?.snapshot || proposalSnapshot.sourceRequestSnapshot || proposalSnapshot || {};
   const client = snapshot.cliente || snapshot.client || {};
   const event = snapshot.evento || snapshot.event || {};
+  const parsed = parseStructuredObservationText(
+    request?.observacoes,
+    event.observacoes,
+    event.observations,
+    proposalSnapshot.event?.notes,
+    proposalSnapshot.event?.sourceNotes,
+  );
   const overrides = getCurrentSourceOverrides();
   const qualification = {
     ...(snapshot.qualificacao || snapshot.qualification || {}),
@@ -3676,8 +3757,8 @@ function getFormSourceData() {
     ...(proposalSnapshot.sourceOverrides || {}),
     ...overrides,
   };
-  const reference = snapshot.referencia || proposalSnapshot.referencia || "";
-  const clientType = normalizeSourceValue(qualification.clientType || qualification.tipoCliente || client.tipoCliente || request?.tipo_cliente);
+  const reference = snapshot.referencia || proposalSnapshot.referencia || parsed.reference || "";
+  const clientType = normalizeSourceValue(qualification.clientType || qualification.tipoCliente || client.tipoCliente || request?.tipo_cliente || parsed.clientType);
   const finalClient = normalizeSourceValue(
     qualification.finalClient ||
       qualification.clienteFinal ||
@@ -3685,7 +3766,8 @@ function getFormSourceData() {
       client.clienteFinal ||
       client.finalClient ||
       getFinalClientFromSnapshot(snapshot) ||
-      getFinalClientFromSnapshot(proposalSnapshot),
+      getFinalClientFromSnapshot(proposalSnapshot) ||
+      parsed.finalClient,
   );
   const groupName = normalizeSourceValue(
     qualification.groupName ||
@@ -3694,31 +3776,32 @@ function getFormSourceData() {
       client.nomeGrupo ||
       client.groupName ||
       getGroupNameFromSnapshot(snapshot) ||
-      getGroupNameFromSnapshot(proposalSnapshot),
+      getGroupNameFromSnapshot(proposalSnapshot) ||
+      parsed.groupName,
   );
 
   return {
     hasSource: Boolean(request || snapshot.origem === "formulario" || reference || clientType || qualification.faixaInvestimento),
     reference,
-    company: normalizeSourceValue(client.empresa || client.company || proposalSnapshot.client?.company || request?.empresa || request?.cliente_empresa),
+    company: normalizeSourceValue(client.empresa || client.company || proposalSnapshot.client?.company || request?.empresa || request?.cliente_empresa || parsed.company),
     clientType,
     finalClient,
     groupName,
-    budgetRange: normalizeSourceValue(qualification.budgetRange || qualification.faixaInvestimento || request?.faixa_investimento),
-    origin: normalizeSourceValue(qualification.origin || qualification.origem || request?.origem),
-    moment: normalizeSourceValue(qualification.moment || qualification.momento || event.momento || event.moment),
-    occasion: normalizeSourceValue(qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion),
-    eventType: normalizeSourceValue(request?.tipo_evento || event.tipo || event.type || fields.eventType?.value),
-    flexibleDate: normalizeSourceValue(event.dataFlexivel || event.flexibleDate),
-    flexibleDateStatus: normalizeSourceValue(event.dataFlexivelStatus || event.flexibleDateStatus),
-    timeRange: normalizeSourceValue(event.faixaHorario || event.timeRange),
-    arrivalTime: normalizeSourceValue(event.horario || event.time),
-    guests: normalizeSourceValue(event.convidados || event.guests || request?.convidados),
-    duration: normalizeSourceValue(event.duracaoTexto || event.durationLabel || (event.duracao ? `${event.duracao}h` : "")),
-    extras: normalizeSourceValue(event.extras),
-    preferences: normalizeSourceValue(request?.preferencias || event.preferencias || event.preferences),
+    budgetRange: normalizeSourceValue(qualification.budgetRange || qualification.faixaInvestimento || request?.faixa_investimento || parsed.budgetRange),
+    origin: normalizeSourceValue(qualification.origin || qualification.origem || request?.origem || parsed.origin),
+    moment: normalizeSourceValue(qualification.moment || qualification.momento || event.momento || event.moment || parsed.moment),
+    occasion: normalizeSourceValue(qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion || parsed.occasion),
+    eventType: normalizeSourceValue(request?.tipo_evento || event.tipo || event.type || fields.eventType?.value || parsed.eventType),
+    flexibleDate: normalizeSourceValue(event.dataFlexivel || event.flexibleDate || parsed.flexibleDate),
+    flexibleDateStatus: normalizeSourceValue(event.dataFlexivelStatus || event.flexibleDateStatus || parsed.flexibleDateStatus),
+    timeRange: normalizeSourceValue(event.faixaHorario || event.timeRange || parsed.timeRange),
+    arrivalTime: normalizeSourceValue(event.horario || event.time || parsed.arrivalTime),
+    guests: normalizeSourceValue(event.convidados || event.guests || request?.convidados || parsed.guests),
+    duration: normalizeSourceValue(event.duracaoTexto || event.durationLabel || (event.duracao ? `${event.duracao}h` : "") || parsed.duration),
+    extras: normalizeSourceValue(event.extras || parsed.extras),
+    preferences: normalizeSourceValue(request?.preferencias || event.preferencias || event.preferences || parsed.preferences),
     observations: cleanClientObservationText(request, snapshot),
-    reason: normalizeSourceValue(request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value),
+    reason: normalizeSourceValue(request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value || parsed.reason),
   };
 }
 
@@ -3930,9 +4013,9 @@ function getLeadReadinessItems() {
   return [
     {
       id: "contact",
-      label: "Contato e canal",
+      label: "Contato para retorno",
       status: contact?.status || "error",
-      detail: contact?.detail || "Confira nome, e-mail ou celular/WhatsApp de retorno.",
+      detail: contact?.detail || "Confira nome do cliente e pelo menos um canal válido: e-mail ou celular/WhatsApp.",
       target: "client",
     },
     {
@@ -4104,7 +4187,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
-    { label: "Contato e canal", ids: ["contact"], target: "client" },
+    { label: "Contato", ids: ["contact"], target: "client" },
     { label: "Cliente e contexto", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
@@ -4832,8 +4915,8 @@ function getLoadedEditorTarget(targetMode = "client") {
     return nodes.sendReviewPanel || document.querySelector("#sendReviewPanel");
   }
   return (
-    document.querySelector("#clientDataSection") ||
     (nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : null) ||
+    document.querySelector("#clientDataSection") ||
     document.querySelector(".quote-layout")
   );
 }
@@ -4854,6 +4937,15 @@ function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
   }
   scrollToNodeReliably(target, { behavior, offset: 14 });
   return true;
+}
+
+function scheduleLoadedEditorJump(targetMode = "client", behavior = "auto") {
+  const jumps = [0, 90, 240, 520, 980, 1500];
+  jumps.forEach((delay) => {
+    window.setTimeout(() => {
+      jumpToLoadedEditor(targetMode, delay >= 520 ? "auto" : behavior);
+    }, delay);
+  });
 }
 
 function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.", targetMode = "auto") {
@@ -4889,7 +4981,8 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
       }, 20);
     }
   }
-  jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto");
+  const jumpMode = targetMode === "review" ? "review" : "client";
+  jumpToLoadedEditor(jumpMode, "auto");
   target.setAttribute("tabindex", "-1");
   target.focus?.({ preventScroll: true });
   [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
@@ -4898,8 +4991,7 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
     node.classList.add("is-loaded-focus");
     window.setTimeout(() => node.classList.remove("is-loaded-focus"), 1700);
   });
-  window.setTimeout(() => jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto"), 90);
-  window.setTimeout(() => jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto"), 420);
+  scheduleLoadedEditorJump(jumpMode, "auto");
   window.setTimeout(() => fields.clientName?.focus?.({ preventScroll: true }), 350);
   showToast(message);
 }
@@ -7427,7 +7519,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   openSavedProposal(proposalId, sourceLabel);
-  window.setTimeout(() => jumpToLoadedEditor("client", "auto"), 80);
+  scheduleLoadedEditorJump("client", "auto");
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
@@ -7441,7 +7533,7 @@ async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   await applyQuoteRequest(requestId, sourceLabel);
-  window.setTimeout(() => jumpToLoadedEditor("client", "auto"), 80);
+  scheduleLoadedEditorJump("client", "auto");
 }
 
 function renderQuoteWorkspaceGuide() {
