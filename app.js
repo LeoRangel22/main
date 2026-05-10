@@ -4744,6 +4744,9 @@ function getScrollableAncestors(node) {
 function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
   if (!target) return;
   const scroll = (scrollBehavior = behavior) => {
+    try {
+      target.scrollIntoView({ behavior: scrollBehavior, block: "start", inline: "nearest" });
+    } catch (_) {}
     const rect = target.getBoundingClientRect();
     const top = Math.max(0, rect.top + window.scrollY - offset);
     const root = document.scrollingElement || document.documentElement;
@@ -4771,6 +4774,35 @@ function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {})
   window.setTimeout(() => scroll("auto"), 760);
 }
 
+function getLoadedEditorTarget(targetMode = "client") {
+  if (targetMode === "review") {
+    return nodes.sendReviewPanel || document.querySelector("#sendReviewPanel");
+  }
+  return (
+    document.querySelector("#clientDataSection") ||
+    (nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : null) ||
+    document.querySelector(".quote-layout")
+  );
+}
+
+function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
+  const target = getLoadedEditorTarget(targetMode);
+  if (!target) return false;
+  if (target.id) {
+    const nextHash = `#${target.id}`;
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    try {
+      window.history.replaceState(null, "", nextUrl);
+    } catch (_) {
+      try {
+        window.location.hash = nextHash;
+      } catch (_) {}
+    }
+  }
+  scrollToNodeReliably(target, { behavior, offset: 14 });
+  return true;
+}
+
 function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dados, itens e checklist antes de enviar.", targetMode = "auto") {
   const section = document.querySelector("#clientDataSection");
   const layout = document.querySelector(".quote-layout");
@@ -4785,7 +4817,7 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
 
   const editorAnchor =
     nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : section || layout;
-  const target = section || editorAnchor || layout;
+  const target = getLoadedEditorTarget(targetMode) || section || editorAnchor || layout;
   if (!target) return;
 
   if (target.id) {
@@ -4804,7 +4836,7 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
       }, 20);
     }
   }
-  scrollToNodeReliably(target, { behavior: targetMode === "auto" ? "auto" : "smooth", offset: 14 });
+  jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto");
   target.setAttribute("tabindex", "-1");
   target.focus?.({ preventScroll: true });
   [section, layout, proposalPaper, reviewPanel, nodes.loadedEditorBar].filter(Boolean).forEach((node) => {
@@ -4813,6 +4845,8 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
     node.classList.add("is-loaded-focus");
     window.setTimeout(() => node.classList.remove("is-loaded-focus"), 1700);
   });
+  window.setTimeout(() => jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto"), 90);
+  window.setTimeout(() => jumpToLoadedEditor(targetMode === "review" ? "review" : "client", "auto"), 420);
   window.setTimeout(() => fields.clientName?.focus?.({ preventScroll: true }), 350);
   showToast(message);
 }
@@ -7340,6 +7374,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   openSavedProposal(proposalId, sourceLabel);
+  window.setTimeout(() => jumpToLoadedEditor("client", "auto"), 80);
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
@@ -7353,6 +7388,7 @@ async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   await applyQuoteRequest(requestId, sourceLabel);
+  window.setTimeout(() => jumpToLoadedEditor("client", "auto"), 80);
 }
 
 function renderQuoteWorkspaceGuide() {
