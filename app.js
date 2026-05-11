@@ -12,6 +12,9 @@ const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario
 const CANONICAL_PUBLIC_PROPOSAL_URL = "https://leorangel22.github.io/main/proposta.html";
 const TEAM_EMAILS = ["eventos@embaixadacarioca.com.br", "financeiro@embaixadacarioca.com.br", "leorangel@gmail.com"];
 const SUPER_ADMIN_EMAILS = ["leorangel@gmail.com"];
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const QA_MODE = URL_PARAMS.get("qa") === "1";
+const QA_USER_EMAIL = "leorangel@gmail.com";
 const TEAM_PROFILES = {
   "leorangel@gmail.com": {
     label: "Super admin",
@@ -5795,6 +5798,550 @@ function renderSupabaseStatus(message, connected = false) {
   nodes.supabaseStatus.style.borderLeftColor = connected ? "var(--verde)" : "var(--verde-2)";
 }
 
+function createQaTimestamp(daysOffset = 0, hour = 9, minute = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysOffset);
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
+}
+
+function createQaDate(daysOffset = 0) {
+  return createQaTimestamp(daysOffset, 12, 0).slice(0, 10);
+}
+
+function createQaSourceSnapshot({
+  reference,
+  company = "",
+  clientType = "Cliente direto",
+  finalClient = "",
+  groupName = "",
+  budgetRange = "R$ 15 mil a R$ 30 mil",
+  origin = "Indicação",
+  moment = "Manhã em dia de semana",
+  occasion = "Reunião / encontro corporativo",
+  preferences = "",
+  observations = "",
+  eventType = "Café da Manhã / Brunch",
+  date = "",
+  time = "",
+  guests = 30,
+  duration = 1,
+} = {}) {
+  return {
+    origem: "formulario",
+    referencia: reference,
+    cliente: {
+      empresa: company,
+      tipoCliente: clientType,
+      clienteFinal: finalClient,
+      nomeGrupo: groupName,
+    },
+    qualificacao: {
+      tipoCliente: clientType,
+      clienteFinal: finalClient,
+      nomeGrupo: groupName,
+      faixaInvestimento: budgetRange,
+      origem: origin,
+      momento: moment,
+      ocasiao: occasion,
+    },
+    evento: {
+      tipo: eventType,
+      data: date,
+      horario: time,
+      convidados: guests,
+      duracao: duration,
+      momento: moment,
+      ocasiao: occasion,
+      preferencias: preferences,
+      observacoes: observations,
+    },
+  };
+}
+
+function createQaProposalSnapshot({
+  reference,
+  clientName,
+  email,
+  phone,
+  company = "",
+  type,
+  date,
+  time,
+  guests,
+  duration,
+  selectedIds = [],
+  total,
+  clientType,
+  finalClient,
+  groupName,
+  budgetRange,
+  origin,
+  moment,
+  occasion,
+  notes = "",
+  signalPayment = null,
+  remainingPayment = null,
+  clientResponse = null,
+} = {}) {
+  const sourceSnapshot = createQaSourceSnapshot({
+    reference,
+    company,
+    clientType,
+    finalClient,
+    groupName,
+    budgetRange,
+    origin,
+    moment,
+    occasion,
+    eventType: type,
+    date,
+    time,
+    guests,
+    duration,
+    observations: notes,
+  });
+  const selectedItems = selectedIds
+    .map((id) => state.prices.find((item) => item.id === id))
+    .filter(Boolean)
+    .map((item) => ({
+      id: item.id,
+      codigo: item.codigo,
+      tipoEvento: item.tipoEvento,
+      nome: item.nome,
+      descricao: item.descricao,
+      commercialSummary: item.commercialSummary || item.descricao,
+      formula: item.formula,
+      calc: { total: 0, detail: "Simulado no modo QA" },
+    }));
+  return {
+    version: 1,
+    referencia: reference,
+    savedAt: createQaTimestamp(-1, 15, 15),
+    client: {
+      name: clientName,
+      email,
+      phone,
+      company,
+      finalClient,
+      groupName,
+    },
+    event: {
+      type,
+      date,
+      time,
+      guests,
+      duration,
+      validity: "14 dias",
+      signalDeadlineHours: DEFAULT_SIGNAL_DEADLINE_HOURS,
+      signalDeadlineAt: createQaTimestamp(2, 15, 0),
+      manualAdjustment: 0,
+      manualAdjustmentLabel: "",
+      reason: occasion || "",
+      notes,
+    },
+    totals: {
+      subtotal: Math.round((total || 0) / (1 + SERVICE_RATE)),
+      serviceFee: Math.round((total || 0) - (total || 0) / (1 + SERVICE_RATE)),
+      privatizationAmount: 0,
+      adjustment: 0,
+      adjustmentLabel: "Ajuste comercial",
+      total: total || 0,
+      privatization: { amount: 0, title: "Privatização não aplicada", description: "Simulado no modo QA." },
+    },
+    selectedIds,
+    selectedItems,
+    prices: state.prices,
+    guided: { event: getGuidedEventKeyFromType(type), beverageId: "", foodId: "", workshopId: "" },
+    privatizationChoice: "",
+    activeQuoteRequestId: "",
+    qualificacao: sourceSnapshot.qualificacao,
+    sourceRequestSnapshot: sourceSnapshot,
+    privatizationRules: state.privatizationRules,
+    generalTerms: loadGeneralTerms(),
+    paymentTerms,
+    operationalChecklist: {},
+    commercialHistory: [
+      {
+        id: `qa-hist-${reference}`,
+        type: "proposta",
+        title: "Registro QA criado",
+        detail: "Dado fictício para validar fluxo, UX e segurança sem tocar na operação real.",
+        at: createQaTimestamp(-1, 15, 15),
+        actor: QA_USER_EMAIL,
+        actorRole: "Super admin",
+      },
+    ],
+    ...(signalPayment ? { pagamentoSinal: signalPayment } : {}),
+    ...(remainingPayment ? { pagamentoRestante: remainingPayment } : {}),
+    ...(clientResponse ? { clienteResposta: clientResponse } : {}),
+  };
+}
+
+function createQaProposal(input) {
+  const now = createQaTimestamp(input.updatedOffsetDays || -1, input.updatedHour || 15, input.updatedMinute || 0);
+  const snapshot = createQaProposalSnapshot(input);
+  return {
+    id: input.id,
+    responsavel_id: "qa-user",
+    responsavel_email: QA_USER_EMAIL,
+    cliente_nome: input.clientName,
+    cliente_email: input.email,
+    cliente_whatsapp: input.phone,
+    cliente_empresa: input.company || "",
+    tipo_evento: input.type,
+    data_evento: input.date,
+    horario_evento: input.time,
+    convidados: input.guests,
+    duracao: input.duration,
+    subtotal: snapshot.totals.subtotal,
+    taxa_servico: snapshot.totals.serviceFee,
+    privatizacao: snapshot.totals.privatizationAmount,
+    total: snapshot.totals.total,
+    status: input.status || "proposta_enviada",
+    solicitacao_id: input.solicitacaoId || null,
+    cliente_resposta: input.clientResponse?.acao || "",
+    cliente_mensagem: input.clientResponse?.mensagem || "",
+    cliente_solicitacao: input.clientResponse || null,
+    cliente_resposta_em: input.clientResponse?.registradoEm || null,
+    created_at: createQaTimestamp(input.createdOffsetDays || -4, input.createdHour || 10, 0),
+    updated_at: now,
+    snapshot,
+  };
+}
+
+function createQaRequest(input) {
+  const snapshot = createQaSourceSnapshot(input);
+  return {
+    id: input.id,
+    cliente_nome: input.clientName,
+    cliente_email: input.email,
+    cliente_whatsapp: input.phone,
+    cliente_empresa: input.company || "",
+    empresa: input.company || "",
+    tipo_evento: input.eventType,
+    data_evento: input.date,
+    horario_evento: input.time,
+    convidados: input.guests,
+    duracao: input.duration,
+    motivo_evento: input.occasion || "",
+    preferencias: input.preferences || "",
+    observacoes: input.observations || "",
+    status: input.status || "lead_recebido",
+    proposta_id: null,
+    snapshot,
+    created_at: createQaTimestamp(input.createdOffsetDays || -2, input.createdHour || 9, input.createdMinute || 0),
+    updated_at: createQaTimestamp(input.updatedOffsetDays || -2, input.updatedHour || 9, input.updatedMinute || 0),
+  };
+}
+
+function createQaSupabaseClient() {
+  const tableMap = {
+    propostas: () => state.proposals,
+    solicitacoes_cotacao: () => state.quoteRequests,
+  };
+  const setTable = (table, rows) => {
+    if (table === "propostas") state.proposals = rows;
+    if (table === "solicitacoes_cotacao") state.quoteRequests = rows;
+  };
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  function runQuery(table, query) {
+    const rows = tableMap[table]?.() || [];
+    let data = rows.filter((row) => query.filters.every((filter) => row[filter.column] === filter.value));
+    if (query.action === "insert") {
+      const payload = Array.isArray(query.payload) ? query.payload : [query.payload];
+      data = payload.map((row) => ({
+        id: row.id || `qa-${table}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        created_at: row.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...clone(row),
+      }));
+      setTable(table, [...data, ...rows]);
+    } else if (query.action === "update") {
+      data = [];
+      const nextRows = rows.map((row) => {
+        if (!query.filters.every((filter) => row[filter.column] === filter.value)) return row;
+        const updated = { ...row, ...clone(query.payload), updated_at: new Date().toISOString() };
+        data.push(updated);
+        return updated;
+      });
+      setTable(table, nextRows);
+    } else if (query.action === "delete") {
+      const nextRows = rows.filter((row) => !query.filters.every((filter) => row[filter.column] === filter.value));
+      setTable(table, nextRows);
+      data = [];
+    }
+
+    if (query.action === "select") {
+      if (query.orderColumn) {
+        data = [...data].sort((a, b) => {
+          const av = a[query.orderColumn] || "";
+          const bv = b[query.orderColumn] || "";
+          return query.ascending ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+        });
+      }
+      if (Number.isFinite(query.limitValue)) data = data.slice(0, query.limitValue);
+    }
+
+    if (query.head) return { data: null, error: null, count: rows.length };
+    return { data: clone(data), error: null, count: data.length };
+  }
+
+  function from(table) {
+    const query = {
+      action: "select",
+      payload: null,
+      filters: [],
+      orderColumn: "",
+      ascending: true,
+      limitValue: Infinity,
+      head: false,
+    };
+    const chain = {
+      select(_columns = "*", options = {}) {
+        query.head = Boolean(options.head);
+        return chain;
+      },
+      order(column, options = {}) {
+        query.orderColumn = column;
+        query.ascending = Boolean(options.ascending);
+        return chain;
+      },
+      limit(value) {
+        query.limitValue = Number(value);
+        return chain;
+      },
+      insert(payload) {
+        query.action = "insert";
+        query.payload = payload;
+        return chain;
+      },
+      update(payload) {
+        query.action = "update";
+        query.payload = payload;
+        return chain;
+      },
+      delete() {
+        query.action = "delete";
+        return chain;
+      },
+      eq(column, value) {
+        query.filters.push({ column, value });
+        return chain;
+      },
+      single() {
+        const result = runQuery(table, query);
+        return Promise.resolve({ data: Array.isArray(result.data) ? result.data[0] || null : result.data, error: result.error });
+      },
+      then(resolve, reject) {
+        return Promise.resolve(runQuery(table, query)).then(resolve, reject);
+      },
+    };
+    return chain;
+  }
+
+  return {
+    __qa: true,
+    from,
+    auth: {
+      getSession: async () => ({ data: { session: state.session }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      signOut: async () => ({ error: null }),
+      signInWithOtp: async () => ({ error: null }),
+      setSession: async () => ({ data: { session: state.session }, error: null }),
+    },
+    functions: {
+      invoke: async (name, options = {}) => ({
+        data: { ok: true, qa: true, name, body: options.body || null, message: "Simulado no modo QA." },
+        error: null,
+      }),
+    },
+  };
+}
+
+function loadQaFixtures() {
+  const request = createQaRequest({
+    id: "qa-request-prioridade",
+    reference: "QA-20260511-LEAD",
+    clientName: "Claudia da Silva Oliveira",
+    email: "financeiro@joanaemaria.com.br",
+    phone: "+55 21 96728 514",
+    company: "Joana e Maria Eventos Ltda",
+    clientType: "Agência de marketing / eventos",
+    finalClient: "TV Globo",
+    groupName: "Delegação Rio+Criativo",
+    budgetRange: "R$ 30 mil a R$ 60 mil",
+    origin: "Indicação",
+    moment: "Início do almoço",
+    occasion: "Reunião / encontro corporativo",
+    eventType: "Almoço Carioca",
+    date: createQaDate(18),
+    time: "12:00",
+    guests: 85,
+    duration: 2,
+    preferences: "Foto, filmagem, som ambiente e restrições alimentares.",
+    observations: "Grupo estrangeiro com agenda apertada. Precisa de proposta clara e rápida.",
+    createdOffsetDays: -2,
+    createdHour: 8,
+    createdMinute: 30,
+    updatedOffsetDays: -2,
+    updatedHour: 8,
+    updatedMinute: 30,
+  });
+
+  const proposalWaiting = createQaProposal({
+    id: "qa-proposal-sem-resposta",
+    reference: "QA-20260511-SR",
+    clientName: "Bruna Marcelle",
+    email: "bruna.qa@example.com",
+    phone: "+55 21 99999 0001",
+    company: "Rena Travel",
+    clientType: "Agência de turismo receptivo / DMC",
+    finalClient: "Grupo Andes",
+    groupName: "Grupo Andes Incentivo",
+    budgetRange: "R$ 15 mil a R$ 30 mil",
+    origin: "Google / Instagram",
+    moment: "Manhã em dia de semana",
+    occasion: "Grupo turístico / receptivo",
+    type: "Café da Manhã / Brunch",
+    date: createQaDate(7),
+    time: "09:30",
+    guests: 42,
+    duration: 1,
+    selectedIds: ["cafe-classico"],
+    total: 3057.6,
+    status: "proposta_enviada",
+    createdOffsetDays: -5,
+    updatedOffsetDays: -3,
+    updatedHour: 11,
+  });
+
+  const proposalChange = createQaProposal({
+    id: "qa-proposal-alteracao",
+    reference: "QA-20260511-ALT",
+    clientName: "Luciano Ferrari Bissolati",
+    email: "luciano.qa@example.com",
+    phone: "+55 21 99999 0002",
+    company: "Farol Eventos",
+    clientType: "Agência de marketing / eventos",
+    finalClient: "Booking Brasil",
+    groupName: "Booking Corporate RJ",
+    budgetRange: "Acima de R$ 60 mil",
+    origin: "Agência / parceiro",
+    moment: "Fim de tarde",
+    occasion: "Lançamento / relacionamento com clientes",
+    type: "Coquetel",
+    date: createQaDate(31),
+    time: "18:30",
+    guests: 60,
+    duration: 2,
+    selectedIds: ["coquetel-carioca", "brasileiro-ii"],
+    total: 16128,
+    status: "negociacao",
+    notes: "Cliente pediu alteração: incluir almoço antes do welcome coffee e checar disponibilidade de espaço para apresentação.",
+    clientResponse: {
+      acao: "alteracao",
+      mensagem:
+        "Pessoal, precisamos atualizar: é necessário incluir também um almoço além do welcome coffee. Estamos realizando uma cotação de espaço para evento corporativo da Booking Brasil no Rio de Janeiro e gostaríamos de verificar disponibilidade e orçamento com vocês.",
+      data: createQaDate(31),
+      horario: "17:30",
+      convidados: 60,
+      registradoEm: createQaTimestamp(-1, 16, 35),
+    },
+    createdOffsetDays: -2,
+    updatedOffsetDays: -1,
+    updatedHour: 16,
+    updatedMinute: 35,
+  });
+
+  const signalProof = {
+    valor: 2576,
+    data: createQaDate(-1),
+    bancos: ["Itaú"],
+    comprovante: { nome: "qa-comprovante-sinal.pdf", dataUrl: "" },
+  };
+
+  const confirmed = createQaProposal({
+    id: "qa-proposal-sinal",
+    reference: "QA-20260511-SINAL",
+    clientName: "Julia Morena",
+    email: "julia.qa@example.com",
+    phone: "+55 21 99999 0003",
+    company: "Hotel Vista Rio",
+    clientType: "Empresa",
+    finalClient: "Hotel Vista Rio",
+    budgetRange: "R$ 15 mil a R$ 30 mil",
+    origin: "Já conheço o restaurante",
+    moment: "Manhã em dia de semana",
+    occasion: "Reunião / encontro corporativo",
+    type: "Café da Manhã / Brunch",
+    date: createQaDate(2),
+    time: "08:30",
+    guests: 40,
+    duration: 2.5,
+    selectedIds: ["cafe-completo"],
+    total: 5152,
+    status: "confirmado",
+    signalPayment: signalProof,
+    createdOffsetDays: -4,
+    updatedOffsetDays: -1,
+    updatedHour: 9,
+  });
+
+  const remaining = createQaProposal({
+    id: "qa-proposal-pagamento",
+    reference: "QA-20260511-SALDO",
+    clientName: "Cristiane Santos",
+    email: "cristiane.qa@example.com",
+    phone: "+55 21 99999 0004",
+    company: "Blue Coast DMC",
+    clientType: "Agência de turismo receptivo / DMC",
+    finalClient: "Grupo Horizonte",
+    groupName: "Horizonte 2026",
+    budgetRange: "R$ 30 mil a R$ 60 mil",
+    origin: "Agência / parceiro",
+    moment: "Noite (19h-21h)",
+    occasion: "Confraternização",
+    type: "Coquetel",
+    date: createQaDate(1),
+    time: "19:00",
+    guests: 55,
+    duration: 2,
+    selectedIds: ["coquetel-carioca", "brasileiro-ii", "workshop-caipirinha-pt"],
+    total: 22870,
+    status: "pagamento_final",
+    signalPayment: { ...signalProof, valor: 11435 },
+    createdOffsetDays: -10,
+    updatedOffsetDays: -1,
+    updatedHour: 13,
+  });
+
+  state.quoteRequests = [request];
+  state.proposals = [proposalWaiting, proposalChange, confirmed, remaining];
+}
+
+async function initQaMode() {
+  state.session = {
+    user: {
+      id: "qa-user",
+      email: QA_USER_EMAIL,
+    },
+  };
+  state.supabase = createQaSupabaseClient();
+  if (fields.supabaseUrl) fields.supabaseUrl.value = DEFAULT_SUPABASE_URL;
+  if (fields.supabaseAnonKey) fields.supabaseAnonKey.value = DEFAULT_SUPABASE_ANON_KEY;
+  loadQaFixtures();
+  renderSupabaseStatus("Modo QA seguro ativo: dados fictícios, envios e gravações simulados.", true);
+  updateAuthUI();
+  renderHistory();
+  renderConfirmedEvents();
+  renderQuoteRequests();
+  renderAll();
+  showToast("Modo QA ativo. Pode testar sem mexer nos dados reais.");
+  await applyPendingDashboardTarget();
+}
+
 function getHealthTone(status) {
   if (status === "ok") return "ok";
   if (status === "warning") return "warning";
@@ -10732,4 +11279,8 @@ window.addEventListener("hashchange", async () => {
 });
 bindEvents();
 renderAll();
-initSupabase();
+if (QA_MODE) {
+  initQaMode();
+} else {
+  initSupabase();
+}
