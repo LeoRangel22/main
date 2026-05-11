@@ -9129,7 +9129,16 @@ input[type="range"] {
   }
 
   .proposal-paper {
-    padding: 24px 18px;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 22px 14px;
+    width: 100%;
+  }
+
+  #proposalContent,
+  .proposal-page {
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .proposal-header,
@@ -9145,6 +9154,37 @@ input[type="range"] {
 
   .proposal-summary-strip {
     grid-template-columns: 1fr;
+  }
+
+  .proposal-table,
+  .proposal-table tbody,
+  .proposal-table tr,
+  .proposal-table th,
+  .proposal-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .proposal-table thead {
+    display: none;
+  }
+
+  .proposal-table tr {
+    border-bottom: 1px solid rgba(24, 58, 45, 0.12);
+    padding: 10px 0;
+  }
+
+  .proposal-table td {
+    border-bottom: 0;
+    padding: 5px 0;
+    text-align: left;
+  }
+
+  .proposal-table td:last-child,
+  .proposal-table th:last-child,
+  .proposal-table .proposal-value {
+    text-align: left;
+    white-space: normal;
   }
 
   .public-form-hero {
