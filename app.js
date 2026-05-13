@@ -10389,7 +10389,8 @@ function scrollToReviewTarget(target) {
       const contact = getCurrentContactValues();
       if (!contact.name) fields.clientName?.focus?.({ preventScroll: true });
       else if (!contact.email && !contact.phone) fields.clientPhone?.focus?.({ preventScroll: true });
-      else if (!fields.eventDate?.value || !fields.eventTime?.value) fields.eventDateTime?.focus?.({ preventScroll: true });
+      else if (!fields.eventDate?.value) fields.eventDate?.focus?.({ preventScroll: true });
+      else if (!fields.eventTime?.value) fields.eventTime?.focus?.({ preventScroll: true });
       return;
     }
     if (target === "notes") fields.notes?.focus?.({ preventScroll: true });
@@ -10881,7 +10882,12 @@ function createNewItem() {
 function bindEvents() {
   Object.values(fields).forEach((field) => {
     if (!field) return;
-    const refreshFormOutputs = () => {
+    const refreshFormOutputs = (event) => {
+      if (event?.target === fields.eventDateTime) {
+        syncFieldsFromDateTime();
+      } else if (event?.target === fields.eventDate || event?.target === fields.eventTime) {
+        syncDateTimeFromFields();
+      }
       renderPriceList();
       renderAvailabilityAlert();
       renderFormSourcePanel();
@@ -10904,14 +10910,6 @@ function bindEvents() {
   });
 
   fields.eventDateTime?.setAttribute("step", "1800");
-  fields.eventDateTime?.addEventListener("input", () => {
-    syncFieldsFromDateTime();
-    renderAvailabilityAlert();
-    renderSummary();
-    renderSendReview();
-    renderCalculation();
-    renderProposal();
-  });
 
   fields.categoryFilter?.addEventListener("change", renderPriceList);
   fields.eventDuration?.addEventListener("change", renderAll);
