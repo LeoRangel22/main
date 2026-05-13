@@ -621,6 +621,7 @@ const state = {
   activePipelineFilter: "all",
   quoteGuideDismissed: false,
   sourceOverrides: {},
+  manualSourceKey: "",
   guided: {
     event: "",
     beverageId: "",
@@ -3658,6 +3659,7 @@ function cleanClientObservationText(request = null, snapshot = {}) {
 function getSourceOverrideKey() {
   if (state.activeProposalId) return `proposal:${state.activeProposalId}`;
   if (state.activeQuoteRequestId) return `request:${state.activeQuoteRequestId}`;
+  if (state.manualSourceKey) return state.manualSourceKey;
   return "";
 }
 
@@ -3754,6 +3756,7 @@ function getFormSourceData() {
     proposalSnapshot.event?.sourceNotes,
   );
   const overrides = getCurrentSourceOverrides();
+  const isManualDraft = Boolean(state.manualSourceKey && !state.activeProposalId && !state.activeQuoteRequestId);
   const qualification = {
     ...(snapshot.qualificacao || snapshot.qualification || {}),
     ...(proposalSnapshot.qualificacao || proposalSnapshot.qualification || {}),
@@ -3784,9 +3787,10 @@ function getFormSourceData() {
   );
 
   return {
-    hasSource: Boolean(request || snapshot.origem === "formulario" || reference || clientType || qualification.faixaInvestimento),
+    hasSource: Boolean(isManualDraft || request || snapshot.origem === "formulario" || reference || clientType || qualification.faixaInvestimento),
+    isManualDraft,
     reference,
-    company: normalizeSourceValue(client.empresa || client.company || proposalSnapshot.client?.company || request?.empresa || request?.cliente_empresa || parsed.company),
+    company: normalizeSourceValue(overrides.company || client.empresa || client.company || proposalSnapshot.client?.company || request?.empresa || request?.cliente_empresa || parsed.company),
     clientType,
     finalClient,
     groupName,
@@ -3887,14 +3891,19 @@ function renderFormSourcePanel() {
     ["Extras solicitados", data.extras],
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
+  const sourceTitle = data.isManualDraft ? "Dados comerciais da proposta" : "Dados recebidos do formulário";
+  const sourceSubtitle = data.isManualDraft ? "Preencha para proposta manual segura" : "Base para proposta segura e automação futura";
+  const sourceHelp = data.isManualDraft
+    ? "Use estes campos quando a cotação nasce direto no admin. Eles alimentam checklist, histórico do cliente e automação futura."
+    : "Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.";
 
   nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
   nodes.formSourcePanel.innerHTML = `
     <div class="form-source-head">
       <div>
-        <span>Dados recebidos do formulário</span>
-        <strong>Base para proposta segura e automação futura</strong>
-        <p>Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.</p>
+        <span>${escapeHtml(sourceTitle)}</span>
+        <strong>${escapeHtml(sourceSubtitle)}</strong>
+        <p>${escapeHtml(sourceHelp)}</p>
       </div>
       <small>${
         missing.length
@@ -3907,11 +3916,12 @@ function renderFormSourcePanel() {
     <div class="form-source-edit">
       <div>
         <span>Dados para liberar envio seguro</span>
-        <strong>Confira o que veio do cliente e complete só o que faltar</strong>
+        <strong>${escapeHtml(data.isManualDraft ? "Registre o contexto comercial antes de enviar" : "Confira o que veio do cliente e complete só o que faltar")}</strong>
         <p>Esses campos alimentam a revisão, o histórico do cliente e a futura resposta automática.</p>
       </div>
       <div class="form-source-edit-grid">
         ${renderSourceSelect("clientType", "Tipo de cliente", data.clientType, sourceClientTypeOptions)}
+        ${renderSourceInput("company", "Empresa ou agência", data.company, "Ex.: Joana e Maria Eventos, Castelo Viagens")}
         ${renderSourceInput("finalClient", "Cliente final", data.finalClient, "Ex.: TV Globo, Booking Brasil, Família Almeida")}
         ${renderSourceInput("groupName", "Nome do grupo", data.groupName, "Ex.: Incentivo México 2026, Grupo Rio 40 pax")}
         ${renderSourceSelect("budgetRange", "Faixa de investimento", data.budgetRange, sourceBudgetRangeOptions)}
@@ -5706,7 +5716,7 @@ function getProposalSnapshot() {
       name: fields.clientName.value.trim(),
       email: fields.clientEmail.value.trim(),
       phone: fields.clientPhone.value.trim(),
-      company: activeRequest?.empresa || activeRequest?.cliente_empresa || activeRequest?.snapshot?.cliente?.empresa || "",
+      company: sourceData.company || activeRequest?.empresa || activeRequest?.cliente_empresa || activeRequest?.snapshot?.cliente?.empresa || "",
       finalClient: sourceData.finalClient || getFinalClientFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
       groupName: sourceData.groupName || getGroupNameFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
     },
@@ -9102,6 +9112,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
 
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
+  state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   resetProposalDraftState();
   fields.clientName.value = request.cliente_nome || "";
@@ -9751,6 +9762,7 @@ async function logoutSupabase() {
   state.quoteRequests = [];
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.manualSourceKey = "";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
   updateAuthUI();
@@ -10051,6 +10063,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
+  state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
@@ -10257,6 +10270,8 @@ function startNewProposal() {
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  delete state.sourceOverrides["manual:draft"];
+  state.manualSourceKey = "manual:draft";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
