@@ -21,7 +21,8 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
     await page.locator("#clientPhone").fill("+55 21 99999-0000");
-    await page.locator("#eventDateTime").fill("2026-06-18T09:00");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("09:00");
     await page.locator("#guestCount").fill("30");
     await page.locator("#eventDuration").selectOption("1");
     await page.locator('[data-source-field="clientType"]').selectOption("Empresa");
@@ -83,7 +84,8 @@ test.describe("Proposta manual no admin", () => {
     const afterContact = await page.evaluate(() => window.getProposalReviewItems().find((item) => item.id === "contact"));
     expect(afterContact.status).not.toBe("error");
 
-    await page.locator("#eventDateTime").fill("2026-06-18T09:00");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("09:00");
     const afterDate = await page.evaluate(() => window.getProposalReviewItems().find((item) => item.id === "date"));
     expect(afterDate.status).toBe("ok");
 
