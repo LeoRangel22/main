@@ -16,7 +16,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#startManualProposalBtn").click();
     await expect(page.locator("#clientDataSection")).toBeVisible();
     await expect(page.locator("#manualAdjustment")).toHaveValue("0");
-    await expect(page.locator("#formSourcePanel")).toContainText("Dados comerciais da proposta");
+    await expect(page.locator("#formSourcePanel")).toContainText("Classificação comercial da proposta");
 
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
@@ -55,6 +55,12 @@ test.describe("Proposta manual no admin", () => {
     const summaryWithBlankAdjustment = await page.evaluate(() => window.getProposalReviewSummary());
     expect(summaryWithBlankAdjustment.ready).toBe(true);
 
+    await page.locator('#sendReviewPanel button[data-send-review-action="approve"]').first().click();
+    await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
+
+    await page.locator('[data-source-field="origin"]').selectOption("Google / Instagram");
+    await expect(page.locator("#sendReviewPanel")).not.toHaveClass(/is-approved/);
+
     await expectNoBrowserErrors(errors);
   });
 
@@ -90,6 +96,10 @@ test.describe("Proposta manual no admin", () => {
     expect(afterItems.format.status).toBe("ok");
     expect(afterItems.items.status).toBe("ok");
     expect(afterItems.value.status).toBe("ok");
+
+    const sourceGapsAfterFormat = await page.evaluate(() => window.getFormSourceMissingItems(window.getFormSourceData()));
+    expect(sourceGapsAfterFormat).not.toContain("momento");
+    expect(sourceGapsAfterFormat).not.toContain("ocasião");
 
     await expectScrolledNear(page, "#eventConfigSection", 250);
     await expectNoBrowserErrors(errors);

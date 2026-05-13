@@ -636,6 +636,7 @@ const state = {
   },
   sendReviewApprovedSignature: "",
   sendReviewApproval: null,
+  lastSendReviewPointerApprovalAt: 0,
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -3485,10 +3486,19 @@ function renderCustomerDecisionLoop(loop = getCustomerDecisionLoop()) {
 
 function getSendReviewSignature(items = getProposalReviewItems()) {
   const totals = getQuoteTotals();
+  const sourceData = getFormSourceData();
   return JSON.stringify({
     client: fields.clientName.value.trim(),
     email: fields.clientEmail.value.trim(),
     phone: fields.clientPhone.value.trim(),
+    company: sourceData.company,
+    clientType: sourceData.clientType,
+    budgetRange: sourceData.budgetRange,
+    origin: sourceData.origin,
+    finalClient: sourceData.finalClient,
+    groupName: sourceData.groupName,
+    moment: sourceData.moment,
+    occasion: sourceData.occasion,
     eventType: fields.eventType.value.trim(),
     date: fields.eventDate.value,
     time: fields.eventTime.value,
@@ -3501,7 +3511,7 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     adjustment: roundCurrency(getManualAdjustment()),
     notes: fields.notes.value.trim(),
     reason: fields.eventReason.value.trim(),
-    review: items.map((item) => [item.id, item.status, item.detail]),
+    review: items.map((item) => [item.id, item.status]),
   });
 }
 
@@ -3684,6 +3694,22 @@ function normalizeSourceValue(value) {
   return String(value || "").trim();
 }
 
+function inferMomentFromTime(timeValue = "") {
+  const minutes = timeToMinutes(timeValue);
+  if (minutes === null) return "";
+  if (minutes < 11 * 60) return "Manhã em dia de semana";
+  if (minutes < 15 * 60) return "Início do almoço";
+  if (minutes < 19 * 60) return "Fim de tarde";
+  return "Noite (19h-21h)";
+}
+
+function inferOccasionFromProposal() {
+  const reason = fields.eventReason?.value?.trim();
+  if (reason) return reason;
+  const type = fields.eventType?.value?.trim();
+  return type ? `Proposta de ${type}` : "";
+}
+
 function getStructuredObservationKey(label = "") {
   const normalized = normalizarTextoSeguro(label);
   if (!normalized) return "";
@@ -3796,8 +3822,8 @@ function getFormSourceData() {
     groupName,
     budgetRange: normalizeSourceValue(qualification.budgetRange || qualification.faixaInvestimento || request?.faixa_investimento || parsed.budgetRange),
     origin: normalizeSourceValue(qualification.origin || qualification.origem || request?.origem || parsed.origin),
-    moment: normalizeSourceValue(qualification.moment || qualification.momento || event.momento || event.moment || parsed.moment),
-    occasion: normalizeSourceValue(qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion || parsed.occasion),
+    moment: normalizeSourceValue(qualification.moment || qualification.momento || event.momento || event.moment || parsed.moment || inferMomentFromTime(fields.eventTime?.value)),
+    occasion: normalizeSourceValue(qualification.occasion || qualification.ocasiao || event.ocasiao || event.perfil || event.occasion || parsed.occasion || inferOccasionFromProposal()),
     eventType: normalizeSourceValue(request?.tipo_evento || event.tipo || event.type || fields.eventType?.value || parsed.eventType),
     flexibleDate: normalizeSourceValue(event.dataFlexivel || event.flexibleDate || parsed.flexibleDate),
     flexibleDateStatus: normalizeSourceValue(event.dataFlexivelStatus || event.flexibleDateStatus || parsed.flexibleDateStatus),
@@ -3891,10 +3917,10 @@ function renderFormSourcePanel() {
     ["Extras solicitados", data.extras],
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
-  const sourceTitle = data.isManualDraft ? "Dados comerciais da proposta" : "Dados recebidos do formulário";
-  const sourceSubtitle = data.isManualDraft ? "Preencha para proposta manual segura" : "Base para proposta segura e automação futura";
+  const sourceTitle = data.isManualDraft ? "Classificação comercial da proposta" : "Dados recebidos do formulário";
+  const sourceSubtitle = data.isManualDraft ? "Complete o que o checklist usa para liberar o envio" : "Base para proposta segura e automação futura";
   const sourceHelp = data.isManualDraft
-    ? "Use estes campos quando a cotação nasce direto no admin. Eles alimentam checklist, histórico do cliente e automação futura."
+    ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
     : "Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.";
 
   nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
@@ -11134,6 +11160,13 @@ function bindEvents() {
     const reviewButton = event.target.closest("button[data-review-target]");
     if (reviewButton) scrollToReviewTarget(reviewButton.dataset.reviewTarget);
   });
+  nodes.sendReviewPanel?.addEventListener("pointerdown", (event) => {
+    const actionButton = event.target.closest("button[data-send-review-action]");
+    if (!actionButton || actionButton.dataset.sendReviewAction !== "approve") return;
+    event.preventDefault();
+    state.lastSendReviewPointerApprovalAt = Date.now();
+    approveSendReview();
+  });
   nodes.sendReviewPanel?.addEventListener("click", (event) => {
     const actionButton = event.target.closest("button[data-send-review-action]");
     if (actionButton) {
@@ -11147,6 +11180,7 @@ function bindEvents() {
         return;
       }
       if (action === "approve") {
+        if (Date.now() - state.lastSendReviewPointerApprovalAt < 500) return;
         approveSendReview();
         return;
       }
