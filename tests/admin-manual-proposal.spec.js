@@ -90,14 +90,17 @@ test.describe("Proposta manual no admin", () => {
     expect(afterDate.status).toBe("ok");
 
     await page.locator('[data-flow-event="almoco"]').click();
+    await page.locator("#eventType").fill("");
     const afterItems = await page.evaluate(() => ({
       format: window.getProposalReviewItems().find((item) => item.id === "format"),
       items: window.getProposalReviewItems().find((item) => item.id === "items"),
       value: window.getProposalReviewItems().find((item) => item.id === "value"),
+      inferredType: window.getProposalSnapshot().event.type,
     }));
     expect(afterItems.format.status).toBe("ok");
     expect(afterItems.items.status).toBe("ok");
     expect(afterItems.value.status).toBe("ok");
+    expect(afterItems.inferredType).toBe("Almoço Carioca");
 
     const sourceGapsAfterFormat = await page.evaluate(() => window.getFormSourceMissingItems(window.getFormSourceData()));
     expect(sourceGapsAfterFormat).not.toContain("momento");
