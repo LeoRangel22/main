@@ -1571,7 +1571,7 @@ function getActiveServiceContext() {
       "",
     email: contact.email,
     phone: contact.phone,
-    eventType: fields.eventType.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
+    eventType: getCurrentEventType() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
     eventDate: fields.eventDate.value || proposal?.data_evento || request?.data_evento || "",
     eventTime: fields.eventTime.value || proposal?.horario_evento || request?.horario_evento || "",
     guests: getGuestCount() || Number(proposal?.convidados || request?.convidados || 0) || 0,
@@ -2191,7 +2191,7 @@ function getQuickReplyContext() {
       "",
     email: fields.clientEmail.value.trim() || proposal?.cliente_email || request?.cliente_email || "",
     phone: fields.clientPhone.value.trim() || proposal?.cliente_whatsapp || request?.cliente_whatsapp || "",
-    eventType: fields.eventType.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "evento",
+    eventType: getCurrentEventType() || proposal?.tipo_evento || request?.tipo_evento || "evento",
     eventDate: getEventDateLabel(),
     eventTime: getEventTimeLabel(),
     guests: getGuestCount(),
@@ -3055,6 +3055,46 @@ function getSelectedItems() {
     .map((item) => ({ ...item, calc: calculateItem(item) }));
 }
 
+function getMainEventTypeFromItemCategory(category = "") {
+  const normalized = normalizarTextoSeguro(category);
+  if (!normalized) return "";
+  if (normalized.includes("almoco")) return "Almoço Carioca";
+  if (normalized.includes("cafe") || normalized.includes("coffee") || normalized.includes("brunch")) {
+    return "Café da Manhã / Coffee Break";
+  }
+  if (normalized.includes("coquetel") || normalized.includes("comidas")) return "Coquetel";
+  if (normalized.includes("welcome") || normalized.includes("snacks")) return "Welcome Drink";
+  if (normalized.includes("workshop")) return "Workshop de Caipirinha";
+  return "";
+}
+
+function inferEventTypeFromSelectedItems(selected = getSelectedItems()) {
+  if (!selected.length) return "";
+  const inferred = selected.map((item) => getMainEventTypeFromItemCategory(item.tipoEvento));
+  const primaryPriority = [
+    "Almoço Carioca",
+    "Café da Manhã / Coffee Break",
+    "Coquetel",
+    "Welcome Drink",
+    "Workshop de Caipirinha",
+  ];
+  return primaryPriority.find((type) => inferred.includes(type)) || inferred.find(Boolean) || "";
+}
+
+function getCurrentEventType({ infer = true } = {}) {
+  const explicit = fields.eventType?.value?.trim() || "";
+  if (explicit) return explicit;
+  return infer ? inferEventTypeFromSelectedItems() : "";
+}
+
+function syncEventTypeFromSelection({ force = false } = {}) {
+  if (!fields.eventType) return "";
+  if (!force && fields.eventType.value.trim()) return fields.eventType.value.trim();
+  const inferred = inferEventTypeFromSelectedItems();
+  if (inferred) fields.eventType.value = inferred;
+  return fields.eventType.value.trim();
+}
+
 function getCurrentContactValues() {
   const proposal = getActiveProposal();
   const request = getActiveQuoteRequest();
@@ -3173,7 +3213,7 @@ function getProposalReviewItems() {
   const contact = getCurrentContactValues();
   const eventDate = fields.eventDate.value;
   const eventTime = fields.eventTime.value;
-  const eventType = fields.eventType.value.trim();
+  const eventType = getCurrentEventType();
   const guests = getGuestCount();
   const validityDays = getValidityDays();
   const signalDeadlineHours = getSignalDeadlineHours();
@@ -3323,7 +3363,7 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
   const selected = getSelectedItems();
   const selectedCategories = new Set(selected.map((item) => item.tipoEvento));
   const context = getActiveServiceContext();
-  const category = getEventCategoryFromRequest(fields.eventType.value || context.eventType);
+  const category = getEventCategoryFromRequest(getCurrentEventType() || context.eventType);
   const guests = getGuestCount();
   const totals = getQuoteTotals();
   const eventDate = fields.eventDate.value;
@@ -3499,7 +3539,7 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     groupName: sourceData.groupName,
     moment: sourceData.moment,
     occasion: sourceData.occasion,
-    eventType: fields.eventType.value.trim(),
+    eventType: getCurrentEventType(),
     date: fields.eventDate.value,
     time: fields.eventTime.value,
     guests: getGuestCount(),
@@ -5521,7 +5561,7 @@ function renderSendReview() {
       </article>
       <article>
         <span>Evento</span>
-        <strong>${escapeHtml(fields.eventType.value.trim() || "Formato a definir")}</strong>
+        <strong>${escapeHtml(getCurrentEventType() || "Formato a definir")}</strong>
         <small>${escapeHtml(eventLine)}</small>
       </article>
       <article>
@@ -5653,7 +5693,7 @@ function formatSignalDeadlineHours(hours = getSignalDeadlineHours()) {
 function buildProposalText() {
   const selected = getSelectedItems();
   const clientName = fields.clientName.value.trim() || "Cliente";
-  const eventType = fields.eventType.value.trim() || "Evento";
+  const eventType = getCurrentEventType() || "Evento";
   const totals = getQuoteTotals();
   const reason = fields.eventReason.value.trim();
   const lines = [
@@ -5702,6 +5742,7 @@ function buildProposalText() {
 }
 
 function getProposalSnapshot() {
+  syncEventTypeFromSelection();
   const totals = getQuoteTotals();
   const selected = getSelectedItems();
   const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
@@ -5747,7 +5788,7 @@ function getProposalSnapshot() {
       groupName: sourceData.groupName || getGroupNameFromSnapshot(activeRequest?.snapshot || activeProposal?.snapshot || {}),
     },
     event: {
-      type: fields.eventType.value.trim(),
+      type: getCurrentEventType(),
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
@@ -7995,7 +8036,7 @@ function getCurrentEditorSignature() {
     client: fields.clientName?.value.trim() || "",
     email: fields.clientEmail?.value.trim() || "",
     phone: fields.clientPhone?.value.trim() || "",
-    eventType: fields.eventType?.value.trim() || "",
+    eventType: getCurrentEventType(),
     date: fields.eventDate?.value || "",
     time: fields.eventTime?.value || "",
     guests: getGuestCount(),
@@ -8024,7 +8065,7 @@ function getEditorContextFromCurrent(kind = state.activeProposalId ? "proposal" 
     name: fields.clientName?.value.trim() || proposal?.cliente_nome || request?.cliente_nome || "Cliente",
     date: fields.eventDate?.value || proposal?.data_evento || request?.data_evento || "",
     time: fields.eventTime?.value || proposal?.horario_evento || request?.horario_evento || "",
-    type: fields.eventType?.value.trim() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
+    type: getCurrentEventType() || proposal?.tipo_evento || request?.tipo_evento || "Evento",
     status,
     stageId,
     sourceLabel: sourceLabel || state.pendingOpenSourceLabel || (status ? `Funil: ${getProposalStatusLabel(status)}` : "Edição manual"),
@@ -10144,7 +10185,7 @@ function renderProposal() {
         <img src="./assets/venue.jpg" alt="" />
         <div>
           <span>Evento no Morro da Urca</span>
-          <strong>${escapeHtml(fields.eventType.value.trim() || "Proposta de evento")}</strong>
+          <strong>${escapeHtml(getCurrentEventType() || "Proposta de evento")}</strong>
         </div>
       </div>
 
@@ -10172,7 +10213,7 @@ function renderProposal() {
         <h3>Resumo do evento</h3>
       </div>
       <div class="proposal-grid">
-        <div><span>Formato</span>${escapeHtml(fields.eventType.value.trim() || "Evento")}</div>
+        <div><span>Formato</span>${escapeHtml(getCurrentEventType() || "Evento")}</div>
         <div><span>Duração</span>${getDuration()}h</div>
         <div><span>Validade da proposta</span>${escapeHtml(fields.validity.value.trim() || "14 dias")}</div>
         <div><span>Prazo para sinal</span>${escapeHtml(formatSignalDeadlineHours())}</div>
@@ -10265,6 +10306,7 @@ function renderProposal() {
 
 function renderAll() {
   syncDateTimeFromFields();
+  syncEventTypeFromSelection();
   renderQuoteWorkspaceGuide();
   renderPriceList();
   renderPricesTable();
@@ -10464,7 +10506,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
 
 function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar" }) {
   const clientName = fields.clientName.value.trim() || "cliente";
-  const eventType = fields.eventType.value.trim();
+  const eventType = getCurrentEventType();
   const eventDate = fields.eventDate.value || getEventDateLabel();
   const eventTime = fields.eventTime.value || getEventTimeLabel();
   const approvalItems = getLeadReadinessItems();
@@ -10870,6 +10912,7 @@ function createNewItem() {
 
   state.prices.push(item);
   state.selectedIds.add(item.id);
+  syncEventTypeFromSelection();
   savePrices();
   saveSelectedIds();
   renderCategoryFilter();
@@ -10966,6 +11009,7 @@ function bindEvents() {
     if (!id) return;
     if (event.target.checked) state.selectedIds.add(id);
     else state.selectedIds.delete(id);
+    syncEventTypeFromSelection();
     saveSelectedIds();
     renderSummary();
     renderSendReview();
