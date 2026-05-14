@@ -150,6 +150,50 @@ test.describe("Proposta manual no admin", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("coquetel aceita welcome drink e workshop como complementos", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await page.locator("#clientName").fill("Mariana Costa");
+    await page.locator("#clientEmail").fill("mariana.costa@example.com");
+    await page.locator("#clientPhone").fill("+55 21 99999-0000");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("18:00");
+    await page.locator("#guestCount").fill("40");
+    await page.locator("#eventDuration").selectOption("2");
+    await page.locator('[data-source-field="clientType"]').selectOption("Agência de turismo receptivo / DMC");
+    await page.locator('[data-source-field="company"]').fill("Costa Experiencias");
+    await page.locator('[data-source-field="finalClient"]').fill("Grupo Internacional");
+    await page.locator('[data-source-field="budgetRange"]').selectOption("R$ 30 mil a R$ 60 mil");
+    await page.locator('[data-source-field="origin"]').selectOption("Indicação");
+    await page.locator('[data-source-field="moment"]').selectOption("Fim de tarde");
+    await page.locator('[data-source-field="occasion"]').fill("Recepção corporativa");
+
+    await page.locator('[data-flow-event="coquetel"]').click();
+    await expect(page.locator("#flowWelcomeOptions")).toBeVisible();
+    await page.locator('[data-select-package="welcome-caipirinha"]').click();
+    await page.locator('[data-select-package="workshop-caipirinha-pt"]').click();
+
+    const reviewState = await page.evaluate(() => ({
+      selectedCategories: window.getSelectedItems().map((item) => item.tipoEvento),
+      selectedNames: window.getSelectedItems().map((item) => item.nome),
+      summary: window.getProposalReviewSummary(),
+      itemReview: window.getProposalReviewItems().find((item) => item.id === "items"),
+      eventType: window.getProposalSnapshot().event.type,
+    }));
+
+    expect(reviewState.eventType).toBe("Coquetel");
+    expect(reviewState.selectedCategories).toEqual(expect.arrayContaining(["Coquetel", "Comidas", "Welcome Drink", "Workshop de Caipirinha"]));
+    expect(reviewState.selectedNames).toEqual(expect.arrayContaining(["Welcome Drink Caipirinha", "Workshop de Caipirinha (PT)"]));
+    expect(reviewState.itemReview.status).not.toBe("error");
+    expect(reviewState.summary.ready).toBe(true);
+
+    await expectNoBrowserErrors(errors);
+  });
+
   test("proposta manual completa salva, aprova checklist e envia WhatsApp em QA", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     page.on("dialog", (dialog) => dialog.accept());

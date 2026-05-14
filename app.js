@@ -466,7 +466,7 @@ const guidedEvents = {
   coquetel: {
     label: "Coquetel",
     category: "Coquetel",
-    status: "Coquetel selecionado. Escolha bebidas, comidas e, se fizer sentido, adicione workshop como experiência.",
+    status: "Coquetel selecionado. Escolha bebidas, comidas e, se fizer sentido, adicione Welcome Drink e Workshop como complementos.",
   },
   workshop: {
     label: "Workshop de Caipirinha",
@@ -626,6 +626,7 @@ const state = {
     event: "",
     beverageId: "",
     foodId: "",
+    welcomeId: "",
     workshopId: "",
   },
   privatizationChoice: "",
@@ -696,6 +697,7 @@ const nodes = {
   flowEventOptions: document.querySelector("#flowEventOptions"),
   flowBeverageOptions: document.querySelector("#flowBeverageOptions"),
   flowFoodOptions: document.querySelector("#flowFoodOptions"),
+  flowWelcomeOptions: document.querySelector("#flowWelcomeOptions"),
   flowWorkshopOptions: document.querySelector("#flowWorkshopOptions"),
   calculationBreakdown: document.querySelector("#calculationBreakdown"),
   privatizationTitle: document.querySelector("#privatizationTitle"),
@@ -3286,7 +3288,7 @@ function getContactReviewDetail(contact) {
 
 function getAllowedCategoriesForEvent(eventType = "") {
   const mainCategory = getEventCategoryFromRequest(eventType);
-  if (mainCategory === "Coquetel") return ["Coquetel", "Comidas", "Workshop de Caipirinha", "Snacks"];
+  if (mainCategory === "Coquetel") return ["Coquetel", "Comidas", "Welcome Drink", "Workshop de Caipirinha", "Snacks"];
   if (mainCategory === "Welcome Drink") return ["Welcome Drink", "Snacks"];
   if (mainCategory) return [mainCategory];
   return [];
@@ -3483,6 +3485,10 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Comidas")) {
     push("warning", "Coquetel sem comida", "Confirme se o cliente quer apenas bebidas. Muitas propostas convertem melhor com Brasileiro I ou II.", "items", "upsell");
+  }
+
+  if (category === "Coquetel" && selected.length && !selectedCategories.has("Welcome Drink")) {
+    push("opportunity", "Welcome Drink possível", "Pode ser oferecido como recepção de chegada antes do coquetel, especialmente para grupos corporativos, agências e eventos com convidados chegando aos poucos.", "items", "upsell");
   }
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Workshop de Caipirinha")) {
@@ -4470,6 +4476,15 @@ function getUpsellRecommendations() {
         "Deixa o coquetel mais completo e aumenta ticket sem complicar operação.",
       );
     }
+    if (!selectedCategories.has("Welcome Drink")) {
+      pushUpsellRecommendation(
+        recommendations,
+        "welcome-caipirinha",
+        "Adicionar Welcome Drink",
+        "Recepção com caipirinha para organizar a chegada do grupo.",
+        "Complemento simples que aumenta percepção de cuidado logo no início do evento.",
+      );
+    }
     if (!selectedCategories.has("Workshop de Caipirinha")) {
       pushUpsellRecommendation(
         recommendations,
@@ -4522,24 +4537,25 @@ function getUpsellRecommendations() {
     );
   }
 
-  return recommendations.slice(0, 3);
+  return recommendations.slice(0, 4);
 }
 
 function applyUpsellSuggestion(itemId) {
   if (!itemExists(itemId)) return;
-  if (["coquetel-caipirinha", "coquetel-carioca"].includes(itemId)) {
-    setExclusiveSelection(["coquetel-caipirinha", "coquetel-carioca"], itemId);
+  if (coquetelBeverageIds.includes(itemId)) {
+    setExclusiveSelection(coquetelBeverageIds, itemId);
     state.guided.beverageId = itemId;
-  } else if (["brasileiro-i", "brasileiro-ii"].includes(itemId)) {
-    setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], itemId);
+  } else if (coquetelFoodIds.includes(itemId)) {
+    setExclusiveSelection(coquetelFoodIds, itemId);
     state.guided.foodId = itemId;
-  } else if (["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(itemId)) {
-    state.selectedIds.add(itemId);
+  } else if (workshopIds.includes(itemId)) {
+    setExclusiveSelection(workshopIds, itemId);
     state.guided.workshopId = itemId;
   } else if (["cafe-classico", "cafe-completo", "coffee-praia-vermelha", "coffee-morro-urca"].includes(itemId)) {
     setExclusiveSelection(["cafe-classico", "cafe-completo", "coffee-praia-vermelha", "coffee-morro-urca"], itemId);
-  } else if (["welcome-caipirinha", "welcome-espumante", "welcome-champagne"].includes(itemId)) {
-    setExclusiveSelection(["welcome-caipirinha", "welcome-espumante", "welcome-champagne"], itemId);
+  } else if (welcomeDrinkIds.includes(itemId)) {
+    setExclusiveSelection(welcomeDrinkIds, itemId);
+    state.guided.welcomeId = itemId;
   } else if (["almoco-carioca-bebida-livre", "almoco-carioca-duas-bebidas"].includes(itemId)) {
     setExclusiveSelection(["almoco-carioca-bebida-livre", "almoco-carioca-duas-bebidas"], itemId);
   } else {
@@ -4548,6 +4564,7 @@ function applyUpsellSuggestion(itemId) {
   saveSelectedIds();
   setChoiceState(nodes.flowBeverageOptions, state.guided.beverageId, "selectPackage");
   setChoiceState(nodes.flowFoodOptions, state.guided.foodId, "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, state.guided.welcomeId, "selectPackage");
   setChoiceState(nodes.flowWorkshopOptions, state.guided.workshopId, "selectPackage");
   renderAll();
   showToast("Sugestão adicionada à proposta.");
@@ -5011,12 +5028,18 @@ function setExclusiveSelection(ids, selectedId) {
   if (selectedId) state.selectedIds.add(selectedId);
 }
 
+const coquetelBeverageIds = ["coquetel-caipirinha", "coquetel-carioca"];
+const coquetelFoodIds = ["brasileiro-i", "brasileiro-ii"];
+const welcomeDrinkIds = ["welcome-caipirinha", "welcome-espumante", "welcome-champagne"];
+const workshopIds = ["workshop-caipirinha-pt", "workshop-caipirinha-en"];
+const coquetelComplementIds = [...coquetelBeverageIds, ...coquetelFoodIds, ...welcomeDrinkIds, ...workshopIds];
+
 const smartEventTemplates = {
   coquetel: {
     label: "Coquetel completo",
     ids: ["coquetel-carioca", "brasileiro-ii"],
     status:
-      "Template sugerido: Coquetel Carioca + Brasileiro II. Se o cliente quiser experiência interativa, adicione Workshop de Caipirinha.",
+      "Template sugerido: Coquetel Carioca + Brasileiro II. Se fizer sentido para a chegada ou experiência, adicione Welcome Drink e Workshop de Caipirinha.",
   },
   workshop: {
     label: "Workshop PT",
@@ -5053,12 +5076,14 @@ function applySmartTemplateForEvent(eventKey) {
   const appliedIds = template.ids.filter(itemExists);
   appliedIds.forEach((id) => state.selectedIds.add(id));
 
-  state.guided.beverageId = appliedIds.find((id) => ["coquetel-caipirinha", "coquetel-carioca"].includes(id)) || "";
-  state.guided.foodId = appliedIds.find((id) => ["brasileiro-i", "brasileiro-ii"].includes(id)) || "";
-  state.guided.workshopId = appliedIds.find((id) => ["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(id)) || "";
+  state.guided.beverageId = appliedIds.find((id) => coquetelBeverageIds.includes(id)) || "";
+  state.guided.foodId = appliedIds.find((id) => coquetelFoodIds.includes(id)) || "";
+  state.guided.welcomeId = appliedIds.find((id) => welcomeDrinkIds.includes(id)) || "";
+  state.guided.workshopId = appliedIds.find((id) => workshopIds.includes(id)) || "";
 
   setChoiceState(nodes.flowBeverageOptions, state.guided.beverageId, "selectPackage");
   setChoiceState(nodes.flowFoodOptions, state.guided.foodId || (eventKey === "coquetel" ? "" : ""), "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, state.guided.welcomeId, "selectPackage");
   setChoiceState(nodes.flowWorkshopOptions, state.guided.workshopId, "selectPackage");
 
   return appliedIds.length ? template.status : "";
@@ -5317,6 +5342,7 @@ function applyGuidedEvent(eventKey) {
   state.guided.event = eventKey;
   state.guided.beverageId = "";
   state.guided.foodId = "";
+  state.guided.welcomeId = "";
   state.guided.workshopId = "";
   fields.eventType.value = config.label;
   fields.categoryFilter.value = config.category;
@@ -5333,6 +5359,7 @@ function applyGuidedEvent(eventKey) {
   setChoiceState(nodes.flowEventOptions, eventKey, "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, "", "selectPackage");
   setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
 
   const templateStatus = applySmartTemplateForEvent(eventKey);
@@ -5346,27 +5373,37 @@ function applyGuidedEvent(eventKey) {
 function applyGuidedPackage(packageId) {
   if (packageId === "none-food") {
     state.guided.foodId = "";
-    setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], "");
+    setExclusiveSelection(coquetelFoodIds, "");
     setChoiceState(nodes.flowFoodOptions, packageId, "selectPackage");
-    nodes.flowStatus.textContent = "Coquetel com bebidas selecionadas e sem pacote de comidas. Se quiser, adicione workshop como experiência.";
+    nodes.flowStatus.textContent = "Coquetel com bebidas selecionadas e sem pacote de comidas. Se quiser, adicione Welcome Drink e Workshop como complementos.";
+  } else if (packageId === "none-welcome") {
+    state.guided.welcomeId = "";
+    setExclusiveSelection(welcomeDrinkIds, "");
+    setChoiceState(nodes.flowWelcomeOptions, packageId, "selectPackage");
+    nodes.flowStatus.textContent = "Coquetel sem Welcome Drink adicional. Você ainda pode adicionar workshop como experiência opcional.";
   } else if (packageId === "none-workshop") {
     state.guided.workshopId = "";
-    setExclusiveSelection(["workshop-caipirinha-pt", "workshop-caipirinha-en"], "");
+    setExclusiveSelection(workshopIds, "");
     setChoiceState(nodes.flowWorkshopOptions, packageId, "selectPackage");
     nodes.flowStatus.textContent = "Coquetel sem workshop adicional. Confira convidados, duração e total estimado.";
-  } else if (["coquetel-caipirinha", "coquetel-carioca"].includes(packageId)) {
+  } else if (coquetelBeverageIds.includes(packageId)) {
     state.guided.beverageId = packageId;
-    setExclusiveSelection(["coquetel-caipirinha", "coquetel-carioca"], packageId);
+    setExclusiveSelection(coquetelBeverageIds, packageId);
     setChoiceState(nodes.flowBeverageOptions, packageId, "selectPackage");
     nodes.flowStatus.textContent = "Bebidas selecionadas. Agora escolha o pacote de comidas ou marque Nenhum.";
-  } else if (["brasileiro-i", "brasileiro-ii"].includes(packageId)) {
+  } else if (coquetelFoodIds.includes(packageId)) {
     state.guided.foodId = packageId;
-    setExclusiveSelection(["brasileiro-i", "brasileiro-ii"], packageId);
+    setExclusiveSelection(coquetelFoodIds, packageId);
     setChoiceState(nodes.flowFoodOptions, packageId, "selectPackage");
-    nodes.flowStatus.textContent = "Comidas selecionadas. Você ainda pode adicionar workshop como experiência opcional.";
-  } else if (["workshop-caipirinha-pt", "workshop-caipirinha-en"].includes(packageId)) {
+    nodes.flowStatus.textContent = "Comidas selecionadas. Você ainda pode adicionar Welcome Drink e Workshop como complementos.";
+  } else if (welcomeDrinkIds.includes(packageId)) {
+    state.guided.welcomeId = packageId;
+    setExclusiveSelection(welcomeDrinkIds, packageId);
+    setChoiceState(nodes.flowWelcomeOptions, packageId, "selectPackage");
+    nodes.flowStatus.textContent = "Welcome Drink adicionado ao coquetel. Se fizer sentido, inclua também workshop como experiência.";
+  } else if (workshopIds.includes(packageId)) {
     state.guided.workshopId = packageId;
-    setExclusiveSelection(["workshop-caipirinha-pt", "workshop-caipirinha-en"], packageId);
+    setExclusiveSelection(workshopIds, packageId);
     setChoiceState(nodes.flowWorkshopOptions, packageId, "selectPackage");
     nodes.flowStatus.textContent = "Workshop adicionado ao coquetel. Confira convidados, duração e total estimado.";
   }
@@ -5378,10 +5415,11 @@ function applyGuidedPackage(packageId) {
 }
 
 function clearGuidedFlow() {
-  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
+  state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   Object.values(smartEventTemplates)
     .flatMap((item) => item.ids)
     .forEach((id) => state.selectedIds.delete(id));
+  coquetelComplementIds.forEach((id) => state.selectedIds.delete(id));
   fields.eventType.value = "";
   fields.categoryFilter.value = "";
   fields.searchPrice.value = "";
@@ -5391,6 +5429,8 @@ function clearGuidedFlow() {
   setChoiceState(nodes.flowEventOptions, "", "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
   saveSelectedIds();
   renderAll();
 }
@@ -5398,10 +5438,15 @@ function clearGuidedFlow() {
 function getFilteredPrices() {
   const query = fields.searchPrice?.value.trim().toLowerCase() || "";
   const category = fields.categoryFilter?.value || "";
+  const categoryMatches = (item) => {
+    if (!category) return true;
+    if (item.tipoEvento === category) return true;
+    return category === "Coquetel" && getAllowedCategoriesForEvent("Coquetel").includes(item.tipoEvento);
+  };
   return state.prices.filter((item) => {
     const haystack = `${item.codigo} ${item.tipoEvento} ${item.nome} ${item.descricao} ${item.commercialSummary} ${item.recommendedWindows}`.toLowerCase();
     const visible = item.active !== false || state.selectedIds.has(item.id);
-    return visible && (!query || haystack.includes(query)) && (!category || item.tipoEvento === category);
+    return visible && (!query || haystack.includes(query)) && categoryMatches(item);
   });
 }
 
@@ -6172,7 +6217,7 @@ function createQaProposalSnapshot({
     selectedIds,
     selectedItems,
     prices: state.prices,
-    guided: { event: getGuidedEventKeyFromType(type), beverageId: "", foodId: "", workshopId: "" },
+    guided: { event: getGuidedEventKeyFromType(type), beverageId: "", foodId: "", welcomeId: "", workshopId: "" },
     privatizationChoice: "",
     activeQuoteRequestId: "",
     qualificacao: sourceSnapshot.qualificacao,
@@ -9351,7 +9396,7 @@ function getGuidedEventKeyFromType(type) {
 
 function resetProposalDraftState() {
   state.selectedIds.clear();
-  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
+  state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
   saveSelectedIds();
   fields.manualAdjustment.value = "0";
@@ -9366,6 +9411,7 @@ function resetProposalDraftState() {
   setChoiceState(nodes.flowEventOptions, "", "flowEvent");
   setChoiceState(nodes.flowBeverageOptions, "", "selectPackage");
   setChoiceState(nodes.flowFoodOptions, "", "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, "", "selectPackage");
   setChoiceState(nodes.flowWorkshopOptions, "", "selectPackage");
   setChoiceState(nodes.optionalPrivatizationControls, "", "privatizationChoice");
 }
@@ -10548,7 +10594,7 @@ function startNewProposal() {
   state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
   state.selectedIds.clear();
-  state.guided = { event: "", beverageId: "", foodId: "", workshopId: "" };
+  state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
   saveSelectedIds();
 
@@ -11226,6 +11272,12 @@ function bindEvents() {
   });
 
   nodes.flowFoodOptions?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-select-package]");
+    if (!button) return;
+    applyGuidedPackage(button.dataset.selectPackage);
+  });
+
+  nodes.flowWelcomeOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-select-package]");
     if (!button) return;
     applyGuidedPackage(button.dataset.selectPackage);
