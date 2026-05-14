@@ -16,4 +16,5 @@ _preview-*.pdf
 node_modules/
 playwright-report/
 test-results/
+tmp-pw-results*/
 supabase/.temp/

@@ -3261,18 +3261,19 @@ function getProposalReviewItems() {
     },
     {
       id: "commercial_profile",
-      label: "Perfil comercial",
+      label: "Contexto comercial",
       status: commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin ? "ok" : "warning",
+      optional: true,
       detail:
         commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin
           ? [commercialContext.clientType, commercialContext.budgetRange, commercialContext.origin].filter(Boolean).join(" · ")
-          : `Opcional, mas ajuda a priorizar e automatizar melhor: ${[
+          : `Sugestão comercial, não bloqueia envio: complete ${[
               !commercialContext.clientType ? "tipo de cliente" : "",
               !commercialContext.budgetRange ? "faixa de investimento" : "",
               !commercialContext.origin ? "origem do lead" : "",
             ]
               .filter(Boolean)
-              .join(", ")}.`,
+              .join(", ")} para priorizar follow-up e melhorar automação.`,
       target: "source",
     },
     {
@@ -3348,12 +3349,21 @@ function getProposalReviewItems() {
   ];
 }
 
+function isOptionalReviewItem(item) {
+  return Boolean(item?.optional || ["commercial_profile", "profile"].includes(item?.id));
+}
+
 function getProposalReviewSummary(items = getProposalReviewItems()) {
   const errors = items.filter((item) => item.status === "error").length;
-  const warnings = items.filter((item) => item.status === "warning").length;
+  const warningItems = items.filter((item) => item.status === "warning");
+  const warnings = warningItems.length;
+  const optionalWarnings = warningItems.filter(isOptionalReviewItem).length;
+  const attentionWarnings = warnings - optionalWarnings;
   return {
     errors,
     warnings,
+    optionalWarnings,
+    attentionWarnings,
     ready: errors === 0,
   };
 }
@@ -3417,11 +3427,12 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
 
 function getProposalConfidence(items = getProposalReviewItems(), alerts = getSmartProposalAlerts(items)) {
   const errors = items.filter((item) => item.status === "error").length;
-  const warnings = items.filter((item) => item.status === "warning").length;
+  const warnings = items.filter((item) => item.status === "warning" && !isOptionalReviewItem(item)).length;
+  const optionalWarnings = items.filter((item) => item.status === "warning" && isOptionalReviewItem(item)).length;
   const dangerAlerts = alerts.filter((item) => item.level === "danger").length;
   const warningAlerts = alerts.filter((item) => item.level === "warning").length;
   const opportunityAlerts = alerts.filter((item) => item.level === "opportunity").length;
-  const score = Math.max(0, Math.min(100, 100 - errors * 24 - warnings * 7 - dangerAlerts * 18 - warningAlerts * 6 - opportunityAlerts * 2));
+  const score = Math.max(0, Math.min(100, 100 - errors * 24 - warnings * 7 - optionalWarnings * 3 - dangerAlerts * 18 - warningAlerts * 6 - opportunityAlerts * 2));
   const status = errors || dangerAlerts ? "blocked" : score >= 90 ? "ready" : "attention";
   const label = status === "blocked" ? "Bloqueado" : score >= 95 ? "Pronto para envio automático futuro" : score >= 90 ? "Alta confiança" : "Revisão humana recomendada";
   const note =
@@ -3957,8 +3968,8 @@ function renderFormSourcePanel() {
     ["Extras solicitados", data.extras],
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
-  const sourceTitle = data.isManualDraft ? "Classificação comercial da proposta" : "Dados recebidos do formulário";
-  const sourceSubtitle = data.isManualDraft ? "Complete o que o checklist usa para liberar o envio" : "Base para proposta segura e automação futura";
+  const sourceTitle = data.isManualDraft ? "Contexto comercial da proposta" : "Dados recebidos do formulário";
+  const sourceSubtitle = data.isManualDraft ? "Complete o contexto para priorizar e automatizar melhor" : "Base para proposta segura e automação futura";
   const sourceHelp = data.isManualDraft
     ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
     : "Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.";
@@ -3981,7 +3992,7 @@ function renderFormSourcePanel() {
     </div>
     <div class="form-source-edit">
       <div>
-        <span>Dados para liberar envio seguro</span>
+        <span>Contexto para atendimento e automação</span>
         <strong>${escapeHtml(data.isManualDraft ? "Registre o contexto comercial antes de enviar" : "Confira o que veio do cliente e complete só o que faltar")}</strong>
         <p>Esses campos alimentam a revisão, o histórico do cliente e a futura resposta automática.</p>
       </div>
@@ -4099,9 +4110,10 @@ function getLeadReadinessItems() {
     },
     {
       id: "profile",
-      label: "Classificação comercial",
+      label: "Contexto comercial",
       status: commercialProfile?.status || "warning",
-      detail: commercialProfile?.detail || "Opcional, mas recomendado: tipo de cliente, faixa de investimento e origem ajudam no follow-up.",
+      optional: true,
+      detail: commercialProfile?.detail || "Sugestão comercial, não bloqueia envio: tipo de cliente, faixa de investimento e origem ajudam no follow-up.",
       target: "source",
     },
     {
@@ -4169,12 +4181,16 @@ function getProposalApprovalMessage(items = getLeadReadinessItems()) {
     };
   }
   if (warnings.length) {
+    const optionalWarnings = warnings.filter(isOptionalReviewItem).length;
+    const attentionWarnings = warnings.length - optionalWarnings;
     return {
       tone: "warning",
       eyebrow: "Checklist de aprovação",
-      title: "Pode enviar, mas vale revisar",
-      note: "A proposta está montada. Os alertas abaixo ajudam a aumentar a chance de resposta e fechamento.",
-      label: `${warnings.length} atenção`,
+      title: attentionWarnings ? "Pode enviar, mas vale revisar" : "Pode enviar. Sugestão comercial",
+      note: attentionWarnings
+        ? "A proposta está montada. Os alertas abaixo ajudam a aumentar a chance de resposta e fechamento."
+        : "Os dados essenciais estão prontos. Completar o contexto comercial ajuda no acompanhamento, mas não trava o envio.",
+      label: attentionWarnings ? `${attentionWarnings} atenção` : `${optionalWarnings} sugestão`,
     };
   }
   return {
@@ -4186,14 +4202,15 @@ function getProposalApprovalMessage(items = getLeadReadinessItems()) {
   };
 }
 
-function getReviewStatusLabel(status) {
+function getReviewStatusLabel(status, item = null) {
   if (status === "ok") return "OK";
-  if (status === "warning") return "Atenção";
+  if (status === "warning") return isOptionalReviewItem(item) ? "Sugestão" : "Atenção";
   return "Obrigatório";
 }
 
 function getReviewActionLabel(item) {
   if (!item) return "Conferir proposta";
+  if (item.status === "warning" && isOptionalReviewItem(item)) return "Completar se souber";
   if (item.status === "warning") return "Conferir";
   return "Corrigir agora";
 }
@@ -4206,7 +4223,7 @@ function getReviewGuideActionLabel(item) {
       item.id === "client_context"
         ? "Informar cliente final/grupo"
         : item.id === "profile"
-          ? "Completar classificação"
+          ? "Completar contexto"
           : "Abrir dados do formulário",
     items: "Escolher formato e itens",
     notes: "Completar briefing",
@@ -4231,15 +4248,31 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       statusLabel: `${errors.length} obrigatório(s)`,
     };
   }
+  if (approved) {
+    return {
+      tone: "approved",
+      eyebrow: "Pronto para cliente",
+      title: "Enviar proposta pelo canal escolhido",
+      detail: warnings.length
+        ? "Checklist aprovado. As sugestões comerciais continuam visíveis, mas não bloqueiam o envio."
+        : "Checklist aprovado nesta versão. Envie por WhatsApp ou e-mail e acompanhe o retorno pelo funil.",
+      actionLabel: "Enviar proposta",
+      target: "client",
+      statusLabel: "Aprovado",
+    };
+  }
   if (warnings.length) {
+    const optionalWarnings = warnings.filter(isOptionalReviewItem).length;
+    const attentionWarnings = warnings.length - optionalWarnings;
+    const onlyOptional = optionalWarnings > 0 && attentionWarnings === 0;
     return {
       tone: "warning",
-      eyebrow: "Atenção antes de enviar",
-      title: `Conferir: ${firstIssue.label}`,
-      detail: `${firstIssue.detail} Esta conferência melhora a resposta do cliente sem bloquear o envio.`,
+      eyebrow: onlyOptional ? "Sugestão comercial" : "Atenção antes de enviar",
+      title: `${onlyOptional ? "Melhorar" : "Conferir"}: ${firstIssue.label}`,
+      detail: `${firstIssue.detail} ${onlyOptional ? "Você pode enviar agora ou completar para melhorar o acompanhamento." : "Esta conferência melhora a resposta do cliente sem bloquear o envio."}`,
       actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "review",
-      statusLabel: `${warnings.length} atenção`,
+      statusLabel: onlyOptional ? `${optionalWarnings} sugestão` : `${attentionWarnings} atenção`,
     };
   }
   if (!approved) {
@@ -4267,7 +4300,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
     { label: "Contato", ids: ["contact"], target: "client" },
-    { label: "Cliente e contexto", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
+    { label: "Contexto comercial", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
@@ -4284,7 +4317,7 @@ function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
       ...group,
       number: index + 1,
       status,
-      statusLabel: getReviewStatusLabel(status),
+      statusLabel: getReviewStatusLabel(status, firstIssue || groupItems.find(isOptionalReviewItem)),
       detail: firstIssue?.detail || "Conferido",
       target: firstIssue?.target || group.target,
     };
@@ -5454,8 +5487,10 @@ function renderSendReview() {
   const note = summary.ready
     ? approved
       ? "Checklist confirmado. Use WhatsApp ou e-mail para enviar sem risco de disparo acidental."
-      : summary.warnings
-      ? `${summary.warnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
+      : summary.attentionWarnings
+      ? `${summary.attentionWarnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
+      : summary.optionalWarnings
+      ? `${summary.optionalWarnings} sugestão(ões) comercial(is). Pode enviar ou completar para melhorar acompanhamento.`
       : "Dados essenciais, cardápio e valor estão coerentes."
     : `${summary.errors} pendência(s) impedem o envio. Corrija para evitar proposta errada.`;
   const nextAction = summary.ready

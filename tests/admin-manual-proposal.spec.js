@@ -16,7 +16,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#startManualProposalBtn").click();
     await expect(page.locator("#clientDataSection")).toBeVisible();
     await expect(page.locator("#manualAdjustment")).toHaveValue("0");
-    await expect(page.locator("#formSourcePanel")).toContainText("Classificação comercial da proposta");
+    await expect(page.locator("#formSourcePanel")).toContainText("Contexto comercial da proposta");
 
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
@@ -107,6 +107,46 @@ test.describe("Proposta manual no admin", () => {
     expect(sourceGapsAfterFormat).not.toContain("ocasião");
 
     await expectScrolledNear(page, "#eventConfigSection", 250);
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("contexto comercial recomendado aparece como sugestao, nao como erro", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await page.locator("#clientName").fill("Mariana Costa");
+    await page.locator("#clientEmail").fill("mariana.costa@example.com");
+    await page.locator("#clientPhone").fill("+55 21 99999-0000");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("09:00");
+    await page.locator("#guestCount").fill("30");
+    await page.locator("#eventDuration").selectOption("1");
+    await page.locator('[data-source-field="clientType"]').selectOption("Empresa");
+    await page.locator('[data-source-field="company"]').fill("Costa Experiencias");
+    await page.locator('[data-source-field="moment"]').selectOption("Manhã em dia de semana");
+    await page.locator('[data-source-field="occasion"]').fill("Reuniao corporativa");
+    await page.locator('[data-flow-event="cafe"]').click();
+
+    const reviewState = await page.evaluate(() => ({
+      summary: window.getProposalReviewSummary(),
+      workflow: window.getReviewWorkflowSteps().map((item) => ({
+        label: item.label,
+        status: item.status,
+        statusLabel: item.statusLabel,
+      })),
+      profile: window.getLeadReadinessItems().find((item) => item.id === "profile"),
+    }));
+
+    expect(reviewState.summary.ready).toBe(true);
+    expect(reviewState.summary.errors).toBe(0);
+    expect(reviewState.summary.optionalWarnings).toBeGreaterThan(0);
+    expect(reviewState.profile.label).toBe("Contexto comercial");
+    expect(reviewState.profile.optional).toBe(true);
+    expect(reviewState.workflow.find((item) => item.label === "Contexto comercial").statusLabel).toBe("Sugestão");
+    await expect(page.locator("#sendReviewPanel")).toContainText("Sugestão");
     await expectNoBrowserErrors(errors);
   });
 
