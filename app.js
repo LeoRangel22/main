@@ -5846,6 +5846,17 @@ function getProposalSnapshot() {
   };
 }
 
+function getDebugProposalState() {
+  if (!QA_MODE) return null;
+  return {
+    activeProposalId: state.activeProposalId,
+    activeProposal: state.proposals.find((item) => item.id === state.activeProposalId) || null,
+    proposalsCount: state.proposals.length,
+    quoteRequestsCount: state.quoteRequests.length,
+    integrationLogs: JSON.parse(JSON.stringify(state.integrationLogs || [])),
+  };
+}
+
 function getProposalRow(snapshot, status = "proposta_enviada") {
   const user = state.session?.user;
   return {
@@ -6130,6 +6141,7 @@ function createQaSupabaseClient() {
       const payload = Array.isArray(query.payload) ? query.payload : [query.payload];
       data = payload.map((row) => ({
         id: row.id || `qa-${table}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        ...(table === "propostas" ? { public_token: row.public_token || `qa-token-${Date.now()}-${Math.random().toString(16).slice(2)}` } : {}),
         created_at: row.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
         ...clone(row),

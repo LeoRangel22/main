@@ -109,4 +109,77 @@ test.describe("Proposta manual no admin", () => {
     await expectScrolledNear(page, "#eventConfigSection", 250);
     await expectNoBrowserErrors(errors);
   });
+
+  test("proposta manual completa salva, aprova checklist e envia WhatsApp em QA", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await page.locator("#clientName").fill("Leonardo Rangel");
+    await page.locator("#clientEmail").fill("leorangel@gmail.com");
+    await page.locator("#clientPhone").fill("+55 21 99606-0692");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("09:00");
+    await page.locator("#guestCount").fill("30");
+    await page.locator("#eventDuration").selectOption("1");
+    await page.locator("#manualAdjustment").fill("0");
+    await page.locator("#eventReason").fill("Teste completo de envio da proposta pelo fluxo QA.");
+    await page.locator('[data-source-field="clientType"]').selectOption("Empresa");
+    await page.locator('[data-source-field="company"]').fill("Embaixada Carioca");
+    await page.locator('[data-source-field="finalClient"]').fill("Leonardo Rangel");
+    await page.locator('[data-source-field="budgetRange"]').selectOption("R$ 15 mil a R$ 30 mil");
+    await page.locator('[data-source-field="origin"]').selectOption("Indicação");
+    await page.locator('[data-source-field="moment"]').selectOption("Manhã em dia de semana");
+    await page.locator('[data-source-field="occasion"]').fill("Teste interno de lançamento");
+
+    await page.locator('[data-flow-event="cafe"]').click();
+    await expect(page.locator("#selectedItems")).toContainText(/Caf/i);
+
+    const beforeApproval = await page.evaluate(() => ({
+      summary: window.getProposalReviewSummary(),
+      errors: window.getProposalReviewItems().filter((item) => item.status === "error"),
+      sourceGaps: window.getFormSourceMissingItems(window.getFormSourceData()),
+    }));
+    expect(beforeApproval.summary.ready, JSON.stringify(beforeApproval, null, 2)).toBe(true);
+    expect(beforeApproval.errors, JSON.stringify(beforeApproval.errors, null, 2)).toEqual([]);
+    expect(beforeApproval.sourceGaps, JSON.stringify(beforeApproval.sourceGaps, null, 2)).toEqual([]);
+
+    await page.locator('#sendReviewPanel button[data-send-review-action="approve"]').first().click();
+    await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
+
+    await page.locator("#whatsappBtn").click();
+    await expect(page.locator("#integrationLogList")).toContainText(/WhatsApp/i);
+    await expect(page.locator("#integrationLogList")).toContainText(/enviada|Simulado|Proposta/i);
+
+    const activeProposal = await page.evaluate(() => window.getDebugProposalState());
+    expect(activeProposal.activeProposalId).toBeTruthy();
+    expect(activeProposal.activeProposal?.public_token).toBeTruthy();
+    expect(activeProposal.activeProposal?.cliente_email).toBe("leorangel@gmail.com");
+    expect(activeProposal.activeProposal?.cliente_whatsapp.replace(/\D/g, "")).toContain("99606");
+    expect(activeProposal.activeProposal?.status).toBe("proposta_enviada");
+
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("horario da proposta usa selecao clara de 30 em 30 minutos", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await expect(page.locator("#eventDate")).toBeVisible();
+    await expect(page.locator("#eventTime")).toBeVisible();
+    await expect(page.locator("#eventDateTime")).toHaveAttribute("type", "hidden");
+
+    const invalidTimes = await page.locator("#eventTime option").evaluateAll((options) =>
+      options
+        .map((option) => option.value)
+        .filter(Boolean)
+        .filter((value) => !/^\d{2}:(00|30)$/.test(value)),
+    );
+    expect(invalidTimes).toEqual([]);
+    await expectNoBrowserErrors(errors);
+  });
 });
