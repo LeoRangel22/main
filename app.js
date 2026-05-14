@@ -1071,10 +1071,16 @@ function renderPaymentSummaryLine(title, payment) {
   const differenceNote = payment.justificativaDiferenca
     ? `<small>Diferença justificada: ${escapeHtml(payment.justificativaDiferenca)}</small>`
     : "";
+  const settlementNote = payment.pagamentoIntegral
+    ? "<small>Pagamento integral registrado. Não há saldo restante para cobrar.</small>"
+    : payment.saldoEstimado === 0
+      ? "<small>Pagamento cobre o total do evento.</small>"
+      : "";
   return `
     <span>${escapeHtml(title)}</span>
     <strong>${formatMoney(payment.valor)} · ${escapeHtml(formatSignalPaymentDate(payment.data))} · ${escapeHtml(banks)}</strong>
     <small>${proof}</small>
+    ${settlementNote}
     ${differenceNote}
   `;
 }
@@ -1430,7 +1436,7 @@ function getProposalNextStepConfig() {
     const status = normalizeProposalStatus(proposal.status);
     const progress = getChecklistProgress(proposal.snapshot || {});
     const hasSignal = Boolean(proposal.snapshot?.pagamentoSinal);
-    const hasRemaining = Boolean(proposal.snapshot?.pagamentoRestante);
+    const paymentCoverage = getPaymentCoverage(proposal.total || proposal.snapshot?.totals?.total || 0, proposal.snapshot?.pagamentoSinal, proposal.snapshot?.pagamentoRestante);
 
     if (status === "proposta_enviada" && proposal.clientResponse === "confirmar") {
       return {
@@ -1464,13 +1470,23 @@ function getProposalNextStepConfig() {
       };
     }
 
-    if (status === "confirmado" && !hasRemaining) {
+    if (status === "confirmado" && !paymentCoverage.isFullyPaid) {
       return {
         tone: "success",
         title: "Cobrar e registrar o pagamento restante",
         note: "O sinal já entrou. Agora vale alinhar o saldo final para deixar o evento pronto para o planejamento.",
         action: "mark_remaining",
         actionLabel: "Registrar saldo",
+      };
+    }
+
+    if (status === "confirmado" && paymentCoverage.isFullyPaid) {
+      return {
+        tone: "success",
+        title: "Pagamento completo. Enviar para planejamento",
+        note: "O evento já está quitado. O próximo passo é liberar a operação e organizar execução, extras e responsáveis.",
+        action: "focus_checklist",
+        actionLabel: "Planejar evento",
       };
     }
 
@@ -2635,11 +2651,23 @@ function getRemainingDefaultAmount(total, signalInfo) {
   return Math.max(0, roundCurrency((Number(total) || 0) - toNumber(signalInfo?.valor)));
 }
 
-function createSignalPaymentInfo(amount, date, banks) {
+function getPaymentCoverage(total, signalInfo = null, remainingInfo = null) {
+  const totalValue = roundCurrency(Number(total) || 0);
+  const signalValue = toNumber(signalInfo?.valor);
+  const remainingValue = toNumber(remainingInfo?.valor);
+  const paidTotal = roundCurrency(signalValue + remainingValue);
+  const remainingDue = Math.max(0, roundCurrency(totalValue - paidTotal));
+  const isFullyPaid = totalValue > 0 && paidTotal >= totalValue - 0.01;
+  const isSignalIntegral = totalValue > 0 && signalValue >= totalValue - 0.01;
+  return { totalValue, signalValue, remainingValue, paidTotal, remainingDue, isFullyPaid, isSignalIntegral };
+}
+
+function createSignalPaymentInfo(amount, date, banks, meta = {}) {
   return {
     valor: roundCurrency(amount),
     data: date,
     bancos: banks,
+    ...meta,
     registradoEm: new Date().toISOString(),
     registradoPor: state.session?.user?.email || "",
   };
@@ -2682,8 +2710,11 @@ function readSignalProofFile(file) {
   });
 }
 
-function showSignalPaymentDialog(defaultAmount = 0) {
+function showSignalPaymentDialog(total = 0) {
   return new Promise((resolve) => {
+    const totalValue = roundCurrency(Number(total) || 0);
+    const defaultAmount = getSignalDefaultAmount(totalValue);
+    const thirtyPercentAmount = roundCurrency(totalValue * 0.3);
     const backdrop = document.createElement("div");
     backdrop.className = "signal-modal-backdrop";
     backdrop.innerHTML = `
@@ -2691,8 +2722,33 @@ function showSignalPaymentDialog(defaultAmount = 0) {
         <div>
           <span class="eyebrow">Sinal recebido</span>
           <h3>Registrar pagamento do sinal</h3>
-          <p>Confirme valor, data e banco antes de mover o evento para venda concluída.</p>
+          <p>Use 50% como padrão. Se o cliente pagou tudo ou combinou outro valor, registre aqui sem criar saldo indevido.</p>
         </div>
+        <fieldset>
+          <legend>Tipo de pagamento</legend>
+          <div class="signal-payment-presets">
+            <label>
+              <input type="radio" name="paymentPreset" value="50" checked />
+              <span>50% padrão</span>
+              <small>${escapeHtml(formatMoney(defaultAmount))}</small>
+            </label>
+            <label>
+              <input type="radio" name="paymentPreset" value="30" />
+              <span>30%</span>
+              <small>${escapeHtml(formatMoney(thirtyPercentAmount))}</small>
+            </label>
+            <label>
+              <input type="radio" name="paymentPreset" value="100" />
+              <span>Pagamento integral</span>
+              <small>${escapeHtml(formatMoney(totalValue))}</small>
+            </label>
+            <label>
+              <input type="radio" name="paymentPreset" value="custom" />
+              <span>Outro valor</span>
+              <small>combinado</small>
+            </label>
+          </div>
+        </fieldset>
         <label>
           Valor recebido
           <input name="amount" type="text" inputmode="decimal" value="${escapeHtml(defaultAmount.toFixed(2).replace(".", ","))}" />
@@ -2732,6 +2788,7 @@ function showSignalPaymentDialog(defaultAmount = 0) {
     const amountInput = form.querySelector('input[name="amount"]');
     const dateInput = form.querySelector('input[name="date"]');
     const proofInput = form.querySelector('input[name="proof"]');
+    const presetInputs = [...form.querySelectorAll('input[name="paymentPreset"]')];
     const errorNode = form.querySelector(".signal-error");
     let amountChecked = false;
     let dateChecked = false;
@@ -2739,12 +2796,29 @@ function showSignalPaymentDialog(defaultAmount = 0) {
       backdrop.remove();
       resolve(value);
     };
+    const presetAmounts = {
+      50: defaultAmount,
+      30: thirtyPercentAmount,
+      100: totalValue,
+    };
+    const setAmountFromPreset = (preset) => {
+      const presetAmount = presetAmounts[preset];
+      if (typeof presetAmount !== "number") return;
+      amountInput.value = presetAmount.toFixed(2).replace(".", ",");
+      amountChecked = true;
+      errorNode.textContent = "";
+    };
 
+    presetInputs.forEach((input) => {
+      input.addEventListener("change", () => setAmountFromPreset(input.value));
+    });
     amountInput.addEventListener("click", () => {
       amountChecked = true;
     });
     amountInput.addEventListener("input", () => {
       amountChecked = true;
+      const custom = presetInputs.find((input) => input.value === "custom");
+      if (custom) custom.checked = true;
     });
     dateInput.addEventListener("click", () => {
       dateChecked = true;
@@ -2761,6 +2835,7 @@ function showSignalPaymentDialog(defaultAmount = 0) {
       const amount = toNumber(amountInput.value);
       const date = dateInput.value;
       const banks = [...form.querySelectorAll('input[name="bank"]:checked')].map((input) => input.value);
+      const preset = form.querySelector('input[name="paymentPreset"]:checked')?.value || "custom";
 
       if (!amountChecked || !dateChecked) {
         errorNode.textContent = "Clique no valor e na data para conferir antes de confirmar.";
@@ -2783,7 +2858,15 @@ function showSignalPaymentDialog(defaultAmount = 0) {
 
       try {
         const proof = await readSignalProofFile(proofInput.files?.[0] || null);
-        const info = createSignalPaymentInfo(amount, date, banks);
+        const coverage = getPaymentCoverage(totalValue, { valor: amount });
+        const manualPercentual = totalValue ? roundCurrency((amount / totalValue) * 100) : null;
+        const info = createSignalPaymentInfo(amount, date, banks, {
+          percentualSinal: preset === "custom" ? manualPercentual : totalValue ? Number(preset) : null,
+          tipoPagamento: coverage.isSignalIntegral ? "integral" : preset === "custom" ? "manual" : `percentual_${preset}`,
+          pagamentoIntegral: coverage.isSignalIntegral,
+          valorTotalEvento: totalValue,
+          saldoEstimado: coverage.remainingDue,
+        });
         if (proof) info.comprovante = proof;
         close(info);
       } catch (error) {
@@ -2797,10 +2880,11 @@ function showSignalPaymentDialog(defaultAmount = 0) {
   });
 }
 
-function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = null) {
+function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = null, previousRemainingInfo = null) {
   return new Promise((resolve) => {
     const backdrop = document.createElement("div");
     const signalValue = toNumber(signalInfo?.valor);
+    const previousRemainingValue = toNumber(previousRemainingInfo?.valor);
     const signalBanks = Array.isArray(signalInfo?.bancos) ? signalInfo.bancos.join(", ") : signalInfo?.banco || "Banco não informado";
     backdrop.className = "signal-modal-backdrop";
     backdrop.innerHTML = `
@@ -2808,7 +2892,7 @@ function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = n
         <div>
           <span class="eyebrow">Pagamento restante</span>
           <h3>Registrar pagamento restante</h3>
-          <p>Confirme valor, data e banco. O sistema compara sinal + restante com o total do evento.</p>
+          <p>Confirme valor, data e banco. O sistema compara sinal + pagamentos registrados com o total do evento.</p>
         </div>
         <label>
           Valor recebido
@@ -2911,16 +2995,17 @@ function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = n
         return;
       }
 
-      const paidTotal = roundCurrency(signalValue + amount);
+      const paidTotal = roundCurrency(signalValue + previousRemainingValue + amount);
       const expectedTotal = roundCurrency(total);
       const difference = roundCurrency(paidTotal - expectedTotal);
       const hasDifference = Math.abs(difference) >= 0.01;
       let differenceReason = "";
 
       if (hasDifference) {
+        const previousText = previousRemainingValue ? `, mais pagamento já registrado de ${formatMoney(previousRemainingValue)}` : "";
         const message = `O sinal de ${formatMoney(signalValue)} em ${formatSignalPaymentDate(signalInfo?.data)} (${signalBanks}) somado ao pagamento restante de ${formatMoney(
           amount,
-        )} em ${formatSignalPaymentDate(date)} (${banks.join(", ")}) dá ${formatMoney(
+        )} em ${formatSignalPaymentDate(date)} (${banks.join(", ")})${previousText} dá ${formatMoney(
           paidTotal,
         )}, diferente do valor total do evento ${formatMoney(expectedTotal)}. Ajuste o valor ou confirme a diferença com justificativa.`;
         mismatchBox.classList.remove("is-hidden");
@@ -2935,8 +3020,20 @@ function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = n
 
       try {
         const proof = await readSignalProofFile(proofInput.files?.[0] || null);
-        const info = createSignalPaymentInfo(amount, date, banks);
+        const consolidatedAmount = previousRemainingValue ? roundCurrency(previousRemainingValue + amount) : amount;
+        const info = createSignalPaymentInfo(consolidatedAmount, date, banks, {
+          valorRecebidoAgora: roundCurrency(amount),
+          valorAnterior: previousRemainingValue || null,
+        });
         if (proof) info.comprovante = proof;
+        if (previousRemainingInfo) {
+          info.pagamentoAnterior = {
+            valor: previousRemainingValue,
+            data: previousRemainingInfo.data || "",
+            bancos: previousRemainingInfo.bancos || previousRemainingInfo.banco || "",
+            comprovante: previousRemainingInfo.comprovante || null,
+          };
+        }
         if (hasDifference) {
           info.justificativaDiferenca = differenceReason;
           info.somaPagamentos = paidTotal;
@@ -6413,6 +6510,41 @@ function loadQaFixtures() {
     updatedHour: 9,
   });
 
+  const confirmedFullPayment = createQaProposal({
+    id: "qa-proposal-sinal-integral",
+    reference: "QA-20260511-INTEGRAL",
+    clientName: "Fabiana Simplicio",
+    email: "fabiana.qa@example.com",
+    phone: "+55 21 99999 0005",
+    company: "Grupo Praia Sul",
+    clientType: "Cliente direto",
+    finalClient: "Grupo Praia Sul",
+    budgetRange: "R$ 15 mil a R$ 30 mil",
+    origin: "Indicação",
+    moment: "Manhã em dia de semana",
+    occasion: "Reunião / encontro corporativo",
+    type: "Café da Manhã / Brunch",
+    date: createQaDate(4),
+    time: "10:00",
+    guests: 19,
+    duration: 1,
+    selectedIds: ["cafe-classico"],
+    total: 2184,
+    status: "confirmado",
+    signalPayment: {
+      ...signalProof,
+      valor: 2184,
+      pagamentoIntegral: true,
+      percentualSinal: 100,
+      tipoPagamento: "integral",
+      valorTotalEvento: 2184,
+      saldoEstimado: 0,
+    },
+    createdOffsetDays: -5,
+    updatedOffsetDays: -1,
+    updatedHour: 10,
+  });
+
   const remaining = createQaProposal({
     id: "qa-proposal-pagamento",
     reference: "QA-20260511-SALDO",
@@ -6442,7 +6574,7 @@ function loadQaFixtures() {
   });
 
   state.quoteRequests = [request];
-  state.proposals = [proposalWaiting, proposalChange, confirmed, remaining];
+  state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining];
 }
 
 async function initQaMode() {
@@ -6833,44 +6965,50 @@ function getPipelineItems() {
 
   const proposalItems = state.proposals.map((proposal) => {
     const status = normalizeProposalStatus(proposal.status);
+    const snapshot = proposal.snapshot || {};
+    const paymentCoverage = getPaymentCoverage(proposal.total || snapshot.totals?.total || 0, snapshot.pagamentoSinal, snapshot.pagamentoRestante);
     return {
       kind: "proposal",
       id: proposal.id,
       status,
       stage: getPipelineStage(status),
       name: proposal.cliente_nome || "Cliente",
-      email: proposal.cliente_email || proposal.snapshot?.client?.email || proposal.snapshot?.cliente?.email || "",
-      phone: proposal.cliente_whatsapp || proposal.snapshot?.client?.phone || proposal.snapshot?.cliente?.whatsapp || "",
+      email: proposal.cliente_email || snapshot.client?.email || snapshot.cliente?.email || "",
+      phone: proposal.cliente_whatsapp || snapshot.client?.phone || snapshot.cliente?.whatsapp || "",
       company:
         proposal.empresa ||
         proposal.cliente_empresa ||
-        proposal.snapshot?.client?.company ||
-        proposal.snapshot?.cliente?.empresa ||
+        snapshot.client?.company ||
+        snapshot.cliente?.empresa ||
         "",
       type: proposal.tipo_evento || "Evento",
       date: proposal.data_evento || "",
       time: proposal.horario_evento || "",
       guests: proposal.convidados || 1,
-      duration: Number(proposal.duracao || proposal.snapshot?.event?.duration || 1),
+      duration: Number(proposal.duracao || snapshot.event?.duration || 1),
       total: proposal.total || 0,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
-      reference: proposal.snapshot?.referencia || "",
-      snapshot: proposal.snapshot || {},
-      finalClient: getFinalClientFromSnapshot(proposal.snapshot || {}),
-      groupName: getGroupNameFromSnapshot(proposal.snapshot || {}),
-      clientType: proposal.snapshot?.qualificacao?.tipoCliente || "Cliente direto",
-      hasSignalProof: Boolean(proposal.snapshot?.pagamentoSinal?.comprovante?.nome),
-      signalProof: proposal.snapshot?.pagamentoSinal?.comprovante || null,
-      hasRemainingPayment: Boolean(proposal.snapshot?.pagamentoRestante),
-      hasRemainingProof: Boolean(proposal.snapshot?.pagamentoRestante?.comprovante?.nome),
-      remainingProof: proposal.snapshot?.pagamentoRestante?.comprovante || null,
-      clientResponse: proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao || "",
-      clientMessage: proposal.cliente_mensagem || proposal.snapshot?.clienteResposta?.mensagem || "",
-      clientRequest: proposal.cliente_solicitacao || proposal.snapshot?.clienteResposta || null,
-      clientResponseAt: proposal.cliente_resposta_em || proposal.snapshot?.clienteResposta?.registradoEm || "",
-      meta: [proposal.snapshot?.qualificacao?.tipoCliente, proposal.snapshot?.qualificacao?.faixaInvestimento].filter(Boolean),
-      cancelReason: proposal.snapshot?.cancelamento?.motivo || "",
+      reference: snapshot.referencia || "",
+      snapshot,
+      finalClient: getFinalClientFromSnapshot(snapshot),
+      groupName: getGroupNameFromSnapshot(snapshot),
+      clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
+      hasSignalProof: Boolean(snapshot.pagamentoSinal?.comprovante?.nome),
+      signalProof: snapshot.pagamentoSinal?.comprovante || null,
+      hasRemainingPayment: Boolean(snapshot.pagamentoRestante),
+      hasRemainingProof: Boolean(snapshot.pagamentoRestante?.comprovante?.nome),
+      remainingProof: snapshot.pagamentoRestante?.comprovante || null,
+      hasPaymentComplete: paymentCoverage.isFullyPaid,
+      isSignalIntegral: paymentCoverage.isSignalIntegral,
+      paymentPaidTotal: paymentCoverage.paidTotal,
+      paymentRemainingDue: paymentCoverage.remainingDue,
+      clientResponse: proposal.cliente_resposta || snapshot.clienteResposta?.acao || "",
+      clientMessage: proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "",
+      clientRequest: proposal.cliente_solicitacao || snapshot.clienteResposta || null,
+      clientResponseAt: proposal.cliente_resposta_em || snapshot.clienteResposta?.registradoEm || "",
+      meta: [snapshot.qualificacao?.tipoCliente, snapshot.qualificacao?.faixaInvestimento].filter(Boolean),
+      cancelReason: snapshot.cancelamento?.motivo || "",
       eventDate: parseLocalIsoDate(proposal.data_evento || ""),
     };
   });
@@ -7067,9 +7205,9 @@ function getReportDefinitions(referenceDate = new Date()) {
         ["proposta_enviada", "negociacao"].includes(getReportStatus(item)),
     },
     signalAwaitingFinal: {
-      title: "Sinal pago aguardando restante",
+      title: "Sinal pago aguardando saldo",
       detail: "Venda concluída; saldo ainda pendente",
-      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado",
+      filter: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado" && !item.hasPaymentComplete,
     },
     awaitingPlanning: {
       title: "Eventos aguardando planejamento",
@@ -7380,10 +7518,10 @@ function getPipelinePrimaryAction(item) {
   }
   if (status === "confirmado") {
     return {
-      tone: item.hasRemainingPayment ? "success" : "warning",
+      tone: item.hasPaymentComplete ? "success" : "warning",
       eyebrow: "Financeiro",
-      label: item.hasRemainingPayment ? "Enviar para planejamento" : "Cobrar saldo",
-      note: item.hasRemainingPayment ? "Saldo ok. Próximo passo é operação." : "Venda fechada, mas ainda falta saldo final.",
+      label: item.hasPaymentComplete ? "Enviar para planejamento" : "Cobrar saldo",
+      note: item.hasPaymentComplete ? "Pagamento completo. Próximo passo é operação." : "Venda fechada, mas ainda falta saldo final.",
     };
   }
   if (status === "pagamento_final") {
@@ -7426,7 +7564,7 @@ function getPipelineRiskAlerts(item) {
   } else if (daysUntil !== null && daysUntil >= 0 && daysUntil <= 14) {
     alerts.push({ level: "warning", label: `Janela ${daysUntil}d` });
   }
-  if (status === "confirmado" && !item.hasRemainingPayment) {
+  if (status === "confirmado" && !item.hasPaymentComplete) {
     alerts.push({ level: "warning", label: "Falta saldo" });
   }
   if (status === "planejamento" && hasIncompleteChecklist(item.snapshot || {})) {
@@ -7470,7 +7608,9 @@ function getSlaMeta(item) {
     };
   }
   if (item.kind === "proposal" && status === "confirmado") {
-    return { label: "Atenção financeira: cobrar saldo restante", level: "warning" };
+    return item.hasPaymentComplete
+      ? { label: "Pagamento completo: enviar para planejamento", level: "success" }
+      : { label: "Atenção financeira: cobrar saldo restante", level: "warning" };
   }
   return null;
 }
@@ -7651,7 +7791,7 @@ function getPipelineQuickFilterDefinitions() {
     {
       id: "awaitingRemaining",
       label: "Falta saldo",
-      matches: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado" && !item.hasRemainingPayment,
+      matches: (item) => item.kind === "proposal" && getReportStatus(item) === "confirmado" && !item.hasPaymentComplete,
     },
     {
       id: "missingProof",
@@ -8261,13 +8401,23 @@ function getActionTasks(items = getPipelineItems()) {
     }
 
     if (item.kind === "proposal" && status === "confirmado") {
-      tasks.push({
-        ...base,
-        title: "Cobrar pagamento restante",
-        note: "Sinal recebido. Falta registrar saldo.",
-        priority: 72,
-        track: "Financeiro",
-      });
+      if (item.hasPaymentComplete) {
+        tasks.push({
+          ...base,
+          title: "Enviar para planejamento",
+          note: "Pagamento completo. Liberar a operação do evento.",
+          priority: 62,
+          track: "Operação",
+        });
+      } else {
+        tasks.push({
+          ...base,
+          title: "Cobrar pagamento restante",
+          note: `Sinal recebido. Falta registrar ${formatMoney(item.paymentRemainingDue || 0)}.`,
+          priority: 72,
+          track: "Financeiro",
+        });
+      }
       if (!item.hasSignalProof) {
         tasks.push({
           ...base,
@@ -8280,7 +8430,7 @@ function getActionTasks(items = getPipelineItems()) {
     }
 
     if (item.kind === "proposal" && status === "pagamento_final") {
-      if (!item.hasRemainingPayment) {
+      if (!item.hasPaymentComplete) {
         tasks.push({
           ...base,
           title: "Registrar pagamento restante",
@@ -8511,7 +8661,7 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
   }
   const proposals = items.filter((item) => item.kind === "proposal");
   const awaitingSignal = proposals.filter((item) => ["proposta_enviada", "negociacao"].includes(item.status));
-  const awaitingRemaining = proposals.filter((item) => item.status === "confirmado" || (item.status === "pagamento_final" && !item.hasRemainingPayment));
+  const awaitingRemaining = proposals.filter((item) => ["confirmado", "pagamento_final"].includes(item.status) && !item.hasPaymentComplete);
   const missingProof = proposals.filter(
     (item) =>
       (operationStatuses.has(item.status) && !item.hasSignalProof) ||
@@ -8907,8 +9057,8 @@ function getPipelineOpenButtonLabel(item, primaryAction) {
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
   if (status === "negociacao") return "Ajustar";
-  if (status === "confirmado") return item.hasRemainingPayment ? "Planejar" : "Cobrar saldo";
-  if (status === "pagamento_final") return item.hasRemainingPayment ? "Planejar" : "Registrar saldo";
+  if (status === "confirmado") return item.hasPaymentComplete ? "Planejar" : "Cobrar saldo";
+  if (status === "pagamento_final") return item.hasPaymentComplete ? "Planejar" : "Registrar saldo";
   if (status === "planejamento") return "Planejar";
   if (status === "evento_proximo") return "Revisar 48h";
   if (status === "pos_venda") return "Pós-venda";
@@ -8968,7 +9118,7 @@ function renderPipelineCard(item) {
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
   const remainingButton =
-    item.kind === "proposal" && item.status === "pagamento_final" && !item.hasRemainingPayment
+    item.kind === "proposal" && item.status === "pagamento_final" && !item.hasPaymentComplete
       ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}" title="Registrar pagamento restante">Registrar saldo</button>`
       : "";
   const topAction = remainingButton || remainingProofLink || signalProofLink || signalButton;
@@ -9517,25 +9667,28 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
   if (normalizedNext === "confirmado" && !proposal.snapshot?.pagamentoSinal) {
-    paymentSignal = paymentSignal || (await showSignalPaymentDialog(getSignalDefaultAmount(proposal.total)));
+    paymentSignal = paymentSignal || (await showSignalPaymentDialog(proposal.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. A etapa não foi alterada.");
       renderPipeline();
       return;
     }
   }
-  if (finalPaymentRequiredStatuses.has(normalizedNext) && !proposal.snapshot?.pagamentoRestante) {
+  if (finalPaymentRequiredStatuses.has(normalizedNext)) {
     const signal = proposal.snapshot?.pagamentoSinal || paymentSignal;
+    const paymentCoverage = getPaymentCoverage(proposal.total, signal, proposal.snapshot?.pagamentoRestante);
     if (!signal) {
       showToast("Registre o sinal antes do pagamento restante.");
       renderPipeline();
       return;
     }
-    remainingPayment = await showRemainingPaymentDialog(getRemainingDefaultAmount(proposal.total, signal), proposal.total, signal);
-    if (!remainingPayment) {
-      showToast("Pagamento restante não registrado. A etapa não foi alterada.");
-      renderPipeline();
-      return;
+    if (!paymentCoverage.isFullyPaid) {
+      remainingPayment = await showRemainingPaymentDialog(paymentCoverage.remainingDue, proposal.total, signal, proposal.snapshot?.pagamentoRestante);
+      if (!remainingPayment) {
+        showToast("Pagamento restante não registrado. A etapa não foi alterada.");
+        renderPipeline();
+        return;
+      }
     }
   }
 
@@ -9947,7 +10100,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   }
 
   if (normalizedNext === "confirmado" && !activeProposal?.snapshot?.pagamentoSinal) {
-    paymentSignal = paymentSignal || (await showSignalPaymentDialog(getSignalDefaultAmount(snapshot.totals.total)));
+    paymentSignal = paymentSignal || (await showSignalPaymentDialog(snapshot.totals.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. O evento continua sem confirmação.");
       return null;
@@ -9955,16 +10108,20 @@ async function saveCurrentProposal(status, signalInfo = null) {
   }
 
   snapshot.pagamentoSinal = paymentSignal || activeProposal?.snapshot?.pagamentoSinal || snapshot.pagamentoSinal || null;
-  if (finalPaymentRequiredStatuses.has(normalizedNext) && !activeProposal?.snapshot?.pagamentoRestante) {
+  if (finalPaymentRequiredStatuses.has(normalizedNext)) {
     const signal = snapshot.pagamentoSinal || activeProposal?.snapshot?.pagamentoSinal || null;
+    const previousRemaining = activeProposal?.snapshot?.pagamentoRestante || snapshot.pagamentoRestante || null;
+    const paymentCoverage = getPaymentCoverage(snapshot.totals.total, signal, previousRemaining);
     if (!signal) {
       showToast("Registre o sinal antes do pagamento restante.");
       return null;
     }
-    remainingPayment = await showRemainingPaymentDialog(getRemainingDefaultAmount(snapshot.totals.total, signal), snapshot.totals.total, signal);
-    if (!remainingPayment) {
-      showToast("Pagamento restante não registrado. A proposta não foi atualizada.");
-      return null;
+    if (!paymentCoverage.isFullyPaid) {
+      remainingPayment = await showRemainingPaymentDialog(paymentCoverage.remainingDue, snapshot.totals.total, signal, previousRemaining);
+      if (!remainingPayment) {
+        showToast("Pagamento restante não registrado. A proposta não foi atualizada.");
+        return null;
+      }
     }
   }
   if (finalPaymentRequiredStatuses.has(normalizedNext)) {

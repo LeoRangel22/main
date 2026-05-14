@@ -3259,6 +3259,44 @@ label.pipeline-status-control:focus-within select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.signal-payment-presets {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.signal-payment-presets label {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  min-height: 68px;
+  padding: 9px;
+}
+
+.signal-payment-presets input {
+  accent-color: var(--verde-escuro);
+  height: 16px;
+  width: 16px;
+}
+
+.signal-payment-presets span,
+.signal-payment-presets small {
+  display: block;
+}
+
+.signal-payment-presets span {
+  color: var(--verde-escuro);
+  font-weight: 900;
+}
+
+.signal-payment-presets small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .signal-bank-options label {
   align-items: center;
   background: var(--surface);

@@ -81,4 +81,16 @@ test.describe("Dashboard interno em modo QA", () => {
     await expectNoHorizontalOverflow(page);
     await expectNoBrowserErrors(errors);
   });
+
+  test("sinal integral nao gera cobrança de saldo no funil", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    const fullPaymentCard = page.locator('[data-pipeline-card-id="qa-proposal-sinal-integral"]');
+    await expect(fullPaymentCard).toBeVisible();
+    await expect(fullPaymentCard).toContainText(/Planejar|Enviar para planejamento/i);
+    await expect(fullPaymentCard).toContainText(/Pagamento completo|Próximo passo é operação/i);
+    await expect(fullPaymentCard).not.toContainText(/Falta saldo|Cobrar saldo/i);
+    await expectNoBrowserErrors(errors);
+  });
 });
