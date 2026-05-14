@@ -1,6 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const {
   collectBrowserErrors,
+  expectElementInViewport,
   expectNoBrowserErrors,
   expectNoHorizontalOverflow,
   expectScrolledNear,
@@ -22,33 +23,50 @@ test.describe("Dashboard interno em modo QA", () => {
       .getByRole("button", { name: /Responder|Abrir/i })
       .click();
 
-    await expect(page.locator("#loadedEditorBar")).toContainText(/Você está editando/i);
+    await expect(page.locator("#loadedEditorBar")).toContainText(/editando/i);
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
-    await expect(page.locator("#eventType")).toHaveValue(/Almoço Carioca/i);
+    await expect(page.locator("#eventType")).toHaveValue(/Almo.o Carioca/i);
     await expectScrolledNear(page, "#clientDataSection", 300);
+    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 120 });
     await expectNoBrowserErrors(errors);
   });
 
-  test("mostra pedido completo de alteração do cliente e abre a proposta certa", async ({ page }) => {
+  test("prioridade agora abre e posiciona a equipe no editor, nao apenas carrega embaixo", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    await expect(page.locator("#actionList")).toContainText(/Prioridade agora/i);
+
+    await page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first().click();
+
+    await expect(page.locator("#loadedEditorBar")).toContainText(/Prioridade agora/i);
+    await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
+    await expectScrolledNear(page, "#clientDataSection", 300);
+    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 120 });
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("mostra pedido completo de alteracao do cliente e abre a proposta certa", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
     await page.goto("/index.html?qa=1");
     const changeCard = page.locator('[data-pipeline-card-id="qa-proposal-alteracao"]');
-    await expect(changeCard).toContainText(/Cliente pediu alteração/i);
+    await expect(changeCard).toContainText(/Cliente pediu/i);
 
     await changeCard.locator("[data-client-change-id]").click();
     await expect(page.locator(".client-change-dialog")).toBeVisible();
     await expect(page.locator(".client-change-dialog")).toContainText(/O que o cliente pediu/i);
-    await expect(page.locator(".client-change-dialog")).toContainText(/almoço|welcome|corporativo/i);
+    await expect(page.locator(".client-change-dialog")).toContainText(/welcome|corporativo/i);
 
     await page.getByRole("button", { name: /Abrir e ajustar proposta/i }).click();
     await expect(page.locator("#loadedEditorBar")).toContainText(/Luciano/i);
     await expect(page.locator("#clientName")).toHaveValue(/Luciano/i);
     await expectScrolledNear(page, "#clientDataSection", 300);
+    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 120 });
     await expectNoBrowserErrors(errors);
   });
 
-  test("mobile: card inteiro abre e não cria scroll lateral", async ({ page }) => {
+  test("mobile: card inteiro abre e nao cria scroll lateral", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -56,9 +74,10 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator("#pipelineBoard")).toBeVisible();
 
     await page.locator('[data-pipeline-card-id="qa-request-prioridade"]').click();
-    await expect(page.locator("#loadedEditorBar")).toContainText(/Você está editando/i);
+    await expect(page.locator("#loadedEditorBar")).toContainText(/editando/i);
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
     await expectScrolledNear(page, "#clientDataSection", 450);
+    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 120 });
     await expectNoHorizontalOverflow(page);
     await expectNoBrowserErrors(errors);
   });
