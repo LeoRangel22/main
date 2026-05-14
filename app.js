@@ -10708,14 +10708,90 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 }
 
+async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title = "Proposta comercial", skipConfirm = false }) {
+  if (!state.supabase || !state.session) {
+    showToast("Entre com o e-mail da equipe para enviar e-mail direto.");
+    return false;
+  }
+
+  const destination = (email || fields.clientEmail.value || proposal?.cliente_email || proposal?.snapshot?.client?.email || "").trim();
+  if (!destination || !isLikelyEmail(destination)) {
+    showToast("Preencha um e-mail válido do cliente antes de enviar.");
+    return false;
+  }
+
+  if (state.sendLocks.email) {
+    showToast("Envio por e-mail já está em andamento.");
+    return false;
+  }
+
+  if (!skipConfirm) {
+    const confirmed = confirmClientSend({
+      channel: "E-mail",
+      destination,
+      title,
+      action: "enviar agora pelo ZeptoMail e registrar no histórico",
+    });
+    if (!confirmed) {
+      showToast("Envio por e-mail cancelado.");
+      return false;
+    }
+  }
+
+  state.sendLocks.email = true;
+  const logId = createIntegrationLog({
+    channel: "email",
+    status: "pending",
+    title,
+    detail: "Enviando proposta por e-mail.",
+    target: destination,
+    meta: { proposalId: proposal?.id || "" },
+  });
+  try {
+    showToast("Enviando proposta por e-mail...");
+    const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
+      body: {
+        proposalId: proposal.id,
+        email: destination,
+        proposalUrl,
+        title: "Sua proposta de evento na Embaixada Carioca",
+      },
+    });
+
+    if (error || data?.ok === false) {
+      console.warn("Falha no envio direto por e-mail.", error || data);
+      const functionMessage = data?.message || (await getFunctionErrorMessage(error));
+      updateIntegrationLog(logId, {
+        status: functionMessage?.toLowerCase().includes("config") || functionMessage?.toLowerCase().includes("token") ? "config" : "error",
+        detail: functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.",
+      });
+      showToast(functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.");
+      return false;
+    }
+
+    updateIntegrationLog(logId, {
+      status: "success",
+      detail: `Proposta enviada para ${destination}.`,
+    });
+    showToast("Proposta enviada por e-mail e registrada no histórico.");
+    await loadProposalHistory();
+    return true;
+  } catch (error) {
+    updateIntegrationLog(logId, {
+      status: "error",
+      detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar e-mail.",
+    });
+    showToast("Não foi possível enviar o e-mail. Confira a conexão e tente novamente.");
+    return false;
+  } finally {
+    state.sendLocks.email = false;
+  }
+}
+
 async function openEmail() {
   const email = fields.clientEmail.value.trim();
   if (!email) {
-    showToast("Preencha o e-mail do cliente para abrir a mensagem.");
-    return;
-  }
-  if (state.sendLocks.email) {
-    showToast("E-mail já está sendo preparado.");
+    showToast("Preencha o e-mail do cliente para enviar a proposta.");
     return;
   }
   if (!ensureProposalReadyForSending()) return;
@@ -10723,52 +10799,28 @@ async function openEmail() {
     channel: "E-mail",
     destination: email,
     title: "Proposta comercial",
-    action: "abrir o e-mail pronto para envio",
+    action: "enviar agora pelo ZeptoMail e registrar no histórico",
   });
   if (!confirmed) {
-    showToast("Abertura do e-mail cancelada.");
+    showToast("Envio por e-mail cancelado.");
     createIntegrationLog({
       channel: "email",
       status: "canceled",
       title: "Proposta comercial",
-      detail: "A equipe cancelou a abertura do e-mail antes do envio.",
+      detail: "A equipe cancelou o envio de e-mail antes do disparo.",
       target: email,
     });
     return;
   }
-  state.sendLocks.email = true;
-  const proposalUrl = await ensureProposalLink();
-  if (!proposalUrl) {
-    state.sendLocks.email = false;
-    return;
-  }
-  const subject = encodeURIComponent("Proposta de evento - Embaixada Carioca");
-  const body = encodeURIComponent(
-    [
-      `Olá${fields.clientName.value.trim() ? `, ${fields.clientName.value.trim().split(/\s+/)[0]}` : ""}!`,
-      "",
-      "Sua proposta da Embaixada Carioca está pronta.",
-      "",
-      "Link seguro da proposta:",
-      proposalUrl,
-      "",
-      `No link você pode aprovar, cancelar, solicitar ajustes de data/horário/convidados e anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
-      "",
-      "Ficamos à disposição.",
-    ].join("\n"),
-  );
-  createIntegrationLog({
-    channel: "email",
-    status: "opened",
+  const share = await ensureProposalForSharing();
+  if (!share?.saved || !share?.url) return;
+  await sendProposalEmailViaZepto({
+    proposal: share.saved,
+    proposalUrl: share.url,
+    email,
     title: "Proposta comercial",
-    detail: "E-mail pronto aberto no aplicativo do navegador. Confirme o envio no cliente de e-mail.",
-    target: email,
+    skipConfirm: true,
   });
-  showToast("Link da proposta gerado. Abrindo e-mail.");
-  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-  window.setTimeout(() => {
-    state.sendLocks.email = false;
-  }, 1500);
 }
 
 async function copyProposal() {
