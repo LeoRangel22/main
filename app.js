@@ -7081,6 +7081,7 @@ function getPipelineItems() {
       guests: proposal.convidados || 1,
       duration: Number(proposal.duracao || snapshot.event?.duration || 1),
       total: proposal.total || 0,
+      privatizationAmount: proposal.privatizacao ?? snapshot.totals?.privatizationAmount ?? snapshot.totals?.privatization?.amount ?? 0,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: snapshot.referencia || "",
@@ -7375,6 +7376,7 @@ function renderReportItem(item) {
       </div>
       <div>
         <b>${item.total ? formatMoney(item.total) : "Sem valor"}</b>
+        ${renderPipelineValueBreakdown(item, "report-value-breakdown")}
         ${openButton}
       </div>
     </article>
@@ -9159,6 +9161,30 @@ function getPipelineOpenButtonLabel(item, primaryAction) {
   return primaryAction?.label || "Abrir";
 }
 
+function getPipelineValueBreakdown(item = {}) {
+  const total = toNumber(item.total);
+  if (item.kind !== "proposal" || total <= 0) return null;
+  const totals = item.snapshot?.totals || {};
+  const privatizationAmount = roundCurrency(
+    toNumber(item.privatizationAmount ?? item.privatizacao ?? totals.privatizationAmount ?? totals.privatization?.amount ?? 0),
+  );
+  return {
+    foodBeverage: roundCurrency(Math.max(0, total - privatizationAmount)),
+    privatization: privatizationAmount,
+  };
+}
+
+function renderPipelineValueBreakdown(item = {}, className = "") {
+  const breakdown = getPipelineValueBreakdown(item);
+  if (!breakdown) return "";
+  return `
+    <div class="pipeline-value-breakdown ${escapeHtml(className)}" aria-label="Composição do valor da proposta">
+      <span title="Alimentos e bebidas">A&amp;B ${formatMoney(breakdown.foodBeverage)}</span>
+      <span class="${breakdown.privatization > 0 ? "has-privatization" : ""}" title="Privatização">Priv. ${formatMoney(breakdown.privatization)}</span>
+    </div>
+  `;
+}
+
 function renderPipelineCard(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -9261,6 +9287,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
         <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
       </div>
+      ${renderPipelineValueBreakdown(item)}
       <div class="pipeline-card-name-row">
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>

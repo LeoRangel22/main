@@ -93,4 +93,15 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(fullPaymentCard).not.toContainText(/Falta saldo|Cobrar saldo/i);
     await expectNoBrowserErrors(errors);
   });
+  test("cards do funil mostram composicao de A&B e privatizacao", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+    await expect(proposalCard).toBeVisible();
+    await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("A&B");
+    await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Priv.");
+    await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("R$ 3.057,60");
+    await expectNoBrowserErrors(errors);
+  });
 });
