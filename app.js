@@ -3452,6 +3452,10 @@ function isOptionalReviewItem(item) {
   return Boolean(item?.optional || ["commercial_profile", "profile"].includes(item?.id));
 }
 
+function getProposalSendReviewItems(items = getProposalReviewItems()) {
+  return items.filter((item) => !isOptionalReviewItem(item));
+}
+
 function getProposalReviewSummary(items = getProposalReviewItems()) {
   const errors = items.filter((item) => item.status === "error").length;
   const warningItems = items.filter((item) => item.status === "warning");
@@ -3702,7 +3706,7 @@ function approveSendReview() {
   return true;
 }
 
-function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) {
+function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems(), approvalItems = items) {
   if (!summary.ready) {
     const firstIssue = items.find((item) => item.status === "error") || items.find((item) => item.status === "warning");
     return {
@@ -3712,7 +3716,7 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems()) 
       target: firstIssue?.target || "client",
     };
   }
-  if (!isSendReviewApproved(items)) {
+  if (!isSendReviewApproved(approvalItems)) {
     return {
       action: "approve",
       label: "Revisado, pode enviar",
@@ -4427,10 +4431,54 @@ function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   });
 }
 
+function getSendReviewWorkflowSteps(items = getProposalSendReviewItems()) {
+  const groups = [
+    { label: "Contato", ids: ["contact", "client_context"], target: "client" },
+    { label: "Data, hora e pax", ids: ["date", "availability", "guests"], target: "client" },
+    { label: "Cardápio e valor", ids: ["format", "items", "value"], target: "items" },
+    { label: "Condições e envio", ids: ["briefing", "conditions"], target: "review" },
+  ];
+  return groups.map((group, index) => {
+    const groupItems = items.filter((item) => group.ids.includes(item.id));
+    const status = groupItems.some((item) => item.status === "error")
+      ? "error"
+      : groupItems.some((item) => item.status === "warning")
+        ? "warning"
+        : "ok";
+    const firstIssue = groupItems.find((item) => item.status !== "ok");
+    return {
+      ...group,
+      number: index + 1,
+      status,
+      statusLabel: getReviewStatusLabel(status, firstIssue),
+      detail: firstIssue?.detail || "Conferido",
+      target: firstIssue?.target || group.target,
+    };
+  });
+}
+
 function renderReviewWorkflow(items = getLeadReadinessItems()) {
   return `
     <div class="review-workflow" aria-label="Roteiro de revisão da proposta">
       ${getReviewWorkflowSteps(items)
+        .map(
+          (step) => `
+            <button class="review-workflow-step is-${escapeHtml(step.status)}" type="button" data-review-target="${escapeHtml(step.target)}">
+              <span>${escapeHtml(String(step.number))}</span>
+              <strong>${escapeHtml(step.label)}</strong>
+              <small>${escapeHtml(step.statusLabel)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderSendReviewWorkflow(items = getProposalSendReviewItems()) {
+  return `
+    <div class="review-workflow" aria-label="Roteiro essencial de envio da proposta">
+      ${getSendReviewWorkflowSteps(items)
         .map(
           (step) => `
             <button class="review-workflow-step is-${escapeHtml(step.status)}" type="button" data-review-target="${escapeHtml(step.target)}">
@@ -5609,10 +5657,11 @@ function renderSummary() {
 
 function renderSendReview() {
   if (!nodes.sendReviewPanel) return;
-  const items = getProposalReviewItems();
+  const allItems = getProposalReviewItems();
+  const items = getProposalSendReviewItems(allItems);
   const summary = getProposalReviewSummary(items);
-  const approved = isSendReviewApproved(items);
-  const command = getSendReviewPrimaryCommand(summary, items);
+  const approved = isSendReviewApproved(allItems);
+  const command = getSendReviewPrimaryCommand(summary, items, allItems);
   const smartAlerts = getSmartProposalAlerts(items);
   const confidence = getProposalConfidence(items, smartAlerts);
   const automation = getProposalAutomationReadiness(items, smartAlerts, confidence);
@@ -5666,7 +5715,7 @@ function renderSendReview() {
         </button>
       </div>
     </div>
-    ${renderReviewWorkflow(items)}
+    ${renderSendReviewWorkflow(items)}
     <div class="send-review-route" aria-label="Rota rápida de conferência e envio">
       <button type="button" data-review-target="client">
         <span>1</span>
