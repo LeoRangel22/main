@@ -3360,7 +3360,7 @@ function getProposalReviewItems() {
     },
     {
       id: "commercial_profile",
-      label: "Contexto comercial",
+      label: "Classificação comercial",
       status: commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin ? "ok" : "warning",
       optional: true,
       detail:
@@ -4075,7 +4075,7 @@ function renderFormSourcePanel() {
     ["Extras solicitados", data.extras],
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
-  const sourceTitle = data.isManualDraft ? "Contexto comercial da proposta" : "Dados recebidos do formulário";
+  const sourceTitle = data.isManualDraft ? "Dados comerciais da proposta" : "Dados recebidos do formulário";
   const sourceSubtitle = data.isManualDraft ? "Complete o contexto para priorizar e automatizar melhor" : "Base para proposta segura e automação futura";
   const sourceHelp = data.isManualDraft
     ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
@@ -4217,7 +4217,7 @@ function getLeadReadinessItems() {
     },
     {
       id: "profile",
-      label: "Contexto comercial",
+      label: "Classificação comercial",
       status: commercialProfile?.status || "warning",
       optional: true,
       detail: commercialProfile?.detail || "Sugestão comercial, não bloqueia envio: tipo de cliente, faixa de investimento e origem ajudam no follow-up.",
@@ -4227,7 +4227,7 @@ function getLeadReadinessItems() {
       id: "client_context",
       label: "Cliente final/grupo",
       status: clientContext?.status || "ok",
-      detail: clientContext?.detail || "Contexto comercial revisado.",
+      detail: clientContext?.detail || "Cliente final e grupo revisados.",
       target: "source",
     },
     {
@@ -4330,7 +4330,7 @@ function getReviewGuideActionLabel(item) {
       item.id === "client_context"
         ? "Informar cliente final/grupo"
         : item.id === "profile"
-          ? "Completar contexto"
+          ? "Completar classificação"
           : "Abrir dados do formulário",
     items: "Escolher formato e itens",
     notes: "Completar briefing",
@@ -4407,7 +4407,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
     { label: "Contato", ids: ["contact"], target: "client" },
-    { label: "Contexto comercial", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
+    { label: "Cliente e contexto", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },

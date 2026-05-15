@@ -16,7 +16,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#startManualProposalBtn").click();
     await expect(page.locator("#clientDataSection")).toBeVisible();
     await expect(page.locator("#manualAdjustment")).toHaveValue("0");
-    await expect(page.locator("#formSourcePanel")).toContainText("Contexto comercial da proposta");
+    await expect(page.locator("#formSourcePanel")).toContainText("Dados comerciais da proposta");
 
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
@@ -143,10 +143,11 @@ test.describe("Proposta manual no admin", () => {
     expect(reviewState.summary.ready).toBe(true);
     expect(reviewState.summary.errors).toBe(0);
     expect(reviewState.summary.optionalWarnings).toBeGreaterThan(0);
-    expect(reviewState.profile.label).toBe("Contexto comercial");
+    expect(reviewState.profile.label).toBe("Classificação comercial");
     expect(reviewState.profile.optional).toBe(true);
-    expect(reviewState.workflow.find((item) => item.label === "Contexto comercial").statusLabel).toBe("Sugestão");
+    expect(reviewState.workflow.find((item) => item.label === "Cliente e contexto").statusLabel).toBe("Sugestão");
     await expect(page.locator("#sendReviewPanel")).not.toContainText("Contexto comercial");
+    await expect(page.locator("#sendReviewPanel")).not.toContainText("Cliente e contexto");
     await expect(page.locator("#sendReviewPanel")).not.toContainText("Sugestão comercial");
     await expect(page.locator("#sendReviewPanel")).toContainText("Pronto para revisar");
     await expectNoBrowserErrors(errors);
