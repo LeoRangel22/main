@@ -110,7 +110,7 @@ test.describe("Proposta manual no admin", () => {
     await expectNoBrowserErrors(errors);
   });
 
-  test("contexto comercial recomendado aparece como sugestao, nao como erro", async ({ page }) => {
+  test("contexto comercial recomendado nao polui a coluna direita de envio", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     page.on("dialog", (dialog) => dialog.accept());
 
@@ -146,7 +146,9 @@ test.describe("Proposta manual no admin", () => {
     expect(reviewState.profile.label).toBe("Contexto comercial");
     expect(reviewState.profile.optional).toBe(true);
     expect(reviewState.workflow.find((item) => item.label === "Contexto comercial").statusLabel).toBe("Sugestão");
-    await expect(page.locator("#sendReviewPanel")).toContainText("Sugestão");
+    await expect(page.locator("#sendReviewPanel")).not.toContainText("Contexto comercial");
+    await expect(page.locator("#sendReviewPanel")).not.toContainText("Sugestão comercial");
+    await expect(page.locator("#sendReviewPanel")).toContainText("Pronto para revisar");
     await expectNoBrowserErrors(errors);
   });
 
