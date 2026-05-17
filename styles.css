@@ -8038,7 +8038,7 @@ input[type="range"] {
   gap: 4px;
 }
 
-.final-review-card span {
+.final-review-card > div:first-child span {
   color: var(--verde);
   font-size: 0.72rem;
   font-weight: 900;
@@ -8073,6 +8073,58 @@ input[type="range"] {
   min-height: 78px;
   padding: 12px;
   text-align: left;
+}
+
+.final-review-grid button.is-required {
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.92), rgba(255, 255, 255, 0.9));
+  border-color: rgba(238, 146, 14, 0.5);
+}
+
+.final-review-grid button.is-ok {
+  background: linear-gradient(135deg, rgba(232, 244, 236, 0.94), rgba(255, 255, 255, 0.9));
+  border-color: rgba(44, 113, 72, 0.24);
+}
+
+.final-review-grid button.is-optional {
+  background: linear-gradient(135deg, rgba(239, 244, 241, 0.96), rgba(255, 255, 255, 0.9));
+}
+
+.final-review-grid .final-review-status {
+  align-self: start;
+  background: rgba(238, 146, 14, 0.13);
+  border-radius: 999px;
+  color: var(--amarelo);
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 950;
+  justify-self: start;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 6px 8px;
+  text-transform: uppercase;
+}
+
+.final-review-grid .is-ok .final-review-status {
+  background: rgba(44, 113, 72, 0.12);
+  color: var(--verde);
+}
+
+.final-review-grid .is-required .final-review-status {
+  background: rgba(179, 48, 36, 0.1);
+  color: var(--danger);
+}
+
+.final-review-grid .is-optional .final-review-status {
+  background: rgba(24, 58, 45, 0.08);
+  color: var(--muted);
+}
+
+.final-review-grid .final-review-label {
+  color: var(--verde);
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .final-review-grid button:hover,
