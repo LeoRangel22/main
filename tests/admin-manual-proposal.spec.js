@@ -252,6 +252,85 @@ test.describe("Proposta manual no admin", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("proposta manual aceita preenchimento em ordem aleatoria sem perder dados", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+    const source = (field) => page.locator(`[data-source-field="${field}"]`);
+    const humanFill = async (locator, value) => {
+      await locator.click();
+      await locator.fill(value);
+    };
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await humanFill(source("observations"), "Observacao livre preenchida antes de tudo para testar persistencia.");
+    await humanFill(source("reason"), "Receber diretores internacionais com uma experiencia objetiva no Morro da Urca.");
+    await humanFill(source("preferences"), "Open bar, opcao vegetariana e cafe espresso ao final.");
+    await humanFill(source("extras"), "Som com microfone, TV e foto.");
+    await humanFill(page.locator("#guestCount"), "42");
+    await page.locator("#eventDuration").selectOption("2");
+    await source("clientType").selectOption({ index: 2 });
+    await humanFill(page.locator("#clientPhone"), "+55 21 99606-0692");
+    await humanFill(source("company"), "Agencia Modelo Ordem");
+    await page.locator("#eventTime").selectOption("18:00");
+    await source("origin").selectOption({ index: 2 });
+    await humanFill(page.locator("#clientName"), "Leonardo Rangel");
+    await humanFill(source("finalClient"), "Cliente Final Ordem");
+    await source("budgetRange").selectOption({ index: 3 });
+    await humanFill(page.locator("#clientEmail"), "leorangel@gmail.com");
+    await humanFill(source("groupName"), "Grupo Ordem Aleatoria");
+    await source("moment").selectOption({ index: 3 });
+    await humanFill(page.locator("#eventDate"), "2026-07-22");
+    await humanFill(source("occasion"), "Relacionamento com clientes");
+
+    await source("origin").selectOption({ index: 4 });
+    await source("moment").selectOption({ index: 4 });
+
+    await page.locator('[data-flow-event="cafe"]').click();
+    await expect(page.locator("#eventType")).toHaveValue(/Caf/i);
+    await expect(page.locator("#selectedItems")).toContainText(/Caf/i);
+
+    const state = await page.evaluate(() => {
+      const sourceData = window.getFormSourceData();
+      const review = window.getProposalReviewItems();
+      return {
+        sourceData,
+        sourceGaps: window.getFormSourceMissingItems(sourceData),
+        requiredErrors: review
+          .filter((item) => ["contact", "format", "date", "guests", "items", "value", "conditions"].includes(item.id) && item.status === "error")
+          .map((item) => item.id),
+        briefing: review.find((item) => item.id === "briefing"),
+        summary: window.getProposalReviewSummary(review),
+        snapshot: window.getProposalSnapshot(),
+      };
+    });
+
+    expect(state.sourceGaps, JSON.stringify(state.sourceGaps, null, 2)).toEqual([]);
+    expect(state.requiredErrors, JSON.stringify(state.requiredErrors, null, 2)).toEqual([]);
+    expect(state.summary.ready).toBe(true);
+    expect(state.briefing.status).toBe("ok");
+    expect(state.sourceData.company).toBe("Agencia Modelo Ordem");
+    expect(state.sourceData.finalClient).toBe("Cliente Final Ordem");
+    expect(state.sourceData.groupName).toBe("Grupo Ordem Aleatoria");
+    expect(state.sourceData.reason).toContain("diretores internacionais");
+    expect(state.sourceData.preferences).toContain("Open bar");
+    expect(state.sourceData.extras).toContain("Som com microfone");
+    expect(state.sourceData.observations).toContain("persistencia");
+    expect(state.snapshot.client.name).toBe("Leonardo Rangel");
+    expect(state.snapshot.client.email).toBe("leorangel@gmail.com");
+    expect(state.snapshot.event.guests).toBe(42);
+    expect(state.snapshot.event.reason).toContain("diretores internacionais");
+    expect(state.snapshot.event.preferences).toContain("Open bar");
+    expect(state.snapshot.event.extras).toContain("Som com microfone");
+    expect(state.snapshot.event.sourceNotes).toContain("persistencia");
+
+    await page.locator('#sendReviewPanel button[data-send-review-action="approve"]').first().click();
+    await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
+
+    await expectNoBrowserErrors(errors);
+  });
+
   test("proposta manual completa salva, aprova checklist e envia WhatsApp em QA", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     page.on("dialog", (dialog) => dialog.accept());

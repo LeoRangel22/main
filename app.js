@@ -3849,7 +3849,7 @@ function getCurrentSourceOverrides() {
   return key ? state.sourceOverrides[key] || {} : {};
 }
 
-function getLiveSourcePanelValues() {
+function collectLiveSourcePanelValues({ includeEmpty = false } = {}) {
   const key = getSourceOverrideKey();
   if (!key || !nodes.formSourcePanel || nodes.formSourcePanel.dataset.sourceKey !== key) return {};
   const values = {};
@@ -3857,9 +3857,24 @@ function getLiveSourcePanelValues() {
     const sourceField = field.dataset.sourceField;
     if (!sourceField || typeof field.value === "undefined") return;
     const value = String(field.value || "").trim();
-    if (value) values[sourceField] = value;
+    if (value || includeEmpty) values[sourceField] = value;
   });
   return values;
+}
+
+function getLiveSourcePanelValues() {
+  return collectLiveSourcePanelValues();
+}
+
+function persistLiveSourcePanelValues() {
+  const key = getSourceOverrideKey();
+  if (!key) return;
+  const liveValues = collectLiveSourcePanelValues();
+  if (!Object.keys(liveValues).length) return;
+  state.sourceOverrides[key] = {
+    ...(state.sourceOverrides[key] || {}),
+    ...liveValues,
+  };
 }
 
 function setCurrentSourceOverride(field, value) {
@@ -4093,6 +4108,7 @@ function renderSourceTextarea(field, label, value, placeholder) {
 
 function renderFormSourcePanel() {
   if (!nodes.formSourcePanel) return;
+  persistLiveSourcePanelValues();
   const data = getFormSourceData();
   if (!data.hasSource) {
     nodes.formSourcePanel.className = "form-source-panel is-hidden";
