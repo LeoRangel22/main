@@ -3570,7 +3570,8 @@ label.pipeline-status-control:focus-within select {
 }
 
 .form-source-edit-field input,
-.form-source-edit-field select {
+.form-source-edit-field select,
+.form-source-edit-field textarea {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(24, 58, 45, 0.18);
   border-radius: 8px;
@@ -3581,8 +3582,18 @@ label.pipeline-status-control:focus-within select {
   padding: 10px;
 }
 
+.form-source-edit-field textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.form-source-edit-field.is-wide {
+  grid-column: 1 / -1;
+}
+
 .form-source-edit-field input:focus,
-.form-source-edit-field select:focus {
+.form-source-edit-field select:focus,
+.form-source-edit-field textarea:focus {
   border-color: var(--verde);
   box-shadow: 0 0 0 3px rgba(24, 58, 45, 0.1);
   outline: none;
