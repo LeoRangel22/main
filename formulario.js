@@ -425,9 +425,9 @@ const copy = {
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos as informações apenas para preparar o atendimento e a proposta do seu evento.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
-      finalReviewEyebrow: "Antes de enviar",
-      finalReviewTitle: "Confira se está tudo certo",
-      finalReviewBody: "Revise o essencial. Se algo estiver errado, clique no bloco para voltar direto ao ponto.",
+      finalReviewEyebrow: "Revisão final",
+      finalReviewTitle: "Veja o que a equipe vai receber",
+      finalReviewBody: "Se estiver tudo certo, envie. Se quiser ajustar algo, toque em “Editar esta parte” no card correspondente.",
       submit: "Enviar solicitação de proposta",
       preferenceLegend: "O que não pode faltar?",
       extrasLegend: "Extras de produção",
@@ -602,9 +602,9 @@ const copy = {
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
       contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
-      finalReviewEyebrow: "Before sending",
-      finalReviewTitle: "Review your request",
-      finalReviewBody: "Review the essentials. If something is wrong, click the block to go straight back to that point.",
+      finalReviewEyebrow: "Final review",
+      finalReviewTitle: "See what our team will receive",
+      finalReviewBody: "If everything looks right, send it. To adjust anything, tap “Edit this part” on the matching card.",
       submit: "Send proposal request",
       preferenceLegend: "What cannot be missing?",
       extrasLegend: "Production extras",
@@ -981,73 +981,109 @@ function renderFinalReview() {
   if (!finalReviewGrid) return;
   const current = getCopy();
   const pendingLabel = uiState.language === "en" ? "To be defined" : "A definir";
+  const isEn = uiState.language === "en";
+  const reviewCopy = {
+    ok: isEn ? "All set" : "Tudo certo",
+    warning: isEn ? "Worth completing" : "Vale completar",
+    required: isEn ? "Needs completion" : "Precisa completar",
+    optional: isEn ? "Optional" : "Opcional",
+    edit: isEn ? "Edit this part" : "Editar esta parte",
+    formatMissing: isEn
+      ? "Our team can suggest the best format if you prefer."
+      : "A equipe pode sugerir o melhor formato, se você preferir.",
+    clientMissing: isEn ? "Who is organizing has not been selected yet" : "Quem organiza ainda não foi selecionado",
+    occasionMissing: isEn ? "occasion not selected yet" : "ocasião ainda não escolhida",
+    timeMissing: isEn ? "arrival time not selected yet" : "horário ainda não escolhido",
+    preferenceEmpty: isEn
+      ? "No must-have preference selected. That is fine if there is nothing essential."
+      : "Nenhuma preferência indispensável marcada. Tudo bem se não houver.",
+    contactMissing: isEn
+      ? "Please complete name, e-mail and Phone/WhatsApp so our team can reply."
+      : "Complete nome, e-mail e Celular/WhatsApp para a equipe retornar.",
+    contactFallback: current.labels.defaultStatus,
+  };
   const selectedPreferences = getSelectedPreferenceLabels();
   const selectedExtras = getSelectedExtraLabels();
   const preferenceSummary = [
     selectedPreferences.length
       ? selectedPreferences.join(", ")
-      : uiState.language === "en"
-        ? "No essential item selected"
-        : "Sem item obrigatório marcado",
-    selectedExtras.length ? `${uiState.language === "en" ? "Extras" : "Extras"}: ${selectedExtras.join(", ")}` : "",
+      : reviewCopy.preferenceEmpty,
+    selectedExtras.length ? `${isEn ? "Extras" : "Extras"}: ${selectedExtras.join(", ")}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
+  const contactParts = [
+    fields.name.value.trim(),
+    fields.company.value.trim(),
+    fields.endClientName.value.trim() ? `${isEn ? "Final client" : "Cliente final"}: ${fields.endClientName.value.trim()}` : "",
+    fields.groupName.value.trim() ? `${isEn ? "Group" : "Grupo"}: ${fields.groupName.value.trim()}` : "",
+    fields.email.value.trim(),
+    fields.phone.value.trim(),
+  ].filter(Boolean);
+  const contactReady = fields.name.value.trim() && fields.email.value.trim() && fields.phone.value.trim();
+  const dateReady = fields.date.value || fields.dateFlex.value.trim();
+  const timeReady = fields.time.value;
+  const clientTypeLabel = getClientTypeDisplayLabel();
+  const profileLabel = getSelectedProfileDisplayLabels().join(", ");
   const items = [
     {
-      label: uiState.language === "en" ? "Format" : "Formato",
-      value: fields.eventType.value || (uiState.language === "en" ? "To be suggested" : "A sugerir"),
+      label: isEn ? "Event format" : "Formato do evento",
+      value: fields.eventType.value || reviewCopy.formatMissing,
       step: "recommendation",
+      status: fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
+      state: fields.eventType.value ? "is-ok" : "is-warning",
     },
     {
-      label: uiState.language === "en" ? "Context" : "Contexto",
+      label: isEn ? "Who and occasion" : "Quem organiza e ocasião",
       value: [
-        getClientTypeDisplayLabel() || (uiState.language === "en" ? "client type pending" : "tipo de cliente pendente"),
-        getSelectedProfileDisplayLabels().join(", ") || (uiState.language === "en" ? "occasion pending" : "ocasião pendente"),
+        clientTypeLabel || reviewCopy.clientMissing,
+        profileLabel || reviewCopy.occasionMissing,
       ].join(" · "),
       step: "profile",
+      status: clientTypeLabel && profileLabel ? reviewCopy.ok : reviewCopy.required,
+      state: clientTypeLabel && profileLabel ? "is-ok" : "is-required",
     },
     {
-      label: uiState.language === "en" ? "Date and arrival" : "Data e chegada",
+      label: isEn ? "Date and arrival" : "Data e chegada",
       value: [
         formatReviewDate(fields.date.value) || fields.dateFlex.value.trim() || pendingLabel,
-        fields.time.value || (uiState.language === "en" ? "time pending" : "horário pendente"),
+        fields.time.value || reviewCopy.timeMissing,
       ].join(" · "),
       step: "eventDetails",
+      status: dateReady && timeReady ? reviewCopy.ok : reviewCopy.required,
+      state: dateReady && timeReady ? "is-ok" : "is-required",
     },
     {
-      label: uiState.language === "en" ? "Group" : "Grupo",
-      value: `${fields.guests.value || 30} ${uiState.language === "en" ? "guests" : "pessoas"} · ${getSelectedDurationLabel()}`,
+      label: isEn ? "Guests and duration" : "Convidados e duração",
+      value: `${fields.guests.value || 30} ${isEn ? "guests" : "pessoas"} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
+      status: reviewCopy.ok,
+      state: "is-ok",
     },
     {
-      label: uiState.language === "en" ? "Preferences" : "Preferências",
+      label: isEn ? "Preferences" : "Preferências",
       value: preferenceSummary,
       step: "briefing",
+      status: selectedPreferences.length || selectedExtras.length ? reviewCopy.ok : reviewCopy.optional,
+      state: selectedPreferences.length || selectedExtras.length ? "is-ok" : "is-optional",
     },
     {
-      label: uiState.language === "en" ? "Contact" : "Contato",
-      value:
-        [
-          fields.name.value.trim(),
-          fields.company.value.trim(),
-          fields.endClientName.value.trim() ? `${uiState.language === "en" ? "Final client" : "Cliente final"}: ${fields.endClientName.value.trim()}` : "",
-          fields.groupName.value.trim() ? `${uiState.language === "en" ? "Group" : "Grupo"}: ${fields.groupName.value.trim()}` : "",
-          fields.email.value.trim(),
-          fields.phone.value.trim(),
-        ].filter(Boolean).join(" · ") ||
-        current.labels.defaultStatus,
+      label: isEn ? "Team reply" : "Retorno da equipe",
+      value: contactReady ? contactParts.join(" · ") : [contactParts.join(" · "), reviewCopy.contactMissing].filter(Boolean).join(" · "),
       step: "contact",
+      status: contactReady ? reviewCopy.ok : reviewCopy.required,
+      state: contactReady ? "is-ok" : "is-required",
     },
   ];
 
   finalReviewGrid.innerHTML = items
     .map(
       (item) => `
-        <button type="button" data-review-step="${item.step}">
-          <span>${item.label}</span>
+        <button type="button" class="final-review-item ${item.state}" data-review-step="${item.step}" aria-label="${escapeHtml(`${item.label}: ${item.value}. ${reviewCopy.edit}`)}">
+          <span class="final-review-status">${item.status}</span>
+          <span class="final-review-label">${item.label}</span>
           <strong>${escapeHtml(item.value)}</strong>
-          <small>${uiState.language === "en" ? "Edit" : "Editar"}</small>
+          <small>${reviewCopy.edit}</small>
         </button>
       `,
     )
