@@ -77,6 +77,12 @@ test.describe("Proposta manual no admin", () => {
     );
     expect(initialReview).toEqual(expect.arrayContaining(["contact", "format", "date", "items", "value"]));
 
+    await page.locator("#manualAdjustment").fill("1");
+    const afterAdjustmentOnly = await page.evaluate(() =>
+      window.getProposalReviewItems().filter((item) => item.status === "error").map((item) => item.id),
+    );
+    expect(afterAdjustmentOnly).toEqual(expect.arrayContaining(["contact", "format", "date", "items", "value"]));
+
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
     await page.locator("#clientPhone").fill("+55 21 99999-0000");
@@ -193,6 +199,55 @@ test.describe("Proposta manual no admin", () => {
     expect(reviewState.selectedNames).toEqual(expect.arrayContaining(["Welcome Drink Caipirinha", "Workshop de Caipirinha (PT)"]));
     expect(reviewState.itemReview.status).not.toBe("error");
     expect(reviewState.summary.ready).toBe(true);
+
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("proposta nova espelha briefing do formulario em campos proprios no admin", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await expect(page.locator('[data-source-field="reason"]')).toBeVisible();
+    await expect(page.locator('[data-source-field="preferences"]')).toBeVisible();
+    await expect(page.locator('[data-source-field="extras"]')).toBeVisible();
+    await expect(page.locator('[data-source-field="observations"]')).toBeVisible();
+
+    await page.locator('[data-source-field="clientType"]').selectOption("Empresa");
+    await page.locator('[data-source-field="company"]').fill("Agencia Modelo");
+    await page.locator('[data-source-field="budgetRange"]').selectOption("R$ 15 mil a R$ 30 mil");
+    await page.locator('[data-source-field="origin"]').selectOption({ index: 1 });
+    await page.locator('[data-source-field="moment"]').selectOption({ index: 3 });
+    await page.locator('[data-source-field="occasion"]').fill("Relacionamento com clientes");
+    await page.locator('[data-source-field="reason"]').fill("Receber parceiros estratégicos com vista e serviço ágil.");
+    await page.locator('[data-source-field="preferences"]').fill("Open bar, opções vegetarianas e café ao final.");
+    await page.locator('[data-source-field="extras"]').fill("Som ambiente e foto.");
+    await page.locator('[data-source-field="observations"]').fill("Grupo chega aos poucos e precisa de recepção simples.");
+
+    const mirrored = await page.evaluate(() => ({
+      source: window.getFormSourceData(),
+      sourceGaps: window.getFormSourceMissingItems(window.getFormSourceData()),
+      briefing: window.getProposalReviewItems().find((item) => item.id === "briefing"),
+      requiredErrors: window
+        .getProposalReviewItems()
+        .filter((item) => ["contact", "format", "date", "items", "value"].includes(item.id) && item.status === "error")
+        .map((item) => item.id),
+      snapshot: window.getProposalSnapshot(),
+    }));
+
+    expect(mirrored.sourceGaps).toEqual([]);
+    expect(mirrored.source.reason).toContain("Receber parceiros");
+    expect(mirrored.source.preferences).toContain("Open bar");
+    expect(mirrored.source.extras).toContain("Som ambiente");
+    expect(mirrored.source.observations).toContain("Grupo chega");
+    expect(mirrored.briefing.status).toBe("ok");
+    expect(mirrored.requiredErrors).toEqual(expect.arrayContaining(["contact", "format", "date", "items", "value"]));
+    expect(mirrored.snapshot.event.reason).toContain("Receber parceiros");
+    expect(mirrored.snapshot.event.preferences).toContain("Open bar");
+    expect(mirrored.snapshot.event.extras).toContain("Som ambiente");
+    expect(mirrored.snapshot.event.sourceNotes).toContain("Grupo chega");
 
     await expectNoBrowserErrors(errors);
   });

@@ -3336,7 +3336,13 @@ function getProposalReviewItems() {
     !selected.some((item) => allowedCategories.includes(item.tipoEvento));
   const missingBaseCategory = requiredCategory && selected.length > 0 && !selected.some((item) => item.tipoEvento === requiredCategory);
   const minimumWarnings = selected.filter((item) => guests < (toNumber(item.minimo) || 0));
-  const hasNotes = fields.notes.value.trim() || fields.eventReason.value.trim();
+  const hasNotes =
+    fields.notes.value.trim() ||
+    fields.eventReason.value.trim() ||
+    sourceData.reason ||
+    sourceData.preferences ||
+    sourceData.extras ||
+    sourceData.observations;
   const contactReview = getContactReviewState(contact);
 
   return [
@@ -3431,8 +3437,11 @@ function getProposalReviewItems() {
     {
       id: "value",
       label: "Valor final",
-      status: totals.total > 0 ? "ok" : "error",
-      detail: totals.total > 0 ? `${formatMoney(totals.total)} · sinal em ${formatSignalDeadlineHours()} · validade ${fields.validity.value || "a definir"}.` : "Monte os itens para calcular o total.",
+      status: selected.length && totals.total > 0 ? "ok" : "error",
+      detail:
+        selected.length && totals.total > 0
+          ? `${formatMoney(totals.total)} · sinal em ${formatSignalDeadlineHours()} · validade ${fields.validity.value || "a definir"}.`
+          : "Monte os itens para calcular o total.",
       target: "items",
     },
     {
@@ -3657,6 +3666,10 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     groupName: sourceData.groupName,
     moment: sourceData.moment,
     occasion: sourceData.occasion,
+    sourceReason: sourceData.reason,
+    sourcePreferences: sourceData.preferences,
+    sourceExtras: sourceData.extras,
+    sourceObservations: sourceData.observations,
     eventType: getCurrentEventType(),
     date: fields.eventDate.value,
     time: fields.eventTime.value,
@@ -3836,6 +3849,19 @@ function getCurrentSourceOverrides() {
   return key ? state.sourceOverrides[key] || {} : {};
 }
 
+function getLiveSourcePanelValues() {
+  const key = getSourceOverrideKey();
+  if (!key || !nodes.formSourcePanel || nodes.formSourcePanel.dataset.sourceKey !== key) return {};
+  const values = {};
+  nodes.formSourcePanel.querySelectorAll("[data-source-field]").forEach((field) => {
+    const sourceField = field.dataset.sourceField;
+    if (!sourceField || typeof field.value === "undefined") return;
+    const value = String(field.value || "").trim();
+    if (value) values[sourceField] = value;
+  });
+  return values;
+}
+
 function setCurrentSourceOverride(field, value) {
   const key = getSourceOverrideKey();
   if (!key || !field) return;
@@ -3939,7 +3965,10 @@ function getFormSourceData() {
     proposalSnapshot.event?.notes,
     proposalSnapshot.event?.sourceNotes,
   );
-  const overrides = getCurrentSourceOverrides();
+  const overrides = {
+    ...getCurrentSourceOverrides(),
+    ...getLiveSourcePanelValues(),
+  };
   const isManualDraft = Boolean(state.manualSourceKey && !state.activeProposalId && !state.activeQuoteRequestId);
   const qualification = {
     ...(snapshot.qualificacao || snapshot.qualification || {}),
@@ -3989,10 +4018,10 @@ function getFormSourceData() {
     arrivalTime: normalizeSourceValue(event.horario || event.time || parsed.arrivalTime),
     guests: normalizeSourceValue(event.convidados || event.guests || request?.convidados || parsed.guests),
     duration: normalizeSourceValue(event.duracaoTexto || event.durationLabel || (event.duracao ? `${event.duracao}h` : "") || parsed.duration),
-    extras: normalizeSourceValue(event.extras || parsed.extras),
-    preferences: normalizeSourceValue(request?.preferencias || event.preferencias || event.preferences || parsed.preferences),
-    observations: cleanClientObservationText(request, snapshot),
-    reason: normalizeSourceValue(request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value || parsed.reason),
+    extras: normalizeSourceValue(overrides.extras || event.extras || parsed.extras),
+    preferences: normalizeSourceValue(overrides.preferences || request?.preferencias || event.preferencias || event.preferences || parsed.preferences),
+    observations: normalizeSourceValue(overrides.observations || cleanClientObservationText(request, snapshot)),
+    reason: normalizeSourceValue(overrides.reason || request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value || parsed.reason),
   };
 }
 
@@ -4044,11 +4073,20 @@ function renderSourceSelect(field, label, value, options, placeholder = "Selecio
   `;
 }
 
-function renderSourceInput(field, label, value, placeholder) {
+function renderSourceInput(field, label, value, placeholder, { wide = false } = {}) {
   return `
-    <label class="form-source-edit-field">
+    <label class="form-source-edit-field ${wide ? "is-wide" : ""}">
       <span>${escapeHtml(label)}</span>
       <input data-source-field="${escapeHtml(field)}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(placeholder)}" />
+    </label>
+  `;
+}
+
+function renderSourceTextarea(field, label, value, placeholder) {
+  return `
+    <label class="form-source-edit-field is-wide">
+      <span>${escapeHtml(label)}</span>
+      <textarea data-source-field="${escapeHtml(field)}" rows="3" placeholder="${escapeHtml(placeholder)}">${escapeHtml(value || "")}</textarea>
     </label>
   `;
 }
@@ -4059,6 +4097,7 @@ function renderFormSourcePanel() {
   if (!data.hasSource) {
     nodes.formSourcePanel.className = "form-source-panel is-hidden";
     nodes.formSourcePanel.innerHTML = "";
+    delete nodes.formSourcePanel.dataset.sourceKey;
     return;
   }
 
@@ -4082,6 +4121,7 @@ function renderFormSourcePanel() {
     : "Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.";
 
   nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
+  nodes.formSourcePanel.dataset.sourceKey = getSourceOverrideKey();
   nodes.formSourcePanel.innerHTML = `
     <div class="form-source-head">
       <div>
@@ -4112,6 +4152,10 @@ function renderFormSourcePanel() {
         ${renderSourceSelect("origin", "Como chegou até nós", data.origin, sourceOriginOptions)}
         ${renderSourceSelect("moment", "Momento desejado", data.moment, sourceMomentOptions)}
         ${renderSourceInput("occasion", "Ocasião / objetivo", data.occasion, "Ex.: reunião corporativa, incentivo, lançamento")}
+        ${renderSourceInput("reason", "Motivo do evento", data.reason, "Ex.: receber clientes, comemoração, incentivo, lançamento", { wide: true })}
+        ${renderSourceInput("preferences", "Preferências de alimentos e bebidas", data.preferences, "Ex.: open bar, restrições, menu degustação", { wide: true })}
+        ${renderSourceInput("extras", "Extras de produção", data.extras, "Ex.: DJ, foto, som com microfone, decoração", { wide: true })}
+        ${renderSourceTextarea("observations", "Observação livre do cliente", data.observations, "Detalhes importantes, acessibilidade, pedido especial, montagem...")}
       </div>
     </div>
     <div class="form-source-grid">
@@ -4167,8 +4211,15 @@ function handleFormSourceFieldInput(event, { includeSourcePanel = false } = {}) 
   refreshReviewSurfaces({ includeSourcePanel });
 }
 
+function captureFormSourceFieldValue(event) {
+  const field = event.target.closest?.("[data-source-field]");
+  if (!field || !nodes.formSourcePanel?.contains(field)) return;
+  setCurrentSourceOverride(field.dataset.sourceField, field.value);
+}
+
 function handleFormSourceFieldChange(event) {
-  handleFormSourceFieldInput(event, { includeSourcePanel: true });
+  const field = event.target.closest("[data-source-field]");
+  handleFormSourceFieldInput(event, { includeSourcePanel: field?.tagName === "SELECT" });
 }
 
 function getLeadReadinessItems() {
@@ -5921,7 +5972,8 @@ function buildProposalText() {
   const clientName = fields.clientName.value.trim() || "Cliente";
   const eventType = getCurrentEventType() || "Evento";
   const totals = getQuoteTotals();
-  const reason = fields.eventReason.value.trim();
+  const sourceData = getFormSourceData();
+  const reason = fields.eventReason.value.trim() || sourceData.reason;
   const lines = [
     `Proposta de evento - Embaixada Carioca`,
     ``,
@@ -5991,6 +6043,10 @@ function getProposalSnapshot() {
     ...(sourceData.budgetRange ? { faixaInvestimento: sourceData.budgetRange } : {}),
     ...(sourceData.moment ? { momento: sourceData.moment } : {}),
     ...(sourceData.occasion ? { ocasiao: sourceData.occasion } : {}),
+    ...(sourceData.reason ? { motivo: sourceData.reason } : {}),
+    ...(sourceData.preferences ? { preferencias: sourceData.preferences } : {}),
+    ...(sourceData.extras ? { extras: sourceData.extras } : {}),
+    ...(sourceData.observations ? { observacoes: sourceData.observations } : {}),
   };
   const reviewApproval =
     isSendReviewApproved(reviewItems) && state.sendReviewApproval?.signature === state.sendReviewApprovedSignature
@@ -6024,8 +6080,11 @@ function getProposalSnapshot() {
       signalDeadlineAt,
       manualAdjustment: getManualAdjustment(),
       manualAdjustmentLabel: fields.manualAdjustmentLabel.value.trim(),
-      reason: fields.eventReason.value.trim(),
+      reason: fields.eventReason.value.trim() || sourceData.reason,
       notes: fields.notes.value.trim(),
+      preferences: sourceData.preferences,
+      extras: sourceData.extras,
+      sourceNotes: sourceData.observations,
     },
     totals: {
       subtotal: roundCurrency(totals.subtotal),
@@ -10482,8 +10541,9 @@ function formatSavedAt(value) {
 function renderProposal() {
   if (!nodes.proposalContent) return;
   const selected = getSelectedItems();
+  const sourceData = getFormSourceData();
   const notes = fields.notes.value.trim();
-  const reason = fields.eventReason.value.trim();
+  const reason = fields.eventReason.value.trim() || sourceData.reason;
   const terms = fields.generalTerms.value.trim();
   const totals = getQuoteTotals();
   const repeatedHeader = `
@@ -11577,6 +11637,8 @@ function bindEvents() {
   });
   nodes.formSourcePanel?.addEventListener("input", handleFormSourceFieldInput);
   nodes.formSourcePanel?.addEventListener("change", handleFormSourceFieldChange);
+  document.addEventListener("input", captureFormSourceFieldValue, true);
+  document.addEventListener("change", captureFormSourceFieldValue, true);
   nodes.leadReviewPanel?.addEventListener("click", (event) => {
     const upsellButton = event.target.closest("button[data-upsell-add]");
     if (upsellButton) {
