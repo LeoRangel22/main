@@ -384,6 +384,69 @@ test.describe("Proposta manual no admin", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("proposta manual aprovada pede confirmacao e envia e-mail em QA", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    const dialogs = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.accept();
+    });
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await page.locator("#clientName").fill("Leonardo Rangel");
+    await page.locator("#clientEmail").fill("leorangel@gmail.com");
+    await page.locator("#clientPhone").fill("+55 21 99606-0692");
+    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventTime").selectOption("09:00");
+    await page.locator("#guestCount").fill("30");
+    await page.locator("#eventDuration").selectOption("1");
+    await page.locator("#manualAdjustment").fill("0");
+    await page.locator("#eventReason").fill("Teste completo de envio da proposta por e-mail pelo fluxo QA.");
+    await page.locator('[data-source-field="clientType"]').selectOption("Empresa");
+    await page.locator('[data-source-field="company"]').fill("Embaixada Carioca");
+    await page.locator('[data-source-field="finalClient"]').fill("Leonardo Rangel");
+    await page.locator('[data-source-field="budgetRange"]').selectOption("R$ 15 mil a R$ 30 mil");
+    await page.locator('[data-source-field="origin"]').selectOption("Indicação");
+    await page.locator('[data-source-field="moment"]').selectOption("Manhã em dia de semana");
+    await page.locator('[data-source-field="occasion"]').fill("Teste interno de e-mail");
+
+    await page.locator('[data-flow-event="cafe"]').click();
+    await expect(page.locator("#selectedItems")).toContainText(/Caf/i);
+
+    const beforeApproval = await page.evaluate(() => ({
+      summary: window.getProposalReviewSummary(),
+      errors: window.getProposalReviewItems().filter((item) => item.status === "error"),
+      sourceGaps: window.getFormSourceMissingItems(window.getFormSourceData()),
+    }));
+    expect(beforeApproval.summary.ready, JSON.stringify(beforeApproval, null, 2)).toBe(true);
+    expect(beforeApproval.errors, JSON.stringify(beforeApproval.errors, null, 2)).toEqual([]);
+    expect(beforeApproval.sourceGaps, JSON.stringify(beforeApproval.sourceGaps, null, 2)).toEqual([]);
+
+    await page.locator('#sendReviewPanel button[data-send-review-action="approve"]').first().click();
+    await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
+    const channelActions = page.locator("#sendReviewPanel .send-review-channel-actions");
+    await expect(channelActions.locator('button[data-send-review-action="whatsapp"]')).toBeVisible();
+    await expect(channelActions.locator('button[data-send-review-action="email"]')).toBeVisible();
+
+    await channelActions.locator('button[data-send-review-action="email"]').click();
+
+    expect(dialogs.length).toBeGreaterThan(0);
+    expect(dialogs.join("\n")).toContain("Canal: E-mail");
+    expect(dialogs.join("\n")).toContain("leorangel@gmail.com");
+    await expect(page.locator("#integrationLogList")).toContainText(/E-mail/i);
+    await expect(page.locator("#integrationLogList")).toContainText(/Enviado/i);
+    await expect(page.locator("#integrationLogList")).toContainText(/leorangel@gmail\.com/i);
+
+    const activeProposal = await page.evaluate(() => window.getDebugProposalState());
+    expect(activeProposal.activeProposalId).toBeTruthy();
+    expect(activeProposal.activeProposal?.public_token).toBeTruthy();
+    expect(activeProposal.activeProposal?.cliente_email).toBe("leorangel@gmail.com");
+
+    await expectNoBrowserErrors(errors);
+  });
+
   test("horario da proposta usa selecao clara de 30 em 30 minutos", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
