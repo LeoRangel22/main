@@ -9280,6 +9280,7 @@ function renderPipelineValueBreakdown(item = {}, className = "") {
   if (!breakdown) return "";
   return `
     <div class="pipeline-value-breakdown ${escapeHtml(className)}" aria-label="Composição do valor da proposta">
+      ${item.type ? `<span class="pipeline-product-chip" title="Formato do evento">${escapeHtml(item.type)}</span>` : ""}
       <span title="Alimentos e bebidas">A&amp;B ${formatMoney(breakdown.foodBeverage)}</span>
       <span class="${breakdown.privatization > 0 ? "has-privatization" : ""}" title="Privatização">Priv. ${formatMoney(breakdown.privatization)}</span>
     </div>
@@ -9394,7 +9395,6 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
         <span class="pipeline-card-value-stack">
           <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
-          ${item.type ? `<small class="pipeline-card-value-type">${escapeHtml(item.type)}</small>` : ""}
         </span>
       </div>
       ${renderPipelineValueBreakdown(item)}
