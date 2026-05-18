@@ -99,9 +99,13 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
     await expect(proposalCard).toBeVisible();
+    await expect(proposalCard.locator(".pipeline-stage-chip")).toContainText("Café da Manhã / Brunch");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("A&B");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Priv.");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("R$ 3.057,60");
+    await expect(proposalCard.locator(".pipeline-card-final-client")).toContainText("Cliente final: Grupo Andes");
+    await expect(proposalCard.locator(".pipeline-card-next-action [data-mark-paid]")).toBeVisible();
+    await expect(proposalCard.locator(".pipeline-card-kicker [data-mark-paid]")).toHaveCount(0);
     await expectNoBrowserErrors(errors);
   });
 

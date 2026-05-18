@@ -9287,6 +9287,7 @@ function renderPipelineValueBreakdown(item = {}, className = "") {
 }
 
 function renderPipelineCard(item) {
+  const status = getReportStatus(item);
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
@@ -9307,18 +9308,13 @@ function renderPipelineCard(item) {
   const followUpBadge = followUp
     ? `<small class="follow-up-badge follow-up-${escapeHtml(followUp.level)}">${escapeHtml(followUp.label)}</small>`
     : "";
+  const stageChipLabel = status === "proposta_enviada" && item.type ? item.type : getProposalStatusLabel(item.status);
+  const showTypeLine = !(status === "proposta_enviada" && item.type);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
   const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} · ${commercialScore.value}</small>`;
   const primaryAction = getPipelinePrimaryAction(item);
-  const primaryActionLine = `
-    <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}">
-      <span>${escapeHtml(primaryAction.eyebrow)}</span>
-      <strong>${escapeHtml(primaryAction.label)}</strong>
-      <small>${escapeHtml(primaryAction.note || "")}</small>
-    </div>
-  `;
   const riskAlerts = getPipelineRiskAlerts(item);
   const riskAlertsLine = riskAlerts.length
     ? `<div class="pipeline-card-alerts">${riskAlerts
@@ -9338,11 +9334,20 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
+  const primaryActionButton = signalButton ? `<span class="pipeline-next-action-button">${signalButton}</span>` : "";
+  const primaryActionLine = `
+    <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}">
+      <span>${escapeHtml(primaryAction.eyebrow)}</span>
+      <strong>${escapeHtml(primaryAction.label)}</strong>
+      <small>${escapeHtml(primaryAction.note || "")}</small>
+      ${primaryActionButton}
+    </div>
+  `;
   const remainingButton =
     item.kind === "proposal" && item.status === "pagamento_final" && !item.hasPaymentComplete
       ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}" title="Registrar pagamento restante">Registrar saldo</button>`
       : "";
-  const topAction = remainingButton || remainingProofLink || signalProofLink || signalButton;
+  const topAction = remainingButton || remainingProofLink || signalProofLink;
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
@@ -9378,7 +9383,7 @@ function renderPipelineCard(item) {
       data-pipeline-card-status="${escapeHtml(item.status)}"
     >
       <div class="pipeline-card-kicker">
-        <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(getProposalStatusLabel(item.status))}</span>
+        <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
         <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
         ${leadAgeBadge}
         ${followUpBadge}
@@ -9392,8 +9397,8 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-name-row">
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
-      <small class="pipeline-card-type">${escapeHtml(item.type)}</small>
       ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
+      ${showTypeLine ? `<small class="pipeline-card-type">${escapeHtml(item.type)}</small>` : ""}
       ${riskAlertsLine}
       ${primaryActionLine}
       ${clientResponseLine}
