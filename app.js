@@ -7676,8 +7676,15 @@ function getProposalFollowUpInfo(item) {
   const hours = getHoursSince(item.updatedAt || item.createdAt);
   if (hours < 24) return null;
   const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
-  const label = hours >= 72 ? `Follow-up urgente · ${hours}h` : hours >= 48 ? `Follow-up atrasado · ${hours}h` : `Follow-up hoje · ${hours}h`;
-  return { label, level };
+  const label = `Sem retorno há ${hours}h`;
+  const actionLabel = hours >= 72 ? "Retomar contato agora" : hours >= 48 ? "Retomar contato hoje" : "Checar retorno hoje";
+  const note =
+    hours >= 72
+      ? "Reenvie o link ou ligue para destravar a decisão."
+      : hours >= 48
+        ? "A proposta esfriou. Vale uma abordagem curta e objetiva."
+        : "Cliente ainda não respondeu. Faça um toque leve.";
+  return { label, level, actionLabel, note };
 }
 
 function getPipelinePrimaryAction(item) {
@@ -7698,9 +7705,9 @@ function getPipelinePrimaryAction(item) {
     }
     return {
       tone: followUp?.level || "fresh",
-      eyebrow: "Próxima ação",
-      label: followUp ? "Fazer follow-up" : "Aguardar retorno",
-      note: followUp ? "Retomar enquanto a proposta ainda está quente." : "Monitorar retorno ou visualização do cliente.",
+      eyebrow: followUp ? "Retorno pendente" : "Próxima ação",
+      label: followUp?.actionLabel || "Aguardar retorno",
+      note: followUp?.note || "Monitorar retorno ou visualização do cliente.",
     };
   }
   if (status === "negociacao") {
@@ -7744,7 +7751,7 @@ function getPipelineRiskAlerts(item) {
     alerts.push({ level: age.level, label: age.level === "critical" ? "Lead 48h+" : age.level === "danger" ? "Lead 24h+" : "Lead 12h+" });
   }
   if (followUp) {
-    alerts.push({ level: followUp.level, label: followUp.level === "critical" ? "Follow-up 72h+" : followUp.level === "danger" ? "Follow-up 48h+" : "Follow-up hoje" });
+    alerts.push({ level: followUp.level, label: followUp.level === "critical" ? "Sem retorno 72h+" : followUp.level === "danger" ? "Sem retorno 48h+" : "Sem retorno 24h+" });
   }
   if (item.clientResponse === "confirmar") {
     alerts.push({ level: "success", label: "Cliente aprovou" });
@@ -7793,7 +7800,7 @@ function getSlaMeta(item) {
     const nextLimit = hours < 24 ? "24h" : hours < 48 ? "48h" : hours < 72 ? "72h" : "estourado";
     const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : hours >= 24 ? "warning" : "fresh";
     return {
-      label: `Sem retorno: ${hours || "<1"}h · follow-up ${nextLimit}`,
+      label: `Sem retorno há ${hours || "<1"}h · limite ${nextLimit}`,
       level,
     };
   }
@@ -8572,8 +8579,8 @@ function getActionTasks(items = getPipelineItems()) {
       const followUp = getProposalFollowUpInfo(item);
       tasks.push({
         ...base,
-        title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Follow-up da proposta",
-        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : followUp?.label || `Sem resposta há ${hours || 0}h`,
+        title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Retomar proposta",
+        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : followUp?.note || `Sem resposta há ${hours || 0}h.`,
         priority: item.clientResponse === "confirmar" ? 92 : hours >= 72 ? 90 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
         track: item.clientResponse === "confirmar" ? "Venda" : "Comercial",
       });
