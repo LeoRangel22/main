@@ -104,4 +104,17 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("R$ 3.057,60");
     await expectNoBrowserErrors(errors);
   });
+
+  test("card sem resposta mostra retorno pendente sem repetir follow-up", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+    await expect(proposalCard).toBeVisible();
+    await expect(proposalCard.locator(".follow-up-badge")).toContainText(/Sem retorno há/i);
+    await expect(proposalCard.locator(".pipeline-card-next-action")).toContainText(/Retomar contato|Checar retorno/i);
+    await expect(proposalCard.locator(".pipeline-card-next-action")).not.toContainText(/follow-up/i);
+    await expect(proposalCard.locator(".pipeline-card-alerts")).not.toContainText(/follow-up/i);
+    await expectNoBrowserErrors(errors);
+  });
 });
