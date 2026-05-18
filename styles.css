@@ -2630,6 +2630,16 @@ textarea[aria-invalid="true"] {
   line-height: 1.15;
 }
 
+.pipeline-next-action-button {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.pipeline-next-action-button .pipeline-signal-action {
+  margin-left: auto;
+}
+
 .pipeline-card-next-action.is-warning,
 .pipeline-card-next-action.is-warm,
 .pipeline-card-next-action.is-attention {
