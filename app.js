@@ -3738,7 +3738,7 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems(), 
     };
   }
   const hasPhone = Boolean(fields.clientPhone.value.trim().replace(/\D/g, ""));
-  const hasEmail = Boolean(fields.clientEmail.value.trim());
+  const hasEmail = isLikelyEmailAddress(fields.clientEmail.value.trim());
   if (hasPhone) {
     return {
       action: "whatsapp",
@@ -3751,7 +3751,7 @@ function getSendReviewPrimaryCommand(summary, items = getProposalReviewItems(), 
     return {
       action: "email",
       label: "Enviar por e-mail",
-      detail: "Abre o e-mail revisado com link seguro da proposta.",
+      detail: "Envia o link seguro pelo ZeptoMail e registra no histórico.",
       target: "client",
     };
   }
@@ -5741,6 +5741,24 @@ function renderSendReview() {
     fields.eventTime.value || "Horário a definir",
     `${getGuestCount()} pax`,
   ].join(" · ");
+  const hasReviewPhone = Boolean(fields.clientPhone.value.trim().replace(/\D/g, ""));
+  const hasReviewEmail = isLikelyEmailAddress(fields.clientEmail.value.trim());
+  const channelActionButtons =
+    summary.ready && approved
+      ? `
+    <div class="send-review-channel-actions" aria-label="Canais de envio da proposta">
+      ${
+        hasReviewPhone
+          ? `<button class="primary" type="button" data-send-review-action="whatsapp">Enviar por WhatsApp</button>`
+          : ""
+      }
+      ${
+        hasReviewEmail
+          ? `<button class="secondary" type="button" data-send-review-action="email">Enviar por e-mail</button>`
+          : ""
+      }
+    </div>`
+      : "";
   const title = summary.ready ? (approved ? "Revisão aprovada" : "Pronto para revisar") : "Revise antes de enviar";
   const note = summary.ready
     ? approved
@@ -5769,6 +5787,7 @@ function renderSendReview() {
       </div>
       <small>${escapeHtml(note)}</small>
     </div>
+    ${channelActionButtons}
     <div class="review-command-center is-${escapeHtml(guide.tone)}">
       <div class="review-command-copy">
         <span>${escapeHtml(guide.eyebrow)}</span>
@@ -11147,6 +11166,12 @@ async function openEmail() {
   const email = fields.clientEmail.value.trim();
   if (!email) {
     showToast("Preencha o e-mail do cliente para enviar a proposta.");
+    fields.clientEmail?.focus?.();
+    return;
+  }
+  if (!isLikelyEmailAddress(email)) {
+    showToast("Confira o e-mail do cliente antes de enviar.");
+    fields.clientEmail?.focus?.();
     return;
   }
   if (!ensureProposalReadyForSending()) return;
@@ -11168,7 +11193,17 @@ async function openEmail() {
     return;
   }
   const share = await ensureProposalForSharing();
-  if (!share?.saved || !share?.url) return;
+  if (!share?.saved || !share?.url) {
+    createIntegrationLog({
+      channel: "email",
+      status: "error",
+      title: "Proposta comercial",
+      detail: "E-mail não enviado: não foi possível gerar o link seguro da proposta.",
+      target: email,
+    });
+    showToast("E-mail não enviado: não consegui gerar o link seguro da proposta.");
+    return;
+  }
   await sendProposalEmailViaZepto({
     proposal: share.saved,
     proposalUrl: share.url,
@@ -11500,7 +11535,6 @@ function bindEvents() {
   });
 
   document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
-  document.querySelector("#emailBtn")?.addEventListener("click", openEmail);
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
   nodes.openNextPriorityBtn?.addEventListener("click", () => openNextPriorityItem());
@@ -11515,7 +11549,19 @@ function bindEvents() {
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
-  document.querySelector("#whatsappBtn")?.addEventListener("click", openWhatsApp);
+  document.addEventListener("click", (event) => {
+    const emailButton = event.target.closest?.("#emailBtn");
+    if (emailButton) {
+      event.preventDefault();
+      openEmail();
+      return;
+    }
+    const whatsappButton = event.target.closest?.("#whatsappBtn");
+    if (whatsappButton) {
+      event.preventDefault();
+      openWhatsApp();
+    }
+  });
   document.querySelector("#resetPricesBtn")?.addEventListener("click", resetPrices);
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
   document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);
@@ -11674,6 +11720,7 @@ function bindEvents() {
   nodes.sendReviewPanel?.addEventListener("click", (event) => {
     const actionButton = event.target.closest("button[data-send-review-action]");
     if (actionButton) {
+      event.preventDefault();
       const action = actionButton.dataset.sendReviewAction;
       if (action === "whatsapp") {
         openWhatsApp();
