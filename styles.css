@@ -5990,6 +5990,32 @@ textarea {
   text-align: right;
 }
 
+.send-review-channel-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.send-review-channel-actions button {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.send-review-channel-actions .secondary {
+  background: var(--bege);
+  color: var(--verde-escuro);
+}
+
+.send-review-channel-actions .secondary:hover {
+  background: #f5e7c7;
+}
+
 .send-review-command {
   display: grid;
   gap: 8px;
