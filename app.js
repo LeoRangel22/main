@@ -11070,7 +11070,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
   }
 
   const destination = (email || fields.clientEmail.value || proposal?.cliente_email || proposal?.snapshot?.client?.email || "").trim();
-  if (!destination || !isLikelyEmail(destination)) {
+  if (!destination || !isLikelyEmailAddress(destination)) {
     showToast("Preencha um e-mail válido do cliente antes de enviar.");
     return false;
   }
