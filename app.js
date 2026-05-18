@@ -9293,7 +9293,8 @@ function renderPipelineCard(item) {
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
   const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
-  const eventLine = `${dateLabel} · ${timeLabel} · ${item.guests} pax`;
+  const weekdayLabel = item.date ? formatWeekdayShortFromIso(item.date) : "";
+  const eventLine = [dateLabel, weekdayLabel, timeLabel, `${item.guests} pax`].filter(Boolean).join(" · ");
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
   const finalClientLine = [item.finalClient ? `Cliente final: ${item.finalClient}` : "", item.groupName ? `Grupo: ${item.groupName}` : ""]
@@ -10573,6 +10574,15 @@ function formatDateFromIso(value) {
   if (!value) return "";
   const [year, month, day] = String(value).split("-");
   return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function formatWeekdayShortFromIso(value) {
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return "";
+  return ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][date.getDay()];
 }
 
 function formatSavedAt(value) {

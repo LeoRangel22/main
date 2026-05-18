@@ -100,6 +100,7 @@ test.describe("Dashboard interno em modo QA", () => {
     const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
     await expect(proposalCard).toBeVisible();
     await expect(proposalCard.locator(".pipeline-stage-chip")).toContainText("Café da Manhã / Brunch");
+    await expect(proposalCard.locator(".pipeline-card-event-line")).toContainText(/· (dom|seg|ter|qua|qui|sex|sáb) ·/i);
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("A&B");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Priv.");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("R$ 3.057,60");
