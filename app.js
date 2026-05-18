@@ -7707,7 +7707,7 @@ function getPipelinePrimaryAction(item) {
       tone: followUp?.level || "fresh",
       eyebrow: followUp ? "Retorno pendente" : "Próxima ação",
       label: followUp?.actionLabel || "Aguardar retorno",
-      note: followUp?.note || "Monitorar retorno",
+      note: "Monitorar retorno cliente",
     };
   }
   if (status === "negociacao") {
@@ -9309,8 +9309,7 @@ function renderPipelineCard(item) {
   const followUpBadge = followUp
     ? `<small class="follow-up-badge follow-up-${escapeHtml(followUp.level)}">${escapeHtml(followUp.label)}</small>`
     : "";
-  const stageChipLabel = status === "proposta_enviada" && item.type ? item.type : getProposalStatusLabel(item.status);
-  const showTypeLine = !(status === "proposta_enviada" && item.type);
+  const stageChipLabel = item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
@@ -9335,7 +9334,8 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
-  const primaryActionButton = signalButton ? `<span class="pipeline-next-action-button">${signalButton}</span>` : "";
+  const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
+  const primaryActionButton = actionInsideNext ? `<span class="pipeline-next-action-button">${actionInsideNext}</span>` : "";
   const primaryActionLine = `
     <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}${primaryActionButton ? " has-action-button" : ""}">
       <span>${escapeHtml(primaryAction.eyebrow)}</span>
@@ -9348,7 +9348,7 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && item.status === "pagamento_final" && !item.hasPaymentComplete
       ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}" title="Registrar pagamento restante">Registrar saldo</button>`
       : "";
-  const topAction = remainingButton || remainingProofLink || signalProofLink;
+  const topAction = remainingButton || remainingProofLink || (status === "confirmado" ? "" : signalProofLink);
   const openButton =
     item.kind === "proposal"
       ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
@@ -9392,21 +9392,22 @@ function renderPipelineCard(item) {
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
-        <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
+        <span class="pipeline-card-value-stack">
+          <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
+          ${item.type ? `<small class="pipeline-card-value-type">${escapeHtml(item.type)}</small>` : ""}
+        </span>
       </div>
       ${renderPipelineValueBreakdown(item)}
       <div class="pipeline-card-name-row">
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
-      ${showTypeLine ? `<small class="pipeline-card-type">${escapeHtml(item.type)}</small>` : ""}
       ${riskAlertsLine}
       ${primaryActionLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
         <span class="pipeline-card-meta-group">
           ${scoreBadge}
-          ${clientTypeLine ? `<small class="pipeline-card-meta">${escapeHtml(clientTypeLine)}</small>` : ""}
         </span>
         ${actionButtons}
       </div>

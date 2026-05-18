@@ -2483,12 +2483,33 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
+.pipeline-card-value-stack {
+  align-items: flex-end;
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: auto;
+  min-width: 92px;
+}
+
 .pipeline-card-value {
   color: var(--verde-escuro) !important;
-  flex: 0 0 auto;
   font-size: 0.82rem !important;
   font-weight: 900 !important;
-  margin-left: auto;
+  white-space: nowrap;
+}
+
+.pipeline-card-value-type {
+  color: var(--verde) !important;
+  display: block;
+  font-size: 0.68rem !important;
+  font-weight: 900 !important;
+  line-height: 1.05;
+  max-width: 120px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
