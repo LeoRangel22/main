@@ -2607,6 +2607,10 @@ textarea[aria-invalid="true"] {
   padding: 7px 8px;
 }
 
+.pipeline-card-next-action.has-action-button {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .pipeline-card-next-action span {
   color: var(--muted);
   font-size: 0.58rem;
@@ -2632,12 +2636,19 @@ textarea[aria-invalid="true"] {
 
 .pipeline-next-action-button {
   display: flex;
-  grid-column: 1 / -1;
+  grid-column: 2;
+  grid-row: 2;
   justify-content: flex-end;
+  align-self: center;
 }
 
 .pipeline-next-action-button .pipeline-signal-action {
   margin-left: auto;
+}
+
+.pipeline-card-next-action.has-action-button small {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 .pipeline-card-next-action.is-warning,

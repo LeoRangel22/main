@@ -7707,7 +7707,7 @@ function getPipelinePrimaryAction(item) {
       tone: followUp?.level || "fresh",
       eyebrow: followUp ? "Retorno pendente" : "Próxima ação",
       label: followUp?.actionLabel || "Aguardar retorno",
-      note: followUp?.note || "Monitorar retorno ou visualização do cliente.",
+      note: followUp?.note || "Monitorar retorno",
     };
   }
   if (status === "negociacao") {
@@ -9337,7 +9337,7 @@ function renderPipelineCard(item) {
       : "";
   const primaryActionButton = signalButton ? `<span class="pipeline-next-action-button">${signalButton}</span>` : "";
   const primaryActionLine = `
-    <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}">
+    <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}${primaryActionButton ? " has-action-button" : ""}">
       <span>${escapeHtml(primaryAction.eyebrow)}</span>
       <strong>${escapeHtml(primaryAction.label)}</strong>
       <small>${escapeHtml(primaryAction.note || "")}</small>
