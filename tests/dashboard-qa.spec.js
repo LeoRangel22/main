@@ -99,7 +99,8 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
     await expect(proposalCard).toBeVisible();
-    await expect(proposalCard.locator(".pipeline-stage-chip")).toContainText("Café da Manhã / Brunch");
+    await expect(proposalCard.locator(".pipeline-stage-chip")).toContainText("Agência de turismo receptivo / DMC");
+    await expect(proposalCard.locator(".pipeline-card-value-type")).toContainText("Café da Manhã / Brunch");
     await expect(proposalCard.locator(".pipeline-card-event-line")).toContainText(/· (dom|seg|ter|qua|qui|sex|sáb) ·/i);
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("A&B");
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Priv.");
