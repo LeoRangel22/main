@@ -70,16 +70,53 @@ function formatDuration(value: unknown) {
   return `${hours}h${String(minutes).padStart(2, "0")}`;
 }
 
+const ZEPTO_TOKEN_ENV_NAMES = [
+  "ZEPTO_MAIL_TOKEN",
+  "ZEPTOMAIL_TOKEN",
+  "ZEPTO_TOKEN",
+  "ZOHO_ZEPTO_TOKEN",
+  "ZOHO_ZEPTOMAIL_TOKEN",
+];
+
+function getFirstEnv(names: string[]) {
+  for (const name of names) {
+    const value = Deno.env.get(name);
+    if (value && value.trim()) return { name, value: value.trim() };
+  }
+  return { name: "", value: "" };
+}
+
 function normalizeToken(rawToken: string) {
   const normalized = rawToken
     .trim()
+    .replace(/^authorization:\s*/i, "")
     .replace(/^token de envio:\s*/i, "")
+    .replace(/^token de envio\s*\d*\s*:\s*/i, "")
     .replace(/^"+|"+$/g, "")
     .replace(/^'+|'+$/g, "");
 
   return normalized.toLowerCase().startsWith("zoho-enczapikey ")
     ? normalized
     : `Zoho-enczapikey ${normalized}`;
+}
+
+function getZeptoAuth() {
+  const tokenEnv = getFirstEnv(ZEPTO_TOKEN_ENV_NAMES);
+  return {
+    envName: tokenEnv.name,
+    token: tokenEnv.value,
+    authorization: tokenEnv.value ? normalizeToken(tokenEnv.value) : "",
+  };
+}
+
+function getZeptoErrorMessage(status: number) {
+  if (status === 401) {
+    return "ZeptoMail recusou o envio (HTTP 401). Atualize o secret ZEPTO_MAIL_TOKEN com o token de envio do ZeptoMail e publique a funcao send-proposal-email novamente.";
+  }
+  if (status === 403) {
+    return "ZeptoMail recusou o envio (HTTP 403). Confira se o remetente esta verificado no ZeptoMail.";
+  }
+  return `ZeptoMail recusou o envio (HTTP ${status}).`;
 }
 
 function getSignalDeadlineLabel(snapshot: Record<string, unknown>) {
@@ -218,7 +255,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const zeptoToken = Deno.env.get("ZEPTO_MAIL_TOKEN") || "";
+    const zeptoAuth = getZeptoAuth();
     const fromEmail = Deno.env.get("PROPOSAL_FROM_EMAIL") || Deno.env.get("LEAD_ALERT_FROM_EMAIL") || "";
     const fromName = Deno.env.get("PROPOSAL_FROM_NAME") || Deno.env.get("LEAD_ALERT_FROM_NAME") || "Eventos Embaixada";
 
@@ -226,11 +263,16 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Supabase não configurado na função." }, 500);
     }
 
-    if (!zeptoToken || !fromEmail) {
+    if (!zeptoAuth.token || !fromEmail) {
       return jsonResponse(
         {
           ok: false,
-          message: "E-mail não configurado. Defina ZEPTO_MAIL_TOKEN e LEAD_ALERT_FROM_EMAIL nos secrets do Supabase.",
+          message: "E-mail nao configurado. Defina ZEPTO_MAIL_TOKEN e LEAD_ALERT_FROM_EMAIL nos secrets do Supabase.",
+          configured: {
+            token: Boolean(zeptoAuth.token),
+            tokenSecret: zeptoAuth.envName || null,
+            fromEmail: Boolean(fromEmail),
+          },
         },
         500,
       );
@@ -255,7 +297,8 @@ Deno.serve(async (req) => {
         mode: "dry-run",
         message: "ZeptoMail configurado para envio de propostas.",
         configured: {
-          token: Boolean(zeptoToken),
+          token: Boolean(zeptoAuth.token),
+          tokenSecret: zeptoAuth.envName || null,
           fromEmail: Boolean(fromEmail),
         },
       });
@@ -291,7 +334,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         Accept: "application/json",
-        Authorization: normalizeToken(zeptoToken),
+        Authorization: zeptoAuth.authorization,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -332,7 +375,12 @@ Deno.serve(async (req) => {
       return jsonResponse(
         {
           ok: false,
-          message: `ZeptoMail recusou o envio (HTTP ${zeptoResponse.status}).`,
+          message: getZeptoErrorMessage(zeptoResponse.status),
+          configured: {
+            token: Boolean(zeptoAuth.token),
+            tokenSecret: zeptoAuth.envName || null,
+            fromEmail: Boolean(fromEmail),
+          },
           details: zeptoBody,
         },
         502,
