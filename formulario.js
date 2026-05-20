@@ -303,7 +303,7 @@ const timeOptionsByRange = {
 const copy = {
   pt: {
     progressLabel: (current, total) => `Pergunta ${current} de ${total} - Tempo estimado 2 minutos`,
-    uxCues: ["Escolha por cards", "Recomendamos formatos", "Você só informa o essencial"],
+    uxCues: ["Escolha por cards", "Sugerimos formatos", "Leva cerca de 2 minutos"],
     trustPoints: ["Morro da Urca", "Parque Bondinho Pão de Açúcar", "Empresas, agências e eventos privados", "Proposta em até 2 dias úteis"],
     heroEyebrow: "Embaixada Carioca",
     heroTitle: "Planeje seu evento na Embaixada Carioca",
@@ -390,13 +390,13 @@ const copy = {
     labels: {
       eventDate: "Data desejada",
       eventDateHelp: "Se ainda não houver data fechada, conte a janela aproximada abaixo.",
-      dateFlex: "Data flexível",
-      dateFlexible: "A data é flexível?",
+      dateFlex: "Se não tiver data fechada",
+      dateFlexible: "A data pode mudar?",
       guests: "Quantidade de convidados",
       guestsHelp: "Use o slider até 99+. Para grupos maiores, digite o número exato até 500.",
       period: "Período desejado",
       time: "Horário de chegada",
-      timeHelp: "O horário guia a operação. Atrasos podem gerar hora extra.",
+      timeHelp: "O horário combinado orienta a reserva e a operação.",
       duration: "Duração estimada",
       briefingSupport: "Marque só o que for importante. Se não tiver certeza, deixe em branco; a equipe completa com você depois.",
       reason: "Motivo do evento",
@@ -427,7 +427,7 @@ const copy = {
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
       finalReviewEyebrow: "Revisão final",
       finalReviewTitle: "Veja o que a equipe vai receber",
-      finalReviewBody: "Se estiver tudo certo, envie. Se quiser ajustar algo, toque em “Editar esta parte” no card correspondente.",
+      finalReviewBody: "Confira os pontos principais. Se algo precisar mudar, toque em “Ajustar” no card.",
       submit: "Enviar solicitação de proposta",
       preferenceLegend: "O que não pode faltar?",
       extrasLegend: "Extras de produção",
@@ -480,7 +480,7 @@ const copy = {
   },
   en: {
     progressLabel: (current, total) => `Question ${current} of ${total} - Estimated time 2 minutes`,
-    uxCues: ["Choose with cards", "We recommend formats", "You only share the essentials"],
+    uxCues: ["Choose with cards", "We suggest formats", "Takes about 2 minutes"],
     trustPoints: ["Morro da Urca", "Sugarloaf Cable Car Park", "Companies, agencies and private events", "Proposal within 2 business days"],
     heroEyebrow: "Embaixada Carioca",
     heroTitle: "Plan your event at Embaixada Carioca",
@@ -567,13 +567,13 @@ const copy = {
     labels: {
       eventDate: "Preferred date",
       eventDateHelp: "If the date is not set yet, share an approximate window below.",
-      dateFlex: "Flexible date window",
-      dateFlexible: "Is the date flexible?",
+      dateFlex: "If the date is not set",
+      dateFlexible: "Can the date move?",
       guests: "Guest count",
       guestsHelp: "Use the slider up to 99+. For larger groups, type the exact number up to 500.",
       period: "Preferred period",
       time: "Arrival time",
-      timeHelp: "Arrival time guides the operation. Delays may trigger extra charges.",
+      timeHelp: "The agreed time guides the reservation and operation.",
       duration: "Estimated duration",
       briefingSupport: "Select only what matters. If you are unsure, leave it blank; our team can complete it with you later.",
       reason: "Event goal",
@@ -604,7 +604,7 @@ const copy = {
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
       finalReviewEyebrow: "Final review",
       finalReviewTitle: "See what our team will receive",
-      finalReviewBody: "If everything looks right, send it. To adjust anything, tap “Edit this part” on the matching card.",
+      finalReviewBody: "Review the key points. If anything needs to change, tap “Adjust” on the card.",
       submit: "Send proposal request",
       preferenceLegend: "What cannot be missing?",
       extrasLegend: "Production extras",
@@ -819,7 +819,7 @@ function applyStaticCopy() {
   fields.groupName.placeholder = current.placeholders.groupName;
   updateContactRequirements();
   updateContactGuidance();
-  document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Final touches" : "O toque final";
+  document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Event preferences" : "Preferências do evento";
   document.querySelector("#contactTitle").textContent = current.stepLabels[5];
   document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
   document.querySelector("#profileTitle").textContent = uiState.language === "en" ? "Who is organizing and what is the occasion?" : "Quem está organizando e qual é a ocasião?";
@@ -987,7 +987,7 @@ function renderFinalReview() {
     warning: isEn ? "Worth completing" : "Vale completar",
     required: isEn ? "Needs completion" : "Precisa completar",
     optional: isEn ? "Optional" : "Opcional",
-    edit: isEn ? "Edit this part" : "Editar esta parte",
+    edit: isEn ? "Adjust" : "Ajustar",
     formatMissing: isEn
       ? "Our team can suggest the best format if you prefer."
       : "A equipe pode sugerir o melhor formato, se você preferir.",
@@ -1068,7 +1068,7 @@ function renderFinalReview() {
       state: selectedPreferences.length || selectedExtras.length ? "is-ok" : "is-optional",
     },
     {
-      label: isEn ? "Team reply" : "Retorno da equipe",
+      label: isEn ? "Reply contact" : "Contato para retorno",
       value: contactReady ? contactParts.join(" · ") : [contactParts.join(" · "), reviewCopy.contactMissing].filter(Boolean).join(" · "),
       step: "contact",
       status: contactReady ? reviewCopy.ok : reviewCopy.required,
