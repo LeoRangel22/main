@@ -311,7 +311,7 @@ const copy = {
     introEyebrow: "Consultoria de eventos",
     introTitle: "Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.",
     introBody: "Um fluxo rápido para orientar sua proposta com cuidado e precisão.",
-    stepLabels: ["Momento", "Qualificação", "Formato", "Viabilidade", "Extras", "Contato"],
+    stepLabels: ["Quando", "Ocasião", "Formato", "Data e grupo", "Preferências", "Contato"],
     commercialSummary: "Ver janelas mais indicadas",
     commercialWindows: [
       "Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.",
@@ -488,7 +488,7 @@ const copy = {
     introEyebrow: "Event advisory",
     introTitle: "Tell us the essentials. Our team will shape the right experience for your group.",
     introBody: "A quick flow to guide your proposal with care and precision.",
-    stepLabels: ["Moment", "Qualification", "Format", "Feasibility", "Extras", "Contact"],
+    stepLabels: ["When", "Occasion", "Format", "Date & group", "Preferences", "Contact"],
     commercialSummary: "See the most recommended windows",
     commercialWindows: [
       "Weekday mornings: breakfast, brunch and coffee break.",
@@ -821,7 +821,7 @@ function applyStaticCopy() {
   updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Final touches" : "O toque final";
   document.querySelector("#contactTitle").textContent = current.stepLabels[5];
-  document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "Moment" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
+  document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
   document.querySelector("#profileTitle").textContent = uiState.language === "en" ? "Who is organizing and what is the occasion?" : "Quem está organizando e qual é a ocasião?";
   document.querySelector("#eventDetailsTitle").textContent = uiState.language === "en" ? "Event details" : "Detalhes do evento";
   document.querySelector(".preference-chips legend").textContent = current.labels.preferenceLegend;
