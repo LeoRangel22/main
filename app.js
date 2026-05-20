@@ -7754,14 +7754,10 @@ function getPipelineRiskAlerts(item) {
   const status = getReportStatus(item);
   const daysUntil = getDaysUntilEvent(item);
   const age = getLeadAgeInfo(item);
-  const followUp = getProposalFollowUpInfo(item);
   const score = getCommercialScore(item);
 
   if (age && age.level !== "fresh") {
     alerts.push({ level: age.level, label: age.level === "critical" ? "Lead 48h+" : age.level === "danger" ? "Lead 24h+" : "Lead 12h+" });
-  }
-  if (followUp) {
-    alerts.push({ level: followUp.level, label: followUp.level === "critical" ? "Sem retorno 72h+" : followUp.level === "danger" ? "Sem retorno 48h+" : "Sem retorno 24h+" });
   }
   if (item.clientResponse === "confirmar") {
     alerts.push({ level: "success", label: "Cliente aprovou" });
@@ -9326,7 +9322,7 @@ function renderPipelineCard(item) {
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
-  const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} · ${commercialScore.value}</small>`;
+  const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} ${commercialScore.value}</small>`;
   const primaryAction = getPipelinePrimaryAction(item);
   const riskAlerts = getPipelineRiskAlerts(item);
   const riskAlertsLine = riskAlerts.length
@@ -9398,7 +9394,6 @@ function renderPipelineCard(item) {
     >
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
-        <small class="pipeline-card-reference">${escapeHtml(item.reference || "Sem referência")}</small>
         ${leadAgeBadge}
         ${followUpBadge}
         ${topAction}
@@ -9407,6 +9402,7 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
         <span class="pipeline-card-value-stack">
           <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
+          ${scoreBadge}
         </span>
       </div>
       ${renderPipelineValueBreakdown(item)}
@@ -9418,10 +9414,9 @@ function renderPipelineCard(item) {
       ${primaryActionLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
-        <span class="pipeline-card-meta-group">
-          ${scoreBadge}
-        </span>
+        <span class="pipeline-card-meta-group"></span>
         ${actionButtons}
+        <small class="pipeline-card-reference-bottom">${escapeHtml(item.reference || "Sem referência")}</small>
       </div>
       ${cancelInfo}
     </article>
