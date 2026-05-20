@@ -2378,6 +2378,20 @@ textarea[aria-invalid="true"] {
   max-width: none;
 }
 
+.pipeline-card-reference-bottom {
+  color: var(--muted) !important;
+  font-size: 0.56rem !important;
+  font-weight: 650 !important;
+  grid-column: 2;
+  justify-self: end;
+  letter-spacing: 0;
+  line-height: 1;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lead-age-badge {
   border-radius: 999px;
   flex: 0 0 auto;
@@ -2500,6 +2514,7 @@ textarea[aria-invalid="true"] {
   display: inline-flex;
   flex: 0 0 auto;
   flex-direction: column;
+  gap: 2px;
   margin-left: auto;
   min-width: 92px;
 }
@@ -2629,10 +2644,10 @@ textarea[aria-invalid="true"] {
   border: 1px solid rgba(24, 58, 45, 0.12);
   border-radius: 8px;
   display: grid;
-  gap: 2px 8px;
+  gap: 1px 8px;
   grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 28px;
-  padding: 5px 7px;
+  min-height: 24px;
+  padding: 4px 7px;
 }
 
 .pipeline-card-next-action.has-action-button {
@@ -2658,7 +2673,7 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-next-action small {
   color: var(--muted) !important;
-  font-size: 0.61rem !important;
+  font-size: 0.6rem !important;
   font-weight: 760 !important;
   grid-column: 1 / -1;
   line-height: 1.05;
@@ -2785,7 +2800,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-bottom-row {
   align-items: center;
   display: grid;
-  gap: 6px;
+  gap: 3px 6px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -2964,13 +2979,13 @@ textarea[aria-invalid="true"] {
   border-radius: 999px;
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.58rem !important;
-  font-weight: 900 !important;
+  font-size: 0.55rem !important;
+  font-weight: 850 !important;
   line-height: 1;
   max-width: 124px;
-  min-height: 20px;
+  min-height: 16px;
   overflow: hidden;
-  padding: 0 7px;
+  padding: 0 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
