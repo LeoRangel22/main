@@ -265,7 +265,7 @@ function getDecisionCopy(proposal) {
   }
   return {
     title: "Pronto para reservar sua data?",
-      note: "Aprove para seguir. A equipe confirma disponibilidade e orienta o sinal para reservar data e horário.",
+    note: "Confira a proposta e aprove para seguir. A equipe valida a disponibilidade e o sinal confirma a reserva da data e do horário.",
   };
 }
 
@@ -395,7 +395,7 @@ function renderProposal(proposal) {
       <article>
         <span>01</span>
         <strong>Aprovação</strong>
-        <p>Você confirma que a proposta faz sentido para o seu evento.</p>
+        <p>Você confirma que o formato, a data e o investimento fazem sentido.</p>
       </article>
       <article>
         <span>02</span>
@@ -405,7 +405,7 @@ function renderProposal(proposal) {
       <article>
         <span>03</span>
         <strong>Data reservada</strong>
-        <p>Após o sinal, seguimos com os combinados finais do evento.</p>
+        <p>Após a validação do sinal, seguimos com os combinados finais do evento.</p>
       </article>
     </div>
 
@@ -438,7 +438,7 @@ function renderProposal(proposal) {
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
         <h3>Escolha seu próximo passo</h3>
-        <p>Aprove para seguir ou peça ajuste se algo ainda precisar mudar.</p>
+        <p>Se estiver tudo certo, aprove para seguir com a reserva. Se precisar, peça um ajuste antes.</p>
       </div>
       <div class="public-proposal-buttons">
         <button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">Aprovar e seguir para reserva</button>
@@ -543,7 +543,7 @@ function openResponseForm(action) {
     message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
     if (submitButton) submitButton.textContent = "Enviar aprovação à equipe";
     updateProofStatus();
-    setMessage("Confira os dados bancários, copie o Pix e anexe o comprovante quando tiver. A equipe valida o sinal e confirma a reserva.", "neutral");
+    setMessage("Confira os dados bancários, copie o Pix e anexe o comprovante quando tiver. A equipe valida o pagamento e confirma a reserva.", "neutral");
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }

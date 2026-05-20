@@ -111,10 +111,10 @@ function getZeptoAuth() {
 
 function getZeptoErrorMessage(status: number) {
   if (status === 401) {
-    return "ZeptoMail recusou o envio (HTTP 401). Atualize o secret ZEPTO_MAIL_TOKEN com o token de envio do ZeptoMail e publique a funcao send-proposal-email novamente.";
+    return "ZeptoMail recusou o envio (HTTP 401). Atualize o secret ZEPTO_MAIL_TOKEN com o token de envio do ZeptoMail e publique a função send-proposal-email novamente.";
   }
   if (status === 403) {
-    return "ZeptoMail recusou o envio (HTTP 403). Confira se o remetente esta verificado no ZeptoMail.";
+    return "ZeptoMail recusou o envio (HTTP 403). Confira se o remetente está verificado no ZeptoMail.";
   }
   return `ZeptoMail recusou o envio (HTTP ${status}).`;
 }
@@ -168,9 +168,9 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
       <div style="max-width:680px; margin:0 auto; background:#ffffff; border:1px solid #d7e3dc; border-radius:18px; overflow:hidden;">
         <div style="background:#183a2d; color:#ffffff; padding:24px 28px;">
           <div style="font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#f2d9a2;">Embaixada Carioca</div>
-          <h1 style="margin:10px 0 0; font-size:30px; line-height:1.1;">Sua proposta está pronta</h1>
+          <h1 style="margin:10px 0 0; font-size:30px; line-height:1.1;">Sua proposta está pronta para revisão</h1>
           <p style="margin:12px 0 0; color:#e8f1ec; font-size:16px; line-height:1.55;">
-            Olá, ${escapeHtml(firstName)}. Preparamos a proposta do seu evento no Morro da Urca.
+            Olá, ${escapeHtml(firstName)}. Preparamos sua proposta com base nas informações enviadas para o evento no Morro da Urca.
           </p>
         </div>
 
@@ -203,16 +203,16 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
           <div style="background:#f7faf8; border:1px solid #d7e3dc; border-radius:14px; padding:16px 18px; margin-bottom:20px;">
             <strong style="display:block; color:#183a2d; font-size:16px;">${escapeHtml(signalLabel)}</strong>
             <p style="margin:8px 0 0; color:#5d6d64; font-size:14px; line-height:1.6;">
-              Pelo link você pode aprovar a proposta, solicitar ajustes e anexar o comprovante do sinal com segurança.
+              Pelo link você pode aprovar a proposta, solicitar ajustes ou anexar o comprovante do sinal com segurança. A data e o horário ficam reservados após validação da equipe e confirmação do sinal.
             </p>
           </div>
 
           <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:900; font-size:16px; padding:16px 22px; border-radius:10px;">
-            Abrir minha proposta
+            Ver e responder proposta
           </a>
 
           <p style="margin:18px 0 0; color:#5d6d64; font-size:13px; line-height:1.6;">
-            Se tiver qualquer dúvida, fale com a equipe de eventos pelo e-mail eventos@embaixadacarioca.com.br ou pelo WhatsApp (21) 97142-6007.
+            Se quiser alinhar algum detalhe antes de responder, fale com a equipe de eventos pelo e-mail eventos@embaixadacarioca.com.br ou pelo WhatsApp (21) 97142-6007.
           </p>
         </div>
       </div>
@@ -225,7 +225,7 @@ function buildProposalEmailText(proposal: any, proposalUrl: string) {
   const eventType = safeText(proposal?.tipo_evento || snapshot?.event?.type, "Evento");
   const total = formatMoney(proposal?.total || snapshot?.totals?.total || 0);
   return [
-    "Sua proposta da Embaixada Carioca está pronta.",
+    "Sua proposta da Embaixada Carioca está pronta para revisão.",
     "",
     `Formato: ${eventType}`,
     `Data: ${formatDate(proposal?.data_evento || snapshot?.event?.date)}`,
@@ -237,7 +237,8 @@ function buildProposalEmailText(proposal: any, proposalUrl: string) {
     "Abra sua proposta pelo link abaixo:",
     proposalUrl,
     "",
-    "Pelo link você pode aprovar, pedir ajustes e anexar o comprovante do sinal.",
+    "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal.",
+    "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
     "",
     "Equipe de Eventos | Embaixada Carioca",
   ].join("\n");

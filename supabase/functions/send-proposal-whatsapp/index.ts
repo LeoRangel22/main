@@ -42,10 +42,10 @@ function buildDefaultMessage(payload: SendPayload, proposal: any) {
   return [
     `Olá, ${firstName}!`,
     "",
-    "Segue o link da proposta comercial da Embaixada Carioca:",
+    "Sua proposta da Embaixada Carioca está pronta para revisão:",
     proposalUrl,
     "",
-    "Pelo link você pode aprovar a proposta, solicitar ajustes de data, horário ou convidados, ou falar com a nossa equipe.",
+    "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal. A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
   ].join("\n");
 }
 
