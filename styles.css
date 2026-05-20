@@ -2359,6 +2359,7 @@ textarea[aria-invalid="true"] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-bottom: -1px;
   min-width: 0;
 }
 
@@ -2380,13 +2381,13 @@ textarea[aria-invalid="true"] {
 
 .pipeline-card-reference-bottom {
   color: var(--muted) !important;
-  font-size: 0.56rem !important;
+  font-size: 0.55rem !important;
   font-weight: 650 !important;
-  grid-column: 2;
+  grid-column: auto;
   justify-self: end;
   letter-spacing: 0;
   line-height: 1;
-  max-width: 132px;
+  max-width: 116px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2801,7 +2802,7 @@ textarea[aria-invalid="true"] {
   align-items: center;
   display: grid;
   gap: 3px 6px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .pipeline-card-meta-group {
@@ -9685,8 +9686,8 @@ input[type="range"] {
   }
 
   .pipeline-card-bottom-row {
-    align-items: stretch;
-    grid-template-columns: 1fr;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
   .pipeline-card-actions {
