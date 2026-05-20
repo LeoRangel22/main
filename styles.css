@@ -2384,10 +2384,10 @@ textarea[aria-invalid="true"] {
   font-size: 0.55rem !important;
   font-weight: 650 !important;
   grid-column: auto;
-  justify-self: end;
+  justify-self: start;
   letter-spacing: 0;
   line-height: 1;
-  max-width: 116px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2484,11 +2484,11 @@ textarea[aria-invalid="true"] {
 .pipeline-open-button {
   flex: 0 0 auto;
   font-size: 0.6rem;
-  height: 22px;
+  height: 20px;
   line-height: 1;
   margin-left: 0;
   max-width: 112px;
-  min-height: 22px;
+  min-height: 20px;
   padding: 0 8px;
   white-space: nowrap;
 }
@@ -2809,7 +2809,7 @@ textarea[aria-invalid="true"] {
   align-items: center;
   display: grid;
   gap: 3px 6px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .pipeline-card-meta-group {
@@ -9695,7 +9695,7 @@ input[type="range"] {
 
   .pipeline-card-bottom-row {
     align-items: center;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .pipeline-card-actions {
