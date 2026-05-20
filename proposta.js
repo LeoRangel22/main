@@ -265,7 +265,7 @@ function getDecisionCopy(proposal) {
   }
   return {
     title: "Pronto para reservar sua data?",
-    note: "Aprovar a proposta sinaliza que você quer seguir. A equipe confirma disponibilidade final e orienta o pagamento do sinal de 50% para reservar data e horário.",
+      note: "Aprove para seguir. A equipe confirma disponibilidade e orienta o sinal para reservar data e horário.",
   };
 }
 
@@ -293,7 +293,7 @@ function renderPaymentInfo({ proof = null } = {}) {
       <div class="public-payment-heading">
         <span>Sinal de reserva</span>
         <h3>Dados para pagamento do sinal</h3>
-        <p>A data e o horário ficam reservados após confirmação de disponibilidade pela equipe e pagamento do sinal de 50%.</p>
+        <p>A reserva fica confirmada após validação da equipe e pagamento do sinal.</p>
       </div>
       ${renderDeadlineCard()}
       <div class="public-payment-grid">
@@ -399,8 +399,8 @@ function renderProposal(proposal) {
       </article>
       <article>
         <span>02</span>
-        <strong>Sinal de 50%</strong>
-        <p>Ao aprovar, os dados bancários e a chave Pix aparecem para facilitar o sinal.</p>
+        <strong>Sinal de reserva</strong>
+        <p>Ao aprovar, os dados bancários e a chave Pix aparecem para facilitar o pagamento.</p>
       </article>
       <article>
         <span>03</span>
@@ -438,12 +438,12 @@ function renderProposal(proposal) {
     <div class="public-proposal-actions">
       <div class="public-proposal-actions-copy">
         <h3>Escolha seu próximo passo</h3>
-        <p>Para avançar, aprove a proposta. Se algum detalhe ainda não estiver perfeito, peça ajuste de data, horário, convidados ou observações.</p>
+        <p>Aprove para seguir ou peça ajuste se algo ainda precisar mudar.</p>
       </div>
       <div class="public-proposal-buttons">
         <button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">Aprovar e seguir para reserva</button>
         <button class="secondary" type="button" data-public-action="alteracao">Pedir ajuste</button>
-        <button class="secondary danger-light" type="button" data-public-action="cancelar">Encerrar pedido</button>
+        <button class="secondary danger-light" type="button" data-public-action="cancelar">Não seguir com esta proposta</button>
       </div>
 
       <form class="public-proposal-change-form" id="publicProposalResponseForm" hidden>
@@ -543,18 +543,18 @@ function openResponseForm(action) {
     message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
     if (submitButton) submitButton.textContent = "Enviar aprovação à equipe";
     updateProofStatus();
-    setMessage("Confira os dados bancários nesta página, copie o Pix se preferir e anexe o comprovante quando tiver. A reserva é confirmada após validação da equipe e pagamento do sinal.", "neutral");
+    setMessage("Confira os dados bancários, copie o Pix e anexe o comprovante quando tiver. A equipe valida o sinal e confirma a reserva.", "neutral");
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   if (action === "cancelar") {
     message.placeholder = "Conte brevemente o motivo do cancelamento.";
     if (submitButton) submitButton.textContent = "Enviar cancelamento";
-    setMessage("Informe o motivo do cancelamento para a equipe encerrar corretamente.", "neutral");
+    setMessage("Conte brevemente o motivo para a equipe registrar corretamente.", "neutral");
   } else {
     message.placeholder = "Conte qual data, horário, número de convidados ou detalhe precisa mudar.";
     if (submitButton) submitButton.textContent = "Enviar pedido de ajuste";
-    setMessage("Informe os ajustes desejados nos campos da resposta ou escreva no campo aberto.", "neutral");
+    setMessage("Conte o que gostaria de ajustar: data, horário, convidados ou outro detalhe.", "neutral");
   }
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -570,11 +570,11 @@ async function submitPublicResponse(event) {
   const needsMessage = action === "cancelar" || action === "alteracao";
 
   if (needsMessage && message.length < 3) {
-    setMessage("Escreva uma mensagem curta para a equipe entender sua solicitação.", "error");
+    setMessage("Escreva uma mensagem breve para a equipe entender sua solicitação.", "error");
     return;
   }
 
-  setMessage("Enviando resposta...", "neutral");
+  setMessage("Enviando sua resposta...", "neutral");
   const payload = {
     proposal_token: token,
     action,
@@ -592,7 +592,7 @@ async function submitPublicResponse(event) {
     delete fallbackPayload.payment_proof;
     ({ data, error } = await supabaseClient.rpc("respond_public_proposal", fallbackPayload));
     if (!error && data?.[0]?.ok) {
-      setMessage("Aprovação registrada, mas o anexo ainda precisa da atualização do schema no Supabase. Envie o comprovante por e-mail ou WhatsApp para a equipe.", "error");
+      setMessage("Aprovação registrada. O anexo não foi salvo; envie o comprovante por e-mail ou WhatsApp.", "error");
       await loadProposal();
       return;
     }
@@ -600,7 +600,7 @@ async function submitPublicResponse(event) {
 
   if (error || !data?.[0]?.ok) {
     console.warn("Falha ao responder proposta.", error);
-    setMessage("Não foi possível registrar sua resposta. Tente novamente ou fale com a equipe.", "error");
+    setMessage("Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.", "error");
     return;
   }
 
@@ -608,7 +608,7 @@ async function submitPublicResponse(event) {
     setMessage(
       selectedProof
         ? "Aprovação e comprovante registrados. A equipe vai validar o sinal e confirmar a reserva."
-        : "Aprovação registrada. Use os dados de pagamento do sinal e envie o comprovante para a equipe de eventos.",
+        : "Aprovação registrada. Use os dados de pagamento e envie o comprovante para a equipe.",
       "success",
     );
     await loadProposal();
@@ -617,7 +617,7 @@ async function submitPublicResponse(event) {
 
   setMessage(
     action === "confirmar"
-      ? "Aprovação registrada. Use os dados de pagamento do sinal e envie o comprovante para a equipe de eventos."
+      ? "Aprovação registrada. Use os dados de pagamento e envie o comprovante para a equipe."
       : "Resposta registrada. Nossa equipe recebeu sua atualização.",
     "success",
   );

@@ -56,9 +56,12 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
   min-height: 42px;
   padding: 0 16px;
   transition:
+    box-shadow 160ms ease,
     transform 160ms ease,
     background 160ms ease,
     color 160ms ease;
@@ -71,7 +74,13 @@ button:disabled {
 }
 
 button:hover {
+  box-shadow: 0 8px 18px rgba(24, 58, 45, 0.09);
   transform: translateY(-1px);
+}
+
+button:active {
+  box-shadow: none;
+  transform: translateY(0);
 }
 
 a:focus-visible,
@@ -2296,6 +2305,8 @@ textarea[aria-invalid="true"] {
   cursor: pointer;
   display: grid;
   gap: 3px;
+  line-height: 1.12;
+  overflow: hidden;
   padding: 6px 8px;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
@@ -2442,6 +2453,7 @@ textarea[aria-invalid="true"] {
   color: var(--verde-escuro);
   font-size: 0.92rem;
   font-weight: 900;
+  line-height: 1.08;
   overflow-wrap: anywhere;
 }
 
@@ -2456,12 +2468,12 @@ textarea[aria-invalid="true"] {
 
 .pipeline-open-button {
   flex: 0 0 auto;
-  font-size: 0.58rem;
-  height: 20px;
+  font-size: 0.6rem;
+  height: 22px;
   line-height: 1;
   margin-left: 0;
   max-width: 112px;
-  min-height: 20px;
+  min-height: 22px;
   padding: 0 8px;
   white-space: nowrap;
 }
@@ -2470,7 +2482,7 @@ textarea[aria-invalid="true"] {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 750;
-  line-height: 1.08;
+  line-height: 1.12;
 }
 
 .pipeline-card-event-line {
@@ -2620,7 +2632,7 @@ textarea[aria-invalid="true"] {
   gap: 2px 8px;
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 28px;
-  padding: 4px 7px;
+  padding: 5px 7px;
 }
 
 .pipeline-card-next-action.has-action-button {
