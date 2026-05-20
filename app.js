@@ -9402,10 +9402,12 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
         <span class="pipeline-card-value-stack">
           <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
-          ${scoreBadge}
         </span>
       </div>
-      ${renderPipelineValueBreakdown(item)}
+      <div class="pipeline-card-breakdown-row">
+        ${renderPipelineValueBreakdown(item)}
+        ${scoreBadge}
+      </div>
       <div class="pipeline-card-name-row">
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
