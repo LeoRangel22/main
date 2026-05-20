@@ -9416,9 +9416,8 @@ function renderPipelineCard(item) {
       ${primaryActionLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
-        <span class="pipeline-card-meta-group"></span>
-        ${actionButtons}
         <small class="pipeline-card-reference-bottom">${escapeHtml(item.reference || "Sem referência")}</small>
+        ${actionButtons}
       </div>
       ${cancelInfo}
     </article>
