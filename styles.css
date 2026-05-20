@@ -2380,7 +2380,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-reference-bottom {
-  color: var(--muted) !important;
+  color: #7d8883 !important;
   font-size: 0.55rem !important;
   font-weight: 650 !important;
   grid-column: auto;
@@ -2415,8 +2415,8 @@ textarea[aria-invalid="true"] {
 }
 
 .lead-age-warning {
-  background: rgba(242, 185, 75, 0.24);
-  color: #8c5a00 !important;
+  background: rgba(245, 155, 30, 0.18);
+  color: #8a5100 !important;
 }
 
 .lead-age-danger,
@@ -2430,8 +2430,8 @@ textarea[aria-invalid="true"] {
 }
 
 .follow-up-warning {
-  background: rgba(242, 185, 75, 0.24);
-  color: #8c5a00 !important;
+  background: rgba(245, 155, 30, 0.18);
+  color: #8a5100 !important;
 }
 
 .follow-up-danger,
@@ -2501,7 +2501,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-event-line {
-  color: var(--verde) !important;
+  color: #245341 !important;
   font-size: 0.82rem !important;
   font-weight: 820 !important;
   min-width: 0;
@@ -2544,10 +2544,10 @@ textarea[aria-invalid="true"] {
 
 .pipeline-value-breakdown span {
   align-items: center;
-  background: rgba(24, 58, 45, 0.06);
+  background: rgba(24, 58, 45, 0.045);
   border: 1px solid rgba(24, 58, 45, 0.1);
   border-radius: 999px;
-  color: var(--verde);
+  color: #335d4a;
   display: inline-flex;
   font-size: 0.58rem;
   font-weight: 780;
@@ -2560,7 +2560,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-value-breakdown .pipeline-product-chip {
-  background: rgba(24, 58, 45, 0.1);
+  background: rgba(24, 58, 45, 0.08);
   border-color: rgba(24, 58, 45, 0.14);
   color: var(--verde-escuro);
   font-weight: 820;
@@ -2570,9 +2570,9 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-value-breakdown span.has-privatization {
-  background: rgba(245, 155, 30, 0.14);
-  border-color: rgba(245, 155, 30, 0.24);
-  color: #7a4f00;
+  background: rgba(245, 155, 30, 0.12);
+  border-color: rgba(245, 155, 30, 0.22);
+  color: #7f5100;
 }
 
 .report-value-breakdown {
@@ -2600,7 +2600,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-final-client {
-  color: var(--verde-escuro);
+  color: #68736e;
   display: block;
   font-size: 0.84rem;
   font-weight: 680;
@@ -2664,7 +2664,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-next-action span {
-  color: var(--muted);
+  color: #8a6a32;
   font-size: 0.56rem;
   font-weight: 820;
   letter-spacing: 0;
@@ -2681,7 +2681,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-card-next-action small {
-  color: var(--muted) !important;
+  color: #6f7773 !important;
   font-size: 0.6rem !important;
   font-weight: 620 !important;
   grid-column: 1 / -1;
@@ -3006,18 +3006,18 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-score-good {
-  background: rgba(92, 195, 189, 0.16);
-  color: var(--verde) !important;
+  background: rgba(47, 111, 69, 0.1);
+  color: #335d4a !important;
 }
 
 .pipeline-score-warm {
-  background: rgba(242, 185, 75, 0.22);
-  color: #8c5a00 !important;
+  background: rgba(245, 155, 30, 0.18);
+  color: #8a5100 !important;
 }
 
 .pipeline-score-base {
   background: rgba(24, 58, 45, 0.07);
-  color: var(--muted) !important;
+  color: #68736e !important;
 }
 
 .pipeline-top-action,
