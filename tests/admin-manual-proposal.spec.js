@@ -149,7 +149,7 @@ test.describe("Proposta manual no admin", () => {
     expect(reviewState.summary.ready).toBe(true);
     expect(reviewState.summary.errors).toBe(0);
     expect(reviewState.summary.optionalWarnings).toBeGreaterThan(0);
-    expect(reviewState.profile.label).toBe("Classificação comercial");
+    expect(reviewState.profile.label).toBe("Perfil comercial");
     expect(reviewState.profile.optional).toBe(true);
     expect(reviewState.workflow.find((item) => item.label === "Cliente e contexto").statusLabel).toBe("Sugestão");
     await expect(page.locator("#sendReviewPanel")).not.toContainText("Contexto comercial");

@@ -141,7 +141,7 @@ const funnelStages = [
     id: "pos_venda",
     row: "operation",
     title: "PÓS-VENDA",
-    description: "Finalizado. Follow-up e relacionamento.",
+    description: "Finalizado. Retorno e relacionamento.",
     statuses: ["pos_venda"],
   },
   {
@@ -1454,7 +1454,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "commercial",
         title: "Enviar o link público e acompanhar retorno",
-        note: "A proposta já está pronta. Gere o link, envie ao cliente e acompanhe a resposta nas próximas horas para não esfriar o lead.",
+      note: "Gere o link, envie ao cliente e acompanhe o retorno nas próximas horas.",
         action: "copy_link",
         actionLabel: "Copiar link público",
       };
@@ -1465,8 +1465,8 @@ function getProposalNextStepConfig() {
         tone: "warning",
         title: "Refinar a proposta e reenviar",
         note: proposal.clientResponse === "alteracao"
-          ? "O cliente pediu ajuste. Revise itens, data, horário ou pax e gere uma nova rodada com rapidez."
-          : "A negociação está em andamento. Vale revisar itens e reforçar os próximos passos comerciais.",
+          ? "Cliente pediu ajuste. Revise e reenvie com agilidade."
+          : "Negociação ativa. Defina o próximo passo.",
         action: "focus_items",
         actionLabel: "Ir para itens",
       };
@@ -1476,7 +1476,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "success",
         title: "Cobrar e registrar o pagamento restante",
-        note: "O sinal já entrou. Agora vale alinhar o saldo final para deixar o evento pronto para o planejamento.",
+        note: "Sinal registrado. Alinhe o saldo para liberar planejamento.",
         action: "mark_remaining",
         actionLabel: "Registrar saldo",
       };
@@ -1486,7 +1486,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "success",
         title: "Pagamento completo. Enviar para planejamento",
-        note: "O evento já está quitado. O próximo passo é liberar a operação e organizar execução, extras e responsáveis.",
+        note: "Pagamento completo. Libere operação, extras e responsáveis.",
         action: "focus_checklist",
         actionLabel: "Planejar evento",
       };
@@ -1496,7 +1496,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "operation",
         title: "Fechar o checklist operacional",
-        note: `${progress.done}/${progress.total} itens concluídos. Revise responsáveis, extras, operação e observações críticas antes da execução.`,
+        note: `${progress.done}/${progress.total} itens concluídos. Revise responsáveis, extras e observações.`,
         action: "focus_checklist",
         actionLabel: "Ver checklist",
       };
@@ -1506,7 +1506,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "operation",
         title: "Revisar detalhes finais da execução",
-        note: "O evento está na janela crítica de hoje ou amanhã. Faça uma última leitura operacional e confirme qualquer ponto sensível.",
+        note: "Evento hoje ou amanhã. Faça a leitura final de operação.",
         action: "focus_checklist",
         actionLabel: "Revisar operação",
       };
@@ -1515,7 +1515,7 @@ function getProposalNextStepConfig() {
     if (status === "pos_venda") {
       return {
         tone: "neutral",
-        title: "Registrar follow-up e próximos passos",
+        title: "Registrar retorno e próximos passos",
         note: "Evento entregue. Vale registrar aprendizados, retorno do cliente e oportunidade de relacionamento.",
         action: "focus_notes",
         actionLabel: "Ir para observações",
@@ -1538,7 +1538,7 @@ function getProposalNextStepConfig() {
     return {
       tone: "commercial",
       title: "Salvar proposta enviada e começar o acompanhamento",
-      note: "Você já está com os dados do lead ou com um rascunho montado. Salve a proposta para entrar no funil e seguir com envio e retorno.",
+      note: "Salve a proposta para entrar no funil e seguir com envio e retorno.",
       action: "save_proposal",
       actionLabel: "Salvar proposta",
     };
@@ -1635,7 +1635,7 @@ function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
     isApplied,
     title: template?.label || category,
     detail: template
-      ? `${templateIds.length} item(ns) sugerido(s) para começar rápido.`
+      ? `${templateIds.length} ${templateIds.length === 1 ? "item sugerido" : "itens sugeridos"} para começar rápido.`
       : "Escolha o formato para o app sugerir os itens base.",
   };
 }
@@ -1646,25 +1646,25 @@ function getServiceApproachTip(context = getActiveServiceContext(), recommendati
     return `Comece por ${firstError.label.toLowerCase()}: ${firstError.detail}`;
   }
   if (!recommendation.selected.length) {
-    return "Escolha uma proposta base antes de falar em valor. O cliente entende melhor quando formato, duração e itens aparecem juntos.";
+    return "Escolha o formato antes de falar em valor. Fica mais claro para o cliente.";
   }
   const type = normalizarTextoSeguro(context.eventType || recommendation.category || "");
   if (type.includes("cafe") || type.includes("break") || type.includes("brunch")) {
-    return "Abordagem sugerida: destaque a chegada no Morro da Urca, vista e pontualidade. Depois confirme se o grupo precisa de opção reforçada.";
+    return "Destaque Morro da Urca, vista e pontualidade. Depois confirme se precisa reforço.";
   }
   if (type.includes("almoco")) {
-    return "Abordagem sugerida: confirme horário de chegada e perfil do grupo. O Almoço Carioca vende melhor quando a experiência é apresentada como pausa completa.";
+    return "Confirme chegada e perfil. Venda o Almoço Carioca como pausa completa.";
   }
   if (type.includes("coquetel")) {
-    return "Abordagem sugerida: confirme se o grupo quer só bebidas ou uma experiência mais completa com comidas e, quando fizer sentido, workshop.";
+    return "Confirme se será só bebidas ou experiência com comidas e, se fizer sentido, workshop.";
   }
   if (type.includes("welcome")) {
-    return "Abordagem sugerida: venda como recepção elegante e rápida. Pergunte se faz sentido incluir snack para sustentar melhor o grupo.";
+    return "Venda como recepção elegante e rápida. Pergunte se snack ajuda o grupo.";
   }
   if (type.includes("workshop")) {
-    return "Abordagem sugerida: destaque experiência interativa, memória do Rio e integração do grupo. É ótimo para agências e eventos corporativos.";
+    return "Destaque experiência interativa, memória do Rio e integração do grupo.";
   }
-  return "Abordagem sugerida: confirme objetivo, horário e perfil do grupo antes de enviar. A proposta deve parecer feita para aquele cliente, não genérica.";
+  return "Confirme objetivo, horário e perfil. A proposta deve parecer feita para o cliente.";
 }
 
 function getUpsellOfferLine(item) {
@@ -1694,8 +1694,8 @@ function getServiceCockpitStatus(readiness, recommendation) {
     return {
       tone: "danger",
       label: "Antes de enviar",
-      title: "Resolva os pontos obrigatórios",
-      detail: `${errors.length} item(ns) travando a proposta. Comece por ${errors[0].label.toLowerCase()}.`,
+      title: "Corrija para enviar",
+      detail: `${errors.length} pendência(s) travam a proposta. Comece por ${errors[0].label.toLowerCase()}.`,
     };
   }
   if (!recommendation.selected.length) {
@@ -1711,7 +1711,7 @@ function getServiceCockpitStatus(readiness, recommendation) {
       tone: "attention",
       label: "Pode avançar",
       title: "Revise os alertas comerciais",
-      detail: `${warnings.length} ponto(s) podem melhorar conversão antes do envio.`,
+      detail: `${warnings.length} ${warnings.length === 1 ? "ponto melhora" : "pontos melhoram"} a conversão.`,
     };
   }
   return {
@@ -1830,7 +1830,7 @@ function renderServiceCockpit() {
         <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Novo relacionamento")}</strong>
         <p>${
           clientMatch
-            ? `Total registrado: ${escapeHtml(formatMoney(totalValue))}. Use o histórico para ajustar abordagem e follow-up.`
+            ? `Total registrado: ${escapeHtml(formatMoney(totalValue))}. Use o histórico para ajustar abordagem e acompanhamento.`
             : "Ainda sem histórico encontrado. Capriche no primeiro contato e registre os próximos passos."
         }</p>
         ${
@@ -1980,7 +1980,7 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
       tone: clientResponse ? "client" : "muted",
       label: "Resposta do cliente",
       value: responseLabels[clientResponse] || "Sem resposta",
-      detail: clientResponse ? "Priorize o próximo passo comercial." : "Acompanhar retorno e fazer follow-up no prazo.",
+      detail: clientResponse ? "Priorize o próximo passo comercial." : "Acompanhe o retorno dentro do prazo combinado.",
     },
     {
       tone: remaining ? "money" : signal ? "warning" : "muted",
@@ -2247,10 +2247,10 @@ function getQuickReplyPresets(status) {
     },
     {
       id: "followup",
-      title: "Follow-up sem resposta",
+      title: "Retorno sem resposta",
       eyebrow: "Retomada comercial",
       note: "Retoma o contato sem soar insistente.",
-      subject: "Follow-up da proposta - Embaixada Carioca",
+      subject: "Retorno sobre a proposta - Embaixada Carioca",
       needsLink: true,
       recommended: recommended === "followup",
       buildText: (context, proposalUrl) =>
@@ -2279,7 +2279,7 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}!`,
           "",
-          `Para reservarmos a data do seu ${context.eventType}, seguimos com o sinal de 50% do valor total acordado.`,
+          `Para reservarmos a data do seu ${context.eventType}, seguimos com o sinal combinado na proposta.`,
           "",
           `A proposta continua aqui para consulta:`,
           proposalUrl,
@@ -2470,7 +2470,7 @@ function renderQuickReplies() {
     context.clientName && context.clientName !== "cliente" && (context.eventType !== "evento" || context.email || context.phone);
 
   if (!hasContext) {
-    nodes.quickReplies.innerHTML = `<p>Abra um lead ou comece uma proposta para liberar mensagens prontas de envio, follow-up e cobrança.</p>`;
+    nodes.quickReplies.innerHTML = `<p>Abra um lead ou comece uma proposta para liberar mensagens prontas de envio, retorno e cobrança.</p>`;
     return;
   }
 
@@ -3250,7 +3250,7 @@ function getContactReviewState(contact) {
   if (missing.length) {
     return {
       status: "error",
-      detail: `Falta ${missing.join(" e ")}. Corrija em Dados do cliente antes de enviar.`,
+      detail: `Falta ${missing.join(" e ")} em Dados do cliente.`,
     };
   }
 
@@ -3263,7 +3263,7 @@ function getContactReviewState(contact) {
   if (!emailOk && !phoneOk) {
     return {
       status: "error",
-      detail: `Revise ${invalid.join(" e ")}. O sistema precisa de pelo menos um canal válido para enviar a proposta.`,
+      detail: `Revise ${invalid.join(" e ")}. É preciso ao menos um canal válido.`,
     };
   }
 
@@ -3271,7 +3271,7 @@ function getContactReviewState(contact) {
     const validChannel = phoneOk ? "celular/WhatsApp" : "e-mail";
     return {
       status: "warning",
-      detail: `${validChannel} válido para envio. Revise também ${invalid.join(" e ")} para evitar perda de retorno.`,
+      detail: `${validChannel} válido. Revise também ${invalid.join(" e ")}.`,
     };
   }
 
@@ -3360,25 +3360,25 @@ function getProposalReviewItems() {
       detail: isAgency
         ? finalClient || groupName
           ? [finalClient ? `Cliente final: ${finalClient}` : "", groupName ? `Grupo: ${groupName}` : ""].filter(Boolean).join(" · ")
-          : "Para agência, registre cliente final ou nome do grupo antes de automatizar."
+          : "Para agência, registre cliente final ou nome do grupo antes de usar como base de resposta."
         : "Cliente direto ou empresa sem intermediário identificado.",
       target: "source",
     },
     {
       id: "commercial_profile",
-      label: "Classificação comercial",
+      label: "Perfil comercial",
       status: commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin ? "ok" : "warning",
       optional: true,
       detail:
         commercialContext.clientType && commercialContext.budgetRange && commercialContext.origin
           ? [commercialContext.clientType, commercialContext.budgetRange, commercialContext.origin].filter(Boolean).join(" · ")
-          : `Sugestão comercial, não bloqueia envio: complete ${[
+          : `Sugestão: complete ${[
               !commercialContext.clientType ? "tipo de cliente" : "",
               !commercialContext.budgetRange ? "faixa de investimento" : "",
               !commercialContext.origin ? "origem do lead" : "",
             ]
               .filter(Boolean)
-              .join(", ")} para priorizar follow-up e melhorar automação.`,
+              .join(", ")} para priorizar o atendimento.`,
       target: "source",
     },
     {
@@ -3423,7 +3423,7 @@ function getProposalReviewItems() {
           ? `Pedido: ${eventType || "evento"}. Troque itens ou formato: a categoria escolhida não combina.`
           : missingBaseCategory
             ? `Confira o produto base de ${requiredCategory}. Há complementos, mas falta o item principal.`
-          : `${selected.length} item(ns): ${selected.map((item) => item.nome).slice(0, 3).join(", ")}${selected.length > 3 ? "..." : ""}.`
+          : `${selected.length} ${selected.length === 1 ? "item" : "itens"}: ${selected.map((item) => item.nome).slice(0, 3).join(", ")}${selected.length > 3 ? "..." : ""}.`
         : "Escolha os itens da proposta antes de enviar.",
       target: "items",
     },
@@ -3493,7 +3493,7 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
   const push = (level, title, detail, target = "review", kind = "risco") => alerts.push({ level, title, detail, target, kind });
 
   if (hasError("contact") || hasError("format") || hasError("date") || hasError("items") || hasError("value") || hasError("conditions")) {
-    push("danger", "Envio bloqueado", "Resolva contato, formato, data/horário, cardápio, valor e condições antes de falar com o cliente.", "review", "bloqueio");
+    push("danger", "Envio bloqueado", "Revise contato, formato, agenda, itens, valor e condições.", "review", "bloqueio");
   }
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Comidas")) {
@@ -3501,7 +3501,7 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
   }
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Welcome Drink")) {
-    push("opportunity", "Welcome Drink possível", "Pode ser oferecido como recepção de chegada antes do coquetel, especialmente para grupos corporativos, agências e eventos com convidados chegando aos poucos.", "items", "upsell");
+    push("opportunity", "Welcome Drink possível", "Boa recepção antes do coquetel, especialmente com chegadas espaçadas.", "items", "upsell");
   }
 
   if (category === "Coquetel" && selected.length && !selectedCategories.has("Workshop de Caipirinha")) {
@@ -3512,16 +3512,16 @@ function getSmartProposalAlerts(items = getProposalReviewItems()) {
     const hasFinalClient = Boolean(context.finalClient || context.snapshot?.client?.finalClient || context.snapshot?.clienteFinal || getFinalClientFromSnapshot(context.snapshot));
     const hasGroupName = Boolean(context.groupName || context.snapshot?.client?.groupName || context.snapshot?.nomeGrupo || getGroupNameFromSnapshot(context.snapshot));
     if (!hasFinalClient && !hasGroupName) {
-      push("warning", "Agência sem cliente final ou grupo", "Registre nome do cliente final ou grupo. Isso ajuda a localizar, evitar confusão e personalizar follow-up.", "source", "qualificação");
+      push("warning", "Agência sem cliente final ou grupo", "Registre cliente final ou grupo para localizar rápido depois.", "source", "qualificação");
     }
   }
 
   if (guests >= 40) {
-    push("warning", "Grupo grande", "Confira fluxo de chegada, privatização, equipe, cardápio e tempo de serviço antes de enviar.", "client", "operação");
+    push("warning", "Grupo grande", "Confira chegada, equipe, cardápio e tempo de serviço.", "client", "operação");
   }
 
   if (totals.privatization?.amount > 0) {
-    push("warning", "Privatização no valor", "Explique a exclusividade/necessidade operacional para o cliente entender o investimento.", "items", "preço");
+    push("warning", "Privatização no valor", "Explique exclusividade e necessidade operacional.", "items", "preço");
   }
 
   if (eventDate) {
@@ -3553,11 +3553,11 @@ function getProposalConfidence(items = getProposalReviewItems(), alerts = getSma
   const label = status === "blocked" ? "Bloqueado" : score >= 95 ? "Pronto para envio automático futuro" : score >= 90 ? "Alta confiança" : "Revisão humana recomendada";
   const note =
     status === "blocked"
-      ? "Ainda existe risco de envio errado. Corrija os pontos obrigatórios."
+      ? "Ainda há risco de erro. Corrija os obrigatórios."
       : score >= 95
         ? "Checklist, valor, agenda e contexto estão fortes para envio com mínima intervenção."
         : score >= 90
-          ? "Pode avançar com revisão rápida. Confira alertas comerciais antes do disparo."
+          ? "Pode avançar. Confira os alertas antes do envio."
           : "Use a revisão em 60 segundos para reduzir atrito e aumentar conversão.";
   return { score, status, label, note };
 }
@@ -3573,16 +3573,16 @@ function getProposalAutomationReadiness(items = getProposalReviewItems(), alerts
       : "humano_rapido";
   const label =
     status === "humano_obrigatorio"
-      ? "Humano obrigatório"
+      ? "Revisão obrigatória"
       : status === "candidato_automatico"
-        ? "Candidato a automação futura"
+        ? "Pronto para padronizar no futuro"
         : "Revisão humana rápida";
   const note =
     status === "humano_obrigatorio"
-      ? "Existe bloqueio real. O sistema não deve disparar automaticamente."
+      ? "Há bloqueio. Não envie automaticamente."
       : status === "candidato_automatico"
-        ? "Todos os fatores críticos estão consistentes. Bom caso para aprender padrão de envio automático."
-        : "Pode ser enviado por humano com revisão curta. Alertas comerciais ainda melhoram conversão.";
+        ? "Fatores críticos consistentes. Bom modelo para padronizar."
+        : "Pode ser enviado por humano. Alertas ainda ajudam a vender.";
   return {
     status,
     label,
@@ -4131,10 +4131,10 @@ function renderFormSourcePanel() {
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
   const sourceTitle = data.isManualDraft ? "Dados comerciais da proposta" : "Dados recebidos do formulário";
-  const sourceSubtitle = data.isManualDraft ? "Complete o contexto para priorizar e automatizar melhor" : "Base para proposta segura e automação futura";
+  const sourceSubtitle = data.isManualDraft ? "Complete o perfil para priorizar melhor" : "Base para proposta segura";
   const sourceHelp = data.isManualDraft
     ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
-    : "Complete o que faltar aqui uma vez. O checklist usa estes dados para liberar envio com menos ajustes e menos risco.";
+    : "Complete uma vez. O checklist usa estes dados para reduzir ajustes e risco.";
 
   nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
   nodes.formSourcePanel.dataset.sourceKey = getSourceOverrideKey();
@@ -4155,9 +4155,9 @@ function renderFormSourcePanel() {
     </div>
     <div class="form-source-edit">
       <div>
-        <span>Contexto para atendimento e automação</span>
-        <strong>${escapeHtml(data.isManualDraft ? "Registre o contexto comercial antes de enviar" : "Confira o que veio do cliente e complete só o que faltar")}</strong>
-        <p>Esses campos alimentam a revisão, o histórico do cliente e a futura resposta automática.</p>
+        <span>Contexto para atendimento</span>
+        <strong>${escapeHtml(data.isManualDraft ? "Complete o perfil antes de enviar" : "Confira e complete só o que faltar")}</strong>
+        <p>Esses dados alimentam revisão, histórico e respostas futuras.</p>
       </div>
       <div class="form-source-edit-grid">
         ${renderSourceSelect("clientType", "Tipo de cliente", data.clientType, sourceClientTypeOptions)}
@@ -4284,10 +4284,10 @@ function getLeadReadinessItems() {
     },
     {
       id: "profile",
-      label: "Classificação comercial",
+      label: "Perfil comercial",
       status: commercialProfile?.status || "warning",
       optional: true,
-      detail: commercialProfile?.detail || "Sugestão comercial, não bloqueia envio: tipo de cliente, faixa de investimento e origem ajudam no follow-up.",
+      detail: commercialProfile?.detail || "Sugestão: tipo, investimento e origem ajudam a priorizar.",
       target: "source",
     },
     {
@@ -4315,7 +4315,9 @@ function getLeadReadinessItems() {
       id: "menu",
       label: "Formato e itens",
       status: items?.status || "error",
-      detail: selected.length ? `${selected.length} item(ns) selecionado(s). Confira se combinam com o pedido.` : "Escolha o pacote principal.",
+      detail: selected.length
+        ? `${selected.length} ${selected.length === 1 ? "item selecionado" : "itens selecionados"}. Confira se combinam com o pedido.`
+        : "Escolha o pacote principal.",
       target: "items",
     },
     {
@@ -4350,8 +4352,8 @@ function getProposalApprovalMessage(items = getLeadReadinessItems()) {
       tone: "blocker",
       eyebrow: "Checklist de aprovação",
       title: "Ainda não envie para o cliente",
-      note: "Resolva os pontos obrigatórios para evitar proposta incompleta, valor errado ou retorno sem canal claro.",
-      label: `${errors.length} obrigatório(s)`,
+      note: "Corrija os obrigatórios para evitar proposta incompleta ou valor errado.",
+      label: `${errors.length} ${errors.length === 1 ? "pendência" : "pendências"}`,
     };
   }
   if (warnings.length) {
@@ -4362,8 +4364,8 @@ function getProposalApprovalMessage(items = getLeadReadinessItems()) {
       eyebrow: "Checklist de aprovação",
       title: attentionWarnings ? "Pode enviar, mas vale revisar" : "Pode enviar. Sugestão comercial",
       note: attentionWarnings
-        ? "A proposta está montada. Os alertas abaixo ajudam a aumentar a chance de resposta e fechamento."
-        : "Os dados essenciais estão prontos. Completar o contexto comercial ajuda no acompanhamento, mas não trava o envio.",
+        ? "Proposta montada. Alertas aumentam chance de resposta."
+        : "Essenciais prontos. Completar o perfil ajuda, mas não trava envio.",
       label: attentionWarnings ? `${attentionWarnings} atenção` : `${optionalWarnings} sugestão`,
     };
   }
@@ -4419,7 +4421,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       detail: `${firstIssue.detail} O sistema só libera envio quando este ponto estiver claro.`,
       actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "client",
-      statusLabel: `${errors.length} obrigatório(s)`,
+      statusLabel: `${errors.length} ${errors.length === 1 ? "pendência" : "pendências"}`,
     };
   }
   if (approved) {
@@ -4428,8 +4430,8 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       eyebrow: "Pronto para cliente",
       title: "Enviar proposta pelo canal escolhido",
       detail: warnings.length
-        ? "Checklist aprovado. As sugestões comerciais continuam visíveis, mas não bloqueiam o envio."
-        : "Checklist aprovado nesta versão. Envie por WhatsApp ou e-mail e acompanhe o retorno pelo funil.",
+        ? "Checklist aprovado. Sugestões seguem visíveis, sem travar envio."
+        : "Checklist aprovado. Envie e acompanhe pelo funil.",
       actionLabel: "Enviar proposta",
       target: "client",
       statusLabel: "Aprovado",
@@ -4454,7 +4456,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       tone: "ready",
       eyebrow: "Último passo",
       title: "Aprovar revisão e salvar envio",
-      detail: "Cliente, agenda, cardápio, valor e condições estão coerentes. Faça a aprovação humana antes de disparar.",
+      detail: "Cliente, agenda, cardápio, valor e condições conferidos. Aprove antes de enviar.",
       actionLabel: "Revisado, pode enviar",
       target: "review",
       statusLabel: "Pronto",
@@ -4464,7 +4466,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
     tone: "approved",
     eyebrow: "Pronto para cliente",
     title: "Enviar proposta pelo canal escolhido",
-    detail: "Checklist aprovado nesta versão. Envie por WhatsApp ou e-mail e acompanhe o retorno pelo funil.",
+    detail: "Checklist aprovado. Envie e acompanhe pelo funil.",
     actionLabel: "Enviar proposta",
     target: "client",
     statusLabel: "Aprovado",
@@ -4705,9 +4707,9 @@ function renderLeadReviewPanel() {
   const guide = getReviewGuide(items, false);
   const visibleSmartAlerts = smartAlerts.filter((alert) => alert.level !== "success").slice(0, errors ? 1 : 2);
   const focusNote = errors
-    ? "Resolva o primeiro bloqueio acima. Depois confira o roteiro e salve a proposta."
+    ? "Corrija o primeiro bloqueio. Depois salve a proposta."
     : warnings
-      ? "A proposta pode avançar, mas estes pontos aumentam a chance de resposta e fechamento."
+      ? "Pode avançar. Estes pontos ajudam a fechar."
       : "Tudo essencial está no lugar. Faça a aprovação humana antes do envio ao cliente.";
   nodes.leadReviewPanel.className = `lead-review-panel ${errors ? "has-blocker" : warnings ? "has-warning" : "is-ready"}`;
   nodes.leadReviewPanel.innerHTML = `
@@ -4783,7 +4785,7 @@ function renderLeadReviewPanel() {
     <details class="smart-alerts is-detail">
       <summary class="smart-alerts-heading">
         <span>Leitura completa</span>
-        <small>Use quando quiser revisar riscos, oportunidades e automação com mais calma.</small>
+        <small>Use quando quiser revisar riscos e oportunidades com mais calma.</small>
       </summary>
       <div class="smart-alerts-grid">
         ${smartAlerts
@@ -4963,7 +4965,7 @@ function renderAvailabilityAlert() {
   nodes.availabilityAlert.className = `availability-alert ${hasSoldConflict ? "availability-danger" : "availability-warning"}`;
   nodes.availabilityAlert.innerHTML = `
     <strong>${hasSoldConflict ? "Conflito com evento vendido" : "Atenção: possível disputa de agenda"}</strong>
-    <span>${conflicts.length} item(ns) no mesmo dia e horário. Confirme disponibilidade antes de avançar.</span>
+    <span>${conflicts.length} ${conflicts.length === 1 ? "registro" : "registros"} no mesmo dia e horário. Confirme disponibilidade antes de avançar.</span>
     <div>
       ${conflicts
         .slice(0, 3)
@@ -5701,7 +5703,7 @@ function renderSummary() {
   nodes.grandTotal.textContent = formatMoney(totals.total);
   nodes.proposalTotal.textContent = formatMoney(totals.total);
   nodes.totalMeta.textContent = selected.length
-    ? `${selected.length} item(ns), ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.`
+    ? `${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.`
     : "Selecione itens para montar o orçamento.";
 
   nodes.selectedItems.innerHTML = selected.length
@@ -5762,13 +5764,13 @@ function renderSendReview() {
   const title = summary.ready ? (approved ? "Revisão aprovada" : "Pronto para revisar") : "Revise antes de enviar";
   const note = summary.ready
     ? approved
-      ? "Checklist confirmado. Use WhatsApp ou e-mail para enviar sem risco de disparo acidental."
+      ? "Checklist confirmado. Use WhatsApp ou e-mail para enviar com segurança."
       : summary.attentionWarnings
-      ? `${summary.attentionWarnings} ponto(s) de atenção. Dá para enviar, mas vale conferir.`
+      ? `${summary.attentionWarnings} ${summary.attentionWarnings === 1 ? "ponto de atenção" : "pontos de atenção"}. Pode enviar, mas confira.`
       : summary.optionalWarnings
       ? `${summary.optionalWarnings} sugestão(ões) comercial(is). Pode enviar ou completar para melhorar acompanhamento.`
       : "Dados essenciais, cardápio e valor estão coerentes."
-    : `${summary.errors} pendência(s) impedem o envio. Corrija para evitar proposta errada.`;
+    : `${summary.errors} pendência(s) impedem envio seguro.`;
   const nextAction = summary.ready
     ? "Enviar link por WhatsApp"
     : summary.errors
@@ -5776,7 +5778,7 @@ function renderSendReview() {
       : "Conferir pontos de atenção";
   const nextActionNote = summary.ready
     ? "WhatsApp tende a acelerar a resposta; o link registra aprovação, ajuste ou comprovante."
-    : "Clique em um item abaixo para ir direto ao campo que precisa de revisão.";
+    : "Clique em um item para ir ao campo certo.";
 
   nodes.sendReviewPanel.className = `send-review-panel is-${summary.ready ? "ready" : "blocked"}${approved ? " is-approved" : ""}`;
   nodes.sendReviewPanel.innerHTML = `
@@ -5879,12 +5881,12 @@ function renderSendReview() {
       <article>
         <span>Revisão</span>
         <strong>${escapeHtml(approved ? "Confirmada" : summary.ready ? "Falta aprovar" : "Pendente")}</strong>
-        <small>${escapeHtml(approved ? "Checklist travado para esta versão." : "Clique em “Revisado, pode enviar” antes do disparo.")}</small>
+        <small>${escapeHtml(approved ? "Checklist travado para esta versão." : "Aprove antes de enviar.")}</small>
       </article>
       <article>
         <span>Total</span>
         <strong>${escapeHtml(formatMoney(totals.total))}</strong>
-        <small>${escapeHtml(`${getSelectedItems().length} item(ns) · sinal em ${formatSignalDeadlineHours()}`)}</small>
+        <small>${escapeHtml(`${getSelectedItems().length} ${getSelectedItems().length === 1 ? "item" : "itens"} · sinal em ${formatSignalDeadlineHours()}`)}</small>
       </article>
     </div>
     <div class="send-review-grid">
@@ -6806,9 +6808,9 @@ function renderSystemHealth() {
   const warnings = checks.filter((item) => item.status === "warning").length;
   const ok = checks.filter((item) => item.status === "ok").length;
   const summaryText = errors
-    ? `${errors} ponto(s) precisam de ajuste antes de operar com tranquilidade.`
+    ? `${errors} ajuste(s) pendente(s) antes de operar.`
     : warnings
-      ? `${ok} item(ns) ok e ${warnings} ponto(s) de atenção.`
+      ? `${ok} ${ok === 1 ? "item ok" : "itens ok"} e ${warnings} atenção.`
       : "Tudo pronto para operar.";
   nodes.systemHealthSummary.textContent = summaryText;
   nodes.systemHealthSummary.className = `system-health-summary is-${errors ? "error" : warnings ? "warning" : "ok"}`;
@@ -6876,7 +6878,7 @@ async function runSystemHealthCheck() {
       checks.push(
         error || data?.ok === false
           ? { status: "error", label: "WhatsApp", title: "Z-API precisa de atenção", detail: data?.message || (await getFunctionErrorMessage(error)) || "Confira secrets da Z-API." }
-          : { status: "ok", label: "WhatsApp", title: "Z-API configurada", detail: "Função respondeu em modo teste, sem disparar mensagem." },
+          : { status: "ok", label: "WhatsApp", title: "Z-API configurada", detail: "Função respondeu em modo teste, sem enviar mensagem." },
       );
     } catch (error) {
       checks.push({ status: "error", label: "WhatsApp", title: "Falha ao testar Z-API", detail: getHealthErrorMessage(error) });
@@ -7502,7 +7504,7 @@ function getReportActionInsight({ config, reportItems, proposalItems, soldItems 
   let nextAction = "Use este relatório para abrir os itens mais recentes e registrar o próximo passo.";
 
   if (config.title.toLowerCase().includes("responder") || awaiting) {
-    nextAction = "Priorize follow-up: propostas sem resposta perdem força depois de 24h.";
+    nextAction = "Priorize retorno: propostas sem resposta perdem força depois de 24h.";
   } else if (config.title.toLowerCase().includes("negociação") || negotiation) {
     nextAction = "Feche a próxima ação da negociação: ajuste, aprovação ou sinal.";
   } else if (config.title.toLowerCase().includes("sinal") || confirmed) {
@@ -8202,7 +8204,7 @@ function getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, re
     return {
       tone: "hot",
       label: "Cliente recorrente em cotação",
-      detail: "Mais de uma oportunidade aberta. Priorize follow-up consultivo.",
+      detail: "Mais de uma oportunidade aberta. Priorize acompanhamento consultivo.",
     };
   }
   if (latest?.kind === "proposal" && normalizeProposalStatus(latest.status) === "negociacao") {
@@ -8315,7 +8317,7 @@ function getClientNextAction(item) {
   if (!item) return "Cadastrar primeiro contato.";
   const status = normalizeProposalStatus(item.status);
   if (item.kind === "request" || status === "lead_recebido") return "Abrir lead e montar proposta.";
-  if (status === "proposta_enviada") return "Fazer follow-up e buscar resposta.";
+  if (status === "proposta_enviada") return "Retomar contato e buscar resposta.";
   if (status === "negociacao") return "Resolver ajustes e avançar para sinal.";
   if (status === "confirmado") return "Registrar pagamento restante.";
   if (status === "pagamento_final") return "Avançar para planejamento.";
@@ -8716,7 +8718,7 @@ function getActionTaskSteps(task = {}) {
   if (title.includes("responder lead")) {
     return ["Abrir lead", "Conferir data, horário, pax e contato", "Enviar proposta ou resposta inicial"];
   }
-  if (title.includes("follow-up")) {
+  if (title.includes("follow-up") || title.includes("retorno")) {
     return ["Abrir proposta", "Ver último envio e resposta", "Reenviar link ou ligar para destravar"];
   }
   if (title.includes("registrar sinal")) {
@@ -8744,7 +8746,7 @@ function renderActionTasks(items = getPipelineItems()) {
     nodes.actionCenterMeta.textContent = `${tasks.length} no radar · ${criticalCount} agora · ${commercialCount} venda · ${operationCount} operação`;
   }
   if (!tasks.length) {
-    nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora. O funil está limpo para novos contatos e follow-ups.</p>`;
+    nodes.actionList.innerHTML = `<p>Nenhuma ação crítica agora. O funil está limpo para novos contatos e retornos pendentes.</p>`;
     return;
   }
   const topTask = tasks[0];
@@ -8955,7 +8957,9 @@ function getOperationalAgendaCollections(items = getPipelineItems()) {
     upcoming,
     planningQueue,
     conflicts: conflictPairs.slice(0, 6),
-    busiestDay: busiestDay ? `${formatDateFromIso(busiestDay[0])} com ${busiestDay[1]} item(ns)` : "Sem concentração crítica na agenda.",
+    busiestDay: busiestDay
+      ? `${formatDateFromIso(busiestDay[0])} com ${busiestDay[1]} ${busiestDay[1] === 1 ? "registro" : "registros"}`
+      : "Sem concentração crítica na agenda.",
   };
 }
 
@@ -9629,7 +9633,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
     nodes.flowStatus.textContent = templateStatus
       ? `${templateStatus} Revise data, horário, pax e observações antes de enviar.`
       : eventCategory
-      ? `${eventCategory} carregado do formulário. Confira cardápio, pax, data e horário antes de enviar.`
+      ? `${eventCategory} carregado. Confira cardápio, pax e agenda.`
       : "Lead carregado do formulário. Escolha o formato e confira os pontos essenciais.";
   }
   nodes.coquetelChoices?.classList.toggle("is-hidden", guidedKey !== "coquetel");
@@ -11210,7 +11214,7 @@ async function openEmail() {
       channel: "email",
       status: "canceled",
       title: "Proposta comercial",
-      detail: "A equipe cancelou o envio de e-mail antes do disparo.",
+      detail: "A equipe cancelou o envio de e-mail antes de confirmar.",
       target: email,
     });
     return;
