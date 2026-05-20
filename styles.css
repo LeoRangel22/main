@@ -2496,14 +2496,14 @@ textarea[aria-invalid="true"] {
 .pipeline-card small {
   color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 750;
+  font-weight: 650;
   line-height: 1.12;
 }
 
 .pipeline-card-event-line {
   color: var(--verde) !important;
   font-size: 0.82rem !important;
-  font-weight: 900 !important;
+  font-weight: 820 !important;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2550,7 +2550,7 @@ textarea[aria-invalid="true"] {
   color: var(--verde);
   display: inline-flex;
   font-size: 0.58rem;
-  font-weight: 950;
+  font-weight: 780;
   line-height: 1;
   min-height: 16px;
   overflow: visible;
@@ -2563,6 +2563,7 @@ textarea[aria-invalid="true"] {
   background: rgba(24, 58, 45, 0.1);
   border-color: rgba(24, 58, 45, 0.14);
   color: var(--verde-escuro);
+  font-weight: 820;
   max-width: 128px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2602,7 +2603,7 @@ textarea[aria-invalid="true"] {
   color: var(--verde-escuro);
   display: block;
   font-size: 0.84rem;
-  font-weight: 850;
+  font-weight: 680;
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2665,7 +2666,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-next-action span {
   color: var(--muted);
   font-size: 0.56rem;
-  font-weight: 950;
+  font-weight: 820;
   letter-spacing: 0;
   line-height: 1;
   text-transform: uppercase;
@@ -2674,7 +2675,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-next-action strong {
   color: var(--verde-escuro);
   font-size: 0.7rem;
-  font-weight: 950;
+  font-weight: 850;
   line-height: 1.05;
   text-align: right;
 }
@@ -2682,7 +2683,7 @@ textarea[aria-invalid="true"] {
 .pipeline-card-next-action small {
   color: var(--muted) !important;
   font-size: 0.6rem !important;
-  font-weight: 760 !important;
+  font-weight: 620 !important;
   grid-column: 1 / -1;
   line-height: 1.05;
 }
@@ -2989,7 +2990,7 @@ textarea[aria-invalid="true"] {
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 0.53rem !important;
-  font-weight: 820 !important;
+  font-weight: 720 !important;
   line-height: 1;
   max-width: 96px;
   min-height: 14px;
@@ -6727,6 +6728,7 @@ textarea {
 .pipeline-reopen-chip {
   flex: 0 0 auto;
   font-size: 0.58rem;
+  font-weight: 700;
   height: 20px;
   min-height: 20px;
   padding: 0 7px;
