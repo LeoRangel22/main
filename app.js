@@ -4174,20 +4174,26 @@ function renderFormSourcePanel() {
         ${renderSourceTextarea("observations", "Observação livre do cliente", data.observations, "Detalhes importantes, acessibilidade, pedido especial, montagem...")}
       </div>
     </div>
-    <div class="form-source-grid">
-      ${renderSourceCard("Referência", data.reference, { fallback: "Sem referência" })}
-      ${renderSourceCard("Tipo de cliente", data.clientType, { important: true, fallback: "Classifique para priorizar" })}
-      ${renderSourceCard("Empresa ou agência", data.company, { fallback: "Não informado" })}
-      ${renderSourceCard("Cliente final / grupo", clientContext, { important: ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(data.clientType), fallback: "Peça cliente final ou grupo" })}
-      ${renderSourceCard("Faixa de investimento", data.budgetRange, { important: true, fallback: "Não definida" })}
-      ${renderSourceCard("Origem do lead", data.origin, { fallback: "Não informada" })}
-      ${renderSourceCard("Momento desejado", data.moment, { important: true })}
-      ${renderSourceCard("Ocasião", data.occasion, { important: true })}
-      ${renderSourceCard("Flexibilidade de data", flexibility, { fallback: "Não informada" })}
-      ${renderSourceCard("Período e chegada", timeContext, { fallback: "Use data e horário acima" })}
-      ${renderSourceCard("Pax e duração do formulário", [data.guests ? `${data.guests} pax` : "", data.duration].filter(Boolean).join(" · "), { fallback: "Usar campos acima" })}
-      ${renderSourceCard("Formato solicitado", data.eventType, { fallback: "Definir na configuração" })}
-    </div>
+    <details class="form-source-full-summary">
+      <summary>
+        <span>Ver resumo completo recebido</span>
+        <small>Use só se precisar conferir o pedido original.</small>
+      </summary>
+      <div class="form-source-grid">
+        ${renderSourceCard("Referência", data.reference, { fallback: "Sem referência" })}
+        ${renderSourceCard("Tipo de cliente", data.clientType, { important: true, fallback: "Classifique para priorizar" })}
+        ${renderSourceCard("Empresa ou agência", data.company, { fallback: "Não informado" })}
+        ${renderSourceCard("Cliente final / grupo", clientContext, { important: ["Agência de turismo receptivo / DMC", "Agência de marketing / eventos"].includes(data.clientType), fallback: "Peça cliente final ou grupo" })}
+        ${renderSourceCard("Faixa de investimento", data.budgetRange, { important: true, fallback: "Não definida" })}
+        ${renderSourceCard("Origem do lead", data.origin, { fallback: "Não informada" })}
+        ${renderSourceCard("Momento desejado", data.moment, { important: true })}
+        ${renderSourceCard("Ocasião", data.occasion, { important: true })}
+        ${renderSourceCard("Flexibilidade de data", flexibility, { fallback: "Não informada" })}
+        ${renderSourceCard("Período e chegada", timeContext, { fallback: "Use data e horário acima" })}
+        ${renderSourceCard("Pax e duração do formulário", [data.guests ? `${data.guests} pax` : "", data.duration].filter(Boolean).join(" · "), { fallback: "Usar campos acima" })}
+        ${renderSourceCard("Formato solicitado", data.eventType, { fallback: "Definir na configuração" })}
+      </div>
+    </details>
     <div class="form-source-briefing ${briefingBlocks.length ? "" : "is-empty"}">
       ${
         briefingBlocks.length
@@ -4411,7 +4417,8 @@ function getReviewGuideActionLabel(item) {
 
 function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
   const errors = items.filter((item) => item.status === "error");
-  const warnings = items.filter((item) => item.status === "warning");
+  const warnings = items.filter((item) => item.status === "warning" && !isOptionalReviewItem(item));
+  const optionalWarnings = items.filter((item) => item.status === "warning" && isOptionalReviewItem(item));
   const firstIssue = errors[0] || warnings[0] || null;
   if (errors.length) {
     return {
@@ -4430,7 +4437,7 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       eyebrow: "Pronto para cliente",
       title: "Enviar proposta pelo canal escolhido",
       detail: warnings.length
-        ? "Checklist aprovado. Sugestões seguem visíveis, sem travar envio."
+        ? "Checklist aprovado. Sugestões comerciais seguem visíveis, sem travar envio."
         : "Checklist aprovado. Envie e acompanhe pelo funil.",
       actionLabel: "Enviar proposta",
       target: "client",
@@ -4438,17 +4445,14 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
     };
   }
   if (warnings.length) {
-    const optionalWarnings = warnings.filter(isOptionalReviewItem).length;
-    const attentionWarnings = warnings.length - optionalWarnings;
-    const onlyOptional = optionalWarnings > 0 && attentionWarnings === 0;
     return {
       tone: "warning",
-      eyebrow: onlyOptional ? "Sugestão comercial" : "Atenção antes de enviar",
-      title: `${onlyOptional ? "Melhorar" : "Conferir"}: ${firstIssue.label}`,
-      detail: `${firstIssue.detail} ${onlyOptional ? "Você pode enviar agora ou completar para melhorar o acompanhamento." : "Esta conferência melhora a resposta do cliente sem bloquear o envio."}`,
+      eyebrow: "Atenção antes de enviar",
+      title: `Conferir: ${firstIssue.label}`,
+      detail: `${firstIssue.detail} Esta conferência melhora a resposta do cliente sem bloquear o envio.`,
       actionLabel: getReviewGuideActionLabel(firstIssue),
       target: firstIssue.target || "review",
-      statusLabel: onlyOptional ? `${optionalWarnings} sugestão` : `${attentionWarnings} atenção`,
+      statusLabel: `${warnings.length} atenção`,
     };
   }
   if (!approved) {
@@ -4456,10 +4460,12 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
       tone: "ready",
       eyebrow: "Último passo",
       title: "Aprovar revisão e salvar envio",
-      detail: "Cliente, agenda, cardápio, valor e condições conferidos. Aprove antes de enviar.",
+      detail: optionalWarnings.length
+        ? "Essenciais conferidos. Há sugestões comerciais opcionais, mas elas não travam o envio."
+        : "Cliente, agenda, cardápio, valor e condições conferidos. Aprove antes de enviar.",
       actionLabel: "Revisado, pode enviar",
       target: "review",
-      statusLabel: "Pronto",
+      statusLabel: optionalWarnings.length ? "Pronto com sugestão" : "Pronto",
     };
   }
   return {
@@ -4476,24 +4482,26 @@ function getReviewGuide(items = getLeadReadinessItems(), approved = false) {
 function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
   const groups = [
     { label: "Contato", ids: ["contact"], target: "client" },
-    { label: "Cliente e contexto", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
+    { label: "Cliente final", ids: ["client_context", "profile", "commercial_profile"], target: "source" },
     { label: "Data, hora e pax", ids: ["date", "agenda", "availability", "guests"], target: "client" },
     { label: "Cardápio e valor", ids: ["format", "menu", "items", "value"], target: "items" },
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
   ];
   return groups.map((group, index) => {
     const groupItems = items.filter((item) => group.ids.includes(item.id));
+    const blockingGroupItems = groupItems.filter((item) => !isOptionalReviewItem(item));
+    const optionalGroupWarnings = groupItems.filter((item) => item.status === "warning" && isOptionalReviewItem(item));
     const status = groupItems.some((item) => item.status === "error")
       ? "error"
-      : groupItems.some((item) => item.status === "warning")
+      : blockingGroupItems.some((item) => item.status === "warning")
         ? "warning"
         : "ok";
-    const firstIssue = groupItems.find((item) => item.status !== "ok");
+    const firstIssue = blockingGroupItems.find((item) => item.status !== "ok") || optionalGroupWarnings[0];
     return {
       ...group,
       number: index + 1,
       status,
-      statusLabel: getReviewStatusLabel(status, firstIssue || groupItems.find(isOptionalReviewItem)),
+      statusLabel: status === "ok" && optionalGroupWarnings.length ? "Sugestão" : getReviewStatusLabel(status, firstIssue),
       detail: firstIssue?.detail || "Conferido",
       target: firstIssue?.target || group.target,
     };

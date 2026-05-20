@@ -3656,6 +3656,56 @@ label.pipeline-status-control:focus-within select {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.form-source-full-summary {
+  border-top: 1px solid rgba(24, 58, 45, 0.1);
+  padding-top: 2px;
+}
+
+.form-source-full-summary summary {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.form-source-full-summary summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-source-full-summary summary::before {
+  content: "▸";
+  color: var(--verde);
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.form-source-full-summary[open] summary::before {
+  content: "▾";
+}
+
+.form-source-full-summary summary span {
+  flex: 1;
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.form-source-full-summary summary small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.form-source-full-summary .form-source-grid {
+  margin-top: 8px;
+}
+
 .form-source-card {
   background: rgba(255, 255, 255, 0.84);
   border: 1px solid rgba(24, 58, 45, 0.11);
