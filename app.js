@@ -2235,12 +2235,13 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}!`,
           "",
-          `Preparei a proposta comercial da Embaixada Carioca para o seu ${context.eventType} no dia ${context.eventDate} às ${context.eventTime}, para ${context.guests} pessoa(s).`,
+          `Preparamos a proposta da Embaixada Carioca para ${context.eventType}, no dia ${context.eventDate} às ${context.eventTime}, para ${context.guests} pessoa(s).`,
           "",
-          "Segue o link para você ver com calma:",
+          "Você pode revisar tudo pelo link abaixo:",
           proposalUrl,
           "",
-          "Se fizer sentido, consigo ajustar data, horário, convidados e formato para chegar na melhor versão.",
+          `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
+          "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
           "",
           `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
@@ -2257,12 +2258,10 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}! Tudo bem?`,
           "",
-          `Passando para saber se você conseguiu ver a proposta do seu ${context.eventType} na Embaixada Carioca.`,
-          "",
-          "Deixo o link aqui novamente:",
+          `Deixei sua proposta para ${context.eventType} na Embaixada Carioca aqui à mão para você revisar quando puder:`,
           proposalUrl,
           "",
-          "Se fizer sentido, consigo ajustar alguns pontos para chegarmos na versão ideal para o grupo.",
+          "Se algum ponto ainda não estiver ideal, ajustamos data, horário, convidados ou formato sem problema.",
           "",
           `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
@@ -2279,12 +2278,12 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}!`,
           "",
-          `Para reservarmos a data do seu ${context.eventType}, seguimos com o sinal combinado na proposta.`,
+          `Para reservar a data do seu ${context.eventType}, o próximo passo é o sinal indicado na proposta.`,
           "",
-          `A proposta continua aqui para consulta:`,
+          "A proposta continua aqui para consulta:",
           proposalUrl,
           "",
-          "Assim que o sinal entrar, já deixamos a reserva confirmada e seguimos para a parte operacional.",
+          "No link você vê os dados bancários, copia a chave Pix e pode anexar o comprovante. A reserva fica confirmada após validação da equipe.",
           "",
           `Se preferir conversar com a equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
@@ -2301,14 +2300,14 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}!`,
           "",
-          `Passando para alinhar o pagamento restante do seu ${context.eventType} na Embaixada Carioca.`,
+          `Estamos alinhando a etapa final do seu ${context.eventType} na Embaixada Carioca.`,
           "",
-          "Deixo o link da proposta aqui como referência:",
+          "Segue o link da proposta para referência e pagamento restante:",
           proposalUrl,
           "",
-          `Se precisar, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
+          "Com o saldo confirmado, seguimos com os detalhes finais da operação.",
           "",
-          "A equipe acompanha por esses canais.",
+          `Se precisar, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -2323,8 +2322,8 @@ function getQuickReplyPresets(status) {
         [
           `Olá, ${context.clientName}!`,
           "",
-          `Estamos na reta final do seu ${context.eventType} na Embaixada Carioca.`,
-          `Hoje o combinado está assim: ${context.eventDate} às ${context.eventTime}, ${context.guests} pessoa(s), duração estimada de ${context.duration}h.`,
+          `Estamos chegando na reta final do seu ${context.eventType} na Embaixada Carioca.`,
+          `O combinado atual é: ${context.eventDate} às ${context.eventTime}, ${context.guests} pessoa(s), duração estimada de ${context.duration}h.`,
           "",
           "Deixo o link da proposta aqui para referência final:",
           proposalUrl,
@@ -2348,11 +2347,12 @@ function getQuickReplyPayload(replyId, context, proposalUrl) {
 
 function appendBotWhatsAppNotice(message) {
   const text = String(message || "").trim();
-  const notice = [
-    "Observação importante: esta mensagem foi enviada pelo número automático da Embaixada Carioca.",
-    `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-  ].join("\n");
   if (text.includes("número automático da Embaixada Carioca")) return text;
+  const noticeLines = ["Observação: este envio saiu pelo número automático da Embaixada Carioca."];
+  if (!text.includes(HUMAN_EVENTS_EMAIL) && !text.includes(HUMAN_EVENTS_WHATSAPP)) {
+    noticeLines.push(`Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`);
+  }
+  const notice = noticeLines.join("\n");
   return [text, "", notice].filter(Boolean).join("\n");
 }
 
@@ -10943,12 +10943,13 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return [
     `Olá${firstName ? `, ${firstName}` : ""}!`,
     "",
-    "Sua proposta da Embaixada Carioca está pronta.",
+    "Sua proposta da Embaixada Carioca está pronta para revisão.",
     "",
-    "Link seguro da proposta:",
+    "Você pode acessar pelo link abaixo:",
     proposalUrl,
     "",
-    `No link você pode aprovar, pedir ajustes e anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
+    `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
+    "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
   ].join("\n");
 }
 
