@@ -4,6 +4,7 @@ const PRIVATIZATION_KEY = "embaixada_orcamentos_privatizacao_v1";
 const TERMS_KEY = "embaixada_orcamentos_condicoes_v1";
 const SUPABASE_CONFIG_KEY = "embaixada_orcamentos_supabase_v1";
 const INTEGRATION_LOG_KEY = "embaixada_orcamentos_envios_v1";
+const COMMUNICATION_TEMPLATES_KEY = "embaixada_orcamentos_comunicacao_v1";
 const DEFAULT_SUPABASE_URL = "https://pdgbnpztdnrvrphzdjas.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
@@ -2220,130 +2221,277 @@ function getQuickReplyContext() {
   };
 }
 
-function getQuickReplyPresets(status) {
-  const recommended = getQuickReplyRecommendation(status);
-  return [
-    {
-      id: "proposta",
-      title: "Proposta enviada",
-      eyebrow: "Primeiro envio",
-      note: "Apresenta a proposta com contexto e CTA de ajuste.",
-      subject: "Proposta de evento - Embaixada Carioca",
-      needsLink: true,
-      recommended: recommended === "proposta",
-      buildText: (context, proposalUrl) =>
-        [
-          `Olá, ${context.clientName}!`,
-          "",
-          `Preparamos a proposta da Embaixada Carioca para ${context.eventType}, no dia ${context.eventDate} às ${context.eventTime}, para ${context.guests} pessoa(s).`,
-          "",
-          "Você pode revisar tudo pelo link abaixo:",
-          proposalUrl,
-          "",
-          `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
-          "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
-          "",
-          "Para manter tudo organizado, prefira responder pelo link da proposta.",
-          `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-        ].join("\n"),
-    },
-    {
-      id: "followup",
-      title: "Retorno sem resposta",
-      eyebrow: "Retomada comercial",
-      note: "Retoma o contato sem soar insistente.",
-      subject: "Retorno sobre a proposta - Embaixada Carioca",
-      needsLink: true,
-      recommended: recommended === "followup",
-      buildText: (context, proposalUrl) =>
-        [
-          `Olá, ${context.clientName}! Tudo bem?`,
-          "",
-          `Deixei sua proposta para ${context.eventType} na Embaixada Carioca aqui à mão para você revisar quando puder:`,
-          proposalUrl,
-          "",
-          "Se algum ponto ainda não estiver ideal, ajustamos data, horário, convidados ou formato sem problema.",
-          "",
-          "Para manter tudo organizado, prefira responder pelo link da proposta.",
-          `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-        ].join("\n"),
-    },
-    {
-      id: "sinal",
-      title: "Cobrança de sinal",
-      eyebrow: "Reserva da data",
-      note: "Explica o próximo passo comercial de forma clara.",
-      subject: "Reserva e sinal do evento - Embaixada Carioca",
-      needsLink: true,
-      recommended: recommended === "sinal",
-      buildText: (context, proposalUrl) =>
-        [
-          `Olá, ${context.clientName}!`,
-          "",
-          `Para reservar a data do seu ${context.eventType}, o próximo passo é o sinal indicado na proposta.`,
-          "",
-          "A proposta continua aqui para consulta:",
-          proposalUrl,
-          "",
-          "No link você vê os dados bancários, copia a chave Pix e pode anexar o comprovante. A reserva fica confirmada após validação da equipe.",
-          "",
-          `Se preferir conversar com a equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-        ].join("\n"),
-    },
-    {
-      id: "saldo",
-      title: "Cobrança do saldo",
-      eyebrow: "Financeiro",
-      note: "Alinha o restante com tom profissional e sereno.",
-      subject: "Pagamento restante do evento - Embaixada Carioca",
-      needsLink: true,
-      recommended: recommended === "saldo",
-      buildText: (context, proposalUrl) =>
-        [
-          `Olá, ${context.clientName}!`,
-          "",
-          `Estamos alinhando a etapa final do seu ${context.eventType} na Embaixada Carioca.`,
-          "",
-          "Segue o link da proposta para referência e pagamento restante:",
-          proposalUrl,
-          "",
-          "Com o saldo confirmado, seguimos com os detalhes finais da operação.",
-          "",
-          `Se precisar, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-        ].join("\n"),
-    },
-    {
-      id: "pre_evento",
-      title: "Confirmação pré-evento",
-      eyebrow: "Reta final",
-      note: "Fecha a operação com segurança e elegância.",
-      subject: "Confirmação final do evento - Embaixada Carioca",
-      needsLink: true,
-      recommended: recommended === "pre_evento",
-      buildText: (context, proposalUrl) =>
-        [
-          `Olá, ${context.clientName}!`,
-          "",
-          `Estamos chegando na reta final do seu ${context.eventType} na Embaixada Carioca.`,
-          `O combinado atual é: ${context.eventDate} às ${context.eventTime}, ${context.guests} pessoa(s), duração estimada de ${context.duration}h.`,
-          "",
-          "Deixo o link da proposta aqui para referência final:",
-          proposalUrl,
-          "",
-          `Se houver qualquer ajuste de última hora, fale com a equipe de eventos por ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-          "",
-          "Nos vemos em breve.",
-        ].join("\n"),
-    },
-  ];
+const communicationTemplateDefaults = [
+  {
+    id: "proposta",
+    title: "Proposta enviada",
+    stage: "Primeiro envio",
+    note: "Apresenta a proposta com contexto e CTA de ajuste.",
+    needsLink: true,
+    subject: "Proposta de evento - Embaixada Carioca",
+    whatsappBody: [
+      "Olá, {{primeiro_nome}}!",
+      "",
+      "Sua proposta da Embaixada Carioca está pronta para revisão.",
+      "",
+      "Formato: {{tipo_evento}}",
+      "Data e horário: {{data}} às {{hora}}",
+      "Grupo: {{pax}} pessoa(s)",
+      "Total estimado: {{total}}",
+      "",
+      "Acesse sua proposta aqui:",
+      "{{link}}",
+      "",
+      "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: {{prazo_sinal}}.",
+      "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
+      "",
+      "Para manter tudo organizado, prefira responder pelo link da proposta.",
+      "Se quiser falar com uma pessoa da equipe, use {{email_eventos}} ou {{whatsapp_eventos}}.",
+    ].join("\n"),
+    emailBody: [
+      "Olá, {{primeiro_nome}}.",
+      "",
+      "Preparamos sua proposta da Embaixada Carioca para {{tipo_evento}}, no dia {{data}} às {{hora}}, para {{pax}} pessoa(s).",
+      "",
+      "Você pode revisar a proposta, pedir ajustes ou anexar o comprovante do sinal pelo link abaixo:",
+      "{{link}}",
+      "",
+      "Total estimado: {{total}}.",
+      "Prazo do sinal: {{prazo_sinal}}.",
+      "",
+      "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n"),
+  },
+  {
+    id: "followup",
+    title: "Retorno sem resposta",
+    stage: "Retomada comercial",
+    note: "Retoma o contato sem soar insistente.",
+    needsLink: true,
+    subject: "Retorno sobre a proposta - Embaixada Carioca",
+    whatsappBody: [
+      "Olá, {{primeiro_nome}}! Tudo bem?",
+      "",
+      "Passando para deixar sua proposta da Embaixada Carioca à mão:",
+      "{{link}}",
+      "",
+      "Se algum ponto ainda não estiver ideal, ajustamos data, horário, convidados ou formato.",
+      "",
+      "Para manter tudo organizado, prefira responder pelo link da proposta.",
+      "Se quiser falar com uma pessoa da equipe, use {{email_eventos}} ou {{whatsapp_eventos}}.",
+    ].join("\n"),
+    emailBody: [
+      "Olá, {{primeiro_nome}}.",
+      "",
+      "Passando para retomar sua proposta para {{tipo_evento}} na Embaixada Carioca.",
+      "",
+      "Link para revisão:",
+      "{{link}}",
+      "",
+      "Se quiser ajustar data, horário, número de convidados ou formato, é só responder pela própria proposta.",
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n"),
+  },
+  {
+    id: "sinal",
+    title: "Cobrança de sinal",
+    stage: "Reserva da data",
+    note: "Explica o próximo passo comercial de forma clara.",
+    needsLink: true,
+    subject: "Reserva e sinal do evento - Embaixada Carioca",
+    whatsappBody: [
+      "Olá, {{primeiro_nome}}!",
+      "",
+      "Para reservar a data do seu {{tipo_evento}}, o próximo passo é o sinal indicado na proposta.",
+      "",
+      "A proposta continua aqui:",
+      "{{link}}",
+      "",
+      "No link você vê os dados bancários, copia a chave Pix e pode anexar o comprovante.",
+      "A reserva fica confirmada após validação da equipe.",
+      "",
+      "Se preferir conversar com a equipe, use {{email_eventos}} ou {{whatsapp_eventos}}.",
+    ].join("\n"),
+    emailBody: [
+      "Olá, {{primeiro_nome}}.",
+      "",
+      "Para reservar a data do seu {{tipo_evento}}, o próximo passo é realizar o sinal indicado na proposta.",
+      "",
+      "Link da proposta:",
+      "{{link}}",
+      "",
+      "Pelo link você encontra os dados bancários, copia a chave Pix e pode anexar o comprovante.",
+      "A reserva fica confirmada após validação da equipe.",
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n"),
+  },
+  {
+    id: "saldo",
+    title: "Cobrança do saldo",
+    stage: "Financeiro",
+    note: "Alinha o restante com tom profissional e sereno.",
+    needsLink: true,
+    subject: "Pagamento restante do evento - Embaixada Carioca",
+    whatsappBody: [
+      "Olá, {{primeiro_nome}}!",
+      "",
+      "Estamos alinhando a etapa final do seu {{tipo_evento}} na Embaixada Carioca.",
+      "",
+      "Segue o link da proposta para referência e pagamento restante:",
+      "{{link}}",
+      "",
+      "Com o saldo confirmado, seguimos com os detalhes finais da operação.",
+      "",
+      "Se precisar, fale com a equipe por {{email_eventos}} ou {{whatsapp_eventos}}.",
+    ].join("\n"),
+    emailBody: [
+      "Olá, {{primeiro_nome}}.",
+      "",
+      "Estamos alinhando a etapa final do seu {{tipo_evento}} na Embaixada Carioca.",
+      "",
+      "Link da proposta para referência e pagamento restante:",
+      "{{link}}",
+      "",
+      "Com o saldo confirmado, seguimos com os detalhes finais da operação.",
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n"),
+  },
+  {
+    id: "pre_evento",
+    title: "Confirmação pré-evento",
+    stage: "Reta final",
+    note: "Fecha a operação com segurança e elegância.",
+    needsLink: true,
+    subject: "Confirmação final do evento - Embaixada Carioca",
+    whatsappBody: [
+      "Olá, {{primeiro_nome}}!",
+      "",
+      "Estamos chegando na reta final do seu {{tipo_evento}} na Embaixada Carioca.",
+      "Combinado atual: {{data}} às {{hora}}, {{pax}} pessoa(s), duração de {{duracao}}h.",
+      "",
+      "Link da proposta para referência final:",
+      "{{link}}",
+      "",
+      "Se houver qualquer ajuste de última hora, fale com {{email_eventos}} ou {{whatsapp_eventos}}.",
+      "",
+      "Nos vemos em breve.",
+    ].join("\n"),
+    emailBody: [
+      "Olá, {{primeiro_nome}}.",
+      "",
+      "Estamos chegando na reta final do seu {{tipo_evento}} na Embaixada Carioca.",
+      "",
+      "Combinado atual:",
+      "Data e horário: {{data}} às {{hora}}",
+      "Grupo: {{pax}} pessoa(s)",
+      "Duração: {{duracao}}h",
+      "",
+      "Link da proposta para referência final:",
+      "{{link}}",
+      "",
+      "Se houver qualquer ajuste de última hora, fale com a equipe de eventos.",
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n"),
+  },
+];
+
+function cloneCommunicationDefaults() {
+  return communicationTemplateDefaults.map((item) => ({ ...item }));
 }
 
-function getQuickReplyPayload(replyId, context, proposalUrl) {
+function loadCommunicationTemplates() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COMMUNICATION_TEMPLATES_KEY) || "[]");
+    if (!Array.isArray(saved)) return cloneCommunicationDefaults();
+    return communicationTemplateDefaults.map((base) => {
+      const override = saved.find((item) => item?.id === base.id) || {};
+      return {
+        ...base,
+        subject: String(override.subject || base.subject),
+        whatsappBody: String(override.whatsappBody || base.whatsappBody),
+        emailBody: String(override.emailBody || base.emailBody),
+      };
+    });
+  } catch (error) {
+    console.warn("Falha ao carregar textos de comunicação.", error);
+    return cloneCommunicationDefaults();
+  }
+}
+
+function saveCommunicationTemplates(templates) {
+  localStorage.setItem(
+    COMMUNICATION_TEMPLATES_KEY,
+    JSON.stringify(
+      templates.map((item) => ({
+        id: item.id,
+        subject: item.subject,
+        whatsappBody: item.whatsappBody,
+        emailBody: item.emailBody,
+      })),
+    ),
+  );
+}
+
+function getCommunicationTemplate(id) {
+  return loadCommunicationTemplates().find((item) => item.id === id) || loadCommunicationTemplates()[0];
+}
+
+function getCommunicationPlaceholderValues(context = getQuickReplyContext(), proposalUrl = "") {
+  const clientName = context.clientName || "cliente";
+  const firstName = clientName.split(/\s+/)[0] || clientName || "cliente";
+  return {
+    cliente: clientName,
+    primeiro_nome: firstName,
+    empresa: context.company || "A definir",
+    tipo_evento: context.eventType || "evento",
+    data: context.eventDate || "A definir",
+    hora: context.eventTime || "A definir",
+    pax: String(context.guests || "A definir"),
+    convidados: String(context.guests || "A definir"),
+    duracao: String(context.duration || "A definir"),
+    total: context.total || formatMoney(getQuoteTotals().total),
+    link: proposalUrl || "{{link}}",
+    prazo_sinal: formatSignalDeadlineHours(),
+    email_eventos: HUMAN_EVENTS_EMAIL,
+    whatsapp_eventos: HUMAN_EVENTS_WHATSAPP,
+  };
+}
+
+function renderCommunicationTemplateText(text, context, proposalUrl) {
+  const values = getCommunicationPlaceholderValues(context, proposalUrl);
+  return String(text || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
+    if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
+    return match;
+  });
+}
+
+function getQuickReplyPresets(status) {
+  const recommended = getQuickReplyRecommendation(status);
+  return loadCommunicationTemplates().map((template) => ({
+    id: template.id,
+    title: template.title,
+    eyebrow: template.stage,
+    note: template.note,
+    subject: template.subject,
+    needsLink: template.needsLink,
+    recommended: recommended === template.id,
+    buildText: (context, proposalUrl, channel = "whatsapp") =>
+      renderCommunicationTemplateText(channel === "email" ? template.emailBody : template.whatsappBody, context, proposalUrl),
+  }));
+}
+
+function getQuickReplyPayload(replyId, context, proposalUrl, channel = "whatsapp") {
   const preset = getQuickReplyPresets(context.status).find((item) => item.id === replyId);
   if (!preset) return null;
   return {
     ...preset,
-    message: preset.buildText(context, proposalUrl),
+    message: preset.buildText(context, proposalUrl, channel),
   };
 }
 
@@ -2375,7 +2523,7 @@ async function runQuickReply(replyId, channel) {
       proposalUrl = share?.url || "";
       if (!proposalUrl) return;
     }
-    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl, "whatsapp");
     if (!payload) return;
     try {
       await navigator.clipboard.writeText(payload.message);
@@ -2419,7 +2567,7 @@ async function runQuickReply(replyId, channel) {
       proposalUrl = share?.url || "";
       if (!proposalUrl) return;
     }
-    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
     if (!payload) return;
     state.sendLocks.email = true;
     const subject = encodeURIComponent(payload.subject);
@@ -2456,7 +2604,7 @@ async function runQuickReply(replyId, channel) {
       if (!share?.saved || !share?.url) return;
     }
     proposalUrl = share?.url || "";
-    const payload = getQuickReplyPayload(replyId, context, proposalUrl);
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl, "whatsapp");
     if (!payload) return;
     await sendProposalWhatsAppViaZapi({
       proposal: share.saved,
@@ -10761,7 +10909,99 @@ function renderProposal() {
   `;
 }
 
+function renderCommunicationTemplateEditor() {
+  const container = document.querySelector("#communicationTemplates");
+  if (!container) return;
+  const templates = loadCommunicationTemplates();
+  const sampleContext = {
+    clientName: "Mariana Silva",
+    company: "Agência Rio",
+    email: "cliente@empresa.com.br",
+    phone: "+55 21 99999-0000",
+    eventType: "Coquetel",
+    eventDate: "30/06/2026",
+    eventTime: "18:00",
+    guests: 40,
+    duration: "2",
+    total: "R$ 18.500,00",
+    status: "proposta_enviada",
+  };
+  const sampleUrl = `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=exemplo`;
+  container.innerHTML = templates
+    .map(
+      (template) => `
+        <article class="communication-template-card" data-template-id="${escapeHtml(template.id)}">
+          <div class="communication-template-head">
+            <div>
+              <span>${escapeHtml(template.stage)}</span>
+              <h3>${escapeHtml(template.title)}</h3>
+              <p>${escapeHtml(template.note)}</p>
+            </div>
+            <strong>${escapeHtml(template.id)}</strong>
+          </div>
+          <label>
+            Assunto do e-mail
+            <input data-template-field="subject" type="text" value="${escapeHtml(template.subject)}" />
+          </label>
+          <label>
+            Texto do WhatsApp
+            <textarea class="template-textarea" data-template-field="whatsappBody" rows="9">${escapeHtml(template.whatsappBody)}</textarea>
+          </label>
+          <label>
+            Texto do e-mail
+            <textarea class="template-textarea" data-template-field="emailBody" rows="9">${escapeHtml(template.emailBody)}</textarea>
+          </label>
+          <details class="template-preview">
+            <summary>Ver exemplo preenchido</summary>
+            <pre>${escapeHtml(renderCommunicationTemplateText(template.whatsappBody, sampleContext, sampleUrl))}</pre>
+          </details>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function collectCommunicationTemplateEditorValues() {
+  return loadCommunicationTemplates().map((template) => {
+    const card = document.querySelector(`[data-template-id="${CSS.escape(template.id)}"]`);
+    if (!card) return template;
+    const subject = card.querySelector('[data-template-field="subject"]')?.value.trim() || template.subject;
+    const whatsappBody = card.querySelector('[data-template-field="whatsappBody"]')?.value.trim() || template.whatsappBody;
+    const emailBody = card.querySelector('[data-template-field="emailBody"]')?.value.trim() || template.emailBody;
+    return { ...template, subject, whatsappBody, emailBody };
+  });
+}
+
+function handleSaveCommunicationTemplates() {
+  saveCommunicationTemplates(collectCommunicationTemplateEditorValues());
+  renderCommunicationTemplateEditor();
+  renderQuickReplies();
+  showToast("Textos de comunicação salvos.");
+}
+
+function handleResetCommunicationTemplates() {
+  if (!window.confirm("Restaurar os textos padrão de e-mail e WhatsApp?")) return;
+  localStorage.removeItem(COMMUNICATION_TEMPLATES_KEY);
+  renderCommunicationTemplateEditor();
+  renderQuickReplies();
+  showToast("Textos padrão restaurados.");
+}
+
+function ensureCommunicationShortcut() {
+  const actions = document.querySelector(".topbar-actions");
+  if (!actions || actions.querySelector('[href="./comunicacao.html"], [href="comunicacao.html"]')) return;
+
+  const link = document.createElement("a");
+  link.className = "button-link secondary communication-shortcut";
+  link.href = "./comunicacao.html";
+  link.textContent = "Comunicação";
+
+  const formRow = actions.querySelector(".topbar-action-row");
+  actions.insertBefore(link, formRow || null);
+}
+
 function renderAll() {
+  ensureCommunicationShortcut();
   syncDateTimeFromFields();
   syncEventTypeFromSelection();
   renderQuoteWorkspaceGuide();
@@ -10783,6 +11023,7 @@ function renderAll() {
   renderProposal();
   renderSystemHealth();
   renderIntegrationLogs();
+  renderCommunicationTemplateEditor();
 }
 
 function startNewProposal() {
@@ -10947,22 +11188,9 @@ async function ensureProposalLink() {
 }
 
 function buildProposalWhatsAppMessage(proposalUrl) {
-  const clientName = fields.clientName.value.trim();
-  const firstName = clientName.split(/\s+/)[0] || "";
-  return [
-    `Olá${firstName ? `, ${firstName}` : ""}!`,
-    "",
-    "Sua proposta da Embaixada Carioca está pronta para revisão.",
-    "",
-    "Você pode acessar pelo link abaixo:",
-    proposalUrl,
-    "",
-    `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
-    "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
-    "",
-    "Para manter tudo organizado, prefira responder pelo link da proposta.",
-    `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
-  ].join("\n");
+  const context = getQuickReplyContext();
+  const template = getCommunicationTemplate("proposta");
+  return renderCommunicationTemplateText(template.whatsappBody, context, proposalUrl);
 }
 
 function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar" }) {
@@ -11163,12 +11391,15 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
   });
   try {
     showToast("Enviando proposta por e-mail...");
+    const emailTemplate = getCommunicationTemplate("proposta");
+    const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
     const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
       body: {
         proposalId: proposal.id,
         email: destination,
         proposalUrl,
-        title: "Sua proposta de evento na Embaixada Carioca",
+        title: emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca",
+        message: emailMessage,
       },
     });
 
@@ -11603,6 +11834,8 @@ function bindEvents() {
     }
   });
   document.querySelector("#resetPricesBtn")?.addEventListener("click", resetPrices);
+  document.querySelector("#saveCommunicationTemplatesBtn")?.addEventListener("click", handleSaveCommunicationTemplates);
+  document.querySelector("#resetCommunicationTemplatesBtn")?.addEventListener("click", handleResetCommunicationTemplates);
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
   document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);
   document.querySelector("#saveSupabaseConfigBtn")?.addEventListener("click", configureSupabaseFromForm);

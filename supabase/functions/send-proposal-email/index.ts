@@ -12,6 +12,7 @@ type SendPayload = {
   email?: string;
   proposalUrl?: string;
   title?: string;
+  message?: string;
 };
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -150,7 +151,19 @@ function getItemsHtml(items: any[]) {
     .join("");
 }
 
-function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
+function formatCustomMessageHtml(message: string) {
+  return safeText(message)
+    .split(/\n{2,}/)
+    .map((block) => escapeHtml(block).replaceAll("\n", "<br />"))
+    .filter(Boolean)
+    .map(
+      (paragraph) =>
+        `<p style="margin:0 0 12px; color:#31483d; font-size:15px; line-height:1.65;">${paragraph}</p>`,
+    )
+    .join("");
+}
+
+function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessage = "") {
   const snapshot = proposal?.snapshot || {};
   const clientName = safeText(proposal?.cliente_nome || snapshot?.client?.name, "cliente");
   const firstName = clientName.split(/\s+/)[0] || "tudo";
@@ -162,6 +175,7 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
   const timeLabel = formatTime(proposal?.horario_evento || snapshot?.event?.time);
   const durationLabel = formatDuration(proposal?.duracao || snapshot?.event?.duration);
   const signalLabel = getSignalDeadlineLabel(snapshot);
+  const customMessageHtml = formatCustomMessageHtml(customMessage);
 
   return `
     <div style="background:#eef3ef; padding:26px 14px; font-family:Arial,Helvetica,sans-serif; color:#183a2d;">
@@ -208,7 +222,16 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
             </p>
           </div>
 
-          <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:900; font-size:16px; padding:16px 22px; border-radius:10px;">
+          ${
+            customMessageHtml
+              ? `<div style="margin:20px 0 0; background:#fbf7ed; border:1px solid #ead9af; border-radius:14px; padding:16px 18px;">
+                  <strong style="display:block; color:#183a2d; font-size:15px; margin-bottom:10px;">Mensagem da equipe</strong>
+                  ${customMessageHtml}
+                </div>`
+              : ""
+          }
+
+          <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:900; font-size:16px; padding:16px 22px; border-radius:10px; margin-top:18px;">
             Ver e responder proposta
           </a>
 
@@ -221,7 +244,15 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
   `;
 }
 
-function buildProposalEmailText(proposal: any, proposalUrl: string) {
+function buildProposalEmailText(proposal: any, proposalUrl: string, customMessage = "") {
+  if (safeText(customMessage)) {
+    return [
+      safeText(customMessage),
+      "",
+      "Equipe de Eventos | Embaixada Carioca",
+    ].join("\n");
+  }
+
   const snapshot = proposal?.snapshot || {};
   const eventType = safeText(proposal?.tipo_evento || snapshot?.event?.type, "Evento");
   const total = formatMoney(proposal?.total || snapshot?.totals?.total || 0);
@@ -354,8 +385,8 @@ Deno.serve(async (req) => {
           },
         ],
         subject,
-        htmlbody: buildProposalEmailHtml(proposal, proposalUrl),
-        textbody: buildProposalEmailText(proposal, proposalUrl),
+        htmlbody: buildProposalEmailHtml(proposal, proposalUrl, payload.message),
+        textbody: buildProposalEmailText(proposal, proposalUrl, payload.message),
         reply_to: [
           {
             address: Deno.env.get("PROPOSAL_REPLY_TO_EMAIL") || "eventos@embaixadacarioca.com.br",

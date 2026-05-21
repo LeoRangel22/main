@@ -161,6 +161,9 @@ summary:focus-visible {
 .auth-locked .action-center,
 .auth-locked .finance-command-panel,
 .auth-locked .client-command-center,
+.auth-locked .communication-hero-panel,
+.auth-locked .communication-help-panel,
+.auth-locked .communication-template-grid,
 .auth-locked .operations-agenda,
 .auth-locked .reports-panel,
 .auth-locked .pipeline-panel,
@@ -248,6 +251,13 @@ summary:focus-visible {
   display: grid;
   gap: 6px;
   width: 100%;
+}
+
+.topbar-tools {
+  display: grid;
+  gap: 12px;
+  grid-column: span 2;
+  grid-template-columns: minmax(320px, 1fr) minmax(190px, 220px);
 }
 
 .topbar-actions .button-link,
@@ -7537,6 +7547,151 @@ td:nth-child(9) {
   z-index: 10;
 }
 
+.communication-hero-panel,
+.communication-help-panel {
+  align-items: flex-start;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 18px;
+}
+
+.communication-hero-panel span,
+.communication-help-panel h3,
+.communication-template-head span {
+  color: var(--amarelo);
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.communication-hero-panel h2,
+.communication-help-panel h3,
+.communication-template-head h3 {
+  color: var(--verde-escuro);
+  line-height: 1.12;
+  margin: 0;
+}
+
+.communication-hero-panel p,
+.communication-help-panel p,
+.communication-template-head p {
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 8px 0 0;
+  max-width: 760px;
+}
+
+.communication-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.communication-placeholder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.communication-placeholder-list code {
+  background: var(--verde-claro);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font: 800 0.78rem/1.2 Catamaran, sans-serif;
+  padding: 7px 9px;
+}
+
+.communication-template-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.communication-template-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.communication-template-head {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-bottom: 12px;
+}
+
+.communication-template-head strong {
+  background: var(--verde-claro);
+  border-radius: 999px;
+  color: var(--verde-escuro);
+  font-size: 0.72rem;
+  padding: 6px 9px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.communication-template-card label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.86rem;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.communication-template-card input,
+.template-textarea {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font: 800 0.93rem/1.45 Catamaran, sans-serif;
+  padding: 11px 12px;
+  width: 100%;
+}
+
+.template-textarea {
+  min-height: 190px;
+  resize: vertical;
+}
+
+.template-preview {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.template-preview summary {
+  color: var(--verde-escuro);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.template-preview pre {
+  color: var(--verde-escuro);
+  font: 800 0.82rem/1.45 Catamaran, sans-serif;
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
 @keyframes riseIn {
   from {
     opacity: 0;
@@ -9086,8 +9241,30 @@ input[type="range"] {
 }
 
 @media (max-width: 1080px) {
+  .communication-template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .communication-hero-panel,
+  .communication-help-panel {
+    flex-direction: column;
+  }
+
+  .communication-toolbar {
+    width: 100%;
+  }
+
+  .communication-toolbar button {
+    flex: 1;
+  }
+
   .topbar,
   .auth-locked .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-tools {
+    grid-column: auto;
     grid-template-columns: 1fr;
   }
 

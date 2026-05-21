@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comunicação | Embaixada Carioca</title>
+    <link rel="stylesheet" href="./styles.css?v=20260521-comunicacao-v158" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./app.js?v=20260521-comunicacao-v158"></script>
+  </head>
+  <body class="auth-locked" data-page="comunicacao">
+    <div class="app-shell">
+      <section class="workspace" aria-label="Comunicação">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <img class="brand-logo" src="./assets/logo-embaixada.svg" alt="Embaixada Carioca" />
+            <div>
+              <p class="eyebrow">Embaixada Carioca</p>
+              <h1>Comunicação</h1>
+            </div>
+          </div>
+
+          <div class="topbar-tools">
+            <section class="team-panel compact-team" aria-label="Acesso da equipe">
+              <div class="section-heading">
+                <span>Equipe</span>
+                <h2>Acesso da equipe</h2>
+              </div>
+              <div class="team-access">
+                <div class="team-auth team-primary">
+                  <p>Entre com um e-mail autorizado para editar os textos enviados aos clientes.</p>
+                  <div class="authorized-shortcuts" aria-label="E-mails autorizados">
+                    <button class="secondary" type="button" data-team-email="eventos@embaixadacarioca.com.br">eventos@</button>
+                    <button class="secondary" type="button" data-team-email="financeiro@embaixadacarioca.com.br">financeiro@</button>
+                    <button class="secondary" type="button" data-team-email="leorangel@gmail.com">leorangel@</button>
+                  </div>
+                  <label>
+                    E-mail da equipe
+                    <input id="loginEmail" type="email" value="eventos@embaixadacarioca.com.br" autocomplete="email" />
+                  </label>
+                  <div class="team-auth-actions">
+                    <button class="primary" id="loginBtn" type="button">Entrar por e-mail</button>
+                    <button class="secondary" id="logoutBtn" type="button">Sair</button>
+                  </div>
+                  <div class="team-status" id="authStatus">Use um e-mail autorizado para editar.</div>
+                  <details class="magic-link-help">
+                    <summary>Problema com magic link ou conexão?</summary>
+                    <p>Se o link abrir fora deste navegador, cole a URL completa abaixo para concluir o acesso.</p>
+                    <div class="magic-link-row">
+                      <input id="magicLinkUrl" type="url" placeholder="Cole aqui a URL completa do magic link" />
+                      <button class="secondary" id="recoverMagicLinkBtn" type="button">Entrar com URL</button>
+                    </div>
+                    <div class="supabase-config">
+                      <label>
+                        Supabase URL
+                        <input id="supabaseUrl" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="off" />
+                      </label>
+                      <label>
+                        Supabase anon key
+                        <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
+                      </label>
+                      <button class="secondary" id="saveSupabaseConfigBtn" type="button">Atualizar conexão</button>
+                    </div>
+                    <div class="team-status" id="supabaseStatus">Conexão pronta.</div>
+                  </details>
+                </div>
+              </div>
+            </section>
+
+            <div class="topbar-actions">
+              <a class="button-link secondary" href="./index.html">Dashboard</a>
+              <a class="button-link secondary" href="./clientes.html">Clientes</a>
+              <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
+              <div class="topbar-action-row">
+                <a class="button-link secondary" href="./formulario.html" target="_blank" rel="noopener">Formulário Cliente</a>
+                <button class="primary copy-link-small" id="copyClientFormLinkBtn" type="button">Copiar link</button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="communication-hero-panel">
+          <div>
+            <span>Textos comerciais</span>
+            <h2>E-mails e WhatsApps por etapa do funil</h2>
+            <p>
+              Edite uma vez; os botões do funil passam a usar estes textos. Assim a equipe mantém o mesmo padrão de atendimento,
+              sem depender de copiar mensagens antigas.
+            </p>
+          </div>
+          <div class="communication-toolbar">
+            <button class="primary" id="saveCommunicationTemplatesBtn" type="button">Salvar textos</button>
+            <button class="secondary" id="resetCommunicationTemplatesBtn" type="button">Restaurar padrão</button>
+          </div>
+        </section>
+
+        <section class="communication-help-panel">
+          <h3>Campos automáticos que você pode usar</h3>
+          <p>O sistema troca estes códigos pelos dados reais da proposta antes de enviar.</p>
+          <div class="communication-placeholder-list">
+            <code>{{primeiro_nome}}</code>
+            <code>{{cliente}}</code>
+            <code>{{tipo_evento}}</code>
+            <code>{{data}}</code>
+            <code>{{hora}}</code>
+            <code>{{pax}}</code>
+            <code>{{duracao}}</code>
+            <code>{{total}}</code>
+            <code>{{link}}</code>
+            <code>{{prazo_sinal}}</code>
+            <code>{{email_eventos}}</code>
+            <code>{{whatsapp_eventos}}</code>
+          </div>
+        </section>
+
+        <section class="communication-template-grid" id="communicationTemplates" aria-label="Textos editáveis de comunicação">
+          <div class="empty-state">Carregando textos...</div>
+        </section>
+      </section>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
