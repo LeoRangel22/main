@@ -204,6 +204,7 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string) {
             <strong style="display:block; color:#183a2d; font-size:16px;">${escapeHtml(signalLabel)}</strong>
             <p style="margin:8px 0 0; color:#5d6d64; font-size:14px; line-height:1.6;">
               Pelo link você pode aprovar a proposta, solicitar ajustes ou anexar o comprovante do sinal com segurança. A data e o horário ficam reservados após validação da equipe e confirmação do sinal.
+              Para manter o atendimento organizado, prefira responder pelo botão da proposta. Se responder este e-mail, sua mensagem chega direto à equipe de eventos.
             </p>
           </div>
 
@@ -239,6 +240,7 @@ function buildProposalEmailText(proposal: any, proposalUrl: string) {
     "",
     "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal.",
     "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
+    "Para manter o atendimento organizado, prefira responder pelo link. Se responder este e-mail, sua mensagem chega direto à equipe de eventos.",
     "",
     "Equipe de Eventos | Embaixada Carioca",
   ].join("\n");

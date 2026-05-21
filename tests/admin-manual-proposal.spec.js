@@ -466,4 +466,23 @@ test.describe("Proposta manual no admin", () => {
     expect(invalidTimes).toEqual([]);
     await expectNoBrowserErrors(errors);
   });
+
+  test("mensagem de WhatsApp orienta resposta pelo link e canal humano", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+    await page.locator("#clientName").fill("Leonardo Rangel");
+
+    const message = await page.evaluate(() => {
+      const base = window.buildProposalWhatsAppMessage("https://exemplo.com/proposta");
+      return window.appendBotWhatsAppNotice(base);
+    });
+
+    expect(message).toContain("prefira responder pelo link da proposta");
+    expect(message).toContain("número automático da Embaixada Carioca");
+    expect(message).toContain("eventos@embaixadacarioca.com.br");
+    expect(message).toContain("+55 21 97142-6007");
+    await expectNoBrowserErrors(errors);
+  });
 });

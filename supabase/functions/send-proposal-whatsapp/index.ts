@@ -46,6 +46,11 @@ function buildDefaultMessage(payload: SendPayload, proposal: any) {
     proposalUrl,
     "",
     "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal. A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
+    "",
+    "Para manter tudo organizado, prefira responder pelo link da proposta.",
+    "Se quiser falar com uma pessoa da equipe, use eventos@embaixadacarioca.com.br ou WhatsApp (21) 97142-6007.",
+    "",
+    "Observação: este envio saiu pelo número automático da Embaixada Carioca.",
   ].join("\n");
 }
 
