@@ -2243,7 +2243,8 @@ function getQuickReplyPresets(status) {
           `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
           "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
           "",
-          `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
+          "Para manter tudo organizado, prefira responder pelo link da proposta.",
+          `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -2263,7 +2264,8 @@ function getQuickReplyPresets(status) {
           "",
           "Se algum ponto ainda não estiver ideal, ajustamos data, horário, convidados ou formato sem problema.",
           "",
-          `Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
+          "Para manter tudo organizado, prefira responder pelo link da proposta.",
+          `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
         ].join("\n"),
     },
     {
@@ -2348,9 +2350,12 @@ function getQuickReplyPayload(replyId, context, proposalUrl) {
 function appendBotWhatsAppNotice(message) {
   const text = String(message || "").trim();
   if (text.includes("número automático da Embaixada Carioca")) return text;
-  const noticeLines = ["Observação: este envio saiu pelo número automático da Embaixada Carioca."];
+  const noticeLines = [
+    "Observação: este envio saiu pelo número automático da Embaixada Carioca.",
+    "Para manter sua resposta registrada, use o link da proposta para aprovar, pedir ajuste ou anexar comprovante.",
+  ];
   if (!text.includes(HUMAN_EVENTS_EMAIL) && !text.includes(HUMAN_EVENTS_WHATSAPP)) {
-    noticeLines.push(`Para falar com a equipe de eventos, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`);
+    noticeLines.push(`Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`);
   }
   const notice = noticeLines.join("\n");
   return [text, "", notice].filter(Boolean).join("\n");
@@ -10954,6 +10959,9 @@ function buildProposalWhatsAppMessage(proposalUrl) {
     "",
     `Pelo link é possível aprovar, pedir ajustes ou anexar o comprovante do sinal. Prazo do sinal: ${formatSignalDeadlineHours()}.`,
     "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
+    "",
+    "Para manter tudo organizado, prefira responder pelo link da proposta.",
+    `Se quiser falar com uma pessoa da equipe, use ${HUMAN_EVENTS_EMAIL} ou ${HUMAN_EVENTS_WHATSAPP}.`,
   ].join("\n");
 }
 

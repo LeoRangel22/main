@@ -17,4 +17,5 @@ node_modules/
 playwright-report/
 test-results/
 tmp-pw-results*/
+tmp-pw-*/
 supabase/.temp/
