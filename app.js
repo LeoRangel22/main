@@ -668,6 +668,7 @@ const fields = {
   newTipo: document.querySelector("#newTipo"),
   newNome: document.querySelector("#newNome"),
   newFormula: document.querySelector("#newFormula"),
+  formulaHelp: document.querySelector("#formulaHelp"),
   newDescricao: document.querySelector("#newDescricao"),
   newResumoComercial: document.querySelector("#newResumoComercial"),
   newPrioridadeComercial: document.querySelector("#newPrioridadeComercial"),
@@ -5301,6 +5302,23 @@ function getFormulaLabel(formula) {
     fixedTotal: "Valor fixo total",
   };
   return labels[formula] || "Por pessoa";
+}
+
+function getFormulaHelp(formula) {
+  const help = {
+    durationPerPerson: "Use para pacotes por convidado e duração. Preencha 1h, 2h e 1/2h extra.",
+    serviceIncluded90PerPerson: "Use para Almoço Carioca: preço por pessoa para 1h30 com taxa já incluída. Preencha 1h e extra.",
+    perPersonFixed: "Use quando o valor por pessoa não muda com a duração. Preencha o preço em 1h.",
+    fixedPlusPerPerson: "Use para workshop ou experiência com valor fixo inicial + adicional por pessoa acima do mínimo.",
+    fixedCoversMinimum: "Use quando o preço fixo cobre até o mínimo e cada pessoa extra paga adicional.",
+    fixedTotal: "Use para extras ou taxas cobrados uma vez, sem multiplicar por convidados.",
+  };
+  return help[formula] || help.durationPerPerson;
+}
+
+function updateFormulaHelp() {
+  if (!fields.formulaHelp || !fields.newFormula) return;
+  fields.formulaHelp.textContent = getFormulaHelp(fields.newFormula.value);
 }
 
 function slugify(value) {
@@ -11779,87 +11797,8 @@ function exportProductsCsv() {
   showToast("Planilha de produtos exportada.");
 }
 
-function buildProductsSpreadsheetHtml() {
-  const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-  const activeProducts = state.prices.filter((item) => item.active !== false);
-  const rows = activeProducts
-    .sort((a, b) => `${a.tipoEvento || ""} ${a.nome || ""}`.localeCompare(`${b.tipoEvento || ""} ${b.nome || ""}`, "pt-BR"))
-    .map((item) => `
-      <tr>
-        <td>${escapeHtml(item.codigo || "")}</td>
-        <td>${escapeHtml(item.tipoEvento || "")}</td>
-        <td><strong>${escapeHtml(item.nome || "")}</strong></td>
-        <td>${escapeHtml(item.commercialSummary || item.descricao || "")}</td>
-        <td>${escapeHtml(item.priority || "média")}</td>
-        <td>${escapeHtml(item.recommendedWindows || "")}</td>
-        <td>${formatProductMoney(item.preco1h)}</td>
-        <td>${formatProductMoney(item.preco2h)}</td>
-        <td>${formatProductMoney(item.precoMeiaHoraExtra)}</td>
-        <td>${formatProductMoney(item.precoFixo)}</td>
-        <td>${formatProductMoney(item.valorAdicional)}</td>
-        <td>${escapeHtml(item.minimo ?? "")}</td>
-        <td>${escapeHtml(getProductFormulaLabel(item.formula))}</td>
-      </tr>
-    `)
-    .join("");
-  return `<!doctype html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { color: #153d2d; font-family: Arial, sans-serif; }
-          h1 { color: #153d2d; font-size: 22px; margin: 0; }
-          .meta { color: #66736e; font-size: 12px; font-weight: 700; margin: 6px 0 14px; }
-          table { border-collapse: collapse; width: 100%; }
-          th { background: #153d2d; color: #ffffff; font-size: 12px; padding: 8px; text-align: left; }
-          td { border: 1px solid #d9e1dc; font-size: 11px; padding: 7px; vertical-align: top; }
-          tr:nth-child(even) td { background: #f4f8f5; }
-          .money { mso-number-format:"R$ #,##0.00"; }
-        </style>
-      </head>
-      <body>
-        <h1>Embaixada Carioca - Planilha de produtos e preços</h1>
-        <div class="meta">Gerado em ${escapeHtml(generatedAt)} · ${activeProducts.length} produto(s) ativo(s)</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Tipo</th>
-              <th>Produto</th>
-              <th>Resumo comercial</th>
-              <th>Prioridade</th>
-              <th>Janela indicada</th>
-              <th>1h</th>
-              <th>2h</th>
-              <th>Extra</th>
-              <th>Fixo</th>
-              <th>Adicional</th>
-              <th>Mínimo</th>
-              <th>Fórmula</th>
-            </tr>
-          </thead>
-          <tbody>${rows || `<tr><td colspan="13">Nenhum produto ativo encontrado.</td></tr>`}</tbody>
-        </table>
-      </body>
-    </html>`;
-}
-
-function exportProductsExcel() {
-  const html = buildProductsSpreadsheetHtml();
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `produtos-embaixada-carioca-${new Date().toISOString().slice(0, 10)}.xls`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  showToast("Planilha Excel exportada.");
-}
-
-function downloadProductsTemplateCsv() {
-  const examples = [
+function getProductsTemplateExamples() {
+  return [
     {
       id: "modelo-coquetel-premium",
       codigo: "CP",
@@ -11899,18 +11838,125 @@ function downloadProductsTemplateCsv() {
       active: "sim",
     },
   ];
-  const header = productCsvColumns.map(([, label]) => label).join(";");
-  const rows = examples.map((item) =>
-    productCsvColumns
-      .map(([key]) => escapeCsvValue(item[key] ?? ""))
-      .join(";"),
-  );
-  downloadCsvFile(`\ufeff${[header, ...rows].join("\n")}`, `modelo-produtos-embaixada-carioca.csv`);
-  showToast("Modelo de planilha baixado.");
+}
+
+function buildProductsSpreadsheetHtml(products = state.prices, options = {}) {
+  const { title = "Planilha de produtos e preços", subtitle = "", includeGuide = true, template = false } = options;
+  const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const sourceProducts = (products || []).filter((item) => template || item.active !== false);
+  const rows = sourceProducts
+    .sort((a, b) => `${a.tipoEvento || ""} ${a.nome || ""}`.localeCompare(`${b.tipoEvento || ""} ${b.nome || ""}`, "pt-BR"))
+    .map((item) => `
+      <tr>
+        ${productCsvColumns
+          .map(([key]) => {
+            const value = key === "active" ? (item.active !== false && item.active !== "não" ? "sim" : "não") : item[key] ?? "";
+            return `<td>${escapeHtml(value)}</td>`;
+          })
+          .join("")}
+      </tr>
+    `)
+    .join("");
+  const guide = includeGuide
+    ? `
+        <section class="guide">
+          <h2>Como usar</h2>
+          <ol>
+            <li>Edite apenas as linhas da tabela "Produtos para importar".</li>
+            <li>Não renomeie nem apague a primeira linha da tabela.</li>
+            <li>Campos obrigatórios: Tipo, Nome e Descrição.</li>
+            <li>Use números sem "R$" nos preços. Exemplo: 95, 125 ou 3500.</li>
+            <li>Depois de editar, volte ao sistema e clique em "Importar planilha".</li>
+          </ol>
+          <h2>Fórmulas aceitas</h2>
+          <table class="formula-table">
+            <tr><th>Fórmula</th><th>Quando usar</th><th>Campos principais</th></tr>
+            <tr><td>durationPerPerson</td><td>Preço por pessoa muda por duração.</td><td>Preço 1h, Preço 2h e 1/2h extra</td></tr>
+            <tr><td>serviceIncluded90PerPerson</td><td>Almoço 1h30 com taxa incluída.</td><td>Preço 1h e 1/2h extra</td></tr>
+            <tr><td>perPersonFixed</td><td>Valor por pessoa fixo.</td><td>Preço 1h</td></tr>
+            <tr><td>fixedPlusPerPerson</td><td>Fixo inicial + adicional por pessoa acima do mínimo.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
+            <tr><td>fixedCoversMinimum</td><td>Fixo cobre até o mínimo e cobra adicional acima disso.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
+            <tr><td>fixedTotal</td><td>Extra ou cobrança única.</td><td>Preço fixo</td></tr>
+          </table>
+        </section>`
+    : "";
+  return `<!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { color: #153d2d; font-family: Arial, sans-serif; margin: 18px; }
+          h1 { color: #153d2d; font-size: 24px; margin: 0; }
+          h2 { color: #153d2d; font-size: 15px; margin: 18px 0 8px; text-transform: uppercase; }
+          .meta { color: #66736e; font-size: 12px; font-weight: 700; margin: 6px 0 14px; }
+          .hero { background: #eef5f0; border-left: 6px solid #153d2d; border-radius: 10px; margin-bottom: 16px; padding: 14px 16px; }
+          .hero p { color: #66736e; font-size: 12px; font-weight: 700; margin: 6px 0 0; }
+          .guide { background: #fff8e8; border: 1px solid #f2c469; border-radius: 10px; margin: 12px 0 18px; padding: 12px 16px; }
+          .guide ol { font-size: 12px; font-weight: 700; line-height: 1.45; margin: 0 0 10px 18px; padding: 0; }
+          table { border-collapse: collapse; width: 100%; }
+          th { background: #153d2d; color: #ffffff; font-size: 11px; padding: 8px; text-align: left; }
+          td { border: 1px solid #d9e1dc; font-size: 10px; padding: 7px; vertical-align: top; }
+          tr:nth-child(even) td { background: #f4f8f5; }
+          .formula-table th { background: #2e6b53; }
+          .formula-table td { font-size: 11px; }
+          .money { mso-number-format:"R$ #,##0.00"; }
+        </style>
+      </head>
+      <body>
+        <div class="hero">
+          <h1>Embaixada Carioca - ${escapeHtml(title)}</h1>
+          <div class="meta">Gerado em ${escapeHtml(generatedAt)} · ${sourceProducts.length} produto(s)</div>
+          <p>${escapeHtml(subtitle || "Use esta planilha para revisar produtos, preços e regras comerciais com segurança.")}</p>
+        </div>
+        ${guide}
+        <h2>Produtos para importar</h2>
+        <table data-products-table="true">
+          <thead>
+            <tr>
+              ${productCsvColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="${productCsvColumns.length}">Nenhum produto encontrado.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>`;
+}
+
+function exportProductsExcel() {
+  const html = buildProductsSpreadsheetHtml(state.prices, {
+    title: "produtos e preços atuais",
+    subtitle: "Exportação da tabela atual. Edite com cuidado e importe de volta somente depois de conferir.",
+    includeGuide: true,
+  });
+  downloadExcelFile(html, `produtos-embaixada-carioca-${new Date().toISOString().slice(0, 10)}.xls`);
+  showToast("Planilha Excel exportada.");
+}
+
+function downloadProductsTemplateGuide() {
+  const html = buildProductsSpreadsheetHtml(getProductsTemplateExamples(), {
+    title: "modelo guiado de produtos",
+    subtitle: "Preencha este modelo para cadastrar ou atualizar produtos sem precisar conhecer o sistema.",
+    includeGuide: true,
+    template: true,
+  });
+  downloadExcelFile(html, "modelo-guiado-produtos-embaixada-carioca.xls");
+  showToast("Modelo guiado baixado.");
 }
 
 function downloadCsvFile(csv, filename) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadExcelFile(html, filename) {
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -12068,6 +12114,24 @@ function parseCsvTable(text) {
   return rows;
 }
 
+function parseProductsHtmlTable(text) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(text || ""), "text/html");
+  const table = doc.querySelector("table[data-products-table='true']") || doc.querySelector("table");
+  if (!table) return [];
+  const headerCells = Array.from(table.querySelectorAll("thead th")).map((cell) => cell.textContent.trim());
+  const rows = Array.from(table.querySelectorAll("tbody tr"))
+    .map((row) => Array.from(row.children).map((cell) => cell.textContent.trim()))
+    .filter((row) => row.some(Boolean));
+  return headerCells.length ? [headerCells, ...rows] : rows;
+}
+
+function parseProductsSheetTable(text) {
+  const source = String(text || "");
+  if (/<table[\s>]/i.test(source) || /<html[\s>]/i.test(source)) return parseProductsHtmlTable(source);
+  return parseCsvTable(source);
+}
+
 function normalizeCsvHeader(value) {
   return normalizarTextoSeguro(value).replace(/\s+/g, "");
 }
@@ -12133,17 +12197,37 @@ function normalizeImportedProduct(row, headerMap, index) {
   item.valorAdicional = item.valorAdicional || "";
   item.minimo = item.minimo || 0;
   item.idioma = item.idioma || "";
-  item.formula = item.formula || "durationPerPerson";
+  const formulaAliases = {
+    durationperperson: "durationPerPerson",
+    porpessoaduracao: "durationPerPerson",
+    porpessoaeduracao: "durationPerPerson",
+    serviceincluded90perperson: "serviceIncluded90PerPerson",
+    "1h30porpessoataxainclusa": "serviceIncluded90PerPerson",
+    perpersonfixed: "perPersonFixed",
+    porpessoafixo: "perPersonFixed",
+    fixedplusperperson: "fixedPlusPerPerson",
+    fixoporpessoa: "fixedPlusPerPerson",
+    fixomaisporpessoa: "fixedPlusPerPerson",
+    fixedcoversminimum: "fixedCoversMinimum",
+    fixoincluiminimo: "fixedCoversMinimum",
+    fixedtotal: "fixedTotal",
+    valorfixototal: "fixedTotal",
+  };
+  item.formula = formulaAliases[normalizeCsvHeader(item.formula)] || item.formula || "durationPerPerson";
   item.custom = !initialPrices.some((catalogItem) => catalogItem.id === item.id);
   return normalizeCatalogItem(item);
 }
 
 async function importProductsCsv(file) {
   if (!file) return;
+  if (/\.xlsx$/i.test(file.name || "")) {
+    showToast("Use CSV ou o modelo Excel (.xls) baixado pelo sistema. Arquivo .xlsx direto ainda não é importado.");
+    return;
+  }
   const text = await file.text();
-  const rows = parseCsvTable(text);
+  const rows = parseProductsSheetTable(text);
   if (rows.length < 2) {
-    showToast("A planilha não tem produtos para importar.");
+    showToast("A planilha não tem produtos para importar. Use o modelo guiado e mantenha a tabela de produtos.");
     return;
   }
   const headerMap = mapProductCsvHeaders(rows[0]);
@@ -12152,7 +12236,7 @@ async function importProductsCsv(file) {
     .map((row, index) => normalizeImportedProduct(row, headerMap, index))
     .filter(Boolean);
   if (!imported.length) {
-    showToast("Nenhum produto válido encontrado. Confira Tipo, Nome e Descrição.");
+    showToast("Nenhum produto válido encontrado. Confira se Tipo, Nome e Descrição estão preenchidos.");
     return;
   }
   const confirmed = window.confirm(
@@ -12167,7 +12251,7 @@ async function importProductsCsv(file) {
   saveSelectedIds();
   renderCategoryFilter();
   renderAll();
-  showToast(`${imported.length} produto(s) importado(s).`);
+  showToast(`${imported.length} produto(s) importado(s). Confira a tabela antes de usar em proposta.`);
 }
 
 function addProductType() {
@@ -12214,6 +12298,9 @@ function bindEvents() {
   fields.clientPhone?.addEventListener("input", () => {
     fields.clientPhone.value = formatPhoneForField(fields.clientPhone.value);
   });
+
+  fields.newFormula?.addEventListener("change", updateFormulaHelp);
+  updateFormulaHelp();
 
   fields.eventDateTime?.setAttribute("step", "1800");
 
@@ -12342,7 +12429,7 @@ function bindEvents() {
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
   document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);
   document.querySelector("#addProductTypeBtn")?.addEventListener("click", addProductType);
-  document.querySelector("#downloadPricesTemplateBtn")?.addEventListener("click", downloadProductsTemplateCsv);
+  document.querySelector("#downloadPricesTemplateBtn")?.addEventListener("click", downloadProductsTemplateGuide);
   document.querySelector("#exportPricesBtn")?.addEventListener("click", exportProductsCsv);
   document.querySelector("#exportPricesExcelBtn")?.addEventListener("click", exportProductsExcel);
   document.querySelector("#printPricesBtn")?.addEventListener("click", printProductsCatalog);

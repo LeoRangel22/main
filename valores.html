@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260521-valores-v161" />
+    <link rel="stylesheet" href="./styles.css?v=20260521-valores-v162" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -95,22 +95,31 @@
             <div class="values-command-panel" aria-label="Planilha de produtos">
               <div class="spreadsheet-copy">
                 <span>Planilha de produtos</span>
-                <strong>Atualize preços em tabela, sem perder a lógica comercial.</strong>
-                <p>Exporte em Excel para revisão bonita, use CSV para editar/importar e imprima o catálogo quando precisar alinhar com a equipe.</p>
+                <strong>Atualize preços com um modelo guiado, sem precisar conhecer o sistema.</strong>
+                <p>Baixe o Excel modelo, siga as instruções no próprio arquivo e importe de volta. Para ajustes técnicos, use CSV.</p>
               </div>
               <div class="spreadsheet-actions">
-                <button class="secondary" id="downloadPricesTemplateBtn" type="button">Baixar modelo</button>
-                <button class="secondary" id="exportPricesBtn" type="button">Exportar CSV</button>
-                <button class="secondary" id="exportPricesExcelBtn" type="button">Exportar Excel</button>
+                <button class="primary" id="downloadPricesTemplateBtn" type="button">Baixar modelo guiado</button>
+                <button class="secondary" id="exportPricesExcelBtn" type="button">Exportar Excel atual</button>
+                <button class="secondary" id="exportPricesBtn" type="button">Exportar CSV técnico</button>
                 <button class="secondary" id="printPricesBtn" type="button">Imprimir catálogo</button>
-                <button class="primary" id="importPricesBtn" type="button">Importar CSV</button>
-                <input id="importPricesFile" class="sr-only" type="file" accept=".csv,text/csv" />
+                <button class="primary" id="importPricesBtn" type="button">Importar planilha</button>
+                <input id="importPricesFile" class="sr-only" type="file" accept=".csv,.xls,.html,text/csv,text/html,application/vnd.ms-excel" />
               </div>
               <div class="spreadsheet-steps" aria-label="Como usar a planilha">
-                <div><strong>1. Baixe</strong><span>Use o modelo ou exporte a tabela atual.</span></div>
-                <div><strong>2. Revise</strong><span>Edite preços, mínimos, fórmulas e produtos ativos.</span></div>
-                <div><strong>3. Importe</strong><span>Substitua a lista somente depois da conferência.</span></div>
+                <div><strong>1. Baixe o modelo</strong><span>O Excel abre com instruções e exemplos preenchidos.</span></div>
+                <div><strong>2. Edite só a tabela</strong><span>Não renomeie os cabeçalhos. Valores sem R$ importam melhor.</span></div>
+                <div><strong>3. Importe e confira</strong><span>Aceita CSV ou o Excel modelo gerado aqui.</span></div>
               </div>
+              <details class="spreadsheet-help">
+                <summary>O que a planilha aceita?</summary>
+                <ul>
+                  <li><strong>Mais fácil:</strong> baixe o modelo guiado, edite as linhas de produtos e importe o mesmo arquivo.</li>
+                  <li><strong>Mais seguro para grandes revisões:</strong> exporte CSV técnico, edite no Excel/Google Sheets e salve como CSV UTF-8.</li>
+                  <li><strong>Obrigatório:</strong> cada item precisa ter Tipo, Nome e Descrição. O resto pode ficar em branco quando não se aplicar.</li>
+                  <li><strong>Não faça:</strong> não apague nem renomeie a primeira linha da tabela de produtos.</li>
+                </ul>
+              </details>
             </div>
 
             <section class="product-types-panel" aria-label="Tipos de produto">
@@ -158,6 +167,7 @@
                     <option value="fixedCoversMinimum">Fixo inclui mínimo</option>
                     <option value="fixedTotal">Valor fixo total</option>
                   </select>
+                  <small id="formulaHelp" class="formula-help">Use para pacotes cobrados por convidado e duração. Preencha 1h, 2h e extra.</small>
                 </label>
                 <label class="builder-wide">
                   Descrição
@@ -274,6 +284,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260521-valores-v161"></script>
+    <script defer src="./app.js?v=20260521-valores-v162"></script>
   </body>
 </html>
