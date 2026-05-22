@@ -1,4 +1,5 @@
 ﻿const STORAGE_KEY = "embaixada_orcamentos_precos_v1";
+const PRODUCT_TYPES_KEY = "embaixada_orcamentos_tipos_produto_v1";
 const SELECTED_KEY = "embaixada_orcamentos_selecionados_v1";
 const PRIVATIZATION_KEY = "embaixada_orcamentos_privatizacao_v1";
 const TERMS_KEY = "embaixada_orcamentos_condicoes_v1";
@@ -604,6 +605,7 @@ UTILIZAÇÃO DA MARCA DO BONDINHO: qualquer uso comercial ou promocional envolve
 
 const state = {
   prices: loadPrices(),
+  productTypes: loadProductTypes(),
   selectedIds: loadSelectedIds(),
   privatizationRules: loadPrivatizationRules(),
   supabase: null,
@@ -677,6 +679,7 @@ const fields = {
   newPrecoFixo: document.querySelector("#newPrecoFixo"),
   newValorAdicional: document.querySelector("#newValorAdicional"),
   newMinimo: document.querySelector("#newMinimo"),
+  newProductTypeName: document.querySelector("#newProductTypeName"),
   supabaseUrl: document.querySelector("#supabaseUrl"),
   supabaseAnonKey: document.querySelector("#supabaseAnonKey"),
   loginEmail: document.querySelector("#loginEmail"),
@@ -692,6 +695,7 @@ const nodes = {
   priceList: document.querySelector("#priceList"),
   pricesTable: document.querySelector("#pricesTable"),
   commercialLibrarySummary: document.querySelector("#commercialLibrarySummary"),
+  productTypeList: document.querySelector("#productTypeList"),
   categoryOptions: document.querySelector("#categoryOptions"),
   flowStatus: document.querySelector("#flowStatus"),
   coquetelChoices: document.querySelector("#coquetelChoices"),
@@ -868,6 +872,22 @@ function loadPrices() {
     console.warn("Não foi possível carregar preços salvos.", error);
   }
   return clonePrices(initialPrices).map(normalizeCatalogItem);
+}
+
+function loadProductTypes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRODUCT_TYPES_KEY) || "[]");
+    return Array.isArray(saved) ? saved.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  } catch (error) {
+    console.warn("Não foi possível carregar tipos de produto.", error);
+    return [];
+  }
+}
+
+function saveProductTypes() {
+  const types = [...new Set((state.productTypes || []).map((item) => String(item || "").trim()).filter(Boolean))].sort();
+  state.productTypes = types;
+  localStorage.setItem(PRODUCT_TYPES_KEY, JSON.stringify(types));
 }
 
 function mergeCatalogLabels(prices) {
@@ -5600,7 +5620,7 @@ async function applyPendingDashboardTarget() {
 }
 
 function renderCategoryFilter() {
-  const categories = [...new Set(state.prices.map((item) => item.tipoEvento))].sort();
+  const categories = getProductTypes();
   if (fields.categoryFilter) {
     fields.categoryFilter.innerHTML = `<option value="">Todas</option>${categories
       .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
@@ -5611,6 +5631,40 @@ function renderCategoryFilter() {
       .map((category) => `<option value="${escapeHtml(category)}"></option>`)
       .join("");
   }
+}
+
+function getProductTypes() {
+  return [
+    ...new Set([
+      ...state.prices.map((item) => item.tipoEvento),
+      ...(state.productTypes || []),
+    ].map((item) => String(item || "").trim()).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function renderProductTypeManager() {
+  if (!nodes.productTypeList) return;
+  const types = getProductTypes();
+  if (!types.length) {
+    nodes.productTypeList.innerHTML = `<p>Nenhum tipo cadastrado ainda.</p>`;
+    return;
+  }
+  const counts = state.prices.reduce((acc, item) => {
+    const type = item.tipoEvento || "Sem tipo";
+    acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
+  nodes.productTypeList.innerHTML = types
+    .map((type) => {
+      const count = counts[type] || 0;
+      return `
+        <button class="product-type-chip" type="button" data-product-type="${escapeHtml(type)}">
+          <strong>${escapeHtml(type)}</strong>
+          <span>${count ? `${count} item(ns)` : "Pronto para novo item"}</span>
+        </button>
+      `;
+    })
+    .join("");
 }
 
 function applyGuidedEvent(eventKey) {
@@ -11005,6 +11059,7 @@ function renderAll() {
   syncDateTimeFromFields();
   syncEventTypeFromSelection();
   renderQuoteWorkspaceGuide();
+  renderProductTypeManager();
   renderPriceList();
   renderPricesTable();
   renderCommercialLibrarySummary();
@@ -11671,15 +11726,463 @@ function createNewItem() {
   };
 
   state.prices.push(item);
+  state.productTypes = [...new Set([...(state.productTypes || []), tipo])];
   state.selectedIds.add(item.id);
   syncEventTypeFromSelection();
   savePrices();
+  saveProductTypes();
   saveSelectedIds();
   renderCategoryFilter();
   if (fields.categoryFilter) fields.categoryFilter.value = tipo;
   clearNewItemForm();
   renderAll();
   showToast("Item criado e adicionado ao orçamento.");
+}
+
+const productCsvColumns = [
+  ["id", "ID"],
+  ["codigo", "Código"],
+  ["tipoEvento", "Tipo"],
+  ["nome", "Nome"],
+  ["descricao", "Descrição"],
+  ["commercialSummary", "Resumo comercial"],
+  ["priority", "Prioridade"],
+  ["recommendedWindows", "Horários indicados"],
+  ["preco1h", "Preço 1h"],
+  ["preco2h", "Preço 2h"],
+  ["precoMeiaHoraExtra", "Preço 1/2h extra"],
+  ["precoFixo", "Preço fixo"],
+  ["valorAdicional", "Valor adicional"],
+  ["minimo", "Mínimo"],
+  ["idioma", "Idioma"],
+  ["formula", "Fórmula"],
+  ["active", "Ativo"],
+];
+
+function escapeCsvValue(value) {
+  const text = String(value ?? "");
+  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportProductsCsv() {
+  const header = productCsvColumns.map(([, label]) => label).join(";");
+  const rows = state.prices.map((item) =>
+    productCsvColumns
+      .map(([key]) => {
+        if (key === "active") return item.active !== false ? "sim" : "não";
+        return escapeCsvValue(item[key] ?? "");
+      })
+      .join(";"),
+  );
+  const csv = `\ufeff${[header, ...rows].join("\n")}`;
+  downloadCsvFile(csv, `produtos-embaixada-carioca-${new Date().toISOString().slice(0, 10)}.csv`);
+  showToast("Planilha de produtos exportada.");
+}
+
+function buildProductsSpreadsheetHtml() {
+  const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const activeProducts = state.prices.filter((item) => item.active !== false);
+  const rows = activeProducts
+    .sort((a, b) => `${a.tipoEvento || ""} ${a.nome || ""}`.localeCompare(`${b.tipoEvento || ""} ${b.nome || ""}`, "pt-BR"))
+    .map((item) => `
+      <tr>
+        <td>${escapeHtml(item.codigo || "")}</td>
+        <td>${escapeHtml(item.tipoEvento || "")}</td>
+        <td><strong>${escapeHtml(item.nome || "")}</strong></td>
+        <td>${escapeHtml(item.commercialSummary || item.descricao || "")}</td>
+        <td>${escapeHtml(item.priority || "média")}</td>
+        <td>${escapeHtml(item.recommendedWindows || "")}</td>
+        <td>${formatProductMoney(item.preco1h)}</td>
+        <td>${formatProductMoney(item.preco2h)}</td>
+        <td>${formatProductMoney(item.precoMeiaHoraExtra)}</td>
+        <td>${formatProductMoney(item.precoFixo)}</td>
+        <td>${formatProductMoney(item.valorAdicional)}</td>
+        <td>${escapeHtml(item.minimo ?? "")}</td>
+        <td>${escapeHtml(getProductFormulaLabel(item.formula))}</td>
+      </tr>
+    `)
+    .join("");
+  return `<!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { color: #153d2d; font-family: Arial, sans-serif; }
+          h1 { color: #153d2d; font-size: 22px; margin: 0; }
+          .meta { color: #66736e; font-size: 12px; font-weight: 700; margin: 6px 0 14px; }
+          table { border-collapse: collapse; width: 100%; }
+          th { background: #153d2d; color: #ffffff; font-size: 12px; padding: 8px; text-align: left; }
+          td { border: 1px solid #d9e1dc; font-size: 11px; padding: 7px; vertical-align: top; }
+          tr:nth-child(even) td { background: #f4f8f5; }
+          .money { mso-number-format:"R$ #,##0.00"; }
+        </style>
+      </head>
+      <body>
+        <h1>Embaixada Carioca - Planilha de produtos e preços</h1>
+        <div class="meta">Gerado em ${escapeHtml(generatedAt)} · ${activeProducts.length} produto(s) ativo(s)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Tipo</th>
+              <th>Produto</th>
+              <th>Resumo comercial</th>
+              <th>Prioridade</th>
+              <th>Janela indicada</th>
+              <th>1h</th>
+              <th>2h</th>
+              <th>Extra</th>
+              <th>Fixo</th>
+              <th>Adicional</th>
+              <th>Mínimo</th>
+              <th>Fórmula</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="13">Nenhum produto ativo encontrado.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>`;
+}
+
+function exportProductsExcel() {
+  const html = buildProductsSpreadsheetHtml();
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `produtos-embaixada-carioca-${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast("Planilha Excel exportada.");
+}
+
+function downloadProductsTemplateCsv() {
+  const examples = [
+    {
+      id: "modelo-coquetel-premium",
+      codigo: "CP",
+      tipoEvento: "Coquetel",
+      nome: "Coquetel Premium",
+      descricao: "Bebidas, petiscos e serviço conforme proposta.",
+      commercialSummary: "Recepção completa para networking, celebrações e eventos corporativos.",
+      priority: "alta",
+      recommendedWindows: "Após 17h e 19h-21h",
+      preco1h: "95",
+      preco2h: "145",
+      precoMeiaHoraExtra: "30",
+      precoFixo: "",
+      valorAdicional: "",
+      minimo: "20",
+      idioma: "",
+      formula: "durationPerPerson",
+      active: "sim",
+    },
+    {
+      id: "modelo-extra-musica",
+      codigo: "EX",
+      tipoEvento: "Extras",
+      nome: "Trio de Jazz/Bossa Nova",
+      descricao: "Música ao vivo sob consulta de disponibilidade.",
+      commercialSummary: "Experiência musical para valorizar recepção, coquetel ou almoço especial.",
+      priority: "media",
+      recommendedWindows: "Sob consulta",
+      preco1h: "",
+      preco2h: "",
+      precoMeiaHoraExtra: "",
+      precoFixo: "3500",
+      valorAdicional: "",
+      minimo: "1",
+      idioma: "",
+      formula: "fixedTotal",
+      active: "sim",
+    },
+  ];
+  const header = productCsvColumns.map(([, label]) => label).join(";");
+  const rows = examples.map((item) =>
+    productCsvColumns
+      .map(([key]) => escapeCsvValue(item[key] ?? ""))
+      .join(";"),
+  );
+  downloadCsvFile(`\ufeff${[header, ...rows].join("\n")}`, `modelo-produtos-embaixada-carioca.csv`);
+  showToast("Modelo de planilha baixado.");
+}
+
+function downloadCsvFile(csv, filename) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function getProductFormulaLabel(formula) {
+  const labels = {
+    durationPerPerson: "Por pessoa + duração",
+    serviceIncluded90PerPerson: "1h30 por pessoa, taxa inclusa",
+    perPersonFixed: "Por pessoa fixo",
+    fixedPlusPerPerson: "Fixo + por pessoa",
+    fixedCoversMinimum: "Fixo inclui mínimo",
+    fixedTotal: "Valor fixo total",
+  };
+  return labels[formula] || formula || "Por pessoa + duração";
+}
+
+function formatProductMoney(value) {
+  const text = String(value ?? "").trim();
+  const number = Number(text.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, ""));
+  return number ? formatMoney(number) : "-";
+}
+
+function buildPrintableProductsHtml() {
+  const activeProducts = state.prices.filter((item) => item.active !== false);
+  const grouped = activeProducts.reduce((acc, item) => {
+    const type = item.tipoEvento || "Sem tipo";
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(item);
+    return acc;
+  }, {});
+  const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const groups = Object.keys(grouped)
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((type) => `
+      <section class="print-group">
+        <h2>${escapeHtml(type)} <small>${grouped[type].length} item(ns)</small></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Produto</th>
+              <th>Resumo</th>
+              <th>1h</th>
+              <th>2h</th>
+              <th>Extra</th>
+              <th>Fixo</th>
+              <th>Mín.</th>
+              <th>Fórmula</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${grouped[type].map((item) => `
+              <tr>
+                <td>${escapeHtml(item.codigo || "-")}</td>
+                <td><strong>${escapeHtml(item.nome || "-")}</strong><br><span>${escapeHtml(item.priority || "média")}</span></td>
+                <td>${escapeHtml(item.commercialSummary || item.descricao || "-")}</td>
+                <td>${formatProductMoney(item.preco1h)}</td>
+                <td>${formatProductMoney(item.preco2h)}</td>
+                <td>${formatProductMoney(item.precoMeiaHoraExtra)}</td>
+                <td>${formatProductMoney(item.precoFixo)}</td>
+                <td>${escapeHtml(item.minimo ?? "-")}</td>
+                <td>${escapeHtml(getProductFormulaLabel(item.formula))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </section>
+    `).join("");
+  return `<!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <title>Catálogo de produtos - Embaixada Carioca</title>
+        <style>
+          @page { margin: 14mm; size: A4 landscape; }
+          * { box-sizing: border-box; }
+          body { color: #153d2d; font-family: Arial, sans-serif; margin: 0; }
+          header { align-items: center; border-bottom: 2px solid #153d2d; display: flex; justify-content: space-between; margin-bottom: 18px; padding-bottom: 12px; }
+          h1 { font-size: 24px; line-height: 1; margin: 0; }
+          p { color: #66736e; font-size: 11px; font-weight: 700; margin: 4px 0 0; }
+          .summary { background: #eef5f0; border-left: 5px solid #153d2d; border-radius: 8px; color: #153d2d; font-size: 12px; font-weight: 700; margin-bottom: 16px; padding: 10px 12px; }
+          .print-group { break-inside: avoid; margin-bottom: 18px; }
+          h2 { color: #153d2d; font-size: 15px; margin: 0 0 8px; text-transform: uppercase; }
+          h2 small { color: #f39200; font-size: 11px; margin-left: 8px; text-transform: none; }
+          table { border-collapse: collapse; font-size: 10px; width: 100%; }
+          th { background: #153d2d; color: #fff; padding: 7px 6px; text-align: left; }
+          td { border-bottom: 1px solid #d9e1dc; padding: 7px 6px; vertical-align: top; }
+          td:nth-child(3) { max-width: 280px; }
+          span { color: #66736e; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <header>
+          <div>
+            <p>EMBAIXADA CARIOCA</p>
+            <h1>Catálogo de produtos e preços</h1>
+          </div>
+          <p>Gerado em ${escapeHtml(generatedAt)}</p>
+        </header>
+        <div class="summary">${activeProducts.length} produto(s) ativo(s). Use esta versão para conferência interna, treinamento e revisão comercial.</div>
+        ${groups || "<p>Nenhum produto ativo encontrado.</p>"}
+        <script>window.addEventListener("load", () => window.print());</script>
+      </body>
+    </html>`;
+}
+
+function printProductsCatalog() {
+  const win = window.open("", "_blank");
+  if (!win) {
+    showToast("Permita pop-ups para imprimir o catálogo.");
+    return;
+  }
+  win.document.open();
+  win.document.write(buildPrintableProductsHtml());
+  win.document.close();
+}
+
+function parseCsvTable(text) {
+  const cleanText = String(text || "").replace(/^\ufeff/, "");
+  const delimiter = (cleanText.split("\n")[0].match(/;/g) || []).length >= (cleanText.split("\n")[0].match(/,/g) || []).length ? ";" : ",";
+  const rows = [];
+  let row = [];
+  let value = "";
+  let inQuotes = false;
+  for (let i = 0; i < cleanText.length; i += 1) {
+    const char = cleanText[i];
+    const next = cleanText[i + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      value += '"';
+      i += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === delimiter && !inQuotes) {
+      row.push(value);
+      value = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(value);
+      if (row.some((cell) => String(cell).trim())) rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+  row.push(value);
+  if (row.some((cell) => String(cell).trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeCsvHeader(value) {
+  return normalizarTextoSeguro(value).replace(/\s+/g, "");
+}
+
+function mapProductCsvHeaders(headerRow) {
+  const aliases = {
+    id: "id",
+    codigo: "codigo",
+    cod: "codigo",
+    tipo: "tipoEvento",
+    tipoevento: "tipoEvento",
+    categoria: "tipoEvento",
+    nome: "nome",
+    produto: "nome",
+    descricao: "descricao",
+    descrio: "descricao",
+    resumocomercial: "commercialSummary",
+    resumo: "commercialSummary",
+    prioridade: "priority",
+    horariosindicados: "recommendedWindows",
+    horriosindicados: "recommendedWindows",
+    janelarecomendada: "recommendedWindows",
+    preco1h: "preco1h",
+    preo1h: "preco1h",
+    preco2h: "preco2h",
+    preo2h: "preco2h",
+    preco12hextra: "precoMeiaHoraExtra",
+    preo12hextra: "precoMeiaHoraExtra",
+    precoextrameiahora: "precoMeiaHoraExtra",
+    precofixo: "precoFixo",
+    preofixo: "precoFixo",
+    valoradicional: "valorAdicional",
+    adicional: "valorAdicional",
+    minimo: "minimo",
+    mnimo: "minimo",
+    idioma: "idioma",
+    formula: "formula",
+    frmula: "formula",
+    ativo: "active",
+  };
+  return headerRow.map((cell) => aliases[normalizeCsvHeader(cell)] || "");
+}
+
+function normalizeImportedProduct(row, headerMap, index) {
+  const item = {};
+  headerMap.forEach((key, cellIndex) => {
+    if (key) item[key] = String(row[cellIndex] ?? "").trim();
+  });
+  item.tipoEvento = item.tipoEvento || "";
+  item.nome = item.nome || "";
+  item.descricao = item.descricao || item.commercialSummary || "";
+  if (!item.tipoEvento || !item.nome || !item.descricao) return null;
+  item.id = item.id || `import-${slugify(item.tipoEvento)}-${slugify(item.nome)}-${Date.now()}-${index}`;
+  item.codigo = item.codigo || "IMP";
+  item.commercialSummary = item.commercialSummary || item.descricao;
+  item.priority = ["alta", "media", "baixa"].includes(normalizarTextoSeguro(item.priority)) ? normalizarTextoSeguro(item.priority) : "media";
+  item.recommendedWindows = item.recommendedWindows || getDefaultRecommendedWindows(item);
+  item.active = !["nao", "não", "false", "0", "inativo"].includes(normalizarTextoSeguro(item.active));
+  item.preco1h = item.preco1h || "";
+  item.preco2h = item.preco2h || "";
+  item.precoMeiaHoraExtra = item.precoMeiaHoraExtra || "";
+  item.precoFixo = item.precoFixo || "";
+  item.valorAdicional = item.valorAdicional || "";
+  item.minimo = item.minimo || 0;
+  item.idioma = item.idioma || "";
+  item.formula = item.formula || "durationPerPerson";
+  item.custom = !initialPrices.some((catalogItem) => catalogItem.id === item.id);
+  return normalizeCatalogItem(item);
+}
+
+async function importProductsCsv(file) {
+  if (!file) return;
+  const text = await file.text();
+  const rows = parseCsvTable(text);
+  if (rows.length < 2) {
+    showToast("A planilha não tem produtos para importar.");
+    return;
+  }
+  const headerMap = mapProductCsvHeaders(rows[0]);
+  const imported = rows
+    .slice(1)
+    .map((row, index) => normalizeImportedProduct(row, headerMap, index))
+    .filter(Boolean);
+  if (!imported.length) {
+    showToast("Nenhum produto válido encontrado. Confira Tipo, Nome e Descrição.");
+    return;
+  }
+  const confirmed = window.confirm(
+    `Importar ${imported.length} produto(s) e substituir a lista atual neste navegador?\n\nDica: exporte uma cópia antes se quiser preservar a tabela atual.`,
+  );
+  if (!confirmed) return;
+  state.prices = imported;
+  state.productTypes = getProductTypes();
+  state.selectedIds = new Set([...state.selectedIds].filter((id) => state.prices.some((item) => item.id === id)));
+  savePrices();
+  saveProductTypes();
+  saveSelectedIds();
+  renderCategoryFilter();
+  renderAll();
+  showToast(`${imported.length} produto(s) importado(s).`);
+}
+
+function addProductType() {
+  const type = fields.newProductTypeName?.value.trim();
+  if (!type) {
+    showToast("Digite o nome do novo tipo.");
+    return;
+  }
+  state.productTypes = [...new Set([...(state.productTypes || []), type])];
+  saveProductTypes();
+  renderCategoryFilter();
+  renderProductTypeManager();
+  if (fields.newTipo) fields.newTipo.value = type;
+  if (fields.newProductTypeName) fields.newProductTypeName.value = "";
+  showToast("Tipo criado. Agora cadastre o primeiro produto dele.");
 }
 
 function bindEvents() {
@@ -11838,6 +12341,31 @@ function bindEvents() {
   document.querySelector("#resetCommunicationTemplatesBtn")?.addEventListener("click", handleResetCommunicationTemplates);
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
   document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);
+  document.querySelector("#addProductTypeBtn")?.addEventListener("click", addProductType);
+  document.querySelector("#downloadPricesTemplateBtn")?.addEventListener("click", downloadProductsTemplateCsv);
+  document.querySelector("#exportPricesBtn")?.addEventListener("click", exportProductsCsv);
+  document.querySelector("#exportPricesExcelBtn")?.addEventListener("click", exportProductsExcel);
+  document.querySelector("#printPricesBtn")?.addEventListener("click", printProductsCatalog);
+  document.querySelector("#importPricesBtn")?.addEventListener("click", () => {
+    document.querySelector("#importPricesFile")?.click();
+  });
+  document.querySelector("#importPricesFile")?.addEventListener("change", async (event) => {
+    const [file] = event.target.files || [];
+    await importProductsCsv(file);
+    event.target.value = "";
+  });
+  nodes.productTypeList?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-product-type]");
+    if (!button) return;
+    const type = button.dataset.productType || "";
+    if (fields.newTipo) fields.newTipo.value = type;
+    if (fields.categoryFilter) {
+      fields.categoryFilter.value = type;
+      renderPriceList();
+    }
+    fields.newNome?.focus();
+    showToast(`Tipo "${type}" selecionado para novo produto.`);
+  });
   document.querySelector("#saveSupabaseConfigBtn")?.addEventListener("click", configureSupabaseFromForm);
   document.querySelector("#loginBtn")?.addEventListener("click", loginWithEmail);
   document.querySelectorAll("[data-team-email]").forEach((button) => {

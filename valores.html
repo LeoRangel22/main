@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260521-comunicacao-v158" />
+    <link rel="stylesheet" href="./styles.css?v=20260521-valores-v161" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -91,6 +91,44 @@
               <h2>Produtos e preços</h2>
             </div>
             <p>Edite valores, mínimos e fórmulas. As alterações serão usadas na criação das propostas neste navegador.</p>
+
+            <div class="values-command-panel" aria-label="Planilha de produtos">
+              <div class="spreadsheet-copy">
+                <span>Planilha de produtos</span>
+                <strong>Atualize preços em tabela, sem perder a lógica comercial.</strong>
+                <p>Exporte em Excel para revisão bonita, use CSV para editar/importar e imprima o catálogo quando precisar alinhar com a equipe.</p>
+              </div>
+              <div class="spreadsheet-actions">
+                <button class="secondary" id="downloadPricesTemplateBtn" type="button">Baixar modelo</button>
+                <button class="secondary" id="exportPricesBtn" type="button">Exportar CSV</button>
+                <button class="secondary" id="exportPricesExcelBtn" type="button">Exportar Excel</button>
+                <button class="secondary" id="printPricesBtn" type="button">Imprimir catálogo</button>
+                <button class="primary" id="importPricesBtn" type="button">Importar CSV</button>
+                <input id="importPricesFile" class="sr-only" type="file" accept=".csv,text/csv" />
+              </div>
+              <div class="spreadsheet-steps" aria-label="Como usar a planilha">
+                <div><strong>1. Baixe</strong><span>Use o modelo ou exporte a tabela atual.</span></div>
+                <div><strong>2. Revise</strong><span>Edite preços, mínimos, fórmulas e produtos ativos.</span></div>
+                <div><strong>3. Importe</strong><span>Substitua a lista somente depois da conferência.</span></div>
+              </div>
+            </div>
+
+            <section class="product-types-panel" aria-label="Tipos de produto">
+              <div class="section-heading">
+                <span>Tipos</span>
+                <h3>Organização comercial</h3>
+              </div>
+              <p>Crie tipos como Coquetel, Welcome Drink, Extras ou um novo produto do grupo. Depois use o tipo no cadastro do item.</p>
+              <div class="product-type-create">
+                <label>
+                  Novo tipo
+                  <input id="newProductTypeName" type="text" placeholder="Ex.: Experiências extras" />
+                </label>
+                <button class="secondary" id="addProductTypeBtn" type="button">Criar tipo</button>
+              </div>
+              <div class="product-type-list" id="productTypeList"></div>
+            </section>
+
             <div class="item-builder" aria-label="Criar novo item de orçamento">
               <div>
                 <h3>Criar novo item</h3>
@@ -172,6 +210,7 @@
                 <button class="primary" id="addItemBtn" type="button">Adicionar item</button>
               </div>
             </div>
+
             <section class="commercial-library" aria-label="Biblioteca comercial">
               <div class="section-heading">
                 <span>Biblioteca</span>
@@ -180,6 +219,7 @@
               <p>Controle quais produtos aparecem no orçamento e ajuste resumo, prioridade e horários recomendados sem mexer na lógica de cálculo.</p>
               <div class="library-summary" id="commercialLibrarySummary"></div>
             </section>
+
             <div class="table-wrap">
               <table>
                 <thead>
@@ -234,6 +274,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=20260521-comunicacao-v158"></script>
+    <script defer src="./app.js?v=20260521-valores-v161"></script>
   </body>
 </html>
