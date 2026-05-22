@@ -7174,6 +7174,43 @@ textarea {
   text-transform: none;
 }
 
+.spreadsheet-help {
+  border-top: 1px solid var(--line);
+  grid-column: 1 / -1;
+  padding-top: 10px;
+}
+
+.spreadsheet-help summary {
+  color: var(--verde-escuro);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.spreadsheet-help ul {
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.formula-help {
+  background: rgba(237, 245, 240, 0.9);
+  border-left: 4px solid var(--verde-medio);
+  border-radius: 6px;
+  color: var(--verde-escuro);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
 .product-types-panel .section-heading {
   align-items: baseline;
   margin-bottom: 0;
