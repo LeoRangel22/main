@@ -6,6 +6,43 @@ const {
 } = require("./support");
 
 test.describe("Proposta manual no admin", () => {
+  test("inicia registro retroativo para evento negociado fora do sistema", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await page.goto("/index.html?qa=1");
+    await expect(page.locator("#startRealizedEventBtn")).toBeVisible();
+    await page.locator("#startRealizedEventBtn").click();
+
+    await expect(page.locator("#formSourcePanel")).toContainText("Registro de evento realizado");
+    await expect(page.locator("#proposalNextStep")).toContainText("Salvar evento realizado no histórico");
+    await expect(page.locator("#eventTime")).toHaveValue("12:00");
+    await expect(page.locator("#manualAdjustment")).toHaveValue("0");
+
+    const sourceData = await page.evaluate(() => window.getFormSourceData());
+    expect(sourceData.origin).toBe("Negociado fora do sistema");
+    expect(sourceData.occasion).toBe("Evento já realizado");
+    expect(sourceData.budgetRange).toBe("Ainda não definido");
+
+    await page.locator("#clientName").fill("Paula Andrade");
+    await page.locator("#clientEmail").fill("paula.andrade@example.com");
+    await page.locator("#clientPhone").fill("+55 21 99999-0000");
+    await page.locator("#eventDate").fill("2026-05-12");
+    await page.locator("#guestCount").fill("42");
+    await page.locator('[data-flow-event="almoco"]').click();
+
+    const review = await page.evaluate(() =>
+      window.getProposalReviewItems().map((item) => ({
+        id: item.id,
+        status: item.status,
+      })),
+    );
+    const blocking = review.filter((item) => ["contact", "format", "date", "guests", "items", "value", "conditions"].includes(item.id) && item.status === "error");
+    expect(blocking).toEqual([]);
+
+    await expectNoBrowserErrors(errors);
+  });
+
   test("preenche uma proposta do zero sem depender do campo de ajuste comercial", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     page.on("dialog", (dialog) => dialog.accept());
