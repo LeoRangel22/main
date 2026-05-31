@@ -68,6 +68,7 @@ const sourceOriginOptions = [
   "Indicação",
   "Google / Instagram",
   "Agência / parceiro",
+  "Negociado fora do sistema",
   "Já conheço o restaurante",
   "Parque Bondinho",
   "Outro",
@@ -753,6 +754,7 @@ const nodes = {
   financeCommandPanel: document.querySelector("#financeCommandPanel"),
   quickReplies: document.querySelector("#quickReplies"),
   startManualProposalBtn: document.querySelector("#startManualProposalBtn"),
+  startRealizedEventBtn: document.querySelector("#startRealizedEventBtn"),
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
   openNextPriorityBtn: document.querySelector("#openNextPriorityBtn"),
   globalSearchResults: document.querySelector("#globalSearchResults"),
@@ -1556,6 +1558,16 @@ function getProposalNextStepConfig() {
   }
 
   const hasDraft = fields.clientName.value.trim() || fields.eventType.value.trim() || state.selectedIds.size;
+  if (state.manualSourceKey === "manual:realized") {
+    return {
+      tone: "operation",
+      title: "Salvar evento realizado no histórico",
+      note: "Use quando a venda aconteceu fora do sistema. Confira cliente, data, pax, itens vendidos, valor e pagamento para alimentar relatórios e recompra.",
+      action: "save_realized_event",
+      actionLabel: "Salvar como realizado",
+    };
+  }
+
   if (request || hasDraft) {
     return {
       tone: "commercial",
@@ -4304,11 +4316,22 @@ function renderFormSourcePanel() {
     ["Extras solicitados", data.extras],
     ["Observação livre do cliente", data.observations],
   ].filter(([, value]) => normalizeSourceValue(value));
-  const sourceTitle = data.isManualDraft ? "Dados comerciais da proposta" : "Dados recebidos do formulário";
-  const sourceSubtitle = data.isManualDraft ? "Complete o perfil para priorizar melhor" : "Base para proposta segura";
-  const sourceHelp = data.isManualDraft
-    ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
-    : "Complete uma vez. O checklist usa estes dados para reduzir ajustes e risco.";
+  const isRealizedManual = state.manualSourceKey === "manual:realized" && !state.activeProposalId && !state.activeQuoteRequestId;
+  const sourceTitle = isRealizedManual
+    ? "Registro de evento realizado"
+    : data.isManualDraft
+      ? "Dados comerciais da proposta"
+      : "Dados recebidos do formulário";
+  const sourceSubtitle = isRealizedManual
+    ? "Preencha o essencial para histórico, relatório e recompra"
+    : data.isManualDraft
+      ? "Complete o perfil para priorizar melhor"
+      : "Base para proposta segura";
+  const sourceHelp = isRealizedManual
+    ? "Use para eventos vendidos por WhatsApp, e-mail ou atendimento externo. O objetivo é registrar cliente, data, itens, valor, pagamento e aprendizados sem retrabalho."
+    : data.isManualDraft
+      ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
+      : "Complete uma vez. O checklist usa estes dados para reduzir ajustes e risco.";
 
   nodes.formSourcePanel.className = `form-source-panel ${missing.length ? "has-missing" : "is-complete"}`;
   nodes.formSourcePanel.dataset.sourceKey = getSourceOverrideKey();
@@ -4330,7 +4353,7 @@ function renderFormSourcePanel() {
     <div class="form-source-edit">
       <div>
         <span>Contexto para atendimento</span>
-        <strong>${escapeHtml(data.isManualDraft ? "Complete o perfil antes de enviar" : "Confira e complete só o que faltar")}</strong>
+        <strong>${escapeHtml(isRealizedManual ? "Dados mínimos para registro retroativo" : data.isManualDraft ? "Complete o perfil antes de enviar" : "Confira e complete só o que faltar")}</strong>
         <p>Esses dados alimentam revisão, histórico e respostas futuras.</p>
       </div>
       <div class="form-source-edit-grid">
@@ -11099,18 +11122,24 @@ function renderAll() {
   renderCommunicationTemplateEditor();
 }
 
-function startNewProposal() {
+function startNewProposal(options = {}) {
+  const mode = options.mode || "manual";
+  const isRealizedMode = mode === "realized";
   const hasDraft =
     state.activeProposalId ||
     state.activeQuoteRequestId ||
     fields.clientName.value.trim() ||
     state.selectedIds.size;
-  if (hasDraft && !window.confirm("Começar uma nova proposta e limpar os dados atuais da tela?")) return;
+  const confirmMessage = isRealizedMode
+    ? "Registrar um evento já realizado e limpar os dados atuais da tela?"
+    : "Começar uma nova proposta e limpar os dados atuais da tela?";
+  if (hasDraft && !window.confirm(confirmMessage)) return;
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   delete state.sourceOverrides["manual:draft"];
-  state.manualSourceKey = "manual:draft";
+  delete state.sourceOverrides["manual:realized"];
+  state.manualSourceKey = isRealizedMode ? "manual:realized" : "manual:draft";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
@@ -11124,7 +11153,7 @@ function startNewProposal() {
   fields.clientPhone.value = "";
   fields.eventType.value = "";
   fields.eventDate.value = "";
-  fields.eventTime.value = "18:00";
+  fields.eventTime.value = isRealizedMode ? "12:00" : "18:00";
   syncDateTimeFromFields();
   fields.guestCount.value = "30";
   fields.eventDuration.value = "1";
@@ -11136,6 +11165,18 @@ function startNewProposal() {
   fields.notes.value = "";
   fields.searchPrice.value = "";
   fields.categoryFilter.value = "";
+  if (isRealizedMode) {
+    state.sourceOverrides[state.manualSourceKey] = {
+      clientType: "Cliente direto",
+      budgetRange: "Ainda não definido",
+      origin: "Negociado fora do sistema",
+      moment: "Usar data e horário acima",
+      occasion: "Evento já realizado",
+      observations: "Registro retroativo de evento negociado fora do sistema.",
+    };
+    fields.notes.value =
+      "Registro retroativo: conferir valor final, forma de pagamento, itens vendidos e observações úteis para histórico.";
+  }
   renderProposalNextStep();
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
@@ -11146,16 +11187,20 @@ function startNewProposal() {
   markEditorClean({
     kind: "manual",
     id: "",
-    name: "Nova proposta manual",
+    name: isRealizedMode ? "Registro de evento realizado" : "Nova proposta manual",
     date: "",
-    time: "",
-    type: "Evento a definir",
-    status: "proposta_enviada",
-    stageId: "proposta_enviada",
-    sourceLabel: "Edição manual",
+    time: isRealizedMode ? "12:00" : "",
+    type: isRealizedMode ? "Evento realizado" : "Evento a definir",
+    status: isRealizedMode ? "pos_venda" : "proposta_enviada",
+    stageId: isRealizedMode ? "pos_venda" : "proposta_enviada",
+    sourceLabel: isRealizedMode ? "Registro retroativo" : "Edição manual",
   });
   scrollToClientData();
-  showToast("Nova proposta pronta para preencher.");
+  showToast(isRealizedMode ? "Registro retroativo pronto. Preencha o essencial e salve como realizado." : "Nova proposta pronta para preencher.");
+}
+
+function startRealizedEventRegistration() {
+  startNewProposal({ mode: "realized" });
 }
 
 function showToast(message) {
@@ -11596,6 +11641,9 @@ async function runProposalNextStepAction(action) {
   switch (action) {
     case "save_proposal":
       await saveCurrentProposal(activeProposal?.status || "proposta_enviada");
+      break;
+    case "save_realized_event":
+      await saveCurrentProposal("pos_venda");
       break;
     case "copy_link":
       await copyProposalLink();
@@ -12398,6 +12446,7 @@ function bindEvents() {
   document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
+  nodes.startRealizedEventBtn?.addEventListener("click", startRealizedEventRegistration);
   nodes.openNextPriorityBtn?.addEventListener("click", () => openNextPriorityItem());
   nodes.jumpToPipelineBtn?.addEventListener("click", () => {
     document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
