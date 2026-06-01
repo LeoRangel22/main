@@ -1561,10 +1561,10 @@ function getProposalNextStepConfig() {
   if (state.manualSourceKey === "manual:realized") {
     return {
       tone: "operation",
-      title: "Salvar evento realizado no histórico",
-      note: "Use quando a venda aconteceu fora do sistema. Confira cliente, data, pax, itens vendidos, valor e pagamento para alimentar relatórios e recompra.",
+      title: "Registrar evento realizado",
+      note: "Preencha cliente, data, pax, itens e valor. Ao salvar, o sistema pergunta o pagamento recebido e manda direto para Pós-venda.",
       action: "save_realized_event",
-      actionLabel: "Salvar como realizado",
+      actionLabel: "Salvar e registrar pagamento",
     };
   }
 
@@ -2898,40 +2898,53 @@ function readSignalProofFile(file) {
   });
 }
 
-function showSignalPaymentDialog(total = 0) {
+function showSignalPaymentDialog(total = 0, options = {}) {
   return new Promise((resolve) => {
     const totalValue = roundCurrency(Number(total) || 0);
-    const defaultAmount = getSignalDefaultAmount(totalValue);
     const thirtyPercentAmount = roundCurrency(totalValue * 0.3);
+    const presetAmounts = {
+      50: getSignalDefaultAmount(totalValue),
+      30: thirtyPercentAmount,
+      100: totalValue,
+    };
+    const defaultPreset = ["50", "30", "100", "custom"].includes(String(options.defaultPreset))
+      ? String(options.defaultPreset)
+      : "50";
+    const defaultAmount = presetAmounts[defaultPreset] ?? getSignalDefaultAmount(totalValue);
+    const isRealizedPayment = options.mode === "realized";
     const backdrop = document.createElement("div");
     backdrop.className = "signal-modal-backdrop";
     backdrop.innerHTML = `
       <form class="signal-modal" novalidate>
         <div>
-          <span class="eyebrow">Sinal recebido</span>
-          <h3>Registrar pagamento do sinal</h3>
-          <p>Use 50% como padrão. Se o cliente pagou tudo ou combinou outro valor, registre aqui sem criar saldo indevido.</p>
+          <span class="eyebrow">${escapeHtml(isRealizedPayment ? "Pagamento do evento" : "Sinal recebido")}</span>
+          <h3>${escapeHtml(isRealizedPayment ? "Registrar pagamento recebido" : "Registrar pagamento do sinal")}</h3>
+          <p>${escapeHtml(
+            isRealizedPayment
+              ? "Para evento já realizado, o padrão é pagamento integral. Se houve sinal parcial, escolha 50%, 30% ou outro valor e o sistema organiza o saldo."
+              : "Use 50% como padrão. Se o cliente pagou tudo ou combinou outro valor, registre aqui sem criar saldo indevido.",
+          )}</p>
         </div>
         <fieldset>
           <legend>Tipo de pagamento</legend>
           <div class="signal-payment-presets">
             <label>
-              <input type="radio" name="paymentPreset" value="50" checked />
+              <input type="radio" name="paymentPreset" value="50" ${defaultPreset === "50" ? "checked" : ""} />
               <span>50% padrão</span>
-              <small>${escapeHtml(formatMoney(defaultAmount))}</small>
+              <small>${escapeHtml(formatMoney(presetAmounts["50"]))}</small>
             </label>
             <label>
-              <input type="radio" name="paymentPreset" value="30" />
+              <input type="radio" name="paymentPreset" value="30" ${defaultPreset === "30" ? "checked" : ""} />
               <span>30%</span>
               <small>${escapeHtml(formatMoney(thirtyPercentAmount))}</small>
             </label>
             <label>
-              <input type="radio" name="paymentPreset" value="100" />
+              <input type="radio" name="paymentPreset" value="100" ${defaultPreset === "100" ? "checked" : ""} />
               <span>Pagamento integral</span>
               <small>${escapeHtml(formatMoney(totalValue))}</small>
             </label>
             <label>
-              <input type="radio" name="paymentPreset" value="custom" />
+              <input type="radio" name="paymentPreset" value="custom" ${defaultPreset === "custom" ? "checked" : ""} />
               <span>Outro valor</span>
               <small>combinado</small>
             </label>
@@ -2967,7 +2980,7 @@ function showSignalPaymentDialog(total = 0) {
         <small class="signal-error" aria-live="polite"></small>
         <div class="signal-modal-actions">
           <button class="secondary" type="button" data-signal-cancel>Cancelar</button>
-          <button class="primary" type="submit">Confirmar sinal</button>
+          <button class="primary" type="submit">${escapeHtml(isRealizedPayment ? "Confirmar pagamento" : "Confirmar sinal")}</button>
         </div>
       </form>
     `;
@@ -2983,11 +2996,6 @@ function showSignalPaymentDialog(total = 0) {
     const close = (value) => {
       backdrop.remove();
       resolve(value);
-    };
-    const presetAmounts = {
-      50: defaultAmount,
-      30: thirtyPercentAmount,
-      100: totalValue,
     };
     const setAmountFromPreset = (preset) => {
       const presetAmount = presetAmounts[preset];
@@ -4328,7 +4336,7 @@ function renderFormSourcePanel() {
       ? "Complete o perfil para priorizar melhor"
       : "Base para proposta segura";
   const sourceHelp = isRealizedManual
-    ? "Use para eventos vendidos por WhatsApp, e-mail ou atendimento externo. O objetivo é registrar cliente, data, itens, valor, pagamento e aprendizados sem retrabalho."
+    ? "Use para eventos vendidos por WhatsApp, e-mail ou atendimento externo. Registre cliente, data, itens vendidos, valor, pagamento e aprendizados para relatório e recompra."
     : data.isManualDraft
       ? "Quando a cotação nasce direto no admin, estes campos substituem o formulário do cliente: perfil, origem, cliente final/grupo, momento e ocasião."
       : "Complete uma vez. O checklist usa estes dados para reduzir ajustes e risco.";
@@ -4353,8 +4361,12 @@ function renderFormSourcePanel() {
     <div class="form-source-edit">
       <div>
         <span>Contexto para atendimento</span>
-        <strong>${escapeHtml(isRealizedManual ? "Dados mínimos para registro retroativo" : data.isManualDraft ? "Complete o perfil antes de enviar" : "Confira e complete só o que faltar")}</strong>
-        <p>Esses dados alimentam revisão, histórico e respostas futuras.</p>
+        <strong>${escapeHtml(isRealizedManual ? "Registro rápido do que já aconteceu" : data.isManualDraft ? "Complete o perfil antes de enviar" : "Confira e complete só o que faltar")}</strong>
+        <p>${escapeHtml(
+          isRealizedManual
+            ? "Preencha o básico: cliente, data, pax, itens vendidos, pagamento recebido e observações úteis para uma próxima venda."
+            : "Esses dados alimentam revisão, histórico e respostas futuras.",
+        )}</p>
       </div>
       <div class="form-source-edit-grid">
         ${renderSourceSelect("clientType", "Tipo de cliente", data.clientType, sourceClientTypeOptions)}
@@ -10599,6 +10611,20 @@ async function saveCurrentProposal(status, signalInfo = null) {
     }
   }
 
+  const isNewRealizedManual = state.manualSourceKey === "manual:realized" && !activeProposal;
+  if (normalizedNext === "pos_venda" && isNewRealizedManual && !snapshot.pagamentoSinal) {
+    paymentSignal =
+      paymentSignal ||
+      (await showSignalPaymentDialog(snapshot.totals.total, {
+        mode: "realized",
+        defaultPreset: "100",
+      }));
+    if (!paymentSignal) {
+      showToast("Pagamento não registrado. O evento realizado não foi salvo.");
+      return null;
+    }
+  }
+
   snapshot.pagamentoSinal = paymentSignal || activeProposal?.snapshot?.pagamentoSinal || snapshot.pagamentoSinal || null;
   if (finalPaymentRequiredStatuses.has(normalizedNext)) {
     const signal = snapshot.pagamentoSinal || activeProposal?.snapshot?.pagamentoSinal || null;
@@ -11178,10 +11204,11 @@ function startNewProposal(options = {}) {
       origin: "Negociado fora do sistema",
       moment: "Usar data e horário acima",
       occasion: "Evento já realizado",
+      reason: "Evento realizado fora do sistema",
       observations: "Registro retroativo de evento negociado fora do sistema.",
     };
     fields.notes.value =
-      "Registro retroativo: conferir valor final, forma de pagamento, itens vendidos e observações úteis para histórico.";
+      "Registro retroativo: informe itens vendidos, valor final, pagamento recebido e observações úteis para histórico e recompra.";
   }
   renderProposalNextStep();
   renderSignalPaymentInfo(null, null);
