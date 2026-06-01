@@ -15,7 +15,8 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#startRealizedEventBtn").click();
 
     await expect(page.locator("#formSourcePanel")).toContainText("Registro de evento realizado");
-    await expect(page.locator("#proposalNextStep")).toContainText("Salvar evento realizado no histórico");
+    await expect(page.locator("#proposalNextStep")).toContainText("Registrar evento realizado");
+    await expect(page.locator("#proposalNextStep")).toContainText("Salvar e registrar pagamento");
     await expect(page.locator("#eventTime")).toHaveValue("12:00");
     await expect(page.locator("#manualAdjustment")).toHaveValue("0");
 
