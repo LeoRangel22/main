@@ -2701,8 +2701,16 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
   nodes.operationalChecklist.classList.remove("is-hidden");
   nodes.operationalChecklist.innerHTML = `
     <div class="checklist-heading">
-      <span>Checklist pós-sinal</span>
+      <div>
+        <span>Operação pós-sinal</span>
+        <p>Gere a ficha técnica e confira o checklist antes de acionar operação e compras.</p>
+      </div>
       <strong>${progress.done}/${progress.total} concluídos</strong>
+    </div>
+    <div class="operational-doc-actions" aria-label="Documentos operacionais">
+      <button class="primary" type="button" data-operational-doc="technical">Ficha técnica</button>
+      <button class="secondary" type="button" data-operational-doc="checklist">Checklist do evento</button>
+      <button class="secondary" type="button" data-operational-doc="summary">Copiar resumo</button>
     </div>
     <div class="checklist-items">
       ${operationalChecklistItems
@@ -2757,6 +2765,364 @@ async function updateOperationalChecklist(checklistId, checked) {
   renderProposalNextStep();
   renderPipeline();
   showToast("Checklist atualizado.");
+}
+
+function getOperationalReference(proposal, snapshot) {
+  return snapshot?.referencia || proposal?.referencia || proposal?.reference || proposal?.id || "Sem referência";
+}
+
+function formatOperationalDate(value) {
+  return value ? formatDateFromIso(value) : "A definir";
+}
+
+function formatOperationalDateTime(event = {}) {
+  const date = formatOperationalDate(event.date);
+  const weekday = formatWeekdayShortFromIso(event.date);
+  const time = event.time || "A definir";
+  return `${date}${weekday ? ` (${weekday})` : ""} · ${time}`;
+}
+
+function getOperationalDocContext(proposal = getActiveProposal()) {
+  const snapshot = proposal?.snapshot || {};
+  const event = snapshot.event || {};
+  const client = snapshot.client || {};
+  const totals = snapshot.totals || {};
+  const qualification = snapshot.qualificacao || {};
+  const selectedItems = Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems : [];
+  const checklist = snapshot.operationalChecklist || {};
+  const progress = getChecklistProgress(snapshot);
+  const attachments = getEventAttachments(snapshot);
+  const signal = snapshot.pagamentoSinal || null;
+  const remaining = snapshot.pagamentoRestante || null;
+  return {
+    proposal,
+    snapshot,
+    reference: getOperationalReference(proposal, snapshot),
+    generatedAt: new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }),
+    client,
+    event,
+    totals,
+    qualification,
+    selectedItems,
+    checklist,
+    progress,
+    attachments,
+    signal,
+    remaining,
+    statusLabel: getProposalStatusLabel(proposal?.status || ""),
+  };
+}
+
+function buildOperationalRows(rows) {
+  return rows
+    .filter((row) => row && row.value !== undefined && row.value !== null && String(row.value).trim())
+    .map(
+      (row) => `
+        <div class="op-row">
+          <span>${escapeHtml(row.label)}</span>
+          <strong>${formatMultilineHtml(row.value)}</strong>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function buildOperationalItemsList(items) {
+  if (!items.length) return `<p class="op-empty">Nenhum item selecionado.</p>`;
+  return `
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Categoria</th>
+          <th>Descrição para operação/compras</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items
+          .map(
+            (item) => `
+              <tr>
+                <td><strong>${escapeHtml(item.nome || "-")}</strong><br><small>${escapeHtml(item.codigo || "")}</small></td>
+                <td>${escapeHtml(item.tipoEvento || item.tipo || "-")}</td>
+                <td>${escapeHtml(item.descricao || item.commercialSummary || "-")}<br><small>${escapeHtml(item.calc?.detail || "")}</small></td>
+                <td>${formatMoney(item.calc?.total || 0)}</td>
+              </tr>
+            `,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function formatOperationalBanks(payment) {
+  if (!payment) return "Banco não informado";
+  if (Array.isArray(payment.bancos) && payment.bancos.length) return payment.bancos.join(", ");
+  return payment.banco || "Banco não informado";
+}
+
+function buildOperationalPaymentBlock(context) {
+  const signal = context.signal;
+  const remaining = context.remaining;
+  const signalDetail = signal
+    ? `${formatMoney(signal.valor)} · ${formatSignalPaymentDate(signal.data)} · ${formatOperationalBanks(signal)}`
+    : "Sinal ainda não registrado.";
+  const remainingDetail = remaining
+    ? `${formatMoney(remaining.valor)} · ${formatSignalPaymentDate(remaining.data)} · ${formatOperationalBanks(remaining)}`
+    : "Pagamento restante ainda não registrado.";
+  return buildOperationalRows([
+    { label: "Valor total", value: formatMoney(context.totals.total || 0) },
+    { label: "Alimentos e bebidas", value: formatMoney(context.totals.subtotal || 0) },
+    { label: "Taxa de serviço", value: formatMoney(context.totals.serviceFee || 0) },
+    { label: "Privatização", value: `${formatMoney(context.totals.privatizationAmount || 0)} · ${context.totals.privatization?.title || "Não aplicada"}` },
+    { label: "Sinal recebido", value: signalDetail },
+    { label: "Pagamento restante", value: remainingDetail },
+  ]);
+}
+
+function buildOperationalAttachments(context) {
+  const files = [];
+  if (context.signal?.comprovante?.nome) files.push({ label: "Comprovante do sinal", ...context.signal.comprovante });
+  if (context.remaining?.comprovante?.nome) files.push({ label: "Comprovante do saldo", ...context.remaining.comprovante });
+  context.attachments.forEach((attachment) => files.push({ label: attachment.tipo || "Anexo", ...attachment }));
+  if (!files.length) return `<p class="op-empty">Sem anexos cadastrados.</p>`;
+  return `
+    <ul class="op-attachments">
+      ${files
+        .map((file) => {
+          const name = file.nome || "Arquivo";
+          const href = file.dataUrl || file.url || "";
+          return `<li><strong>${escapeHtml(file.label)}:</strong> ${
+            href ? `<a href="${escapeHtml(href)}" download="${escapeHtml(name)}">${escapeHtml(name)}</a>` : escapeHtml(name)
+          }</li>`;
+        })
+        .join("")}
+    </ul>
+  `;
+}
+
+function buildOperationalChecklistRows(context, printable = false) {
+  return operationalChecklistItems
+    .map((item) => {
+      const checked = Boolean(context.checklist[item.id]);
+      return `
+        <div class="op-check-row${checked ? " is-done" : ""}">
+          <span>${printable ? (checked ? "☑" : "☐") : checked ? "OK" : "Pendente"}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function buildOperationalPrintShell(title, subtitle, contentHtml) {
+  const logoUrl = new URL("assets/logo-reducao.svg", window.location.href).href;
+  return `<!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <title>${escapeHtml(title)} - Embaixada Carioca</title>
+        <style>
+          @page { margin: 12mm; size: A4; }
+          * { box-sizing: border-box; }
+          body { color: #153d2d; font-family: Arial, sans-serif; margin: 0; }
+          .op-page { padding: 0; }
+          .op-header { align-items: center; border-bottom: 2px solid #153d2d; display: flex; gap: 14px; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; }
+          .op-brand { align-items: center; display: flex; gap: 12px; }
+          .op-brand img { height: 54px; width: 54px; }
+          .op-kicker { color: #f39200; font-size: 10px; font-weight: 900; letter-spacing: .05em; margin: 0 0 3px; text-transform: uppercase; }
+          h1 { font-size: 24px; line-height: 1.05; margin: 0; }
+          .op-meta { color: #66736e; font-size: 10px; font-weight: 700; text-align: right; }
+          .op-summary { background: #edf5ef; border-left: 5px solid #153d2d; border-radius: 8px; margin-bottom: 12px; padding: 10px 12px; }
+          .op-summary strong { display: block; font-size: 15px; margin-bottom: 3px; }
+          .op-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .op-section { break-inside: avoid; border: 1px solid #d7e1dc; border-radius: 8px; margin-bottom: 10px; padding: 10px; }
+          .op-section h2 { color: #153d2d; font-size: 12px; letter-spacing: .04em; margin: 0 0 8px; text-transform: uppercase; }
+          .op-row { border-bottom: 1px solid #edf1ef; display: grid; gap: 8px; grid-template-columns: 36% 1fr; padding: 6px 0; }
+          .op-row:last-child { border-bottom: 0; }
+          .op-row span, .op-table small, .op-empty, .op-attachments { color: #66736e; font-size: 10px; font-weight: 700; }
+          .op-row strong { font-size: 11px; line-height: 1.35; }
+          .op-table { border-collapse: collapse; font-size: 10px; width: 100%; }
+          .op-table th { background: #153d2d; color: #fff; padding: 7px 6px; text-align: left; }
+          .op-table td { border-bottom: 1px solid #dfe7e3; padding: 7px 6px; vertical-align: top; }
+          .op-checks { display: grid; gap: 7px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .op-check-row { align-items: center; border: 1px solid #dfe7e3; border-radius: 8px; display: flex; gap: 8px; min-height: 34px; padding: 7px 8px; }
+          .op-check-row span { background: #f2ead3; border-radius: 6px; color: #153d2d; font-size: 10px; font-weight: 900; min-width: 34px; padding: 3px 5px; text-align: center; }
+          .op-check-row.is-done span { background: #dfeee5; }
+          .op-attachments { margin: 0; padding-left: 16px; }
+          .op-note { background: #fff7e8; border: 1px solid #f2c46f; border-radius: 8px; color: #153d2d; font-size: 11px; font-weight: 700; margin-top: 10px; padding: 9px 10px; }
+          @media print { .op-page { page-break-after: auto; } }
+        </style>
+      </head>
+      <body>
+        <main class="op-page">
+          <header class="op-header">
+            <div class="op-brand">
+              <img src="${escapeHtml(logoUrl)}" alt="Embaixada Carioca">
+              <div>
+                <p class="op-kicker">Embaixada Carioca</p>
+                <h1>${escapeHtml(title)}</h1>
+              </div>
+            </div>
+            <div class="op-meta">${escapeHtml(subtitle)}</div>
+          </header>
+          ${contentHtml}
+        </main>
+        <script>window.addEventListener("load", () => window.print());</script>
+      </body>
+    </html>`;
+}
+
+function buildTechnicalSheetHtml(proposal = getActiveProposal()) {
+  const context = getOperationalDocContext(proposal);
+  const eventTitle = `${context.event.type || "Evento"} · ${formatOperationalDateTime(context.event)} · ${context.event.guests || 0} pax`;
+  return buildOperationalPrintShell(
+    "Ficha técnica do evento",
+    `Ref. ${context.reference}<br>Gerado em ${context.generatedAt}`,
+    `
+      <div class="op-summary">
+        <strong>${escapeHtml(eventTitle)}</strong>
+        Cliente: ${escapeHtml(context.client.name || "A definir")} · Status: ${escapeHtml(context.statusLabel || "-")}
+      </div>
+      <div class="op-grid">
+        <section class="op-section">
+          <h2>Dados do evento</h2>
+          ${buildOperationalRows([
+            { label: "Formato", value: context.event.type || "A definir" },
+            { label: "Data e chegada", value: formatOperationalDateTime(context.event) },
+            { label: "Convidados", value: `${context.event.guests || 0} pax` },
+            { label: "Duração", value: `${context.event.duration || 1}h` },
+            { label: "Motivo", value: context.event.reason || context.qualification.ocasiao || "Não informado" },
+          ])}
+        </section>
+        <section class="op-section">
+          <h2>Cliente e responsáveis</h2>
+          ${buildOperationalRows([
+            { label: "Cliente", value: context.client.name || "A definir" },
+            { label: "Empresa/agência", value: context.client.company || context.qualification.tipoCliente || "Não informado" },
+            { label: "Cliente final/grupo", value: [context.client.finalClient, context.client.groupName].filter(Boolean).join(" · ") || "Não informado" },
+            { label: "E-mail", value: context.client.email || "Não informado" },
+            { label: "Celular/WhatsApp", value: context.client.phone || "Não informado" },
+          ])}
+        </section>
+      </div>
+      <section class="op-section">
+        <h2>Itens contratados</h2>
+        ${buildOperationalItemsList(context.selectedItems)}
+      </section>
+      <div class="op-grid">
+        <section class="op-section">
+          <h2>Financeiro</h2>
+          ${buildOperationalPaymentBlock(context)}
+        </section>
+        <section class="op-section">
+          <h2>Anexos e comprovantes</h2>
+          ${buildOperationalAttachments(context)}
+        </section>
+      </div>
+      <section class="op-section">
+        <h2>Observações para operação e compras</h2>
+        ${buildOperationalRows([
+          { label: "Preferências de A&B", value: context.event.preferences || context.qualification.preferencias || "Não informado" },
+          { label: "Extras solicitados", value: context.event.extras || context.qualification.extras || "Não informado" },
+          { label: "Observações", value: context.event.notes || context.event.sourceNotes || context.qualification.observacoes || "Sem observações adicionais" },
+        ])}
+      </section>
+      <div class="op-note">Antes da execução, confirme operação avisada, responsável do dia, cardápio, extras, restrições e pagamento restante.</div>
+    `,
+  );
+}
+
+function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
+  const context = getOperationalDocContext(proposal);
+  return buildOperationalPrintShell(
+    "Checklist do evento",
+    `Ref. ${context.reference}<br>${context.progress.done}/${context.progress.total} concluídos`,
+    `
+      <div class="op-summary">
+        <strong>${escapeHtml(context.client.name || "Cliente")} · ${escapeHtml(context.event.type || "Evento")}</strong>
+        ${escapeHtml(formatOperationalDateTime(context.event))} · ${escapeHtml(String(context.event.guests || 0))} pax · Total ${escapeHtml(formatMoney(context.totals.total || 0))}
+      </div>
+      <section class="op-section">
+        <h2>Checklist operacional</h2>
+        <div class="op-checks">${buildOperationalChecklistRows(context, true)}</div>
+      </section>
+      <section class="op-section">
+        <h2>Compras e produção</h2>
+        ${buildOperationalRows([
+          { label: "Cardápio/itens", value: context.selectedItems.map((item) => item.nome).join(", ") || "Não informado" },
+          { label: "Extras", value: context.event.extras || context.qualification.extras || "Sem extras informados" },
+          { label: "Restrições/observações", value: context.event.preferences || context.event.notes || context.event.sourceNotes || "Sem restrições informadas" },
+        ])}
+      </section>
+      <section class="op-section">
+        <h2>Financeiro para conferência</h2>
+        ${buildOperationalPaymentBlock(context)}
+      </section>
+    `,
+  );
+}
+
+function buildOperationalSummaryText(proposal = getActiveProposal()) {
+  const context = getOperationalDocContext(proposal);
+  const checklist = operationalChecklistItems
+    .map((item) => `${context.checklist[item.id] ? "OK" : "PENDENTE"} - ${item.label}`)
+    .join("\n");
+  const items = context.selectedItems.map((item) => `- ${item.nome} (${item.tipoEvento || "item"})`).join("\n") || "- Sem itens selecionados";
+  return [
+    `FICHA OPERACIONAL - ${context.reference}`,
+    `${context.client.name || "Cliente"} | ${context.event.type || "Evento"}`,
+    `${formatOperationalDateTime(context.event)} | ${context.event.guests || 0} pax | ${context.event.duration || 1}h`,
+    `Total: ${formatMoney(context.totals.total || 0)} | A&B: ${formatMoney(context.totals.subtotal || 0)} | Privatização: ${formatMoney(context.totals.privatizationAmount || 0)}`,
+    "",
+    "Itens:",
+    items,
+    "",
+    `Cliente final/grupo: ${[context.client.finalClient, context.client.groupName].filter(Boolean).join(" · ") || "Não informado"}`,
+    `Contato: ${context.client.email || "-"} | ${context.client.phone || "-"}`,
+    `Observações: ${context.event.notes || context.event.sourceNotes || context.event.preferences || "Sem observações adicionais"}`,
+    "",
+    "Checklist:",
+    checklist,
+  ].join("\n");
+}
+
+function openOperationalPrintDocument(kind) {
+  const proposal = getActiveProposal();
+  if (!proposal) {
+    showToast("Abra uma proposta confirmada para gerar a ficha.");
+    return;
+  }
+  const html = kind === "checklist" ? buildOperationalChecklistHtml(proposal) : buildTechnicalSheetHtml(proposal);
+  const win = window.open("", "_blank");
+  if (!win) {
+    showToast("Permita pop-ups para abrir a ficha técnica.");
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+async function handleOperationalDocAction(action) {
+  const proposal = getActiveProposal();
+  if (!proposal) {
+    showToast("Abra uma proposta com sinal para gerar documentos.");
+    return;
+  }
+  if (action === "summary") {
+    try {
+      await navigator.clipboard.writeText(buildOperationalSummaryText(proposal));
+      showToast("Resumo operacional copiado.");
+    } catch (error) {
+      console.warn("Falha ao copiar resumo operacional.", error);
+      showToast("Não foi possível copiar. Gere a ficha técnica.");
+    }
+    return;
+  }
+  openOperationalPrintDocument(action === "checklist" ? "checklist" : "technical");
 }
 
 function getTodayInputValue() {
@@ -12756,6 +13122,11 @@ function bindEvents() {
     const checkbox = event.target.closest("input[data-checklist-id]");
     if (!checkbox) return;
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
+  });
+  nodes.operationalChecklist?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-operational-doc]");
+    if (!button) return;
+    handleOperationalDocAction(button.dataset.operationalDoc);
   });
   nodes.internalNotesPanel?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-add-internal-comment]");

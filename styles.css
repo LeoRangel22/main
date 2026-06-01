@@ -4806,6 +4806,7 @@ label.pipeline-status-control:focus-within select {
 .checklist-heading {
   align-items: center;
   display: flex;
+  gap: 12px;
   justify-content: space-between;
 }
 
@@ -4816,9 +4817,47 @@ label.pipeline-status-control:focus-within select {
   text-transform: uppercase;
 }
 
+.checklist-heading p {
+  color: var(--cinza);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
 .checklist-heading strong {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
   color: var(--verde-escuro);
   font-size: 0.9rem;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.operational-doc-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1.1fr 1.1fr 1fr;
+}
+
+.operational-doc-actions button {
+  min-height: 42px;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .checklist-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .checklist-heading strong {
+    align-self: flex-start;
+  }
+
+  .operational-doc-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .checklist-items {
