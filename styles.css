@@ -7211,6 +7211,98 @@ textarea {
   padding: 8px 10px;
 }
 
+.formula-cheatsheet {
+  background: linear-gradient(135deg, rgba(237, 245, 240, 0.92), rgba(255, 248, 232, 0.7));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.formula-cheatsheet-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.formula-cheatsheet-head span {
+  color: var(--amarelo);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.formula-cheatsheet-head strong {
+  color: var(--verde-escuro);
+  font-size: 0.94rem;
+  line-height: 1.2;
+}
+
+.formula-choice-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.formula-choice-card {
+  align-items: start;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  min-height: 112px;
+  padding: 12px;
+  text-align: left;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.formula-choice-card:hover,
+.formula-choice-card:focus-visible {
+  border-color: var(--verde-medio);
+  box-shadow: 0 12px 28px rgba(24, 58, 45, 0.12);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.formula-choice-card.is-active {
+  background: var(--verde-escuro);
+  border-color: var(--verde-escuro);
+  color: #fff;
+}
+
+.formula-choice-card strong {
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.formula-choice-card span,
+.formula-choice-card em {
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.32;
+}
+
+.formula-choice-card span {
+  color: var(--muted);
+}
+
+.formula-choice-card em {
+  color: #8b6429;
+}
+
+.formula-choice-card.is-active span,
+.formula-choice-card.is-active em {
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .product-types-panel .section-heading {
   align-items: baseline;
   margin-bottom: 0;

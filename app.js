@@ -5329,19 +5329,25 @@ function getFormulaLabel(formula) {
 
 function getFormulaHelp(formula) {
   const help = {
-    durationPerPerson: "Use para pacotes por convidado e duração. Preencha 1h, 2h e 1/2h extra.",
-    serviceIncluded90PerPerson: "Use para Almoço Carioca: preço por pessoa para 1h30 com taxa já incluída. Preencha 1h e extra.",
-    perPersonFixed: "Use quando o valor por pessoa não muda com a duração. Preencha o preço em 1h.",
-    fixedPlusPerPerson: "Use para workshop ou experiência com valor fixo inicial + adicional por pessoa acima do mínimo.",
-    fixedCoversMinimum: "Use quando o preço fixo cobre até o mínimo e cada pessoa extra paga adicional.",
-    fixedTotal: "Use para extras ou taxas cobrados uma vez, sem multiplicar por convidados.",
+    durationPerPerson: "Para coquetel, café ou pacote por convidado com 1h, 2h e extra. Preencha: 1h, 2h, 1/2h extra e mínimo.",
+    serviceIncluded90PerPerson: "Para Almoço Carioca ou produto com taxa já incluída no valor por pessoa. Preencha: preço 1h30 no campo 1h, extra e mínimo.",
+    perPersonFixed: "Para item por convidado que não muda com a duração. Preencha: preço 1h e mínimo.",
+    fixedPlusPerPerson: "Para workshop ou experiência com valor base + adicional por pessoa acima do mínimo. Preencha: preço fixo, adicional e mínimo.",
+    fixedCoversMinimum: "Para valor fechado que cobre até o mínimo e cobra adicional acima disso. Preencha: preço fixo, adicional e mínimo.",
+    fixedTotal: "Para DJ, decoração, audiovisual, taxa ou extra cobrado uma única vez. Preencha: preço fixo.",
   };
   return help[formula] || help.durationPerPerson;
 }
 
 function updateFormulaHelp() {
   if (!fields.formulaHelp || !fields.newFormula) return;
-  fields.formulaHelp.textContent = getFormulaHelp(fields.newFormula.value);
+  const activeFormula = fields.newFormula.value;
+  fields.formulaHelp.textContent = getFormulaHelp(activeFormula);
+  document.querySelectorAll("[data-formula-option]").forEach((button) => {
+    const isActive = button.dataset.formulaOption === activeFormula;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
 }
 
 function slugify(value) {
@@ -11909,6 +11915,20 @@ function buildProductsSpreadsheetHtml(products = state.prices, options = {}) {
     ? `
         <section class="guide">
           <h2>Como usar</h2>
+          <div class="quick-guide">
+            <div>
+              <strong>1. Preencha como uma tabela comercial</strong>
+              <span>Tipo, nome, descrição, preços, mínimo, fórmula e ativo são os campos que o sistema importa.</span>
+            </div>
+            <div>
+              <strong>2. Não altere os cabeçalhos</strong>
+              <span>A primeira linha é o mapa de importação. Pode editar as linhas abaixo, mas mantenha os nomes das colunas.</span>
+            </div>
+            <div>
+              <strong>3. Use número puro nos valores</strong>
+              <span>Exemplos corretos: 95, 125, 3500. Não use R$, texto ou fórmula do Excel nos campos de preço.</span>
+            </div>
+          </div>
           <ol>
             <li>Edite apenas as linhas da tabela "Produtos para importar".</li>
             <li>Não renomeie nem apague a primeira linha da tabela.</li>
@@ -11916,15 +11936,24 @@ function buildProductsSpreadsheetHtml(products = state.prices, options = {}) {
             <li>Use números sem "R$" nos preços. Exemplo: 95, 125 ou 3500.</li>
             <li>Depois de editar, volte ao sistema e clique em "Importar planilha".</li>
           </ol>
+          <h2>Colunas principais</h2>
+          <table class="formula-table">
+            <tr><th>Coluna</th><th>O que significa</th><th>Dica de preenchimento</th></tr>
+            <tr><td>Tipo</td><td>Categoria comercial do produto.</td><td>Ex.: Coquetel, Comidas, Workshop, Extras.</td></tr>
+            <tr><td>Nome</td><td>Nome exibido para a equipe e na proposta.</td><td>Use nome curto e claro. Ex.: Coquetel Carioca.</td></tr>
+            <tr><td>Descrição</td><td>O que está incluído.</td><td>Se o resumo comercial ficar vazio, este texto entra na proposta.</td></tr>
+            <tr><td>Resumo comercial</td><td>Texto mais vendável para o cliente.</td><td>Use para deixar a proposta elegante e objetiva.</td></tr>
+            <tr><td>Ativo</td><td>Define se o produto aparece no orçamento.</td><td>Use sim ou não.</td></tr>
+          </table>
           <h2>Fórmulas aceitas</h2>
           <table class="formula-table">
             <tr><th>Fórmula</th><th>Quando usar</th><th>Campos principais</th></tr>
-            <tr><td>durationPerPerson</td><td>Preço por pessoa muda por duração.</td><td>Preço 1h, Preço 2h e 1/2h extra</td></tr>
-            <tr><td>serviceIncluded90PerPerson</td><td>Almoço 1h30 com taxa incluída.</td><td>Preço 1h e 1/2h extra</td></tr>
-            <tr><td>perPersonFixed</td><td>Valor por pessoa fixo.</td><td>Preço 1h</td></tr>
-            <tr><td>fixedPlusPerPerson</td><td>Fixo inicial + adicional por pessoa acima do mínimo.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
-            <tr><td>fixedCoversMinimum</td><td>Fixo cobre até o mínimo e cobra adicional acima disso.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
-            <tr><td>fixedTotal</td><td>Extra ou cobrança única.</td><td>Preço fixo</td></tr>
+            <tr><td>durationPerPerson<br><small>Por pessoa + duração</small></td><td>Coquetel, café ou pacote por convidado com 1h, 2h e extra.</td><td>Preço 1h, Preço 2h, 1/2h extra e Mínimo</td></tr>
+            <tr><td>serviceIncluded90PerPerson<br><small>1h30 taxa inclusa</small></td><td>Almoço Carioca ou produto com taxa já incluída no valor por pessoa.</td><td>Preço 1h, 1/2h extra e Mínimo</td></tr>
+            <tr><td>perPersonFixed<br><small>Por pessoa fixo</small></td><td>Valor por pessoa que não muda com a duração.</td><td>Preço 1h e Mínimo</td></tr>
+            <tr><td>fixedPlusPerPerson<br><small>Fixo + por pessoa</small></td><td>Workshop ou experiência com base fixa e adicional por pessoa acima do mínimo.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
+            <tr><td>fixedCoversMinimum<br><small>Fixo inclui mínimo</small></td><td>Valor fechado que cobre até o mínimo e cobra adicional acima disso.</td><td>Preço fixo, Valor adicional e Mínimo</td></tr>
+            <tr><td>fixedTotal<br><small>Valor fixo total</small></td><td>DJ, decoração, audiovisual, taxa ou extra cobrado uma única vez.</td><td>Preço fixo</td></tr>
           </table>
         </section>`
     : "";
@@ -11940,6 +11969,10 @@ function buildProductsSpreadsheetHtml(products = state.prices, options = {}) {
           .hero { background: #eef5f0; border-left: 6px solid #153d2d; border-radius: 10px; margin-bottom: 16px; padding: 14px 16px; }
           .hero p { color: #66736e; font-size: 12px; font-weight: 700; margin: 6px 0 0; }
           .guide { background: #fff8e8; border: 1px solid #f2c469; border-radius: 10px; margin: 12px 0 18px; padding: 12px 16px; }
+          .quick-guide { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); margin: 8px 0 12px; }
+          .quick-guide div { background: #ffffff; border: 1px solid #eadfca; border-radius: 8px; padding: 10px; }
+          .quick-guide strong { color: #153d2d; display: block; font-size: 12px; margin-bottom: 4px; }
+          .quick-guide span { color: #66736e; display: block; font-size: 11px; font-weight: 700; line-height: 1.35; }
           .guide ol { font-size: 12px; font-weight: 700; line-height: 1.45; margin: 0 0 10px 18px; padding: 0; }
           table { border-collapse: collapse; width: 100%; }
           th { background: #153d2d; color: #ffffff; font-size: 11px; padding: 8px; text-align: left; }
@@ -11947,6 +11980,7 @@ function buildProductsSpreadsheetHtml(products = state.prices, options = {}) {
           tr:nth-child(even) td { background: #f4f8f5; }
           .formula-table th { background: #2e6b53; }
           .formula-table td { font-size: 11px; }
+          .formula-table small { color: #66736e; font-weight: 700; }
           .money { mso-number-format:"R$ #,##0.00"; }
         </style>
       </head>
@@ -12348,6 +12382,13 @@ function bindEvents() {
   });
 
   fields.newFormula?.addEventListener("change", updateFormulaHelp);
+  document.querySelectorAll("[data-formula-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!fields.newFormula || !button.dataset.formulaOption) return;
+      fields.newFormula.value = button.dataset.formulaOption;
+      updateFormulaHelp();
+    });
+  });
   updateFormulaHelp();
 
   fields.eventDateTime?.setAttribute("step", "1800");

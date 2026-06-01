@@ -169,6 +169,44 @@
                   </select>
                   <small id="formulaHelp" class="formula-help">Use para pacotes cobrados por convidado e duração. Preencha 1h, 2h e extra.</small>
                 </label>
+                <div class="formula-cheatsheet builder-wide" aria-label="Guia rápido de fórmulas">
+                  <div class="formula-cheatsheet-head">
+                    <span>Guia rápido</span>
+                    <strong>Escolha a regra pelo jeito que o produto é vendido.</strong>
+                  </div>
+                  <div class="formula-choice-grid">
+                    <button type="button" class="formula-choice-card" data-formula-option="durationPerPerson">
+                      <strong>Por pessoa + duração</strong>
+                      <span>Coquetel, café ou pacote por convidado com 1h, 2h e extra.</span>
+                      <em>Preencha 1h, 2h, 1/2h extra e mínimo.</em>
+                    </button>
+                    <button type="button" class="formula-choice-card" data-formula-option="serviceIncluded90PerPerson">
+                      <strong>1h30 taxa inclusa</strong>
+                      <span>Almoço Carioca ou produto com taxa já embutida no valor por pessoa.</span>
+                      <em>Preencha preço 1h30 em 1h, extra e mínimo.</em>
+                    </button>
+                    <button type="button" class="formula-choice-card" data-formula-option="perPersonFixed">
+                      <strong>Por pessoa fixo</strong>
+                      <span>Welcome drink, snack ou item por convidado sem variar por duração.</span>
+                      <em>Preencha 1h e mínimo.</em>
+                    </button>
+                    <button type="button" class="formula-choice-card" data-formula-option="fixedPlusPerPerson">
+                      <strong>Fixo + por pessoa</strong>
+                      <span>Workshop ou experiência com base fixa e adicional acima do mínimo.</span>
+                      <em>Preencha preço fixo, adicional e mínimo.</em>
+                    </button>
+                    <button type="button" class="formula-choice-card" data-formula-option="fixedCoversMinimum">
+                      <strong>Fixo inclui mínimo</strong>
+                      <span>Valor fechado até um mínimo; pessoas extras pagam adicional.</span>
+                      <em>Preencha preço fixo, adicional e mínimo.</em>
+                    </button>
+                    <button type="button" class="formula-choice-card" data-formula-option="fixedTotal">
+                      <strong>Valor fixo total</strong>
+                      <span>DJ, decoração, audiovisual, taxa ou extra cobrado uma única vez.</span>
+                      <em>Preencha apenas preço fixo.</em>
+                    </button>
+                  </div>
+                </div>
                 <label class="builder-wide">
                   Descrição
                   <textarea id="newDescricao" rows="2" placeholder="O que está incluído"></textarea>
