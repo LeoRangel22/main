@@ -93,6 +93,30 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(fullPaymentCard).not.toContainText(/Falta saldo|Cobrar saldo/i);
     await expectNoBrowserErrors(errors);
   });
+  test("evento com sinal gera ficha tecnica e checklist operacional", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    const signalCard = page.locator('[data-pipeline-card-id="qa-proposal-sinal"]');
+    await expect(signalCard).toBeVisible();
+    await signalCard.click();
+
+    await expect(page.locator("#loadedEditorBar")).toContainText(/Julia Morena/i);
+    await expect(page.locator("#operationalChecklist")).toBeVisible();
+    await expect(page.locator("#operationalChecklist")).toContainText("Operação pós-sinal");
+    await expect(page.locator("#operationalChecklist")).toContainText("Gere a ficha técnica");
+    await expect(page.locator('button[data-operational-doc="technical"]')).toBeVisible();
+    await expect(page.locator('button[data-operational-doc="checklist"]')).toBeVisible();
+
+    const technicalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal()));
+    expect(technicalHtml).toContain("Ficha técnica do evento");
+    expect(technicalHtml).toContain("Itens contratados");
+    expect(technicalHtml).toContain("Julia Morena");
+    expect(technicalHtml).toContain("Financeiro");
+
+    await expectNoBrowserErrors(errors);
+  });
+
   test("cards do funil mostram composicao de A&B e privatizacao", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
