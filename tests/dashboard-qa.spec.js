@@ -105,14 +105,21 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator("#operationalChecklist")).toBeVisible();
     await expect(page.locator("#operationalChecklist")).toContainText("Operação pós-sinal");
     await expect(page.locator("#operationalChecklist")).toContainText("Gere a ficha técnica");
-    await expect(page.locator('button[data-operational-doc="technical"]')).toBeVisible();
+    await expect(page.locator('button[data-operational-doc="technical-no-finance"]')).toBeVisible();
+    await expect(page.locator('button[data-operational-doc="technical-finance"]')).toBeVisible();
     await expect(page.locator('button[data-operational-doc="checklist"]')).toBeVisible();
 
-    const technicalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal()));
+    const operationalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal(), { showFinance: false }));
+    expect(operationalHtml).toContain("Ficha operacional do evento");
+    expect(operationalHtml).toContain("Itens contratados");
+    expect(operationalHtml).toContain("Julia Morena");
+    expect(operationalHtml).not.toContain("Financeiro");
+    expect(operationalHtml).not.toContain("R$");
+
+    const technicalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal(), { showFinance: true }));
     expect(technicalHtml).toContain("Ficha técnica do evento");
-    expect(technicalHtml).toContain("Itens contratados");
-    expect(technicalHtml).toContain("Julia Morena");
     expect(technicalHtml).toContain("Financeiro");
+    expect(technicalHtml).toContain("R$");
 
     await expectNoBrowserErrors(errors);
   });
