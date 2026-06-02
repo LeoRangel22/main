@@ -2708,7 +2708,8 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
       <strong>${progress.done}/${progress.total} concluídos</strong>
     </div>
     <div class="operational-doc-actions" aria-label="Documentos operacionais">
-      <button class="primary" type="button" data-operational-doc="technical">Ficha técnica</button>
+      <button class="primary" type="button" data-operational-doc="technical-no-finance">Ficha operacional</button>
+      <button class="secondary" type="button" data-operational-doc="technical-finance">Ficha com financeiro</button>
       <button class="secondary" type="button" data-operational-doc="checklist">Checklist do evento</button>
       <button class="secondary" type="button" data-operational-doc="summary">Copiar resumo</button>
     </div>
@@ -2827,7 +2828,8 @@ function buildOperationalRows(rows) {
     .join("");
 }
 
-function buildOperationalItemsList(items) {
+function buildOperationalItemsList(items, options = {}) {
+  const showFinance = options.showFinance !== false;
   if (!items.length) return `<p class="op-empty">Nenhum item selecionado.</p>`;
   return `
     <table class="op-table">
@@ -2836,21 +2838,23 @@ function buildOperationalItemsList(items) {
           <th>Item</th>
           <th>Categoria</th>
           <th>Descrição para operação/compras</th>
-          <th>Valor</th>
+          ${showFinance ? "<th>Valor</th>" : ""}
         </tr>
       </thead>
       <tbody>
         ${items
-          .map(
-            (item) => `
+          .map((item) => {
+            const operationDescription = item.descricao || item.commercialSummary || "-";
+            const financeDetail = item.calc?.detail ? `<br><small>${escapeHtml(item.calc.detail)}</small>` : "";
+            return `
               <tr>
                 <td><strong>${escapeHtml(item.nome || "-")}</strong><br><small>${escapeHtml(item.codigo || "")}</small></td>
                 <td>${escapeHtml(item.tipoEvento || item.tipo || "-")}</td>
-                <td>${escapeHtml(item.descricao || item.commercialSummary || "-")}<br><small>${escapeHtml(item.calc?.detail || "")}</small></td>
-                <td>${formatMoney(item.calc?.total || 0)}</td>
+                <td>${escapeHtml(operationDescription)}${showFinance ? financeDetail : ""}</td>
+                ${showFinance ? `<td>${formatMoney(item.calc?.total || 0)}</td>` : ""}
               </tr>
-            `,
-          )
+            `;
+          })
           .join("")}
       </tbody>
     </table>
@@ -2882,10 +2886,11 @@ function buildOperationalPaymentBlock(context) {
   ]);
 }
 
-function buildOperationalAttachments(context) {
+function buildOperationalAttachments(context, options = {}) {
+  const includeFinancialProofs = options.includeFinancialProofs !== false;
   const files = [];
-  if (context.signal?.comprovante?.nome) files.push({ label: "Comprovante do sinal", ...context.signal.comprovante });
-  if (context.remaining?.comprovante?.nome) files.push({ label: "Comprovante do saldo", ...context.remaining.comprovante });
+  if (includeFinancialProofs && context.signal?.comprovante?.nome) files.push({ label: "Comprovante do sinal", ...context.signal.comprovante });
+  if (includeFinancialProofs && context.remaining?.comprovante?.nome) files.push({ label: "Comprovante do saldo", ...context.remaining.comprovante });
   context.attachments.forEach((attachment) => files.push({ label: attachment.tipo || "Anexo", ...attachment }));
   if (!files.length) return `<p class="op-empty">Sem anexos cadastrados.</p>`;
   return `
@@ -2975,16 +2980,18 @@ function buildOperationalPrintShell(title, subtitle, contentHtml) {
     </html>`;
 }
 
-function buildTechnicalSheetHtml(proposal = getActiveProposal()) {
+function buildTechnicalSheetHtml(proposal = getActiveProposal(), options = {}) {
+  const showFinance = options.showFinance !== false;
   const context = getOperationalDocContext(proposal);
   const eventTitle = `${context.event.type || "Evento"} · ${formatOperationalDateTime(context.event)} · ${context.event.guests || 0} pax`;
   return buildOperationalPrintShell(
-    "Ficha técnica do evento",
+    showFinance ? "Ficha técnica do evento" : "Ficha operacional do evento",
     `Ref. ${context.reference}<br>Gerado em ${context.generatedAt}`,
     `
       <div class="op-summary">
         <strong>${escapeHtml(eventTitle)}</strong>
         Cliente: ${escapeHtml(context.client.name || "A definir")} · Status: ${escapeHtml(context.statusLabel || "-")}
+        ${showFinance ? "" : "<br><small>Versão sem valores para operação, compras e equipe de salão.</small>"}
       </div>
       <div class="op-grid">
         <section class="op-section">
@@ -3010,18 +3017,29 @@ function buildTechnicalSheetHtml(proposal = getActiveProposal()) {
       </div>
       <section class="op-section">
         <h2>Itens contratados</h2>
-        ${buildOperationalItemsList(context.selectedItems)}
+        ${buildOperationalItemsList(context.selectedItems, { showFinance })}
       </section>
-      <div class="op-grid">
-        <section class="op-section">
-          <h2>Financeiro</h2>
-          ${buildOperationalPaymentBlock(context)}
-        </section>
-        <section class="op-section">
-          <h2>Anexos e comprovantes</h2>
-          ${buildOperationalAttachments(context)}
-        </section>
-      </div>
+      ${
+        showFinance
+          ? `
+            <div class="op-grid">
+              <section class="op-section">
+                <h2>Financeiro</h2>
+                ${buildOperationalPaymentBlock(context)}
+              </section>
+              <section class="op-section">
+                <h2>Anexos e comprovantes</h2>
+                ${buildOperationalAttachments(context)}
+              </section>
+            </div>
+          `
+          : `
+            <section class="op-section">
+              <h2>Anexos operacionais</h2>
+              ${buildOperationalAttachments(context, { includeFinancialProofs: false })}
+            </section>
+          `
+      }
       <section class="op-section">
         <h2>Observações para operação e compras</h2>
         ${buildOperationalRows([
@@ -3072,10 +3090,9 @@ function buildOperationalSummaryText(proposal = getActiveProposal()) {
     .join("\n");
   const items = context.selectedItems.map((item) => `- ${item.nome} (${item.tipoEvento || "item"})`).join("\n") || "- Sem itens selecionados";
   return [
-    `FICHA OPERACIONAL - ${context.reference}`,
+    `FICHA OPERACIONAL SEM VALORES - ${context.reference}`,
     `${context.client.name || "Cliente"} | ${context.event.type || "Evento"}`,
     `${formatOperationalDateTime(context.event)} | ${context.event.guests || 0} pax | ${context.event.duration || 1}h`,
-    `Total: ${formatMoney(context.totals.total || 0)} | A&B: ${formatMoney(context.totals.subtotal || 0)} | Privatização: ${formatMoney(context.totals.privatizationAmount || 0)}`,
     "",
     "Itens:",
     items,
@@ -3095,7 +3112,10 @@ function openOperationalPrintDocument(kind) {
     showToast("Abra uma proposta confirmada para gerar a ficha.");
     return;
   }
-  const html = kind === "checklist" ? buildOperationalChecklistHtml(proposal) : buildTechnicalSheetHtml(proposal);
+  const html =
+    kind === "checklist"
+      ? buildOperationalChecklistHtml(proposal)
+      : buildTechnicalSheetHtml(proposal, { showFinance: kind === "technical-finance" });
   const win = window.open("", "_blank");
   if (!win) {
     showToast("Permita pop-ups para abrir a ficha técnica.");
@@ -3122,7 +3142,7 @@ async function handleOperationalDocAction(action) {
     }
     return;
   }
-  openOperationalPrintDocument(action === "checklist" ? "checklist" : "technical");
+  openOperationalPrintDocument(action === "checklist" ? "checklist" : action === "technical-finance" ? "technical-finance" : "technical-no-finance");
 }
 
 function getTodayInputValue() {
