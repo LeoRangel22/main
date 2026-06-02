@@ -2932,6 +2932,26 @@ function buildOperationalPaymentBlock(context) {
   ]);
 }
 
+function buildOperationalPaymentStatusBlock(context) {
+  const total = Number(context.totals.total || 0);
+  const signalValue = Number(context.signal?.valor || 0);
+  const remainingValue = Number(context.remaining?.valor || 0);
+  const paidTotal = signalValue + remainingValue;
+  const isFullyPaid = total > 0 && paidTotal >= total - 1;
+  return buildOperationalRows([
+    { label: "Sinal de reserva", value: context.signal ? "Registrado. Conferir comprovante com financeiro." : "Pendente. Cobrar sinal antes de confirmar operação." },
+    {
+      label: "Pagamento restante",
+      value: isFullyPaid
+        ? "Sem saldo restante aparente. Confirmar com financeiro."
+        : context.remaining
+          ? "Registrado. Conferir comprovante com financeiro."
+          : "Pendente. Cobrar antes da execução, conforme combinado.",
+    },
+    { label: "Responsável pela conferência", value: "Financeiro / eventos" },
+  ]);
+}
+
 function buildOperationalAttachments(context, options = {}) {
   const includeFinancialProofs = options.includeFinancialProofs !== false;
   const files = [];
@@ -3112,7 +3132,7 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
     `
       <div class="op-summary">
         <strong>${escapeHtml(context.client.name || "Cliente")} · ${escapeHtml(context.event.type || "Evento")}</strong>
-        ${escapeHtml(formatOperationalDateTime(context.event))} · ${escapeHtml(String(context.event.guests || 0))} pax · Total ${escapeHtml(formatMoney(context.totals.total || 0))}
+        ${escapeHtml(formatOperationalDateTime(context.event))} · ${escapeHtml(String(context.event.guests || 0))} pax
       </div>
       <section class="op-section">
         <h2>Checklist operacional</h2>
@@ -3129,8 +3149,8 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
         ])}
       </section>
       <section class="op-section">
-        <h2>Financeiro para conferência</h2>
-        ${buildOperationalPaymentBlock(context)}
+        <h2>Conferência financeira operacional</h2>
+        ${buildOperationalPaymentStatusBlock(context)}
       </section>
     `,
   );
