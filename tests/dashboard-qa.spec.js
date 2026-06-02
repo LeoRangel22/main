@@ -112,6 +112,7 @@ test.describe("Dashboard interno em modo QA", () => {
     const operationalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal(), { showFinance: false }));
     expect(operationalHtml).toContain("Ficha operacional do evento");
     expect(operationalHtml).toContain("Itens contratados");
+    expect(operationalHtml).toContain("Lista de insumos");
     expect(operationalHtml).toContain("Julia Morena");
     expect(operationalHtml).not.toContain("Financeiro");
     expect(operationalHtml).not.toContain("R$");
@@ -120,6 +121,10 @@ test.describe("Dashboard interno em modo QA", () => {
     expect(technicalHtml).toContain("Ficha técnica do evento");
     expect(technicalHtml).toContain("Financeiro");
     expect(technicalHtml).toContain("R$");
+
+    const checklistHtml = await page.evaluate(() => buildOperationalChecklistHtml(getActiveProposal()));
+    expect(checklistHtml).toContain("Lista de insumos");
+    expect(checklistHtml).toContain("Lista de insumos conferida");
 
     await expectNoBrowserErrors(errors);
   });
