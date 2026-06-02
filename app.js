@@ -84,6 +84,7 @@ const sourceMomentOptions = [
 const operationalChecklistItems = [
   { id: "saldo_agendado", label: "Pagamento restante alinhado" },
   { id: "cardapio_confirmado", label: "Cardápio e bebidas confirmados" },
+  { id: "insumos_conferidos", label: "Lista de insumos conferida" },
   { id: "extras_confirmados", label: "Extras de produção confirmados" },
   { id: "responsavel_dia", label: "Contato responsável no dia definido" },
   { id: "operacao_avisada", label: "Operação avisada" },
@@ -2861,6 +2862,51 @@ function buildOperationalItemsList(items, options = {}) {
   `;
 }
 
+function buildOperationalSuppliesList(context) {
+  const itemRows = context.selectedItems
+    .map((item) => {
+      const description = item.descricao || item.commercialSummary || "Conferir composição com cardápio/produção.";
+      return `
+        <tr>
+          <td><strong>${escapeHtml(item.nome || "Item")}</strong><br><small>${escapeHtml(item.tipoEvento || item.tipo || "Categoria não informada")}</small></td>
+          <td>${escapeHtml(description)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  const supportRows = [
+    { label: "Extras de produção", value: context.event.extras || context.qualification.extras },
+    { label: "Preferências e restrições", value: context.event.preferences || context.qualification.preferencias },
+    { label: "Observações críticas", value: context.event.notes || context.event.sourceNotes || context.qualification.observacoes },
+  ].filter((row) => row.value && String(row.value).trim());
+
+  if (!itemRows && !supportRows.length) return `<p class="op-empty">Sem insumos mapeados. Revise itens, extras e observações antes de acionar compras.</p>`;
+
+  return `
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Base de compra/produção</th>
+          <th>O que conferir</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${supportRows
+          .map(
+            (row) => `
+              <tr>
+                <td><strong>${escapeHtml(row.label)}</strong></td>
+                <td>${formatMultilineHtml(row.value)}</td>
+              </tr>
+            `,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function formatOperationalBanks(payment) {
   if (!payment) return "Banco não informado";
   if (Array.isArray(payment.bancos) && payment.bancos.length) return payment.bancos.join(", ");
@@ -2945,6 +2991,7 @@ function buildOperationalPrintShell(title, subtitle, contentHtml) {
           .op-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .op-section { break-inside: avoid; border: 1px solid #d7e1dc; border-radius: 8px; margin-bottom: 10px; padding: 10px; }
           .op-section h2 { color: #153d2d; font-size: 12px; letter-spacing: .04em; margin: 0 0 8px; text-transform: uppercase; }
+          .op-section h3 { color: #f39200; font-size: 10px; letter-spacing: .04em; margin: 0 0 8px; text-transform: uppercase; }
           .op-row { border-bottom: 1px solid #edf1ef; display: grid; gap: 8px; grid-template-columns: 36% 1fr; padding: 6px 0; }
           .op-row:last-child { border-bottom: 0; }
           .op-row span, .op-table small, .op-empty, .op-attachments { color: #66736e; font-size: 10px; font-weight: 700; }
@@ -3019,6 +3066,10 @@ function buildTechnicalSheetHtml(proposal = getActiveProposal(), options = {}) {
         <h2>Itens contratados</h2>
         ${buildOperationalItemsList(context.selectedItems, { showFinance })}
       </section>
+      <section class="op-section">
+        <h2>Lista de insumos</h2>
+        ${buildOperationalSuppliesList(context)}
+      </section>
       ${
         showFinance
           ? `
@@ -3069,6 +3120,8 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
       </section>
       <section class="op-section">
         <h2>Compras e produção</h2>
+        <h3>Lista de insumos</h3>
+        ${buildOperationalSuppliesList(context)}
         ${buildOperationalRows([
           { label: "Cardápio/itens", value: context.selectedItems.map((item) => item.nome).join(", ") || "Não informado" },
           { label: "Extras", value: context.event.extras || context.qualification.extras || "Sem extras informados" },
@@ -3089,6 +3142,10 @@ function buildOperationalSummaryText(proposal = getActiveProposal()) {
     .map((item) => `${context.checklist[item.id] ? "OK" : "PENDENTE"} - ${item.label}`)
     .join("\n");
   const items = context.selectedItems.map((item) => `- ${item.nome} (${item.tipoEvento || "item"})`).join("\n") || "- Sem itens selecionados";
+  const supplies =
+    context.selectedItems
+      .map((item) => `- ${item.nome}: ${item.descricao || item.commercialSummary || "conferir composição com produção"}`)
+      .join("\n") || "- Sem insumos mapeados";
   return [
     `FICHA OPERACIONAL SEM VALORES - ${context.reference}`,
     `${context.client.name || "Cliente"} | ${context.event.type || "Evento"}`,
@@ -3096,6 +3153,9 @@ function buildOperationalSummaryText(proposal = getActiveProposal()) {
     "",
     "Itens:",
     items,
+    "",
+    "Lista de insumos:",
+    supplies,
     "",
     `Cliente final/grupo: ${[context.client.finalClient, context.client.groupName].filter(Boolean).join(" · ") || "Não informado"}`,
     `Contato: ${context.client.email || "-"} | ${context.client.phone || "-"}`,
