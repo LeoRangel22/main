@@ -125,6 +125,8 @@ test.describe("Dashboard interno em modo QA", () => {
     const checklistHtml = await page.evaluate(() => buildOperationalChecklistHtml(getActiveProposal()));
     expect(checklistHtml).toContain("Lista de insumos");
     expect(checklistHtml).toContain("Lista de insumos conferida");
+    expect(checklistHtml).toContain("Conferência financeira operacional");
+    expect(checklistHtml).not.toContain("R$");
 
     await expectNoBrowserErrors(errors);
   });
