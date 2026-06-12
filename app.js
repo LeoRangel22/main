@@ -600,7 +600,7 @@ A extensão do evento poderá ser considerada mediante disponibilidade da Embaix
 
 OBSERVAÇÕES IMPORTANTES
 INGRESSOS TELEFÉRICO: os valores não incluem os ingressos para o teleférico, que devem ser adquiridos separadamente.
-VALIDADE: este tarifário é válido exclusivamente para eventos realizados até o dia 30/06/2025.
+VALIDADE: este tarifário é válido exclusivamente para eventos realizados até o dia 31/12/2026.
 ATRAÇÃO MUSICAL, ENTRETENIMENTO E DIVULGAÇÃO: a realização de atrações musicais, atividades de entretenimento, instalação de faixas, banners, materiais promocionais ou qualquer ação de divulgação somente será permitida mediante autorização prévia, por escrito, do Setor de Eventos do Parque Bondinho Pão de Açúcar. Após autorizada, essa autorização deverá ser formalmente encaminhada à Embaixada Carioca. Em caso de ausência desse envio, a execução poderá ser impedida.
 UTILIZAÇÃO DA MARCA DO BONDINHO: qualquer uso comercial ou promocional envolvendo o Bondinho do Pão de Açúcar e os perfis dos morros deverá ser previamente aprovado pelo Setor de Eventos do Caminho Aéreo Pão de Açúcar.
 É expressamente proibida a distribuição de cartazes pela cidade, a fixação de materiais promocionais e a projeção de imagens nos morros sem autorização formal. O descumprimento poderá acarretar penalidades e multas legais, inclusive em momento posterior ao evento.`;
@@ -5805,6 +5805,12 @@ function getFormulaLabel(formula) {
   return labels[formula] || "Por pessoa";
 }
 
+function getPublicTokenExpiresAt(days = 90) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 function getFormulaHelp(formula) {
   const help = {
     durationPerPerson: "Para coquetel, café ou pacote por convidado com 1h, 2h e extra. Preencha: 1h, 2h, 1/2h extra e mínimo.",
@@ -6937,6 +6943,7 @@ function getProposalRow(snapshot, status = "proposta_enviada") {
     privatizacao: snapshot.totals.privatizationAmount,
     total: snapshot.totals.total,
     status,
+    public_token_expires_at: getPublicTokenExpiresAt(),
     solicitacao_id: state.activeQuoteRequestId || null,
     snapshot,
   };
@@ -7897,6 +7904,7 @@ function getPipelineItems() {
     const status = normalizeProposalStatus(proposal.status);
     const snapshot = proposal.snapshot || {};
     const paymentCoverage = getPaymentCoverage(proposal.total || snapshot.totals?.total || 0, snapshot.pagamentoSinal, snapshot.pagamentoRestante);
+    const publicResponseProof = proposal.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || null;
     return {
       kind: "proposal",
       id: proposal.id,
@@ -7925,8 +7933,8 @@ function getPipelineItems() {
       finalClient: getFinalClientFromSnapshot(snapshot),
       groupName: getGroupNameFromSnapshot(snapshot),
       clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
-      hasSignalProof: Boolean(snapshot.pagamentoSinal?.comprovante?.nome),
-      signalProof: snapshot.pagamentoSinal?.comprovante || null,
+      hasSignalProof: Boolean(snapshot.pagamentoSinal?.comprovante?.nome || publicResponseProof?.nome),
+      signalProof: snapshot.pagamentoSinal?.comprovante || publicResponseProof,
       hasRemainingPayment: Boolean(snapshot.pagamentoRestante),
       hasRemainingProof: Boolean(snapshot.pagamentoRestante?.comprovante?.nome),
       remainingProof: snapshot.pagamentoRestante?.comprovante || null,
@@ -8453,6 +8461,14 @@ function getPipelinePrimaryAction(item) {
     };
   }
   if (status === "negociacao") {
+    if (item.clientResponse === "confirmar") {
+      return {
+        tone: item.hasSignalProof ? "success" : "warning",
+        eyebrow: item.hasSignalProof ? "Comprovante recebido" : "Cliente aprovou",
+        label: "Validar sinal",
+        note: item.hasSignalProof ? "Conferir o banco antes de confirmar a venda." : "Orientar pagamento do sinal e registrar quando cair.",
+      };
+    }
     return { tone: item.clientResponse === "alteracao" ? "warning" : "warm", eyebrow: "Negociação", label: "Ajustar e reenviar", note: "Registrar combinado e deixar próximo passo claro." };
   }
   if (status === "confirmado") {
@@ -10930,13 +10946,16 @@ async function loginWithEmail() {
 }
 
 function getMagicLinkErrorMessage(error) {
-  const text = `${error?.message || ""} ${error?.name || ""}`.toLowerCase();
+  const text = `${error?.message || ""} ${error?.name || ""} ${error?.code || ""} ${error?.status || ""}`.toLowerCase();
   const match = text.match(/after\s+(\d+)\s+seconds?/);
-  if (text.includes("security purposes") || text.includes("rate limit") || match) {
+  if (text.includes("429") || text.includes("too many") || text.includes("security purposes") || text.includes("rate limit") || match) {
     const seconds = match?.[1] || "alguns";
     return `Aguarde ${seconds} segundos antes de pedir outro link. O Supabase protege o acesso contra cliques repetidos.`;
   }
-  if (text.includes("invalid") || text.includes("email")) {
+  if (text.includes("error sending") || text.includes("unexpected_failure") || text.includes("smtp") || text.includes("500")) {
+    return "O Supabase não conseguiu enviar o e-mail agora. Use o acesso emergencial ou revise o SMTP em Authentication.";
+  }
+  if (text.includes("invalid")) {
     return "Não foi possível enviar o link. Confira se o e-mail autorizado está correto.";
   }
   return "Não foi possível enviar o link agora. Tente novamente em instantes.";

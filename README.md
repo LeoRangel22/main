@@ -84,7 +84,7 @@ Ao clicar em `Adicionar item`, o novo pacote entra na lista de preços e já fic
 
 A seção `Condições gerais` entra no PDF, no e-mail e no texto copiado para WhatsApp. O texto fica salvo neste navegador e pode ser editado antes do envio.
 
-Atenção: o texto padrão recebido informa validade até `30/06/2025`; atualize essa linha antes de enviar propostas atuais.
+Atenção: confira a linha de validade do tarifário antes de cada temporada comercial. O padrão atual informa validade até `31/12/2026`.
 
 ## Assets de marca
 

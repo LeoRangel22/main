@@ -144,6 +144,8 @@ alter table public.propostas
 
 alter table public.propostas
   add column if not exists public_token uuid not null default gen_random_uuid(),
+  add column if not exists public_token_expires_at timestamptz not null default (now() + interval '90 days'),
+  add column if not exists public_token_revoked_at timestamptz,
   add column if not exists cliente_resposta text,
   add column if not exists cliente_resposta_em timestamptz,
   add column if not exists cliente_mensagem text,
@@ -245,13 +247,22 @@ as $$
     p.privatizacao,
     p.total,
     p.status,
-    p.snapshot,
+    jsonb_strip_nulls(jsonb_build_object(
+      'event', p.snapshot -> 'event',
+      'totals', p.snapshot -> 'totals',
+      'selectedItems', p.snapshot -> 'selectedItems',
+      'generalTerms', p.snapshot -> 'generalTerms',
+      'paymentTerms', p.snapshot -> 'paymentTerms',
+      'clienteResposta', p.snapshot -> 'clienteResposta'
+    )) as snapshot,
     p.cliente_resposta,
     p.cliente_resposta_em,
     p.cliente_mensagem,
     p.cliente_solicitacao
   from public.propostas p
   where p.public_token = proposal_token
+    and p.public_token_revoked_at is null
+    and p.public_token_expires_at > now()
   limit 1;
 $$;
 
@@ -279,20 +290,26 @@ as $$
 declare
   normalized_action text := lower(trim(coalesce(action, '')));
   clean_message text := nullif(trim(coalesce(message, '')), '');
+  current_status text;
+  current_snapshot jsonb;
   response_payload jsonb;
   history_entry jsonb;
-  signal_history_entry jsonb := null;
+  proof_history_entry jsonb := null;
   clean_proof jsonb := null;
   signal_payment jsonb := null;
   next_status text;
   new_snapshot jsonb;
   proposal_total numeric := 0;
+  proof_name text;
+  proof_type text;
+  proof_size integer;
+  proof_data_url text;
 begin
   if normalized_action not in ('confirmar', 'cancelar', 'alteracao') then
     raise exception 'Acao invalida.';
   end if;
 
-  if requested_guests is not null and requested_guests < 1 then
+  if requested_guests is not null and (requested_guests < 1 or requested_guests > 500) then
     raise exception 'Numero de convidados invalido.';
   end if;
 
@@ -300,12 +317,48 @@ begin
     raise exception 'Mensagem obrigatoria.';
   end if;
 
+  select p.status, coalesce(p.snapshot, '{}'::jsonb), coalesce(p.total, 0)
+    into current_status, current_snapshot, proposal_total
+  from public.propostas p
+  where p.public_token = proposal_token
+    and p.public_token_revoked_at is null
+    and p.public_token_expires_at > now();
+
+  if current_snapshot is null then
+    raise exception 'Proposta nao encontrada ou link expirado.';
+  end if;
+
+  if current_status not in ('proposta_enviada', 'negociacao') then
+    raise exception 'Esta proposta nao aceita mais respostas pelo link publico.';
+  end if;
+
   if payment_proof is not null then
+    proof_name := left(nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''), 160);
+    proof_type := lower(nullif(trim(coalesce(payment_proof ->> 'tipo', '')), ''));
+    proof_data_url := nullif(trim(coalesce(payment_proof ->> 'dataUrl', '')), '');
+    proof_size := nullif(trim(coalesce(payment_proof ->> 'tamanho', '')), '')::integer;
+
+    if proof_name is null or proof_type is null or proof_data_url is null then
+      raise exception 'Comprovante incompleto.';
+    end if;
+
+    if proof_size is null or proof_size <= 0 or proof_size > 5242880 then
+      raise exception 'Comprovante acima do limite permitido.';
+    end if;
+
+    if proof_type not in ('application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif') then
+      raise exception 'Tipo de comprovante nao permitido.';
+    end if;
+
+    if length(proof_data_url) > 7200000 or proof_data_url !~ '^data:(application/pdf|image/(jpeg|png|webp|heic|heif));base64,' then
+      raise exception 'Formato do comprovante invalido.';
+    end if;
+
     clean_proof := jsonb_strip_nulls(jsonb_build_object(
-      'nome', nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''),
-      'tipo', nullif(trim(coalesce(payment_proof ->> 'tipo', '')), ''),
-      'tamanho', nullif(trim(coalesce(payment_proof ->> 'tamanho', '')), ''),
-      'dataUrl', nullif(trim(coalesce(payment_proof ->> 'dataUrl', '')), ''),
+      'nome', proof_name,
+      'tipo', proof_type,
+      'tamanho', proof_size,
+      'dataUrl', proof_data_url,
       'anexadoEm', coalesce(payment_proof ->> 'anexadoEm', now()::text)
     ));
   end if;
@@ -339,20 +392,10 @@ begin
 
   next_status := case
     when normalized_action = 'cancelar' then 'cancelado'
-    when normalized_action = 'confirmar' and clean_proof is not null then 'confirmado'
     else 'negociacao'
   end;
 
-  select
-    jsonb_set(coalesce(p.snapshot, '{}'::jsonb), '{clienteResposta}', response_payload, true),
-    coalesce(p.total, 0)
-    into new_snapshot, proposal_total
-  from public.propostas p
-  where p.public_token = proposal_token;
-
-  if new_snapshot is null then
-    raise exception 'Proposta nao encontrada.';
-  end if;
+  new_snapshot := jsonb_set(current_snapshot, '{clienteResposta}', response_payload, true);
 
   if normalized_action = 'cancelar' then
     new_snapshot := jsonb_set(
@@ -379,23 +422,22 @@ begin
       'validacaoPendente', true
     ));
 
-    signal_history_entry := jsonb_build_object(
+    proof_history_entry := jsonb_build_object(
       'id', 'sinal-cliente-' || extract(epoch from now())::text,
-      'type', 'sinal',
-      'title', 'Sinal enviado pelo cliente',
+      'type', 'comprovante_sinal',
+      'title', 'Comprovante enviado pelo cliente',
       'detail', 'Comprovante anexado pelo link público. Validar no banco antes da confirmação operacional: ' || coalesce(clean_proof ->> 'nome', 'arquivo'),
       'at', now(),
       'actor', 'Cliente'
     );
 
-    new_snapshot := jsonb_set(new_snapshot, '{pagamentoSinal}', signal_payment, true);
   end if;
 
   new_snapshot := jsonb_set(
     new_snapshot,
     '{commercialHistory}',
     (case
-      when signal_history_entry is not null then jsonb_build_array(signal_history_entry, history_entry)
+      when proof_history_entry is not null then jsonb_build_array(proof_history_entry, history_entry)
       else jsonb_build_array(history_entry)
     end) || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
     true
