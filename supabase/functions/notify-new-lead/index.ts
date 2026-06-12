@@ -440,11 +440,13 @@ Deno.serve(async (req) => {
   }
 
   const configuredSecret = Deno.env.get("LEAD_WEBHOOK_SECRET")
-  if (configuredSecret) {
-    const receivedSecret = req.headers.get("x-webhook-secret")
-    if (!receivedSecret || receivedSecret !== configuredSecret) {
-      return response({ ok: false, error: "Unauthorized" }, 401)
-    }
+  if (!configuredSecret) {
+    return response({ ok: false, error: "LEAD_WEBHOOK_SECRET not configured" }, 500)
+  }
+
+  const receivedSecret = req.headers.get("x-webhook-secret")
+  if (!receivedSecret || receivedSecret !== configuredSecret) {
+    return response({ ok: false, error: "Unauthorized" }, 401)
   }
 
   try {

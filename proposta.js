@@ -276,6 +276,14 @@ function setMessage(message, type = "neutral") {
   node.dataset.status = type;
 }
 
+function getPublicResponseErrorMessage(error) {
+  const raw = String(error?.message || error?.details || "").trim();
+  if (/link expirado|nao encontrada|não encontrada/i.test(raw)) return "Este link expirou ou não está mais disponível. Fale com a equipe para receber uma proposta atualizada.";
+  if (/nao aceita|não aceita|status/i.test(raw)) return "Esta proposta não aceita mais respostas pelo link. Fale com a equipe para alinhar os próximos passos.";
+  if (/comprovante|payload|too large|limite|tipo|formato/i.test(raw)) return "Não foi possível registrar o comprovante. Revise o arquivo ou envie por e-mail/WhatsApp para a equipe.";
+  return "Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.";
+}
+
 function renderError(message) {
   card.innerHTML = `
     <div class="public-proposal-empty">
@@ -585,8 +593,9 @@ async function submitPublicResponse(event) {
     payment_proof: action === "confirmar" ? selectedProof : null,
   };
   let { data, error } = await supabaseClient.rpc("respond_public_proposal", payload);
+  const retryWithoutProof = false;
 
-  if (error && payload.payment_proof) {
+  if (retryWithoutProof && error && payload.payment_proof) {
     console.warn("Falha ao responder proposta com comprovante. Tentando registrar sem anexo.", error);
     const fallbackPayload = { ...payload };
     delete fallbackPayload.payment_proof;
@@ -600,6 +609,8 @@ async function submitPublicResponse(event) {
 
   if (error || !data?.[0]?.ok) {
     console.warn("Falha ao responder proposta.", error);
+    setMessage(getPublicResponseErrorMessage(error), "error");
+    return;
     setMessage("Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.", "error");
     return;
   }
