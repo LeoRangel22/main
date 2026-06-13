@@ -389,7 +389,7 @@ summary:focus-visible {
 
 .topbar-team-auth .compact-login-row {
   gap: 8px;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(120px, 0.7fr) auto auto;
 }
 
 .topbar-team-auth input,
@@ -424,7 +424,8 @@ summary:focus-visible {
 }
 
 .auth-connected .topbar-team-auth .team-email-presets,
-.auth-connected .topbar-team-auth > .compact-login-row {
+.auth-connected .topbar-team-auth > .compact-login-row,
+.auth-connected .password-login-row {
   display: none;
 }
 
@@ -515,7 +516,7 @@ summary:focus-visible {
 }
 
 .login-row {
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.8fr) auto auto;
 }
 
 label small {

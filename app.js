@@ -686,6 +686,7 @@ const fields = {
   supabaseUrl: document.querySelector("#supabaseUrl"),
   supabaseAnonKey: document.querySelector("#supabaseAnonKey"),
   loginEmail: document.querySelector("#loginEmail"),
+  loginPassword: document.querySelector("#loginPassword"),
   magicLinkUrl: document.querySelector("#magicLinkUrl"),
   reportStartDate: document.querySelector("#reportStartDate"),
   reportEndDate: document.querySelector("#reportEndDate"),
@@ -7683,6 +7684,7 @@ function isFinanceSession() {
 
 function updateAuthUI() {
   const loginButton = document.querySelector("#loginBtn");
+  const passwordLoginButton = document.querySelector("#passwordLoginBtn");
   const logoutButton = document.querySelector("#logoutBtn");
   const recoverButton = document.querySelector("#recoverMagicLinkBtn");
   if (!loginButton || !logoutButton || !recoverButton || !nodes.authStatus || !fields.loginEmail || !fields.magicLinkUrl) return;
@@ -7693,9 +7695,11 @@ function updateAuthUI() {
   document.body.classList.toggle("auth-connected", isLoggedIn);
 
   loginButton.disabled = !isConnected || isLoggedIn;
+  if (passwordLoginButton) passwordLoginButton.disabled = !isConnected || isLoggedIn;
   recoverButton.disabled = !isConnected || isLoggedIn;
   logoutButton.classList.toggle("is-hidden", !isLoggedIn);
   fields.loginEmail.disabled = !isConnected || isLoggedIn;
+  if (fields.loginPassword) fields.loginPassword.disabled = !isConnected || isLoggedIn;
   fields.magicLinkUrl.disabled = !isConnected || isLoggedIn;
 
   if (!isConnected) {
@@ -7705,7 +7709,7 @@ function updateAuthUI() {
 
   nodes.authStatus.textContent = isLoggedIn
     ? `Conectado como ${state.session.user.email} · ${getTeamProfile(state.session.user.email).label}.`
-    : "Use eventos@embaixadacarioca.com.br, financeiro@embaixadacarioca.com.br ou leorangel@gmail.com para receber o link de acesso.";
+    : "Entre com senha ou peça o link de acesso para eventos@embaixadacarioca.com.br, financeiro@embaixadacarioca.com.br ou leorangel@gmail.com.";
 }
 
 function renderHistory() {
@@ -10940,7 +10944,53 @@ async function loginWithEmail() {
     state.sendLocks.auth = false;
     if (loginButton) {
       loginButton.disabled = false;
-      loginButton.textContent = "Entrar por e-mail";
+      loginButton.textContent = "Enviar link";
+    }
+  }
+}
+
+async function loginWithPassword() {
+  if (!state.supabase) {
+    showToast("A conexão da equipe ainda está carregando. Tente novamente em instantes.");
+    return;
+  }
+
+  const email = normalizeEmail(fields.loginEmail?.value);
+  const password = fields.loginPassword?.value || "";
+  if (!email || !password) {
+    showToast("Preencha e-mail e senha da equipe.");
+    return;
+  }
+
+  if (!isTeamEmail(email)) {
+    showToast("Use um e-mail autorizado da equipe.");
+    return;
+  }
+
+  const button = document.querySelector("#passwordLoginBtn");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Entrando...";
+  }
+
+  try {
+    const { error } = await state.supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      const text = `${error.message || ""}`.toLowerCase();
+      const message = text.includes("invalid login credentials")
+        ? "Senha não conferiu para este e-mail. Revise a senha cadastrada no Supabase Auth."
+        : "Não foi possível entrar com senha agora. Confira o usuário no Supabase Auth.";
+      nodes.authStatus.textContent = message;
+      showToast(message);
+      return;
+    }
+    if (fields.loginPassword) fields.loginPassword.value = "";
+    nodes.authStatus.textContent = "Acesso liberado com senha.";
+    showToast("Acesso liberado.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Entrar com senha";
     }
   }
 }
@@ -13057,6 +13107,10 @@ function bindEvents() {
   });
   document.querySelector("#saveSupabaseConfigBtn")?.addEventListener("click", configureSupabaseFromForm);
   document.querySelector("#loginBtn")?.addEventListener("click", loginWithEmail);
+  document.querySelector("#passwordLoginBtn")?.addEventListener("click", loginWithPassword);
+  fields.loginPassword?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loginWithPassword();
+  });
   document.querySelectorAll("[data-team-email]").forEach((button) => {
     button.addEventListener("click", () => {
       fields.loginEmail.value = button.dataset.teamEmail;
