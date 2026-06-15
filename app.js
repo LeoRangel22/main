@@ -6928,6 +6928,18 @@ function getDebugProposalState() {
   };
 }
 
+function isValidUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+}
+
+function getPersistableProposalId() {
+  return isValidUuid(state.activeProposalId) ? state.activeProposalId : "";
+}
+
+function getPersistableQuoteRequestId() {
+  return isValidUuid(state.activeQuoteRequestId) ? state.activeQuoteRequestId : null;
+}
+
 function getProposalRow(snapshot, status = "proposta_enviada") {
   const user = state.session?.user;
   return {
@@ -6947,7 +6959,7 @@ function getProposalRow(snapshot, status = "proposta_enviada") {
     total: snapshot.totals.total,
     status,
     public_token_expires_at: getPublicTokenExpiresAt(),
-    solicitacao_id: state.activeQuoteRequestId || null,
+    solicitacao_id: getPersistableQuoteRequestId(),
     snapshot,
   };
 }
@@ -11265,8 +11277,12 @@ async function saveCurrentProposal(status, signalInfo = null) {
   const snapshotWithHistory = withCommercialHistoryEntries(snapshot, historyEntries);
 
   const row = getProposalRow(snapshotWithHistory, nextStatus);
-  const query = state.activeProposalId
-    ? state.supabase.from("propostas").update(row).eq("id", state.activeProposalId)
+  const persistableProposalId = getPersistableProposalId();
+  if (state.activeProposalId && !persistableProposalId) {
+    console.warn("ID ativo da proposta não é UUID persistível; criando novo registro no Supabase.", state.activeProposalId);
+  }
+  const query = persistableProposalId
+    ? state.supabase.from("propostas").update(row).eq("id", persistableProposalId)
     : state.supabase.from("propostas").insert(row);
   const { data, error } = await query.select("*").single();
 
@@ -11279,12 +11295,15 @@ async function saveCurrentProposal(status, signalInfo = null) {
 
   state.activeProposalId = data.id;
   upsertProposalState(data);
-  if (state.activeQuoteRequestId) {
+  const persistableQuoteRequestId = getPersistableQuoteRequestId();
+  if (persistableQuoteRequestId) {
     await updateQuoteRequest(
-      state.activeQuoteRequestId,
+      persistableQuoteRequestId,
       { status: "proposta_enviada", proposta_id: data.id },
       false,
     );
+  } else if (state.activeQuoteRequestId) {
+    console.warn("Solicitação ativa não é UUID persistível; vínculo ignorado no Supabase.", state.activeQuoteRequestId);
   }
   renderHistory();
   renderPipeline();
@@ -11790,6 +11809,9 @@ function showToast(message) {
 function getSupabaseSaveErrorMessage(error) {
   const raw = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(" ");
   const text = raw.toLowerCase();
+  if (text.includes("invalid input syntax for type uuid") || text.includes("22p02")) {
+    return "Não foi possível salvar: havia um identificador interno inválido. Atualize a página e tente novamente.";
+  }
   if (text.includes("public_token_expires_at")) {
     return "Não foi possível salvar: falta a validade do link público no Supabase.";
   }
