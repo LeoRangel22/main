@@ -643,6 +643,8 @@ const state = {
   sendReviewApprovedSignature: "",
   sendReviewApproval: null,
   lastSendReviewPointerApprovalAt: 0,
+  lastProposalSaveError: "",
+  lastProposalShareError: "",
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -11088,12 +11090,15 @@ function upsertProposalState(proposal) {
 }
 
 async function saveCurrentProposal(status, signalInfo = null) {
+  state.lastProposalSaveError = "";
   if (!state.supabase) {
+    state.lastProposalSaveError = "Conecte o Supabase para salvar no histórico.";
     showToast("Conecte o Supabase para salvar no histórico.");
     return null;
   }
 
   if (!state.session) {
+    state.lastProposalSaveError = "Entre com o e-mail da equipe antes de salvar.";
     showToast("Entre com o e-mail da equipe antes de salvar.");
     return null;
   }
@@ -11267,7 +11272,8 @@ async function saveCurrentProposal(status, signalInfo = null) {
 
   if (error) {
     console.warn("Falha ao salvar proposta.", error);
-    showToast("Não foi possível salvar. Confira o schema no Supabase.");
+    state.lastProposalSaveError = getSupabaseSaveErrorMessage(error);
+    showToast(state.lastProposalSaveError);
     return null;
   }
 
@@ -11781,6 +11787,24 @@ function showToast(message) {
   window.setTimeout(() => toast.remove(), 2600);
 }
 
+function getSupabaseSaveErrorMessage(error) {
+  const raw = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(" ");
+  const text = raw.toLowerCase();
+  if (text.includes("public_token_expires_at")) {
+    return "Não foi possível salvar: falta a validade do link público no Supabase.";
+  }
+  if (text.includes("public_token") || text.includes("public token")) {
+    return "Não foi possível salvar: falta a configuração do link público da proposta no Supabase.";
+  }
+  if (text.includes("column") || text.includes("schema") || text.includes("cache")) {
+    return "Não foi possível salvar: o schema do Supabase precisa ser atualizado.";
+  }
+  if (text.includes("permission") || text.includes("policy") || text.includes("rls")) {
+    return "Não foi possível salvar: confira o acesso da equipe no Supabase.";
+  }
+  return "Não foi possível salvar a proposta. Confira a conexão e tente novamente.";
+}
+
 function getPublicProposalUrl(proposal) {
   const token = proposal?.public_token;
   return token ? `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}` : "";
@@ -11855,14 +11879,19 @@ async function openPipelineCardElement(card) {
 }
 
 async function ensureProposalForSharing() {
+  state.lastProposalShareError = "";
   if (!ensureProposalReadyForSending()) return null;
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
   const saved = await saveCurrentProposal(status);
-  if (!saved) return null;
+  if (!saved) {
+    state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
+    return null;
+  }
   const url = getPublicProposalUrl(saved);
   if (!url) {
-    showToast("Rode o schema atualizado no Supabase para gerar links públicos.");
+    state.lastProposalShareError = "A proposta foi salva, mas ainda não recebeu o link público. Atualize o schema do Supabase.";
+    showToast(state.lastProposalShareError);
     return null;
   }
   return { saved, url };
@@ -12151,14 +12180,15 @@ async function openEmail() {
   }
   const share = await ensureProposalForSharing();
   if (!share?.saved || !share?.url) {
+    const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
     createIntegrationLog({
       channel: "email",
       status: "error",
       title: "Proposta comercial",
-      detail: "E-mail não enviado: não foi possível gerar o link seguro da proposta.",
+      detail,
       target: email,
     });
-    showToast("E-mail não enviado: não consegui gerar o link seguro da proposta.");
+    showToast(detail);
     return;
   }
   await sendProposalEmailViaZepto({
