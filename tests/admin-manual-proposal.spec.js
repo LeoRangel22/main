@@ -5,6 +5,12 @@ const {
   expectScrolledNear,
 } = require("./support");
 
+function getClearManualEventDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 120);
+  return date.toISOString().slice(0, 10);
+}
+
 test.describe("Proposta manual no admin", () => {
   test("inicia registro retroativo para evento negociado fora do sistema", async ({ page }) => {
     const errors = collectBrowserErrors(page);
@@ -59,7 +65,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
     await page.locator("#clientPhone").fill("+55 21 99999-0000");
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("09:00");
     await page.locator("#guestCount").fill("30");
     await page.locator("#eventDuration").selectOption("1");
@@ -128,7 +134,7 @@ test.describe("Proposta manual no admin", () => {
     const afterContact = await page.evaluate(() => window.getProposalReviewItems().find((item) => item.id === "contact"));
     expect(afterContact.status).not.toBe("error");
 
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("09:00");
     const afterDate = await page.evaluate(() => window.getProposalReviewItems().find((item) => item.id === "date"));
     expect(afterDate.status).toBe("ok");
@@ -164,7 +170,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
     await page.locator("#clientPhone").fill("+55 21 99999-0000");
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("09:00");
     await page.locator("#guestCount").fill("30");
     await page.locator("#eventDuration").selectOption("1");
@@ -207,7 +213,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
     await page.locator("#clientPhone").fill("+55 21 99999-0000");
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("18:00");
     await page.locator("#guestCount").fill("40");
     await page.locator("#eventDuration").selectOption("2");
@@ -379,7 +385,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Leonardo Rangel");
     await page.locator("#clientEmail").fill("leorangel@gmail.com");
     await page.locator("#clientPhone").fill("+55 21 99606-0692");
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("09:00");
     await page.locator("#guestCount").fill("30");
     await page.locator("#eventDuration").selectOption("1");
@@ -436,7 +442,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#clientName").fill("Leonardo Rangel");
     await page.locator("#clientEmail").fill("leorangel@gmail.com");
     await page.locator("#clientPhone").fill("+55 21 99606-0692");
-    await page.locator("#eventDate").fill("2026-06-18");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
     await page.locator("#eventTime").selectOption("09:00");
     await page.locator("#guestCount").fill("30");
     await page.locator("#eventDuration").selectOption("1");

@@ -7684,6 +7684,62 @@ function isTeamEmail(email) {
   return TEAM_EMAILS.includes(normalizeEmail(email));
 }
 
+function getAuthorizedTeamEmailsText() {
+  return TEAM_EMAILS.join(", ");
+}
+
+function getCurrentTeamEmail() {
+  return normalizeEmail(state.session?.user?.email || "");
+}
+
+async function ensureTeamSessionForWrite(actionLabel = "salvar") {
+  if (!state.supabase) {
+    return {
+      ok: false,
+      message: "A conexão da equipe ainda está carregando. Recarregue a página se continuar assim.",
+    };
+  }
+
+  if (state.supabase.__qa) {
+    if (!state.session?.user?.email) {
+      state.session = { user: { email: QA_USER_EMAIL } };
+    }
+    return { ok: true, session: state.session, email: getCurrentTeamEmail() };
+  }
+
+  try {
+    const { data, error } = await state.supabase.auth.getSession();
+    if (error) throw error;
+    state.session = data?.session || null;
+  } catch (error) {
+    console.warn(`Falha ao confirmar sessão antes de ${actionLabel}.`, error);
+    return {
+      ok: false,
+      message: `Não consegui confirmar o login da equipe antes de ${actionLabel}. Saia e entre novamente.`,
+    };
+  }
+
+  const email = getCurrentTeamEmail();
+  if (!state.session || !email) {
+    updateAuthUI();
+    return {
+      ok: false,
+      message: `Sessão expirada. Clique em Sair e entre novamente com ${getAuthorizedTeamEmailsText()}.`,
+    };
+  }
+
+  if (!isTeamEmail(email)) {
+    updateAuthUI();
+    return {
+      ok: false,
+      message: `O e-mail ${email} não tem permissão para ${actionLabel}. Entre com ${getAuthorizedTeamEmailsText()}.`,
+    };
+  }
+
+  updateAuthUI();
+  return { ok: true, session: state.session, email };
+}
+
 function isSuperAdminEmail(email) {
   return SUPER_ADMIN_EMAILS.includes(normalizeEmail(email));
 }
@@ -11103,15 +11159,10 @@ function upsertProposalState(proposal) {
 
 async function saveCurrentProposal(status, signalInfo = null) {
   state.lastProposalSaveError = "";
-  if (!state.supabase) {
-    state.lastProposalSaveError = "Conecte o Supabase para salvar no histórico.";
-    showToast("Conecte o Supabase para salvar no histórico.");
-    return null;
-  }
-
-  if (!state.session) {
-    state.lastProposalSaveError = "Entre com o e-mail da equipe antes de salvar.";
-    showToast("Entre com o e-mail da equipe antes de salvar.");
+  const sessionCheck = await ensureTeamSessionForWrite("salvar a proposta");
+  if (!sessionCheck.ok) {
+    state.lastProposalSaveError = sessionCheck.message;
+    showToast(sessionCheck.message);
     return null;
   }
 
@@ -11287,8 +11338,17 @@ async function saveCurrentProposal(status, signalInfo = null) {
   const { data, error } = await query.select("*").single();
 
   if (error) {
-    console.warn("Falha ao salvar proposta.", error);
-    state.lastProposalSaveError = getSupabaseSaveErrorMessage(error);
+    console.warn("Falha ao salvar proposta.", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      email: getCurrentTeamEmail(),
+      status: normalizedNext,
+      activeProposalId: state.activeProposalId,
+      persistableProposalId,
+    });
+    state.lastProposalSaveError = getSupabaseSaveErrorMessage(error, { email: getCurrentTeamEmail() });
     showToast(state.lastProposalSaveError);
     return null;
   }
@@ -11806,11 +11866,21 @@ function showToast(message) {
   window.setTimeout(() => toast.remove(), 2600);
 }
 
-function getSupabaseSaveErrorMessage(error) {
+function getSupabaseSaveErrorMessage(error, context = {}) {
   const raw = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(" ");
   const text = raw.toLowerCase();
+  const email = normalizeEmail(context.email || getCurrentTeamEmail());
   if (text.includes("invalid input syntax for type uuid") || text.includes("22p02")) {
     return "Não foi possível salvar: havia um identificador interno inválido. Atualize a página e tente novamente.";
+  }
+  if (
+    text.includes("jwt") ||
+    text.includes("unauthorized") ||
+    text.includes("not authenticated") ||
+    text.includes("auth") ||
+    text.includes("401")
+  ) {
+    return `Sessão expirada no Supabase. Saia e entre novamente com ${getAuthorizedTeamEmailsText()}.`;
   }
   if (text.includes("public_token_expires_at")) {
     return "Não foi possível salvar: falta a validade do link público no Supabase.";
@@ -11821,8 +11891,10 @@ function getSupabaseSaveErrorMessage(error) {
   if (text.includes("column") || text.includes("schema") || text.includes("cache")) {
     return "Não foi possível salvar: o schema do Supabase precisa ser atualizado.";
   }
-  if (text.includes("permission") || text.includes("policy") || text.includes("rls")) {
-    return "Não foi possível salvar: confira o acesso da equipe no Supabase.";
+  if (text.includes("permission") || text.includes("policy") || text.includes("rls") || text.includes("403") || text.includes("42501")) {
+    return email
+      ? `Supabase recusou o salvamento para ${email}. Saia e entre novamente; se persistir, revise a permissão da tabela propostas.`
+      : "Supabase recusou o salvamento. Entre novamente; se persistir, revise a permissão da tabela propostas.";
   }
   return "Não foi possível salvar a proposta. Confira a conexão e tente novamente.";
 }
