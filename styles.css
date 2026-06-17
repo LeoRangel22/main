@@ -5677,6 +5677,15 @@ label.pipeline-status-control:focus-within select {
   min-width: 86px;
 }
 
+.privatization-rules-table small {
+  display: block;
+  max-width: 150px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
 .is-hidden {
   display: none;
 }

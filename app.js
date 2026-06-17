@@ -5760,10 +5760,10 @@ function getPrivatization() {
     return {
       mode: "optional",
       amount: accepted ? optionalValue : 0,
-      title: "Fora do pico: privatização opcional",
+      title: accepted ? "Fora do pico: privatização total incluída" : "Fora do pico: sem privatização",
       description: accepted
         ? `${dayContext} Exclusividade incluída: ${formatMoney(optionalValue)}.${peak.outsideHoursNote}`
-        : `${dayContext} Ofereça exclusividade do espaço por ${formatMoney(optionalValue)}.${peak.outsideHoursNote}`,
+        : `${dayContext} Serviço sem exclusividade do espaço. Se o cliente quiser privatização total fora do pico, inclua a exclusividade por ${formatMoney(optionalValue)}.${peak.outsideHoursNote}`,
       optional: true,
     };
   }
@@ -6709,7 +6709,10 @@ function renderPrivatizationRulesTable() {
           <td><input type="time" data-rule-index="${index}" data-rule-field="closing" value="${escapeHtml(rule.closing)}" /></td>
           <td><input type="text" inputmode="decimal" data-rule-index="${index}" data-rule-field="partial" value="${escapeHtml(rule.partial)}" /></td>
           <td><input type="text" inputmode="decimal" data-rule-index="${index}" data-rule-field="total" value="${escapeHtml(rule.total)}" /></td>
-          <td><input type="text" inputmode="decimal" data-rule-index="${index}" data-rule-field="offPeak" value="${escapeHtml(rule.offPeak)}" /></td>
+          <td>
+            <input type="text" inputmode="decimal" data-rule-index="${index}" data-rule-field="offPeak" value="${escapeHtml(rule.offPeak)}" aria-label="Privatização total opcional fora do pico" />
+            <small>Opcional: só entra se a proposta incluir exclusividade.</small>
+          </td>
         </tr>
       `,
     )

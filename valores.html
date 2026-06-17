@@ -303,7 +303,7 @@
               <span>02</span>
               <h2>Custos de privatização</h2>
             </div>
-            <p>Atualize abertura, pico, fechamento e valores aplicados automaticamente na proposta.</p>
+            <p>Atualize abertura, pico, fechamento e valores. Pico parcial e pico total entram automaticamente quando o evento cai no pico. Fora do pico é apenas a privatização total opcional, cobrada só se a equipe incluir exclusividade na proposta.</p>
             <div class="privatization-rules-wrap">
               <table class="privatization-rules-table">
                 <thead>
@@ -315,7 +315,7 @@
                     <th>Fechamento</th>
                     <th>Pico parcial</th>
                     <th>Pico total</th>
-                    <th>Fora pico</th>
+                    <th>Fora pico opcional</th>
                   </tr>
                 </thead>
                 <tbody id="privatizationRulesTable"></tbody>
@@ -327,6 +327,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20260616-supabase-session-v166"></script>
+  <script defer src="./app.js?v=20260616-privatizacao-fora-pico-v167"></script>
   </body>
 </html>
