@@ -412,16 +412,16 @@ const copy = {
       phoneHelp: "Informe o DDD e o celular. Se for um número internacional, inclua o código do país.",
       company: "Empresa ou agência",
       companyHelpOptional: "Opcional para pessoa física.",
-      companyHelpRequired: "Obrigatório para empresa e agência.",
+      companyHelpRequired: "Recomendado para empresa e agência. Ajuda a equipe a localizar e priorizar seu pedido.",
       endClient: "Cliente final",
-      endClientHelp: "Obrigatório para agências. Ex.: marca, empresa contratante ou família atendida.",
+      endClientHelp: "Recomendado para agências. Ex.: marca, empresa contratante ou família atendida.",
       groupName: "Nome do grupo",
       groupNameHelp: "Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.",
       contactIntroTitle: "Como prefere que a equipe fale com você?",
       contactIntroBody:
         "Nome, e-mail e celular garantem o retorno. Para empresa ou agência, inclua a organização.",
       contactRequirementNote:
-        "Nome, e-mail e celular são obrigatórios. Para agência, cliente final e grupo ajudam a localizar a cotação.",
+        "Nome, e-mail e celular são essenciais para retorno. Empresa, cliente final e grupo ajudam a equipe a montar a proposta mais rápido.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos os dados apenas para preparar sua proposta.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
@@ -589,16 +589,16 @@ const copy = {
       phoneHelp: "Enter the area code and phone number. For international numbers, include the country code.",
       company: "Company or agency",
       companyHelpOptional: "Optional for private celebrations.",
-      companyHelpRequired: "Required for companies and agencies.",
+      companyHelpRequired: "Recommended for companies and agencies. It helps our team identify and prioritize the request.",
       endClient: "Final client",
-      endClientHelp: "Required for agencies. Example: brand, contracting company or family served.",
+      endClientHelp: "Recommended for agencies. Example: brand, contracting company or family served.",
       groupName: "Group name",
       groupNameHelp: "For receptive tourism/DMC. It helps us identify groups and itineraries.",
       contactIntroTitle: "How should our team reach you?",
       contactIntroBody:
         "Full name, e-mail and phone help us reply. For company or agency requests, include the organization.",
       contactRequirementNote:
-        "Full name, e-mail and phone are required. For agencies, final client and group help us find the quote.",
+        "Name, e-mail and phone are essential for our reply. Company, final client and group help our team prepare the proposal faster.",
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
       contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
@@ -1156,6 +1156,10 @@ function isLikelyFullName(value) {
   return words.length >= 2;
 }
 
+function hasUsableName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").length >= 2;
+}
+
 function isCompanyRequired() {
   return Boolean(fields.clientType.value) && fields.clientType.value !== "person";
 }
@@ -1195,10 +1199,10 @@ function updateContactRequirements() {
   const companyRequired = isCompanyRequired();
   const agencyClient = isAgencyClient();
   const tourismAgency = isTourismAgencyClient();
-  fields.company.required = companyRequired;
-  fields.company.setAttribute("aria-required", companyRequired ? "true" : "false");
-  fields.endClientName.required = agencyClient;
-  fields.endClientName.setAttribute("aria-required", agencyClient ? "true" : "false");
+  fields.company.required = false;
+  fields.company.setAttribute("aria-required", "false");
+  fields.endClientName.required = false;
+  fields.endClientName.setAttribute("aria-required", "false");
   fields.groupName.required = false;
   fields.groupName.setAttribute("aria-required", "false");
   endClientField?.classList.toggle("is-hidden", !agencyClient);
@@ -1216,10 +1220,10 @@ function updateContactRequirements() {
     setHelperState(
       companyHelp,
       companyRequired ? current.labels.companyHelpRequired : current.labels.companyHelpOptional,
-      companyRequired ? "highlight" : "neutral",
+      companyRequired ? "neutral" : "neutral",
     );
   }
-  setHelperState(endClientHelp, current.labels.endClientHelp, agencyClient ? "highlight" : "neutral");
+  setHelperState(endClientHelp, current.labels.endClientHelp, agencyClient ? "neutral" : "neutral");
   setHelperState(groupNameHelp, current.labels.groupNameHelp, "neutral");
 }
 
@@ -1247,7 +1251,7 @@ function updateContactGuidance() {
   }
 
   if (!companyValue) {
-    setHelperState(companyHelp, current.labels.companyHelpRequired, "highlight");
+    setHelperState(companyHelp, current.labels.companyHelpRequired, "neutral");
   } else if (!isLikelyCompanyName(companyValue)) {
     setHelperState(companyHelp, current.messages.invalidCompany, "warning");
   } else {
@@ -1257,7 +1261,7 @@ function updateContactGuidance() {
   if (!isAgencyClient()) return;
 
   if (!endClientValue) {
-    setHelperState(endClientHelp, current.labels.endClientHelp, "highlight");
+    setHelperState(endClientHelp, current.labels.endClientHelp, "neutral");
   } else if (!isLikelyFinalClientName(endClientValue)) {
     setHelperState(endClientHelp, current.messages.invalidEndClient, "warning");
   } else {
@@ -1520,6 +1524,26 @@ function getSnapshot(referenceCode) {
   };
 }
 
+function applyLeadFallbacks(snapshot) {
+  const inferredMoment = snapshot.evento.momento || canonicalMomentLabels[fields.moment.value] || "A definir";
+  const inferredProfile = snapshot.evento.perfil || "A definir";
+  const inferredClientType = snapshot.cliente.tipoCliente || "Cliente a classificar";
+  const inferredEventType = snapshot.evento.tipo || "Evento sob medida";
+  const inferredTimeRange = snapshot.evento.faixaHorario || "A definir";
+  const inferredTime = snapshot.evento.horario || "A definir";
+
+  snapshot.evento.momento = inferredMoment;
+  snapshot.evento.perfil = inferredProfile;
+  snapshot.evento.ocasiao = inferredProfile;
+  snapshot.evento.tipo = inferredEventType;
+  snapshot.evento.faixaHorario = inferredTimeRange;
+  snapshot.evento.horario = inferredTime;
+  snapshot.cliente.tipoCliente = inferredClientType;
+  snapshot.qualificacao.tipoCliente = inferredClientType;
+  snapshot.qualificacao.origem = snapshot.qualificacao.origem || "Não informado";
+  snapshot.qualificacao.faixaInvestimento = snapshot.qualificacao.faixaInvestimento || "Ainda não definido";
+}
+
 function getPayload(snapshot) {
   return {
     status: "novo",
@@ -1565,33 +1589,8 @@ function getFriendlySubmitError(error, current) {
 function validateSnapshot(snapshot) {
   const current = getCopy();
   clearAllStepValidity();
+  applyLeadFallbacks(snapshot);
   const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
-  const required = [
-    [fields.moment, Boolean(snapshot.evento.momento), "moment", uiState.language === "en" ? "event moment" : "momento do evento"],
-    [fields.clientType, Boolean(snapshot.cliente.tipoCliente), "profile", uiState.language === "en" ? "client type" : "tipo de cliente"],
-    [fields.profile, Boolean(snapshot.evento.perfil), "profile", uiState.language === "en" ? "event occasion" : "ocasião do evento"],
-    [fields.eventType, Boolean(snapshot.evento.tipo), "recommendation", uiState.language === "en" ? "recommended format" : "formato do evento"],
-    [fields.timeRange, Boolean(snapshot.evento.faixaHorario), "eventDetails", uiState.language === "en" ? "preferred period" : "período desejado"],
-    [fields.time, Boolean(snapshot.evento.horario), "eventDetails", uiState.language === "en" ? "arrival time" : "horário de chegada"],
-  ];
-  required.forEach(([field, valid, stepName]) => {
-    setFieldValidity(field, valid);
-    if (!valid) setStepValidity(stepName, false);
-  });
-
-  const firstInvalid = required.find(([, valid]) => !valid);
-  if (firstInvalid) {
-    const missingItems = required
-      .filter(([, valid]) => !valid)
-      .map(([, , , label]) => label);
-    setStatusChecklist(
-      uiState.language === "en" ? "Complete these items before sending:" : "Complete estes pontos antes de enviar:",
-      missingItems,
-      uiState.language === "en" ? "The first incomplete section is highlighted above." : "A primeira seção incompleta está destacada acima.",
-    );
-    scrollToStep(firstInvalid[2], true);
-    return false;
-  }
 
   if (!hasEventDateOrWindow) {
     setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.missingDate], current.messages.fixThisPointFooter || "");
@@ -1606,7 +1605,7 @@ function validateSnapshot(snapshot) {
     return failValidation(fields.name, "contact", current.messages.requiredName);
   }
 
-  if (!isLikelyFullName(snapshot.cliente.nome)) {
+  if (!hasUsableName(snapshot.cliente.nome)) {
     return failValidation(fields.name, "contact", current.messages.invalidName);
   }
 
@@ -1634,26 +1633,6 @@ function validateSnapshot(snapshot) {
     fields.phone.focus();
     scrollToStep("contact", true);
     return false;
-  }
-
-  if (isCompanyRequired() && !snapshot.cliente.empresa) {
-    return failValidation(fields.company, "contact", current.messages.requiredCompany);
-  }
-
-  if (snapshot.cliente.empresa && !isLikelyCompanyName(snapshot.cliente.empresa)) {
-    return failValidation(fields.company, "contact", current.messages.invalidCompany);
-  }
-
-  if (isAgencyClient() && !snapshot.cliente.clienteFinal) {
-    return failValidation(fields.endClientName, "contact", current.messages.requiredEndClient);
-  }
-
-  if (snapshot.cliente.clienteFinal && !isLikelyFinalClientName(snapshot.cliente.clienteFinal)) {
-    return failValidation(fields.endClientName, "contact", current.messages.invalidEndClient);
-  }
-
-  if (snapshot.cliente.nomeGrupo && !isLikelyGroupName(snapshot.cliente.nomeGrupo)) {
-    return failValidation(fields.groupName, "contact", current.messages.invalidGroupName);
   }
 
   return true;
@@ -1744,13 +1723,13 @@ fields.phone.addEventListener("input", () => {
   resetStatusIfError();
 });
 fields.name.addEventListener("input", () => {
-  setFieldValidity(fields.name, !fields.name.value || isLikelyFullName(fields.name.value));
+  setFieldValidity(fields.name, !fields.name.value || hasUsableName(fields.name.value));
   setStepValidity("contact", true);
   updateContactGuidance();
   resetStatusIfError();
 });
 fields.name.addEventListener("blur", () => {
-  setFieldValidity(fields.name, !fields.name.value || isLikelyFullName(fields.name.value));
+  setFieldValidity(fields.name, !fields.name.value || hasUsableName(fields.name.value));
   updateContactGuidance();
 });
 fields.guests.addEventListener("input", updateGuestOutput);
@@ -1773,33 +1752,33 @@ fields.dateFlex.addEventListener("input", () => {
   resetStatusIfError();
 });
 fields.company.addEventListener("input", () => {
-  setFieldValidity(fields.company, !fields.company.value || isLikelyCompanyName(fields.company.value) || !isCompanyRequired());
+  setFieldValidity(fields.company, true);
   setStepValidity("contact", true);
   updateContactGuidance();
   resetStatusIfError();
 });
 fields.company.addEventListener("blur", () => {
-  setFieldValidity(fields.company, !fields.company.value || isLikelyCompanyName(fields.company.value) || !isCompanyRequired());
+  setFieldValidity(fields.company, true);
   updateContactGuidance();
 });
 fields.endClientName.addEventListener("input", () => {
-  setFieldValidity(fields.endClientName, !fields.endClientName.value || isLikelyFinalClientName(fields.endClientName.value));
+  setFieldValidity(fields.endClientName, true);
   setStepValidity("contact", true);
   updateContactGuidance();
   resetStatusIfError();
 });
 fields.endClientName.addEventListener("blur", () => {
-  setFieldValidity(fields.endClientName, !fields.endClientName.value || isLikelyFinalClientName(fields.endClientName.value));
+  setFieldValidity(fields.endClientName, true);
   updateContactGuidance();
 });
 fields.groupName.addEventListener("input", () => {
-  setFieldValidity(fields.groupName, !fields.groupName.value || isLikelyGroupName(fields.groupName.value));
+  setFieldValidity(fields.groupName, true);
   setStepValidity("contact", true);
   updateContactGuidance();
   resetStatusIfError();
 });
 fields.groupName.addEventListener("blur", () => {
-  setFieldValidity(fields.groupName, !fields.groupName.value || isLikelyGroupName(fields.groupName.value));
+  setFieldValidity(fields.groupName, true);
   updateContactGuidance();
 });
 preferenceChips.forEach((chip) => chip.addEventListener("change", () => setStepValidity("briefing", true)));
