@@ -63,10 +63,10 @@
           </div>
         </div>
         <form id="clientQuoteForm" class="client-quote-form" autocomplete="off" novalidate>
-          <input id="requestMoment" name="momento" type="hidden" required />
-          <input id="requestClientType" name="tipo_cliente" type="hidden" required />
-          <input id="requestProfile" name="perfil" type="hidden" required />
-          <input id="requestEventType" name="experiencia" type="hidden" required />
+          <input id="requestMoment" name="momento" type="hidden" />
+          <input id="requestClientType" name="tipo_cliente" type="hidden" />
+          <input id="requestProfile" name="perfil" type="hidden" />
+          <input id="requestEventType" name="experiencia" type="hidden" />
 
           <section class="consult-step" id="momentStep" aria-labelledby="momentTitle">
             <div class="section-heading">
@@ -178,7 +178,7 @@
               </label>
               <label>
                 <span id="timeRangeLabel">Período desejado</span>
-                <select id="requestTimeRange" name="periodo_desejado" autocomplete="off" required>
+                <select id="requestTimeRange" name="periodo_desejado" autocomplete="off">
                   <option value="">Selecione</option>
                   <option value="morning">Manhã</option>
                   <option value="afternoon">Tarde</option>
@@ -187,7 +187,7 @@
               </label>
               <label>
                 <span id="eventTimeLabel">Horário de chegada</span>
-                <select id="requestEventTime" name="horario_chegada" autocomplete="off" required>
+                <select id="requestEventTime" name="horario_chegada" autocomplete="off">
                   <option value="">Selecione o período</option>
                 </select>
                 <small id="eventTimeHelp">O horário guia a operação. Atrasos podem gerar hora extra.</small>
@@ -278,7 +278,7 @@
                   Nome, e-mail e celular garantem o retorno. Para empresa ou agência, inclua a organização.
                 </p>
                 <p class="contact-requirement-note" id="contactRequirementNote">
-                  Nome, e-mail e celular são obrigatórios. Para empresa ou agência, informe também a organização.
+                  Nome, e-mail e celular são essenciais para retorno. Empresa, cliente final e grupo ajudam a equipe a montar a proposta mais rápido.
                 </p>
               </div>
 
@@ -316,12 +316,12 @@
                 </label>
                 <label>
                   <span id="companyLabel">Empresa ou agência</span>
-                  <small id="companyHelp">Obrigatório para empresa e agência.</small>
+                  <small id="companyHelp">Recomendado para empresa e agência. Ajuda a equipe a localizar e priorizar seu pedido.</small>
                   <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Grupo Atlântico Eventos…" />
                 </label>
                 <label id="endClientField" class="conditional-contact-field is-hidden">
                   <span id="endClientLabel">Cliente final</span>
-                  <small id="endClientHelp">Obrigatório para agências. Ex.: marca, empresa contratante ou família atendida.</small>
+                  <small id="endClientHelp">Recomendado para agências. Ex.: marca, empresa contratante ou família atendida.</small>
                   <input id="requestEndClientName" name="cliente_final" type="text" autocomplete="organization" placeholder="Ex.: Grupo Aurora…" />
                 </label>
                 <label id="groupNameField" class="conditional-contact-field is-hidden">
@@ -381,6 +381,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./formulario.js?v=20260520-form-copy-v150"></script>
+    <script defer src="./formulario.js?v=20260629-lead-lite-v160"></script>
   </body>
 </html>

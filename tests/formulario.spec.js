@@ -51,7 +51,32 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#submitClientQuoteBtn").click();
 
     await expect(page.locator("#clientFormStatus")).toContainText(/Complete|corrigir|enviar/i);
-    await expect(page.locator("#momentStep")).toHaveAttribute("data-invalid", "");
+    await expect(page.locator("#eventDetailsStep")).toHaveAttribute("data-invalid", "");
+    await expectNoBrowserErrors(errors);
+  });
+  test("envia lead com essencial mesmo sem todos os cards consultivos", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    let payload;
+
+    await page.route("**/rest/v1/solicitacoes_cotacao**", async (route) => {
+      const body = route.request().postDataJSON();
+      payload = Array.isArray(body) ? body[0] : body;
+      await route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
+    });
+
+    await page.goto("/formulario.html");
+    await page.locator("#requestEventDate").fill("2026-08-20");
+    await page.locator("#requestClientName").fill("Ana");
+    await page.locator("#requestClientEmail").fill("ana@example.com");
+    await page.locator("#requestClientPhone").fill("+55 21 99999-8888");
+    await page.locator("#submitClientQuoteBtn").click();
+
+    await expect(page.locator("#clientFormStatus")).toContainText(/Solicitação enviada|received/i);
+    expect(payload?.cliente_nome).toBe("Ana");
+    expect(payload?.cliente_email).toBe("ana@example.com");
+    expect(payload?.horario_evento).toBe("A definir");
+    expect(payload?.tipo_evento).toBe("Evento sob medida");
+    expect(payload?.snapshot?.cliente?.tipoCliente).toBe("Cliente a classificar");
     await expectNoBrowserErrors(errors);
   });
 });
