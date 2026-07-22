@@ -752,6 +752,7 @@ const nodes = {
   proposalNextStep: document.querySelector("#proposalNextStep"),
   signalPaymentInfo: document.querySelector("#signalPaymentInfo"),
   operationalChecklist: document.querySelector("#operationalChecklist"),
+  manualContactPanel: document.querySelector("#manualContactPanel"),
   commercialTimeline: document.querySelector("#commercialTimeline"),
   internalNotesPanel: document.querySelector("#internalNotesPanel"),
   eventAttachmentsPanel: document.querySelector("#eventAttachmentsPanel"),
@@ -1156,6 +1157,16 @@ function getActorLabel(email = getCommercialActor()) {
   return `${email || "Equipe"} · ${profile.label}`;
 }
 
+function getLocalInputDateTime(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const localIso = new Date(safeDate.getTime() - safeDate.getTimezoneOffset() * 60000).toISOString();
+  return {
+    date: localIso.slice(0, 10),
+    time: localIso.slice(11, 16),
+  };
+}
+
 function createCommercialHistoryEntry(type, title, detail, extra = {}) {
   return {
     id: `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1180,6 +1191,10 @@ function withCommercialHistoryEntries(snapshot = {}, entries = []) {
 
 function getInternalComments(snapshot = {}) {
   return Array.isArray(snapshot.internalComments) ? snapshot.internalComments : [];
+}
+
+function getManualContacts(snapshot = {}) {
+  return Array.isArray(snapshot.manualContacts) ? snapshot.manualContacts : [];
 }
 
 function getEventAttachments(snapshot = {}) {
@@ -1377,6 +1392,7 @@ function getHistoryTone(entry = {}) {
   if (entry.type === "tecnico_agrupado") return "muted";
   if (entry.type === "auditoria") return "audit";
   if (entry.type === "comentario") return "client";
+  if (entry.type === "contato_manual") return "contact";
   if (entry.type === "anexo") return "operation";
   if (text.includes("cancel")) return "danger";
   if (text.includes("sinal") || text.includes("pagamento")) return "money";
@@ -1395,6 +1411,7 @@ function getHistoryBadge(entry = {}) {
     money: "PAG",
     sent: "ENVIO",
     client: "CLIENTE",
+    contact: "CONTATO",
     stage: "ETAPA",
     operation: "OP",
     audit: "EQUIPE",
@@ -2155,6 +2172,7 @@ async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Re
   }
   upsertProposalState(data);
   renderCommercialTimeline(data);
+  renderManualContactPanel(data);
   renderInternalNotesPanel(data);
   renderEventAttachmentsPanel(data);
   renderPipeline();
@@ -2185,6 +2203,128 @@ async function addInternalComment(proposalId) {
     [history],
   );
   await updateProposalSnapshot(proposalId, snapshot, "Comentário interno registrado.");
+}
+
+function renderManualContactPanel(proposal = getActiveProposal()) {
+  if (!nodes.manualContactPanel) return;
+  if (!proposal) {
+    nodes.manualContactPanel.classList.add("is-hidden");
+    nodes.manualContactPanel.innerHTML = "";
+    return;
+  }
+
+  const contacts = getManualContacts(proposal.snapshot || {});
+  const now = getLocalInputDateTime();
+  nodes.manualContactPanel.classList.remove("is-hidden");
+  nodes.manualContactPanel.innerHTML = `
+    <details ${contacts.length ? "open" : ""}>
+      <summary class="internal-panel-heading">
+        <div>
+          <span>Contato manual</span>
+          <strong>WhatsApp ou telefone feitos fora do sistema</strong>
+        </div>
+        <small>${contacts.length} registro(s)</small>
+      </summary>
+      <div class="manual-contact-helper">
+        Registre aqui ligações e conversas feitas pelo WhatsApp/telefone para o funil não depender da memória da equipe.
+      </div>
+      <div class="manual-contact-form">
+        <label>
+          Canal
+          <select id="manualContactChannel">
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Telefone">Telefone</option>
+          </select>
+        </label>
+        <label>
+          Data
+          <input id="manualContactDate" type="date" value="${escapeHtml(now.date)}" />
+        </label>
+        <label>
+          Hora
+          <input id="manualContactTime" type="time" step="900" value="${escapeHtml(now.time)}" />
+        </label>
+        <label class="manual-contact-comment">
+          Comentário
+          <textarea id="manualContactText" rows="2" placeholder="Ex.: falei com a agência, cliente pediu retorno às 16h, confirmar menu sem frutos do mar..."></textarea>
+        </label>
+        <button class="primary" type="button" data-add-manual-contact="${escapeHtml(proposal.id)}">Salvar contato</button>
+      </div>
+      <div class="manual-contact-list">
+        ${
+          contacts.length
+            ? contacts
+                .slice(0, 6)
+                .map(
+                  (contact) => `
+                    <article>
+                      <div>
+                        <strong>${escapeHtml(contact.channel || "Contato")}</strong>
+                        <small>${escapeHtml(formatManualContactTimestamp(contact))} · ${escapeHtml(getActorLabel(contact.actor))}</small>
+                      </div>
+                      <p>${escapeHtml(contact.text || "Contato registrado.")}</p>
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<p>Nenhum contato manual registrado ainda.</p>`
+        }
+      </div>
+    </details>
+  `;
+}
+
+function formatManualContactTimestamp(contact = {}) {
+  if (contact.contactedAt) return formatCommercialHistoryDate(contact.contactedAt);
+  if (contact.date || contact.time) {
+    const date = contact.date ? formatDateFromIso(contact.date) : "Data a definir";
+    return [date, contact.time].filter(Boolean).join(" · ");
+  }
+  return formatCommercialHistoryDate(contact.at);
+}
+
+async function addManualContact(proposalId) {
+  const proposal = state.proposals.find((item) => item.id === proposalId);
+  const channel = document.querySelector("#manualContactChannel")?.value || "WhatsApp";
+  const date = document.querySelector("#manualContactDate")?.value || getLocalInputDateTime().date;
+  const time = document.querySelector("#manualContactTime")?.value || getLocalInputDateTime().time;
+  const text = document.querySelector("#manualContactText")?.value?.trim() || "";
+  if (!proposal) {
+    showToast("Abra um item do funil antes de registrar contato.");
+    return;
+  }
+  if (!text) {
+    showToast("Escreva o combinado antes de salvar o contato.");
+    document.querySelector("#manualContactText")?.focus();
+    return;
+  }
+
+  const contactedAt = date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString();
+  const contact = {
+    id: `manual-contact-${Date.now()}`,
+    channel,
+    date,
+    time,
+    text,
+    contactedAt,
+    at: new Date().toISOString(),
+    actor: getCommercialActor(),
+    actorRole: getTeamProfile().label,
+  };
+  const history = createCommercialHistoryEntry(
+    "contato_manual",
+    `Contato por ${channel}`,
+    `${formatManualContactTimestamp(contact)} · ${text}`,
+    { contactedAt, channel },
+  );
+  const snapshot = withCommercialHistoryEntries(
+    {
+      ...(proposal.snapshot || {}),
+      manualContacts: [contact, ...getManualContacts(proposal.snapshot || {})].slice(0, 30),
+    },
+    [history],
+  );
+  await updateProposalSnapshot(proposalId, snapshot, "Contato registrado no funil.");
 }
 
 async function addEventAttachment(proposalId) {
@@ -2765,6 +2905,7 @@ async function updateOperationalChecklist(checklistId, checked) {
   upsertProposalState(data);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderManualContactPanel(data);
   renderInternalNotesPanel(data);
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
@@ -10470,6 +10611,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
+  renderManualContactPanel(null);
   renderInternalNotesPanel(null);
   renderEventAttachmentsPanel(null);
 
@@ -10708,6 +10850,7 @@ async function cancelPipelineItem(kind, id) {
   renderPipeline();
   if (state.activeProposalId === id) {
     renderCommercialTimeline(data);
+    renderManualContactPanel(data);
     renderProposalNextStep();
   }
   showToast("Cancelamento registrado.");
@@ -10822,6 +10965,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
     renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
     renderOperationalChecklist(data);
     renderCommercialTimeline(data);
+    renderManualContactPanel(data);
     renderInternalNotesPanel(data);
     renderEventAttachmentsPanel(data);
     renderProposalNextStep();
@@ -11373,6 +11517,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
+  renderManualContactPanel(data);
   renderInternalNotesPanel(data);
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
@@ -11410,6 +11555,7 @@ async function loadProposalHistory() {
   if (state.activeProposalId) {
     const activeProposal = getActiveProposal();
     renderCommercialTimeline(activeProposal);
+    renderManualContactPanel(activeProposal);
     renderInternalNotesPanel(activeProposal);
     renderEventAttachmentsPanel(activeProposal);
     renderProposalNextStep();
@@ -11445,6 +11591,7 @@ function applyProposalSnapshot(snapshot) {
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
   renderOperationalChecklist(getActiveProposal());
   renderCommercialTimeline(getActiveProposal());
+  renderManualContactPanel(getActiveProposal());
   renderInternalNotesPanel(getActiveProposal());
   renderEventAttachmentsPanel(getActiveProposal());
 
@@ -11765,6 +11912,7 @@ function renderAll() {
   renderLoadedEditorBar();
   renderLeadReviewPanel();
   renderProposalNextStep();
+  renderManualContactPanel();
   renderInternalNotesPanel();
   renderEventAttachmentsPanel();
   renderQuickReplies();
@@ -11837,6 +11985,7 @@ function startNewProposal(options = {}) {
   renderSignalPaymentInfo(null, null);
   renderOperationalChecklist(null);
   renderCommercialTimeline(null);
+  renderManualContactPanel(null);
   renderInternalNotesPanel(null);
   renderEventAttachmentsPanel(null);
   renderAll();
@@ -13427,6 +13576,11 @@ function bindEvents() {
     const button = event.target.closest("button[data-operational-doc]");
     if (!button) return;
     handleOperationalDocAction(button.dataset.operationalDoc);
+  });
+  nodes.manualContactPanel?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-add-manual-contact]");
+    if (!button) return;
+    addManualContact(button.dataset.addManualContact);
   });
   nodes.internalNotesPanel?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-add-internal-comment]");

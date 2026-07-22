@@ -5122,6 +5122,15 @@ label.pipeline-status-control:focus-within select {
   background: rgba(47, 125, 79, 0.14);
 }
 
+.timeline-entry.is-contact {
+  border-left-color: rgba(24, 58, 45, 0.56);
+}
+
+.timeline-entry.is-contact .timeline-entry-badge {
+  background: rgba(24, 58, 45, 0.1);
+  color: var(--verde);
+}
+
 .timeline-entry.is-money {
   border-left-color: var(--amarelo);
 }
@@ -5182,6 +5191,7 @@ label.pipeline-status-control:focus-within select {
   font-weight: 850;
 }
 
+.manual-contact-panel,
 .internal-notes-panel,
 .event-attachments-panel,
 .finance-command-panel {
@@ -5194,12 +5204,14 @@ label.pipeline-status-control:focus-within select {
   padding: 12px;
 }
 
+.manual-contact-panel details,
 .internal-notes-panel details,
 .event-attachments-panel details {
   display: grid;
   gap: 10px;
 }
 
+.manual-contact-panel details:not([open]),
 .internal-notes-panel details:not([open]),
 .event-attachments-panel details:not([open]) {
   gap: 0;
@@ -5227,11 +5239,13 @@ label.pipeline-status-control:focus-within select {
   text-transform: uppercase;
 }
 
+.manual-contact-panel details[open] .internal-panel-heading::after,
 .internal-notes-panel details[open] .internal-panel-heading::after,
 .event-attachments-panel details[open] .internal-panel-heading::after {
   content: "Fechar";
 }
 
+.manual-contact-panel details[open] .internal-panel-heading,
 .internal-notes-panel details[open] .internal-panel-heading,
 .event-attachments-panel details[open] .internal-panel-heading {
   margin-bottom: 10px;
@@ -5263,6 +5277,7 @@ label.pipeline-status-control:focus-within select {
   font-weight: 800;
 }
 
+.manual-contact-form,
 .internal-note-form,
 .attachment-form {
   align-items: stretch;
@@ -5271,22 +5286,46 @@ label.pipeline-status-control:focus-within select {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.manual-contact-form {
+  grid-template-columns: minmax(130px, 0.7fr) minmax(125px, 0.6fr) minmax(105px, 0.5fr) minmax(260px, 1.5fr) auto;
+}
+
+.manual-contact-comment {
+  min-width: 0;
+}
+
 .attachment-form {
   grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr) auto;
 }
 
+.manual-contact-form select,
+.manual-contact-form input,
+.manual-contact-form textarea,
 .internal-note-form textarea,
 .attachment-form input,
 .attachment-form select {
   min-height: 42px;
 }
 
+.manual-contact-helper {
+  background: rgba(24, 58, 45, 0.06);
+  border-left: 4px solid rgba(24, 58, 45, 0.48);
+  border-radius: 8px;
+  color: var(--verde-escuro);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+.manual-contact-list,
 .internal-note-list,
 .attachment-list {
   display: grid;
   gap: 7px;
 }
 
+.manual-contact-list article,
 .internal-note-list article,
 .attachment-list article {
   background: rgba(247, 250, 248, 0.82);
@@ -5297,6 +5336,18 @@ label.pipeline-status-control:focus-within select {
   padding: 8px 9px;
 }
 
+.manual-contact-list article {
+  align-items: start;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1fr);
+}
+
+.manual-contact-list strong {
+  color: var(--verde-escuro);
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.manual-contact-list p,
 .internal-note-list p,
 .attachment-list p {
   color: var(--muted);
@@ -5305,6 +5356,7 @@ label.pipeline-status-control:focus-within select {
   margin: 0;
 }
 
+.manual-contact-list small,
 .internal-note-list small,
 .attachment-list small,
 .attachment-list span {
@@ -10118,6 +10170,8 @@ input[type="range"] {
     text-align: left;
   }
 
+  .manual-contact-form,
+  .manual-contact-list article,
   .internal-note-form,
   .attachment-form,
   .finance-command-grid {
