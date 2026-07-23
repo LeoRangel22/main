@@ -663,11 +663,16 @@ const fields = {
   signalDeadlineHours: document.querySelector("#signalDeadlineHours"),
   manualAdjustment: document.querySelector("#manualAdjustment"),
   manualAdjustmentLabel: document.querySelector("#manualAdjustmentLabel"),
+  privatizationAdjustment: document.querySelector("#privatizationAdjustment"),
+  privatizationAdjustmentLabel: document.querySelector("#privatizationAdjustmentLabel"),
   notes: document.querySelector("#notes"),
   eventReason: document.querySelector("#eventReason"),
   generalTerms: document.querySelector("#generalTerms"),
   searchPrice: document.querySelector("#searchPrice"),
   categoryFilter: document.querySelector("#categoryFilter"),
+  quickItemName: document.querySelector("#quickItemName"),
+  quickItemValue: document.querySelector("#quickItemValue"),
+  quickItemCategory: document.querySelector("#quickItemCategory"),
   newCodigo: document.querySelector("#newCodigo"),
   newTipo: document.querySelector("#newTipo"),
   newNome: document.querySelector("#newNome"),
@@ -718,6 +723,7 @@ const nodes = {
   grandTotal: document.querySelector("#grandTotal"),
   totalMeta: document.querySelector("#totalMeta"),
   selectedItems: document.querySelector("#selectedItems"),
+  addQuickItemBtn: document.querySelector("#addQuickItemBtn"),
   sendReviewPanel: document.querySelector("#sendReviewPanel"),
   proposalTotal: document.querySelector("#proposalTotal"),
   proposalContent: document.querySelector("#proposalContent"),
@@ -5685,6 +5691,43 @@ function getManualAdjustmentLabel() {
   return fields.manualAdjustmentLabel?.value.trim() || (getManualAdjustment() < 0 ? "Desconto comercial" : "Ajuste comercial");
 }
 
+function getPrivatizationAdjustment() {
+  return toNumber(fields.privatizationAdjustment?.value) || 0;
+}
+
+function getPrivatizationAdjustmentInputValue(...values) {
+  const explicitValue = values.find((value) => value !== null && value !== undefined && String(value).trim() !== "");
+  if (explicitValue === null || explicitValue === undefined) return "0";
+  return String(explicitValue);
+}
+
+function getPrivatizationAdjustmentLabel() {
+  return (
+    fields.privatizationAdjustmentLabel?.value.trim() ||
+    (getPrivatizationAdjustment() < 0 ? "Desconto na privatização" : "Ajuste de privatização")
+  );
+}
+
+function applyPrivatizationAdjustment(privatization) {
+  const adjustment = getPrivatizationAdjustment();
+  const baseAmount = toNumber(privatization.amount);
+  const adjustedAmount = Math.max(0, baseAmount + adjustment);
+  const label = getPrivatizationAdjustmentLabel();
+  const hasAdjustment = adjustment !== 0 || Boolean(fields.privatizationAdjustmentLabel?.value.trim());
+  const isManualCharge = baseAmount <= 0 && adjustment > 0;
+  return {
+    ...privatization,
+    title: isManualCharge ? "Privatização manual incluída" : privatization.title,
+    baseAmount,
+    adjustment,
+    adjustmentLabel: label,
+    amount: adjustedAmount,
+    description: hasAdjustment
+      ? `${isManualCharge ? "Valor de privatização definido manualmente." : privatization.description} Ajuste aplicado: ${label} (${formatMoney(adjustment)}).`
+      : privatization.description,
+  };
+}
+
 function timeToMinutes(value) {
   if (!value) return null;
   const [hours, minutes] = value.split(":").map(Number);
@@ -5921,7 +5964,7 @@ function getPrivatization() {
 function getQuoteTotals() {
   const subtotal = getSubtotal();
   const serviceFee = subtotal * SERVICE_RATE;
-  const privatization = getPrivatization();
+  const privatization = applyPrivatizationAdjustment(getPrivatization());
   const adjustment = getManualAdjustment();
   return {
     subtotal,
@@ -6522,6 +6565,58 @@ function renderPriceList() {
     .join("");
 }
 
+function createQuickBudgetItem() {
+  const name = fields.quickItemName?.value.trim() || "";
+  const amount = toNumber(fields.quickItemValue?.value);
+  const category = fields.quickItemCategory?.value.trim() || "Extra do evento";
+
+  if (!name || name.length < 3) {
+    showToast("Digite o nome do item pontual.");
+    fields.quickItemName?.focus();
+    return;
+  }
+
+  if (!amount || amount <= 0) {
+    showToast("Digite um valor positivo para o item pontual.");
+    fields.quickItemValue?.focus();
+    return;
+  }
+
+  const item = normalizeCatalogItem({
+    id: `quote-item-${slugify(name)}-${Date.now()}`,
+    codigo: "EXTRA",
+    tipoEvento: category,
+    nome: name,
+    descricao: "Item pontual adicionado diretamente nesta proposta.",
+    commercialSummary: "Item pontual desta proposta.",
+    priority: "media",
+    recommendedWindows: "Conforme briefing",
+    formula: "fixedTotal",
+    preco1h: "",
+    preco2h: "",
+    precoMeiaHoraExtra: "",
+    precoFixo: String(amount),
+    valorAdicional: "",
+    minimo: "",
+    idioma: "",
+    active: false,
+    custom: true,
+    quoteOnly: true,
+  });
+
+  state.prices.push(item);
+  state.selectedIds.add(item.id);
+  if (fields.searchPrice) fields.searchPrice.value = "";
+  if (fields.categoryFilter) fields.categoryFilter.value = "";
+  if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemValue) fields.quickItemValue.value = "";
+  if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
+  saveSelectedIds();
+  syncEventTypeFromSelection();
+  renderAll();
+  showToast(`${name} adicionado ao orçamento.`);
+}
+
 function renderPricesTable() {
   if (!nodes.pricesTable) return;
   nodes.pricesTable.innerHTML = state.prices
@@ -6595,6 +6690,13 @@ function renderSummary() {
   nodes.totalMeta.textContent = selected.length
     ? `${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.`
     : "Selecione itens para montar o orçamento.";
+  if (selected.length) {
+    const foodBeverage = Math.max(0, totals.total - totals.privatization.amount);
+    nodes.totalMeta.innerHTML = `
+      <span>${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.</span>
+      <strong>A&amp;B ${formatMoney(foodBeverage)} · Priv. ${formatMoney(totals.privatization.amount)}</strong>
+    `;
+  }
 
   nodes.selectedItems.innerHTML = selected.length
     ? selected
@@ -6605,6 +6707,7 @@ function renderSummary() {
               <span>${escapeHtml(item.nome)}</span>
               <span>${formatMoney(item.calc.total)}</span>
             </strong>
+            <em>${escapeHtml(item.tipoEvento || "Item do orçamento")}</em>
             <small>${escapeHtml(item.commercialSummary || item.descricao)}</small>
             <small>${escapeHtml(item.calc.detail)}</small>
           </div>
@@ -6815,7 +6918,11 @@ function renderCalculation() {
     <div>
       <span>Privatização</span>
       <strong>${formatMoney(privatization.amount)}</strong>
-      <small>${escapeHtml(privatization.title)}</small>
+      <small>${escapeHtml(
+        privatization.adjustment
+          ? `${privatization.title}. Base ${formatMoney(privatization.baseAmount)} · ajuste ${formatMoney(privatization.adjustment)}`
+          : privatization.title,
+      )}</small>
     </div>
     <div>
       <span>Ajuste</span>
@@ -7010,6 +7117,8 @@ function getProposalSnapshot() {
       signalDeadlineAt,
       manualAdjustment: getManualAdjustment(),
       manualAdjustmentLabel: fields.manualAdjustmentLabel.value.trim(),
+      privatizationAdjustment: getPrivatizationAdjustment(),
+      privatizationAdjustmentLabel: fields.privatizationAdjustmentLabel?.value.trim() || "",
       reason: fields.eventReason.value.trim() || sourceData.reason,
       notes: fields.notes.value.trim(),
       preferences: sourceData.preferences,
@@ -7020,6 +7129,9 @@ function getProposalSnapshot() {
       subtotal: roundCurrency(totals.subtotal),
       serviceFee: roundCurrency(totals.serviceFee),
       privatizationAmount: roundCurrency(totals.privatization.amount),
+      privatizationBaseAmount: roundCurrency(totals.privatization.baseAmount),
+      privatizationAdjustment: roundCurrency(totals.privatization.adjustment),
+      privatizationAdjustmentLabel: totals.privatization.adjustmentLabel,
       adjustment: roundCurrency(totals.adjustment),
       adjustmentLabel: totals.adjustmentLabel,
       total: roundCurrency(totals.total),
@@ -7036,6 +7148,16 @@ function getProposalSnapshot() {
       priority: item.priority || "media",
       recommendedWindows: item.recommendedWindows || "",
       formula: item.formula,
+      preco1h: item.preco1h,
+      preco2h: item.preco2h,
+      precoMeiaHoraExtra: item.precoMeiaHoraExtra,
+      precoFixo: item.precoFixo,
+      valorAdicional: item.valorAdicional,
+      minimo: item.minimo,
+      idioma: item.idioma,
+      active: item.active,
+      custom: item.custom,
+      quoteOnly: item.quoteOnly,
       calc: item.calc,
     })),
     prices: state.prices,
@@ -10559,6 +10681,11 @@ function resetProposalDraftState() {
   saveSelectedIds();
   fields.manualAdjustment.value = "0";
   fields.manualAdjustmentLabel.value = "";
+  if (fields.privatizationAdjustment) fields.privatizationAdjustment.value = "0";
+  if (fields.privatizationAdjustmentLabel) fields.privatizationAdjustmentLabel.value = "";
+  if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemValue) fields.quickItemValue.value = "";
+  if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
   fields.searchPrice.value = "";
   fields.categoryFilter.value = "";
   nodes.coquetelChoices?.classList.add("is-hidden");
@@ -11584,6 +11711,16 @@ function applyProposalSnapshot(snapshot) {
   }
   fields.manualAdjustment.value = getManualAdjustmentInputValue(snapshot.event?.manualAdjustment, snapshot.totals?.adjustment);
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
+  if (fields.privatizationAdjustment) {
+    fields.privatizationAdjustment.value = getPrivatizationAdjustmentInputValue(
+      snapshot.event?.privatizationAdjustment,
+      snapshot.totals?.privatizationAdjustment,
+    );
+  }
+  if (fields.privatizationAdjustmentLabel) {
+    fields.privatizationAdjustmentLabel.value =
+      snapshot.event?.privatizationAdjustmentLabel || snapshot.totals?.privatizationAdjustmentLabel || "";
+  }
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
@@ -11598,6 +11735,13 @@ function applyProposalSnapshot(snapshot) {
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
     savePrices();
+  }
+  if (Array.isArray(snapshot.selectedItems) && snapshot.selectedItems.length) {
+    snapshot.selectedItems.forEach((item) => {
+      if (!item?.id || state.prices.some((price) => price.id === item.id)) return;
+      const active = item.active !== undefined ? item.active : false;
+      state.prices.push(normalizeCatalogItem({ ...item, active }));
+    });
   }
 
   state.selectedIds = new Set(snapshot.selectedIds || snapshot.selectedItems?.map((item) => item.id) || []);
@@ -11964,6 +12108,11 @@ function startNewProposal(options = {}) {
   if (fields.signalDeadlineHours) fields.signalDeadlineHours.value = String(DEFAULT_SIGNAL_DEADLINE_HOURS);
   fields.manualAdjustment.value = "0";
   fields.manualAdjustmentLabel.value = "";
+  if (fields.privatizationAdjustment) fields.privatizationAdjustment.value = "0";
+  if (fields.privatizationAdjustmentLabel) fields.privatizationAdjustmentLabel.value = "";
+  if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemValue) fields.quickItemValue.value = "";
+  if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
   fields.eventReason.value = "";
   fields.notes.value = "";
   fields.searchPrice.value = "";
@@ -13233,6 +13382,7 @@ function bindEvents() {
 
   fields.categoryFilter?.addEventListener("change", renderPriceList);
   fields.eventDuration?.addEventListener("change", renderAll);
+  nodes.addQuickItemBtn?.addEventListener("click", createQuickBudgetItem);
 
   nodes.flowEventOptions?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-flow-event]");

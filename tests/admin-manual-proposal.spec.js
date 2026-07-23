@@ -529,4 +529,42 @@ test.describe("Proposta manual no admin", () => {
     expect(message).toContain("+55 21 97142-6007");
     await expectNoBrowserErrors(errors);
   });
+
+  test("proposta permite item pontual e ajuste manual de privatizacao com resumo claro", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+
+    await page.goto("/index.html?qa=1");
+    await page.locator("#startManualProposalBtn").click();
+
+    await page.locator("#clientName").fill("Renata Azevedo");
+    await page.locator("#clientEmail").fill("renata.azevedo@example.com");
+    await page.locator("#clientPhone").fill("+55 21 99999-2222");
+    await page.locator("#eventDate").fill(getClearManualEventDate());
+    await page.locator("#eventTime").selectOption("18:00");
+    await page.locator("#guestCount").fill("30");
+    await page.locator('[data-flow-event="cafe"]').click();
+
+    await page.locator("#quickItemName").fill("Som dedicado");
+    await page.locator("#quickItemValue").fill("1200");
+    await page.locator("#quickItemCategory").fill("Produção");
+    await page.locator("#addQuickItemBtn").click();
+
+    await expect(page.locator("#selectedItems")).toContainText("Som dedicado");
+    await expect(page.locator("#selectedItems")).toContainText("Produção");
+
+    await page.locator("#privatizationAdjustment").fill("1000");
+    await page.locator("#privatizationAdjustmentLabel").fill("Privatização negociada");
+
+    await expect(page.locator("#totalMeta")).toContainText("A&B");
+    await expect(page.locator("#totalMeta")).toContainText("Priv. R$ 1.000,00");
+    await expect(page.locator("#calculationBreakdown")).toContainText("Privatização manual incluída");
+    await expect(page.locator("#calculationBreakdown")).toContainText("ajuste R$ 1.000,00");
+
+    const snapshot = await page.evaluate(() => window.getProposalSnapshot());
+    expect(snapshot.selectedItems.some((item) => item.nome === "Som dedicado" && item.quoteOnly === true)).toBe(true);
+    expect(snapshot.totals.privatizationAmount).toBe(1000);
+    expect(snapshot.totals.privatizationAdjustment).toBe(1000);
+
+    await expectNoBrowserErrors(errors);
+  });
 });
