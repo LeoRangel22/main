@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260630-contatos-v168" />
+    <link rel="stylesheet" href="./styles.css?v=20260722-ajustes-priv-v169" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -599,6 +599,25 @@
                   </select>
                 </label>
               </div>
+              <div class="quick-budget-item" id="quickBudgetItem">
+                <div>
+                  <span>Item pontual</span>
+                  <strong>Adicione uma taxa, produção ou serviço extra direto nesta proposta.</strong>
+                </div>
+                <label>
+                  Nome do item
+                  <input id="quickItemName" type="text" placeholder="Ex.: som extra, equipe adicional, taxa especial..." />
+                </label>
+                <label>
+                  Valor
+                  <input id="quickItemValue" type="text" inputmode="decimal" placeholder="Ex.: 1200" />
+                </label>
+                <label>
+                  Categoria
+                  <input id="quickItemCategory" type="text" value="Extra do evento" />
+                </label>
+                <button class="secondary" id="addQuickItemBtn" type="button">Adicionar ao orçamento</button>
+              </div>
               <div class="price-list" id="priceList" aria-live="polite"></div>
             </div>
 
@@ -626,6 +645,17 @@
                     <span id="privatizationDescription">
                       A regra de privatização será calculada conforme dia, horário, convidados e duração.
                     </span>
+                  </div>
+                  <div class="privatization-adjustment">
+                    <label>
+                      Ajuste da privatização
+                      <input id="privatizationAdjustment" type="text" inputmode="decimal" value="0" placeholder="Ex.: -1000 ou 1500" />
+                      <small>Use negativo para desconto na exclusividade ou positivo para acréscimo.</small>
+                    </label>
+                    <label>
+                      Motivo do ajuste
+                      <input id="privatizationAdjustmentLabel" type="text" placeholder="Ex.: desconto na privatização" />
+                    </label>
                   </div>
                   <div class="choice-grid compact is-hidden" id="optionalPrivatizationControls">
                     <button type="button" data-privatization-choice="yes">
@@ -735,6 +765,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20260630-contatos-v168"></script>
+  <script defer src="./app.js?v=20260722-ajustes-priv-v169"></script>
   </body>
 </html>

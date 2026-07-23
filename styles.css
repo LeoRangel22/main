@@ -5700,6 +5700,55 @@ label.pipeline-status-control:focus-within select {
   line-height: 1.45;
 }
 
+.privatization-adjustment {
+  background: rgba(239, 232, 211, 0.46);
+  border: 1px solid rgba(24, 58, 45, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 12px;
+}
+
+.privatization-adjustment small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.quick-budget-item {
+  align-items: end;
+  background: linear-gradient(135deg, rgba(239, 232, 211, 0.56), rgba(247, 250, 247, 0.94));
+  border: 1px solid rgba(24, 58, 45, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(160px, 1fr) 120px minmax(150px, 0.8fr) auto;
+  margin: 12px 0 16px;
+  padding: 12px;
+}
+
+.quick-budget-item > div span {
+  color: var(--laranja);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.quick-budget-item > div strong {
+  color: var(--verde-escuro);
+  display: block;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.quick-budget-item button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
 .rules-editor {
   border-bottom: 1px solid var(--line);
   padding-bottom: 16px;
@@ -6169,6 +6218,15 @@ textarea {
   color: var(--verde);
   justify-content: space-between;
   gap: 12px;
+}
+
+.selected-line em {
+  color: var(--laranja);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .selected-line small {
@@ -9997,6 +10055,11 @@ input[type="range"] {
   }
 
   .price-list {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-budget-item,
+  .privatization-adjustment {
     grid-template-columns: 1fr;
   }
 
