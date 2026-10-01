@@ -155,7 +155,7 @@ const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")]
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
 const uiState = { language: loadLanguage() };
-const stepOrder = ["moment", "profile", "recommendation", "eventDetails", "briefing", "contact"];
+const stepOrder = ["moment", "profile", "eventDetails", "contact", "recommendation", "briefing"];
 
 const steps = {
   moment: document.querySelector("#momentStep"),
@@ -165,6 +165,18 @@ const steps = {
   briefing: document.querySelector("#briefingStep"),
   contact: document.querySelector("#contactStep"),
 };
+
+function applyConversionStepOrder() {
+  const finalReviewCard = document.querySelector("#finalReviewCard");
+  if (!form || !finalReviewCard) return;
+  stepOrder.forEach((stepName, index) => {
+    const step = steps[stepName];
+    if (!step) return;
+    form.insertBefore(step, finalReviewCard);
+    const number = step.querySelector(".section-heading > span");
+    if (number) number.textContent = String(index + 1).padStart(2, "0");
+  });
+}
 
 const momentLabels = {
   "weekday-morning": "Manhã em dia de semana",
@@ -311,7 +323,7 @@ const copy = {
     introEyebrow: "Consultoria de eventos",
     introTitle: "Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.",
     introBody: "Um fluxo rápido para orientar sua proposta com cuidado e precisão.",
-    stepLabels: ["Quando", "Ocasião", "Formato", "Data e grupo", "Preferências", "Contato"],
+    stepLabels: ["Quando", "Ocasião", "Data e grupo", "Contato", "Formato", "Preferências"],
     commercialSummary: "Ver janelas mais indicadas",
     commercialWindows: [
       "Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.",
@@ -419,9 +431,9 @@ const copy = {
       groupNameHelp: "Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.",
       contactIntroTitle: "Como prefere que a equipe fale com você?",
       contactIntroBody:
-        "Nome, e-mail e celular garantem o retorno. Para empresa ou agência, inclua a organização.",
+        "Informe seu nome e pelo menos um canal de contato. O restante pode ser completado depois.",
       contactRequirementNote:
-        "Nome, e-mail e celular são essenciais para retorno. Empresa, cliente final e grupo ajudam a equipe a montar a proposta mais rápido.",
+        "Nome + e-mail ou WhatsApp já são suficientes para salvar seu pedido. Empresa, cliente final e grupo ajudam a equipe a responder mais rápido.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos os dados apenas para preparar sua proposta.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
@@ -488,7 +500,7 @@ const copy = {
     introEyebrow: "Event advisory",
     introTitle: "Tell us the essentials. Our team will shape the right experience for your group.",
     introBody: "A quick flow to guide your proposal with care and precision.",
-    stepLabels: ["When", "Occasion", "Format", "Date & group", "Preferences", "Contact"],
+    stepLabels: ["When", "Occasion", "Date & group", "Contact", "Format", "Preferences"],
     commercialSummary: "See the most recommended windows",
     commercialWindows: [
       "Weekday mornings: breakfast, brunch and coffee break.",
@@ -820,7 +832,7 @@ function applyStaticCopy() {
   updateContactRequirements();
   updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Event preferences" : "Preferências do evento";
-  document.querySelector("#contactTitle").textContent = current.stepLabels[5];
+  document.querySelector("#contactTitle").textContent = current.stepLabels[3];
   document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
   document.querySelector("#profileTitle").textContent = uiState.language === "en" ? "Who is organizing and what is the occasion?" : "Quem está organizando e qual é a ocasião?";
   document.querySelector("#eventDetailsTitle").textContent = uiState.language === "en" ? "Event details" : "Detalhes do evento";
@@ -998,8 +1010,8 @@ function renderFinalReview() {
       ? "No must-have preference selected. That is fine if there is nothing essential."
       : "Nenhuma preferência indispensável marcada. Tudo bem se não houver.",
     contactMissing: isEn
-      ? "Please complete name, e-mail and Phone/WhatsApp so our team can reply."
-      : "Complete nome, e-mail e Celular/WhatsApp para a equipe retornar.",
+      ? "Complete your name and at least e-mail or WhatsApp so our team can reply."
+      : "Complete seu nome e pelo menos e-mail ou WhatsApp para a equipe retornar.",
     contactFallback: current.labels.defaultStatus,
   };
   const selectedPreferences = getSelectedPreferenceLabels();
@@ -1425,7 +1437,7 @@ function selectFormat(formatId) {
   fields.eventType.value = item.label;
   setStepValidity("recommendation", true);
   renderRecommendations();
-  scrollToStep("eventDetails");
+  scrollToStep("briefing");
 }
 
 function handleChoiceClick(event) {
@@ -1609,11 +1621,13 @@ function validateSnapshot(snapshot) {
     return failValidation(fields.name, "contact", current.messages.invalidName);
   }
 
-  if (!snapshot.cliente.email) {
-    return failValidation(fields.email, "contact", current.messages.invalidEmail);
+  const hasEmail = Boolean(snapshot.cliente.email);
+  const hasPhone = Boolean(snapshot.cliente.whatsapp);
+  if (!hasEmail && !hasPhone) {
+    return failValidation(fields.email, "contact", uiState.language === "en" ? "Share an e-mail or WhatsApp so our team can reply." : "Informe um e-mail ou WhatsApp para a equipe retornar.");
   }
 
-  if (!isValidEmail(snapshot.cliente.email)) {
+  if (hasEmail && !isValidEmail(snapshot.cliente.email)) {
     setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidEmail], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.email, false);
@@ -1622,11 +1636,7 @@ function validateSnapshot(snapshot) {
     return false;
   }
 
-  if (!snapshot.cliente.whatsapp) {
-    return failValidation(fields.phone, "contact", current.messages.requiredPhone);
-  }
-
-  if (!isValidContactPhone(snapshot.cliente.whatsapp)) {
+  if (hasPhone && !isValidContactPhone(snapshot.cliente.whatsapp)) {
     setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidPhone], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
@@ -1691,6 +1701,7 @@ async function submitRequest(event) {
   renderSuccessStatus(referenceCode);
 }
 
+applyConversionStepOrder();
 fillGuestOptions();
 resetFlexibleDateField();
 fillTimeOptions("");
