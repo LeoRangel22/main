@@ -924,7 +924,13 @@ function updateProgress(stepName = "moment") {
 
 function getPublicSupabaseClient() {
   if (!publicSupabaseClient && window.supabase?.createClient) {
-    publicSupabaseClient = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+    publicSupabaseClient = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, {
+      auth: {
+        storageKey: "embaixada_public_client_auth_v1",
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    });
   }
   return publicSupabaseClient;
 }
