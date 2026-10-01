@@ -291,56 +291,6 @@ before insert on public.propostas
 for each row
 execute function public.prepare_proposal_version();
 
--- Compatibilidade com abas antigas do app durante o rollout: o insert legado
--- pode nao enviar oportunidade_id. Reutiliza a solicitacao ou cria um vinculo.
-create or replace function public.ensure_proposal_opportunity()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $
-begin
-  if new.oportunidade_id is not null then
-    return new;
-  end if;
-
-  if new.solicitacao_id is not null then
-    select s.oportunidade_id into new.oportunidade_id
-    from public.solicitacoes_cotacao s
-    where s.id = new.solicitacao_id;
-  end if;
-
-  if new.oportunidade_id is null then
-    insert into public.oportunidades (
-      status, cliente_nome, cliente_email, cliente_whatsapp,
-      tipo_evento, data_evento, horario_evento, convidados, valor_atual,
-      responsavel_id, responsavel_email, created_at, updated_at, origem, metadata
-    ) values (
-      case when new.status = 'cancelado' then 'perdido' else new.status end,
-      new.cliente_nome, new.cliente_email, new.cliente_whatsapp,
-      new.tipo_evento, new.data_evento, new.horario_evento, new.convidados,
-      coalesce(new.total, 0), new.responsavel_id, new.responsavel_email,
-      new.created_at, new.updated_at, 'proposta_legacy',
-      jsonb_build_object('migrado_de', 'propostas', 'proposta_id', new.id)
-    ) returning id into new.oportunidade_id;
-
-    if new.solicitacao_id is not null then
-      update public.solicitacoes_cotacao
-      set oportunidade_id = new.oportunidade_id
-      where id = new.solicitacao_id and oportunidade_id is null;
-    end if;
-  end if;
-
-  return new;
-end;
-$;
-
-drop trigger if exists propostas_ensure_opportunity on public.propostas;
-create trigger propostas_ensure_opportunity
-before insert on public.propostas
-for each row
-execute function public.ensure_proposal_opportunity();
-
 create or replace function public.promote_proposal_version()
 returns trigger
 language plpgsql
