@@ -2781,7 +2781,7 @@ async function runQuickReply(replyId, channel) {
       showToast("E-mail já está sendo preparado.");
       return;
     }
-    const confirmed = confirmClientSend({
+    const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
       title: preset.title,
@@ -2825,7 +2825,7 @@ async function runQuickReply(replyId, channel) {
 
   if (channel === "whatsapp") {
     const phone = fields.clientPhone.value.trim() || context.phone || "";
-    const confirmed = confirmClientSend({
+    const confirmed = await confirmClientSend({
       channel: "WhatsApp",
       destination: phone,
       title: preset.title,
@@ -12846,7 +12846,25 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
   ]
     .filter(Boolean)
     .join("\n");
-  return window.confirm(details);
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "send-confirm-dialog";
+    dialog.setAttribute("aria-labelledby", "sendConfirmTitle");
+    dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
+      <h2 id="sendConfirmTitle">Revisar ${escapeHtml(channel)} antes de enviar</h2>
+      <p class="send-confirm-details">${escapeHtml(details)}</p>
+      <div class="send-confirm-actions">
+        <button type="submit" value="cancel" class="secondary" autofocus>Cancelar</button>
+        <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => {
+      resolve(dialog.returnValue === "confirm");
+      dialog.remove();
+    }, { once: true });
+    dialog.showModal();
+  });
 }
 
 async function getFunctionErrorMessage(error) {
@@ -12887,7 +12905,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 
   if (!skipConfirm) {
-    const confirmed = confirmClientSend({
+    const confirmed = await confirmClientSend({
       channel: "WhatsApp",
       destination: phone,
       title,
@@ -12969,7 +12987,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
   }
 
   if (!skipConfirm) {
-    const confirmed = confirmClientSend({
+    const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination,
       title,
@@ -13047,7 +13065,7 @@ async function openEmail() {
     return;
   }
   if (!ensureProposalReadyForSending()) return;
-  const confirmed = confirmClientSend({
+  const confirmed = await confirmClientSend({
     channel: "E-mail",
     destination: email,
     title: "Proposta comercial",
@@ -13195,7 +13213,7 @@ async function runServiceCockpitAction(action, button = null) {
 async function openWhatsApp() {
   if (!ensureProposalReadyForSending()) return;
   const phone = fields.clientPhone.value.trim();
-  const confirmed = confirmClientSend({
+  const confirmed = await confirmClientSend({
     channel: "WhatsApp",
     destination: phone,
     title: "Proposta comercial",
