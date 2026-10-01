@@ -1716,6 +1716,123 @@ textarea[aria-invalid="true"] {
   margin: 0;
 }
 
+/* Painel comercial: informação essencial primeiro, ação sempre próxima do contexto. */
+.action-plan,
+.pipeline-plan-line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.action-plan {
+  border-top: 1px solid rgba(24, 58, 45, 0.12);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+
+.action-plan span,
+.pipeline-plan-line span {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.action-focus-card .action-plan {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.action-focus-card .action-plan span {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.75rem;
+  text-transform: none;
+}
+
+.action-plan.is-overdue span:last-of-type,
+.pipeline-plan-line.is-overdue span {
+  font-weight: 900;
+  text-decoration: underline;
+  text-decoration-color: var(--amarelo);
+  text-underline-offset: 3px;
+}
+
+.action-plan-button,
+.pipeline-plan-line button {
+  font-size: 0.74rem;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.action-plan-dialog {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(14, 35, 27, 0.24);
+  color: var(--ink);
+  max-height: min(90vh, 740px);
+  max-width: min(92vw, 480px);
+  padding: 24px;
+  width: 100%;
+}
+
+.action-plan-dialog::backdrop {
+  background: rgba(15, 35, 27, 0.56);
+}
+
+.action-plan-form {
+  display: grid;
+  gap: 14px;
+}
+
+.action-plan-form h2 {
+  line-height: 1.1;
+  margin: 4px 0;
+}
+
+.action-plan-form p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.action-plan-form label {
+  display: grid;
+  font-weight: 800;
+  gap: 5px;
+}
+
+.action-plan-form input:not([type="checkbox"]),
+.action-plan-form select {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 44px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.action-plan-form .action-plan-contact {
+  align-items: center;
+  display: flex;
+}
+
+.action-plan-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.action-plan-form .action-plan-error {
+  color: var(--danger);
+}
+
+.pipeline-plan-line {
+  background: rgba(24, 58, 45, 0.04);
+  border-radius: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
 .action-danger {
   border-left-color: #ed7d36;
 }
@@ -10932,4 +11049,93 @@ input[type="range"] {
     flex-direction: column;
     gap: 4px;
   }
+}
+
+.proposal-journey {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding: clamp(14px, 2vw, 22px);
+}
+
+.proposal-journey-heading,
+.proposal-version-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.proposal-journey-heading span,
+.proposal-journey-facts span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.73rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.proposal-journey-heading strong {
+  display: block;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.proposal-journey-heading small {
+  background: var(--verde-claro);
+  border-radius: 999px;
+  color: var(--verde-escuro);
+  font-weight: 850;
+  padding: 6px 10px;
+}
+
+.proposal-journey-facts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proposal-journey-facts > div {
+  background: var(--paper);
+  border: 1px solid rgba(24, 58, 45, 0.08);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.proposal-journey-facts strong {
+  display: block;
+  font-size: 0.91rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.proposal-version-list {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.proposal-version-list summary {
+  color: var(--verde);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.proposal-version-row {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0;
+}
+
+.proposal-version-row span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .proposal-journey-facts { grid-template-columns: 1fr; }
+  .action-plan-dialog { padding: 18px; }
+  .action-plan-dialog-actions button { flex: 1; }
 }
