@@ -430,11 +430,6 @@ test.describe("Proposta manual no admin", () => {
 
   test("proposta manual aprovada pede confirmacao e envia e-mail em QA", async ({ page }) => {
     const errors = collectBrowserErrors(page);
-    const dialogs = [];
-    page.on("dialog", async (dialog) => {
-      dialogs.push(dialog.message());
-      await dialog.accept();
-    });
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
@@ -475,10 +470,18 @@ test.describe("Proposta manual no admin", () => {
     await expect(channelActions.locator('button[data-send-review-action="email"]')).toBeVisible();
 
     await channelActions.locator('button[data-send-review-action="email"]').click();
+    const confirmation = page.locator(".send-confirm-dialog");
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation).toContainText("Canal: E-mail");
+    await expect(confirmation).toContainText("leorangel@gmail.com");
+    await confirmation.getByRole("button", { name: "Cancelar" }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(page.locator("#integrationLogList")).toContainText(/Cancelado/i);
 
-    expect(dialogs.length).toBeGreaterThan(0);
-    expect(dialogs.join("\n")).toContain("Canal: E-mail");
-    expect(dialogs.join("\n")).toContain("leorangel@gmail.com");
+    await channelActions.locator('button[data-send-review-action="email"]').click();
+    await expect(confirmation).toContainText("leorangel@gmail.com");
+    await confirmation.getByRole("button", { name: "Confirmar envio" }).click();
+    await expect(confirmation).toHaveCount(0);
     await expect(page.locator("#integrationLogList")).toContainText(/E-mail/i);
     await expect(page.locator("#integrationLogList")).toContainText(/Enviado/i);
     await expect(page.locator("#integrationLogList")).toContainText(/leorangel@gmail\.com/i);
