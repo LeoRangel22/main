@@ -416,7 +416,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator("#whatsappBtn").click();
     const confirmation = page.locator(".send-confirm-dialog");
     await expect(confirmation).toContainText("Canal: WhatsApp");
-    await expect(confirmation).toContainText("99606-0692");
+    await expect(confirmation).toContainText(/Destino: \+55 219 96060 692/);
     await confirmation.getByRole("button", { name: "Confirmar envio" }).click();
     await expect(confirmation).toHaveCount(0);
     await expect(page.locator("#integrationLogList")).toContainText(/WhatsApp/i);
