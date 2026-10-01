@@ -11701,7 +11701,6 @@ function upsertProposalState(proposal) {
   } else {
     state.proposals = [proposal, ...state.proposals];
   }
-  state.proposals = state.proposals.slice(0, 60);
 }
 
 async function saveCurrentProposal(status, signalInfo = null, options = {}) {
