@@ -1814,6 +1814,17 @@ textarea[aria-invalid="true"] {
 .action-plan-form .action-plan-contact {
   align-items: center;
   display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.action-plan-contact input[type="checkbox"] {
+  flex: 0 0 18px;
+  height: 18px;
+  margin: 0;
+  min-height: 18px;
+  padding: 0;
+  width: 18px;
 }
 
 .action-plan-dialog-actions {
