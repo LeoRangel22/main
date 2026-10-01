@@ -616,6 +616,7 @@ const state = {
   quoteRequests: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
+  activeOpportunityId: "",
   activeEditorContext: null,
   loadedEditorSignature: "",
   pendingOpenSourceLabel: "",
@@ -7215,6 +7216,66 @@ function getPersistableQuoteRequestId() {
   return isValidUuid(state.activeQuoteRequestId) ? state.activeQuoteRequestId : null;
 }
 
+function getActiveOpportunityId() {
+  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
+  return state.activeOpportunityId || activeProposal?.oportunidade_id || activeRequest?.oportunidade_id || "";
+}
+
+async function ensureActiveOpportunity(snapshot, status = "proposta_enviada") {
+  const existingId = getActiveOpportunityId();
+  if (existingId) {
+    state.activeOpportunityId = existingId;
+    return existingId;
+  }
+
+  if (state.supabase?.__qa) {
+    state.activeOpportunityId = "00000000-0000-4000-8000-000000000001";
+    return state.activeOpportunityId;
+  }
+
+  const user = state.session?.user;
+  const { data, error } = await state.supabase
+    .from("oportunidades")
+    .insert({
+      status: normalizeProposalStatus(status),
+      cliente_nome: snapshot.client?.name || "Cliente",
+      cliente_email: snapshot.client?.email || null,
+      cliente_whatsapp: snapshot.client?.phone || null,
+      empresa: snapshot.client?.company || null,
+      tipo_evento: snapshot.event?.type || null,
+      data_evento: snapshot.event?.date || null,
+      horario_evento: snapshot.event?.time || null,
+      convidados: snapshot.event?.guests || null,
+      valor_atual: snapshot.totals?.total || 0,
+      responsavel_id: user?.id || null,
+      responsavel_email: user?.email || null,
+      origem: state.activeQuoteRequestId ? "formulario" : "manual",
+      metadata: { criadoPeloApp: true },
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    console.warn("Falha ao criar oportunidade.", error);
+    return "";
+  }
+
+  state.activeOpportunityId = data.id;
+  const requestId = getPersistableQuoteRequestId();
+  if (requestId) {
+    const result = await state.supabase
+      .from("solicitacoes_cotacao")
+      .update({ oportunidade_id: data.id })
+      .eq("id", requestId);
+    if (result.error) console.warn("Falha ao vincular lead à oportunidade.", result.error);
+    state.quoteRequests = state.quoteRequests.map((item) =>
+      item.id === requestId ? { ...item, oportunidade_id: data.id } : item,
+    );
+  }
+  return data.id;
+}
+
 function getProposalRow(snapshot, status = "proposta_enviada") {
   const user = state.session?.user;
   return {
@@ -7233,6 +7294,7 @@ function getProposalRow(snapshot, status = "proposta_enviada") {
     privatizacao: snapshot.totals.privatizationAmount,
     total: snapshot.totals.total,
     status,
+    oportunidade_id: getActiveOpportunityId() || null,
     public_token_expires_at: getPublicTokenExpiresAt(),
     solicitacao_id: getPersistableQuoteRequestId(),
     snapshot,
@@ -7483,13 +7545,16 @@ function createQaRequest(input) {
 }
 
 function createQaSupabaseClient() {
+  const qaOpportunities = [];
   const tableMap = {
     propostas: () => state.proposals,
     solicitacoes_cotacao: () => state.quoteRequests,
+    oportunidades: () => qaOpportunities,
   };
   const setTable = (table, rows) => {
     if (table === "propostas") state.proposals = rows;
     if (table === "solicitacoes_cotacao") state.quoteRequests = rows;
+    if (table === "oportunidades") qaOpportunities.splice(0, qaOpportunities.length, ...rows);
   };
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -7529,6 +7594,7 @@ function createQaSupabaseClient() {
           return query.ascending ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
         });
       }
+      if (Number.isFinite(query.rangeEnd)) data = data.slice(query.rangeStart, query.rangeEnd + 1);
       if (Number.isFinite(query.limitValue)) data = data.slice(0, query.limitValue);
     }
 
@@ -7544,6 +7610,8 @@ function createQaSupabaseClient() {
       orderColumn: "",
       ascending: true,
       limitValue: Infinity,
+      rangeStart: 0,
+      rangeEnd: Infinity,
       head: false,
     };
     const chain = {
@@ -7558,6 +7626,11 @@ function createQaSupabaseClient() {
       },
       limit(value) {
         query.limitValue = Number(value);
+        return chain;
+      },
+      range(from, to) {
+        query.rangeStart = Number(from) || 0;
+        query.rangeEnd = Number(to);
         return chain;
       },
       insert(payload) {
@@ -8074,20 +8147,24 @@ function renderHistory() {
     return;
   }
 
-  nodes.historyList.innerHTML = state.proposals
+  nodes.historyList.innerHTML = getWorkingProposals()
+    .slice(0, 100)
     .map((proposal) => {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
       const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
       const statusLabel = getProposalStatusLabel(proposal.status);
       const statusClass = operationStatuses.has(normalizeProposalStatus(proposal.status)) ? " confirmed" : "";
+      const versionLabel = proposal.versao
+        ? `V${proposal.versao}${proposal.publication_status === "draft" ? " · rascunho" : ""}`
+        : "";
       return `
         <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
           <strong>
             <span>${escapeHtml(proposal.cliente_nome || "Cliente")}</span>
             <span>${formatMoney(proposal.total)}</span>
           </strong>
-          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</small>
-          <small><span class="status-chip${statusClass}">${escapeHtml(statusLabel)}</span>Salva em ${escapeHtml(formatSavedAt(proposal.created_at))}</small>
+          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}</small>
+          <small><span class="status-chip${statusClass}">${escapeHtml(statusLabel)}</span>Atualizada em ${escapeHtml(formatSavedAt(proposal.updated_at || proposal.created_at))}</small>
         </button>
       `;
     })
@@ -8097,6 +8174,7 @@ function renderHistory() {
 function normalizeRequestStatus(status) {
   const legacy = {
     novo: "lead_recebido",
+    rascunho_cliente: "lead_recebido",
     em_cotacao: "lead_recebido",
     analisado: "lead_recebido",
     qualificado: "lead_recebido",
@@ -8213,8 +8291,35 @@ function getGroupNameFromSnapshot(snapshot = {}) {
   );
 }
 
+function getWorkingProposals() {
+  const grouped = new Map();
+  state.proposals.forEach((proposal) => {
+    const key = proposal.oportunidade_id || proposal.id;
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, proposal);
+      return;
+    }
+    const proposalIsDraft = proposal.publication_status === "draft";
+    const currentIsDraft = current.publication_status === "draft";
+    if (proposalIsDraft && !currentIsDraft) {
+      grouped.set(key, proposal);
+      return;
+    }
+    if (proposalIsDraft === currentIsDraft) {
+      const proposalTime = new Date(proposal.updated_at || proposal.created_at || 0).getTime();
+      const currentTime = new Date(current.updated_at || current.created_at || 0).getTime();
+      if (proposalTime > currentTime) grouped.set(key, proposal);
+      return;
+    }
+    if (!currentIsDraft && proposal.is_current === true && current.is_current !== true) grouped.set(key, proposal);
+  });
+  return [...grouped.values()];
+}
+
 function getPipelineItems() {
-  const linkedRequests = new Set(state.proposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
+  const workingProposals = getWorkingProposals();
+  const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
   const requestItems = state.quoteRequests
     .filter((request) => !request.proposta_id && !linkedRequests.has(request.id))
     .map((request) => {
@@ -8245,11 +8350,14 @@ function getPipelineItems() {
         clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
+        captureStatus: request.capture_status || "complete",
+        lastFormStep: request.last_form_step || "",
+        opportunityId: request.oportunidade_id || "",
         eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
       };
     });
 
-  const proposalItems = state.proposals.map((proposal) => {
+  const proposalItems = workingProposals.map((proposal) => {
     const status = normalizeProposalStatus(proposal.status);
     const snapshot = proposal.snapshot || {};
     const paymentCoverage = getPaymentCoverage(proposal.total || snapshot.totals?.total || 0, snapshot.pagamentoSinal, snapshot.pagamentoRestante);
@@ -8279,6 +8387,11 @@ function getPipelineItems() {
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: snapshot.referencia || "",
       snapshot,
+      opportunityId: proposal.oportunidade_id || "",
+      version: Number(proposal.versao || 1),
+      publicationStatus: proposal.publication_status || "sent",
+      isDraft: proposal.publication_status === "draft",
+      isCurrentVersion: proposal.is_current !== false,
       finalClient: getFinalClientFromSnapshot(snapshot),
       groupName: getGroupNameFromSnapshot(snapshot),
       clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
@@ -8743,6 +8856,7 @@ function getProposalTransitionOptions(currentStatus) {
 }
 
 function renderStatusSelect(item) {
+  if (item.kind === "proposal" && item.isDraft) return "";
   const options = item.kind === "request" ? requestStatusOptions : getProposalTransitionOptions(item.status);
   return `
     <details class="pipeline-status-control">
@@ -8771,7 +8885,7 @@ function getLeadAgeInfo(item) {
 }
 
 function getProposalFollowUpInfo(item) {
-  if (item.kind !== "proposal" || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
+  if (item.kind !== "proposal" || item.isDraft || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
   const hours = getHoursSince(item.updatedAt || item.createdAt);
   if (hours < 24) return null;
   const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
@@ -8790,7 +8904,23 @@ function getPipelinePrimaryAction(item) {
   const status = getReportStatus(item);
   const age = getLeadAgeInfo(item);
   const followUp = getProposalFollowUpInfo(item);
+  if (item.kind === "proposal" && item.isDraft) {
+    return {
+      tone: "warning",
+      eyebrow: "Nova versão em rascunho",
+      label: "Finalizar e enviar V" + (item.version || ""),
+      note: "A versão anterior continua com o cliente. Revise esta versão e envie quando estiver pronta.",
+    };
+  }
   if (item.kind === "request" && status === "lead_recebido") {
+    if (item.captureStatus === "partial") {
+      return {
+        tone: age && ["danger", "critical"].includes(age.level) ? "danger" : "warning",
+        eyebrow: "Lead capturado",
+        label: "Retomar lead incompleto",
+        note: "O cliente começou o formulário e deixou contato. Complete o briefing sem fazê-lo preencher tudo de novo.",
+      };
+    }
     return {
       tone: age && ["danger", "critical"].includes(age.level) ? "danger" : age?.level === "warning" ? "warning" : "fresh",
       eyebrow: "Próxima ação",
@@ -8853,6 +8983,9 @@ function getPipelineRiskAlerts(item) {
   const age = getLeadAgeInfo(item);
   const score = getCommercialScore(item);
 
+  if (item.kind === "request" && item.captureStatus === "partial") {
+    alerts.push({ level: "warning", label: "Formulário incompleto" });
+  }
   if (age && age.level !== "fresh") {
     alerts.push({ level: age.level, label: age.level === "critical" ? "Lead 48h+" : age.level === "danger" ? "Lead 24h+" : "Lead 12h+" });
   }
@@ -9583,12 +9716,16 @@ function renderLoadedEditorBar() {
   const dateLabel = context.date ? formatDateFromIso(context.date) : "Data a definir";
   const timeLabel = context.time ? String(context.time).slice(0, 5) : "Horário a definir";
   const stageLabel = getProposalStatusLabel(context.status || "lead_recebido");
+  const activeProposal = getActiveProposal();
+  const versionLabel = activeProposal?.versao
+    ? `V${activeProposal.versao}${activeProposal.publication_status === "draft" ? " · rascunho" : ""}`
+    : "";
   nodes.loadedEditorBar.classList.remove("is-hidden");
   nodes.loadedEditorBar.innerHTML = `
     <div class="loaded-editor-main">
       <span>${escapeHtml(context.sourceLabel || "Carregado do funil")}</span>
       <strong>Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
-      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${dirty ? " · alterações não salvas" : ""}</small>
+      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
     </div>
     <div class="loaded-editor-actions">
       ${dirty ? `<span class="loaded-editor-dirty">Não salvo</span>` : `<span class="loaded-editor-saved">Atualizado</span>`}
@@ -9671,14 +9808,22 @@ function getActionTasks(items = getPipelineItems()) {
       const age = getLeadAgeInfo(item);
       tasks.push({
         ...base,
-        title: "Responder lead",
-        note: age?.label || "Novo pedido recebido",
+        title: item.captureStatus === "partial" ? "Retomar lead incompleto" : "Responder lead",
+        note: item.captureStatus === "partial" ? "Cliente deixou contato antes de concluir o formulário." : age?.label || "Novo pedido recebido",
         priority: age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
         track: "Comercial",
       });
     }
 
-    if (item.kind === "proposal" && status === "proposta_enviada") {
+    if (item.kind === "proposal" && item.isDraft) {
+      tasks.push({
+        ...base,
+        title: "Finalizar nova versão",
+        note: "V" + (item.version || "") + " está em rascunho. A versão anterior continua disponível para o cliente até o novo envio.",
+        priority: 84,
+        track: "Comercial",
+      });
+    } else if (item.kind === "proposal" && status === "proposta_enviada") {
       const followUp = getProposalFollowUpInfo(item);
       tasks.push({
         ...base,
@@ -9816,6 +9961,12 @@ function getActionTasks(items = getPipelineItems()) {
 function getActionTaskSteps(task = {}) {
   const title = String(task.title || "").toLowerCase();
   const track = getActionTrack(task);
+  if (title.includes("nova versão")) {
+    return ["Abrir o rascunho", "Revisar as alterações em relação à versão anterior", "Enviar quando estiver pronto; a versão anterior não é perdida"];
+  }
+  if (title.includes("lead incompleto")) {
+    return ["Abrir o que o cliente já informou", "Completar apenas o que realmente falta", "Responder sem pedir que ele recomece o formulário"];
+  }
   if (title.includes("responder lead")) {
     return ["Abrir lead", "Conferir data, horário, pax e contato", "Enviar proposta ou resposta inicial"];
   }
@@ -9889,6 +10040,7 @@ function renderActionTasks(items = getPipelineItems()) {
     </article>
     <div class="action-track-summary">${groupedLine}</div>
     ${tasks
+    .slice(1)
     .map((task) => {
       const item = task.item;
       const actionButton =
@@ -10355,6 +10507,7 @@ function canDeletePipelineItem(item) {
 
 function getPipelineOpenButtonLabel(item, primaryAction) {
   const status = getReportStatus(item);
+  if (item.kind === "proposal" && item.isDraft) return "Continuar V" + (item.version || "");
   if (item.status === "cancelado") return "Abrir";
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
@@ -10415,6 +10568,10 @@ function renderPipelineCard(item) {
   const followUpBadge = followUp
     ? `<small class="follow-up-badge follow-up-${escapeHtml(followUp.level)}">${escapeHtml(followUp.label)}</small>`
     : "";
+  const versionBadge =
+    item.kind === "proposal" && item.version
+      ? `<small class="proposal-version-badge${item.isDraft ? " is-draft" : ""}">V${escapeHtml(item.version)}${item.isDraft ? " · rascunho" : ""}</small>`
+      : "";
   const stageChipLabel = item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
@@ -10437,7 +10594,7 @@ function renderPipelineCard(item) {
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.remainingProof.dataUrl)}" download="${escapeHtml(item.remainingProof.nome || "comprovante-restante")}">Comprovante restante</a>`
       : "";
   const signalButton =
-    item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
+    item.kind === "proposal" && !item.isDraft && !operationStatuses.has(item.status) && item.status !== "cancelado"
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
@@ -10493,6 +10650,7 @@ function renderPipelineCard(item) {
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
         ${leadAgeBadge}
         ${followUpBadge}
+        ${versionBadge}
         ${topAction}
       </div>
       <div class="pipeline-card-event-row">
@@ -10621,17 +10779,35 @@ function renderQuoteRequests() {
   renderPipeline();
 }
 
+async function fetchAllRows(table, orderColumn = "created_at", pageSize = 500) {
+  if (!state.supabase) return { data: [], error: null };
+  if (state.supabase.__qa) {
+    return state.supabase.from(table).select("*").order(orderColumn, { ascending: false }).limit(1000);
+  }
+
+  const allRows = [];
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await state.supabase
+      .from(table)
+      .select("*")
+      .order(orderColumn, { ascending: false })
+      .range(from, to);
+    if (error) return { data: allRows, error };
+    const batch = data || [];
+    allRows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return { data: allRows, error: null };
+}
+
 async function loadQuoteRequests() {
   if (!state.supabase || !state.session) {
     renderQuoteRequests();
     return;
   }
 
-  const { data, error } = await state.supabase
-    .from("solicitacoes_cotacao")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(30);
+  const { data, error } = await fetchAllRows("solicitacoes_cotacao");
 
   if (error) {
     console.warn("Falha ao carregar solicitacoes.", error);
@@ -10716,6 +10892,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
 
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
+  state.activeOpportunityId = request.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   resetProposalDraftState();
@@ -11507,6 +11684,7 @@ async function logoutSupabase() {
   state.quoteRequests = [];
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.activeOpportunityId = "";
   state.manualSourceKey = "";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
@@ -11523,10 +11701,9 @@ function upsertProposalState(proposal) {
   } else {
     state.proposals = [proposal, ...state.proposals];
   }
-  state.proposals = state.proposals.slice(0, 60);
 }
 
-async function saveCurrentProposal(status, signalInfo = null) {
+async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   state.lastProposalSaveError = "";
   const sessionCheck = await ensureTeamSessionForWrite("salvar a proposta");
   if (!sessionCheck.ok) {
@@ -11538,6 +11715,12 @@ async function saveCurrentProposal(status, signalInfo = null) {
   const snapshot = getProposalSnapshot();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const nextStatus = status || activeProposal?.status || "proposta_enviada";
+  const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
+  if (!opportunityId) {
+    state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
+    showToast(state.lastProposalSaveError);
+    return null;
+  }
   const normalizedNext = normalizeProposalStatus(nextStatus);
   const finalPaymentRequiredStatuses = new Set(["planejamento", "evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
@@ -11620,6 +11803,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   snapshot.pagamentoRestante = snapshot.pagamentoRestante || activeProposal?.snapshot?.pagamentoRestante || null;
   const historyEntries = [];
   const previousStatus = normalizeProposalStatus(activeProposal?.status || "");
+  const proposalChanges = activeProposal ? getProposalChangeList(activeProposal.snapshot || {}, snapshot) : [];
   if (!activeProposal) {
     historyEntries.push(
       createCommercialHistoryEntry("proposta", "Proposta criada", `${formatMoney(snapshot.totals.total)} · ${snapshot.event.guests} pax · ${snapshot.event.type || "Evento"}.`),
@@ -11639,7 +11823,6 @@ async function saveCurrentProposal(status, signalInfo = null) {
     );
   }
   if (activeProposal) {
-    const proposalChanges = getProposalChangeList(activeProposal.snapshot || {}, snapshot);
     if (proposalChanges.length) {
       historyEntries.push(
         createCommercialHistoryEntry(
@@ -11701,9 +11884,43 @@ async function saveCurrentProposal(status, signalInfo = null) {
   if (state.activeProposalId && !persistableProposalId) {
     console.warn("ID ativo da proposta não é UUID persistível; criando novo registro no Supabase.", state.activeProposalId);
   }
-  const query = persistableProposalId
-    ? state.supabase.from("propostas").update(row).eq("id", persistableProposalId)
-    : state.supabase.from("propostas").insert(row);
+
+  const activeIsDraft = activeProposal?.publication_status === "draft";
+  const activeWasPublished =
+    Boolean(activeProposal) &&
+    activeProposal?.publication_status !== "draft" &&
+    ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
+  const needsNewVersion = activeWasPublished && proposalChanges.length > 0;
+
+  let query;
+  if (activeIsDraft && persistableProposalId) {
+    const draftRow = {
+      ...row,
+      is_current: Boolean(options.forSharing),
+      publication_status: options.forSharing ? "sent" : "draft",
+      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+    };
+    query = state.supabase.from("propostas").update(draftRow).eq("id", persistableProposalId);
+  } else if (needsNewVersion) {
+    const versionRow = {
+      ...row,
+      oportunidade_id: opportunityId,
+      is_current: Boolean(options.forSharing),
+      publication_status: options.forSharing ? "sent" : "draft",
+      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+    };
+    query = state.supabase.from("propostas").insert(versionRow);
+  } else if (persistableProposalId) {
+    query = state.supabase.from("propostas").update(row).eq("id", persistableProposalId);
+  } else {
+    query = state.supabase.from("propostas").insert({
+      ...row,
+      oportunidade_id: opportunityId,
+      is_current: true,
+      publication_status: "sent",
+      sent_at: new Date().toISOString(),
+    });
+  }
   const { data, error } = await query.select("*").single();
 
   if (error) {
@@ -11723,6 +11940,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   }
 
   state.activeProposalId = data.id;
+  state.activeOpportunityId = data.oportunidade_id || opportunityId;
   upsertProposalState(data);
   const persistableQuoteRequestId = getPersistableQuoteRequestId();
   if (persistableQuoteRequestId) {
@@ -11744,7 +11962,13 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
   markEditorClean(getEditorContextFromCurrent("proposal", `Funil: ${getProposalStatusLabel(data.status)}`));
-  showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
+  if (data.publication_status === "draft") {
+    showToast("Nova versão V" + (data.versao || "") + " salva como rascunho. O cliente continua vendo a versão anterior até o envio.");
+  } else if (needsNewVersion || (activeIsDraft && options.forSharing)) {
+    showToast("Versão V" + (data.versao || "") + " publicada. Links antigos passam a abrir esta versão.");
+  } else {
+    showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta salva no funil.");
+  }
   return data;
 }
 
@@ -11759,11 +11983,7 @@ async function loadProposalHistory() {
     return;
   }
 
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(60);
+  const { data, error } = await fetchAllRows("propostas");
 
   if (error) {
     console.warn("Falha ao carregar histórico.", error);
@@ -11861,6 +12081,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
+  state.activeOpportunityId = proposal.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
@@ -12179,6 +12400,7 @@ function startNewProposal(options = {}) {
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.activeOpportunityId = "";
   delete state.sourceOverrides["manual:draft"];
   delete state.sourceOverrides["manual:realized"];
   state.manualSourceKey = isRealizedMode ? "manual:realized" : "manual:draft";
@@ -12373,7 +12595,7 @@ async function ensureProposalForSharing() {
   if (!ensureProposalReadyForSending()) return null;
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
-  const saved = await saveCurrentProposal(status);
+  const saved = await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
     return null;

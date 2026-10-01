@@ -2,6 +2,16 @@ const { test, expect } = require("@playwright/test");
 const { collectBrowserErrors, expectNoBrowserErrors, expectNoHorizontalOverflow } = require("./support");
 
 test.describe("Formulário público do cliente", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/rest/v1/rpc/upsert_public_quote_draft**", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "42883", message: "function not found in test" }),
+      });
+    });
+  });
+
   test("mantém defaults, campos críticos e UX mobile sem envio real", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
@@ -58,6 +68,10 @@ test.describe("Formulário público do cliente", () => {
     const errors = collectBrowserErrors(page);
     let payload;
 
+    await page.route("**/rest/v1/rpc/submit_public_quote_request**", async (route) => {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ code: "42883", message: "function not found" }) });
+    });
+
     await page.route("**/rest/v1/solicitacoes_cotacao**", async (route) => {
       const body = route.request().postDataJSON();
       payload = Array.isArray(body) ? body[0] : body;
@@ -68,7 +82,6 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#requestEventDate").fill("2026-08-20");
     await page.locator("#requestClientName").fill("Ana");
     await page.locator("#requestClientEmail").fill("ana@example.com");
-    await page.locator("#requestClientPhone").fill("+55 21 99999-8888");
     await page.locator("#submitClientQuoteBtn").click();
 
     await expect(page.locator("#clientFormStatus")).toContainText(/Solicitação enviada|received/i);
@@ -77,6 +90,33 @@ test.describe("Formulário público do cliente", () => {
     expect(payload?.horario_evento).toBe("A definir");
     expect(payload?.tipo_evento).toBe("Evento sob medida");
     expect(payload?.snapshot?.cliente?.tipoCliente).toBe("Cliente a classificar");
+    await expectNoBrowserErrors(errors);
+  });
+
+
+  test("captura lead identificável antes do fim do formulário", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    let captured = null;
+
+    await page.unroute("**/rest/v1/rpc/upsert_public_quote_draft**");
+    await page.route("**/rest/v1/rpc/upsert_public_quote_draft**", async (route) => {
+      captured = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([{ request_id: "00000000-0000-4000-8000-000000000010", opportunity_id: "00000000-0000-4000-8000-000000000020" }]),
+      });
+    });
+
+    await page.goto("/formulario.html");
+    await expect(page.locator("#returningClientAccess")).toBeVisible();
+    await page.locator("#requestClientName").fill("Marina Costa");
+    await page.locator("#requestClientEmail").fill("marina@example.com");
+
+    await expect.poll(() => captured, { timeout: 4000 }).not.toBeNull();
+    expect(captured?.p_snapshot?.cliente?.nome).toBe("Marina Costa");
+    expect(captured?.p_snapshot?.cliente?.email).toBe("marina@example.com");
+    await expect(page.locator("#partialCaptureStatus")).toContainText(/salvo|saved/i);
     await expectNoBrowserErrors(errors);
   });
 });
