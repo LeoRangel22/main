@@ -8852,6 +8852,7 @@ function getProposalTransitionOptions(currentStatus) {
 }
 
 function renderStatusSelect(item) {
+  if (item.kind === "proposal" && item.isDraft) return "";
   const options = item.kind === "request" ? requestStatusOptions : getProposalTransitionOptions(item.status);
   return `
     <details class="pipeline-status-control">
@@ -8880,7 +8881,7 @@ function getLeadAgeInfo(item) {
 }
 
 function getProposalFollowUpInfo(item) {
-  if (item.kind !== "proposal" || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
+  if (item.kind !== "proposal" || item.isDraft || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
   const hours = getHoursSince(item.updatedAt || item.createdAt);
   if (hours < 24) return null;
   const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
@@ -8899,6 +8900,14 @@ function getPipelinePrimaryAction(item) {
   const status = getReportStatus(item);
   const age = getLeadAgeInfo(item);
   const followUp = getProposalFollowUpInfo(item);
+  if (item.kind === "proposal" && item.isDraft) {
+    return {
+      tone: "warning",
+      eyebrow: "Nova versão em rascunho",
+      label: "Finalizar e enviar V" + (item.version || ""),
+      note: "A versão anterior continua com o cliente. Revise esta versão e envie quando estiver pronta.",
+    };
+  }
   if (item.kind === "request" && status === "lead_recebido") {
     if (item.captureStatus === "partial") {
       return {
@@ -9802,7 +9811,15 @@ function getActionTasks(items = getPipelineItems()) {
       });
     }
 
-    if (item.kind === "proposal" && status === "proposta_enviada") {
+    if (item.kind === "proposal" && item.isDraft) {
+      tasks.push({
+        ...base,
+        title: "Finalizar nova versão",
+        note: "V" + (item.version || "") + " está em rascunho. A versão anterior continua disponível para o cliente até o novo envio.",
+        priority: 84,
+        track: "Comercial",
+      });
+    } else if (item.kind === "proposal" && status === "proposta_enviada") {
       const followUp = getProposalFollowUpInfo(item);
       tasks.push({
         ...base,
@@ -9940,6 +9957,9 @@ function getActionTasks(items = getPipelineItems()) {
 function getActionTaskSteps(task = {}) {
   const title = String(task.title || "").toLowerCase();
   const track = getActionTrack(task);
+  if (title.includes("nova versão")) {
+    return ["Abrir o rascunho", "Revisar as alterações em relação à versão anterior", "Enviar quando estiver pronto; a versão anterior não é perdida"];
+  }
   if (title.includes("lead incompleto")) {
     return ["Abrir o que o cliente já informou", "Completar apenas o que realmente falta", "Responder sem pedir que ele recomece o formulário"];
   }
@@ -10483,6 +10503,7 @@ function canDeletePipelineItem(item) {
 
 function getPipelineOpenButtonLabel(item, primaryAction) {
   const status = getReportStatus(item);
+  if (item.kind === "proposal" && item.isDraft) return "Continuar V" + (item.version || "");
   if (item.status === "cancelado") return "Abrir";
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
@@ -10569,7 +10590,7 @@ function renderPipelineCard(item) {
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.remainingProof.dataUrl)}" download="${escapeHtml(item.remainingProof.nome || "comprovante-restante")}">Comprovante restante</a>`
       : "";
   const signalButton =
-    item.kind === "proposal" && !operationStatuses.has(item.status) && item.status !== "cancelado"
+    item.kind === "proposal" && !item.isDraft && !operationStatuses.has(item.status) && item.status !== "cancelado"
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
