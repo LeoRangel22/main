@@ -1,5 +1,7 @@
 # Orçamentos de Eventos
 
+> **Fase comercial 1 (oportunidades, versões, captura parcial e recompra):** antes de publicar a branch `phase1-commercial-ux`, execute `supabase/phase1_commercial_ux.sql` no SQL Editor do Supabase. A migração é aditiva, preserva o histórico existente e faz o backfill das oportunidades. O frontend desta fase depende dessas novas colunas/RPCs.
+
 Aplicativo estático para montar propostas da Embaixada Carioca com preços ajustáveis.
 
 ## Como abrir

@@ -10774,3 +10774,162 @@ input[type="range"] {
     display: none;
   }
 }
+
+
+/* Phase 1 commercial UX --------------------------------------------------- */
+
+.proposal-version-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.proposal-version-badge.is-draft {
+  border-style: dashed;
+}
+
+.returning-client-card {
+  margin: 0 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.returning-client-card > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.returning-client-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.returning-client-card > summary span {
+  font-weight: 750;
+}
+
+.returning-client-card > summary strong {
+  font-size: 0.84rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.returning-client-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.returning-client-body h3 {
+  margin: 0 0 5px;
+  font-size: 1.05rem;
+}
+
+.returning-client-body p {
+  margin: 0;
+}
+
+.returning-client-login {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.returning-client-login label {
+  display: grid;
+  gap: 6px;
+}
+
+.returning-client-login input {
+  width: 100%;
+}
+
+.returning-client-status {
+  min-height: 20px;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.returning-history-heading,
+.returning-history-item,
+.returning-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.returning-history-heading {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.returning-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.returning-history-item {
+  justify-content: space-between;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.returning-history-item > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.returning-history-item span,
+.returning-history-item small {
+  font-size: 0.78rem;
+}
+
+.returning-history-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.partial-capture-status {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .returning-client-login {
+    grid-template-columns: 1fr;
+  }
+
+  .returning-history-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .returning-history-actions {
+    justify-content: stretch;
+  }
+
+  .returning-history-actions button {
+    flex: 1 1 150px;
+  }
+
+  .returning-client-card > summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}

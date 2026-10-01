@@ -13,6 +13,12 @@ const progressBar = document.querySelector("#formProgressBar");
 const progressSteps = [...document.querySelectorAll(".public-form-steps li")];
 const mobileFormQuery = window.matchMedia("(max-width: 720px)");
 const LANGUAGE_KEY = "embaixada_form_language_v1";
+const CAPTURE_TOKEN_KEY = "embaixada_form_capture_token_v1";
+const REFERENCE_CODE_KEY = "embaixada_form_reference_v1";
+const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
+let publicSupabaseClient = null;
+let partialCaptureTimer = null;
+let returningClientHistory = [];
 const langButtons = [...document.querySelectorAll("[data-lang]")];
 
 const canonicalMomentLabels = {
@@ -155,7 +161,7 @@ const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")]
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
 const uiState = { language: loadLanguage() };
-const stepOrder = ["moment", "profile", "recommendation", "eventDetails", "briefing", "contact"];
+const stepOrder = ["moment", "profile", "eventDetails", "contact", "recommendation", "briefing"];
 
 const steps = {
   moment: document.querySelector("#momentStep"),
@@ -165,6 +171,18 @@ const steps = {
   briefing: document.querySelector("#briefingStep"),
   contact: document.querySelector("#contactStep"),
 };
+
+function applyConversionStepOrder() {
+  const finalReviewCard = document.querySelector("#finalReviewCard");
+  if (!form || !finalReviewCard) return;
+  stepOrder.forEach((stepName, index) => {
+    const step = steps[stepName];
+    if (!step) return;
+    form.insertBefore(step, finalReviewCard);
+    const number = step.querySelector(".section-heading > span");
+    if (number) number.textContent = String(index + 1).padStart(2, "0");
+  });
+}
 
 const momentLabels = {
   "weekday-morning": "Manhã em dia de semana",
@@ -311,7 +329,7 @@ const copy = {
     introEyebrow: "Consultoria de eventos",
     introTitle: "Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.",
     introBody: "Um fluxo rápido para orientar sua proposta com cuidado e precisão.",
-    stepLabels: ["Quando", "Ocasião", "Formato", "Data e grupo", "Preferências", "Contato"],
+    stepLabels: ["Quando", "Ocasião", "Data e grupo", "Contato", "Formato", "Preferências"],
     commercialSummary: "Ver janelas mais indicadas",
     commercialWindows: [
       "Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.",
@@ -419,9 +437,9 @@ const copy = {
       groupNameHelp: "Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.",
       contactIntroTitle: "Como prefere que a equipe fale com você?",
       contactIntroBody:
-        "Nome, e-mail e celular garantem o retorno. Para empresa ou agência, inclua a organização.",
+        "Informe seu nome e pelo menos um canal de contato. O restante pode ser completado depois.",
       contactRequirementNote:
-        "Nome, e-mail e celular são essenciais para retorno. Empresa, cliente final e grupo ajudam a equipe a montar a proposta mais rápido.",
+        "Nome + e-mail ou WhatsApp já são suficientes para salvar seu pedido. Empresa, cliente final e grupo ajudam a equipe a responder mais rápido.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
       contactAssurance: "Solicitação sem compromisso. Usamos os dados apenas para preparar sua proposta.",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
@@ -488,7 +506,7 @@ const copy = {
     introEyebrow: "Event advisory",
     introTitle: "Tell us the essentials. Our team will shape the right experience for your group.",
     introBody: "A quick flow to guide your proposal with care and precision.",
-    stepLabels: ["When", "Occasion", "Format", "Date & group", "Preferences", "Contact"],
+    stepLabels: ["When", "Occasion", "Date & group", "Contact", "Format", "Preferences"],
     commercialSummary: "See the most recommended windows",
     commercialWindows: [
       "Weekday mornings: breakfast, brunch and coffee break.",
@@ -820,7 +838,7 @@ function applyStaticCopy() {
   updateContactRequirements();
   updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Event preferences" : "Preferências do evento";
-  document.querySelector("#contactTitle").textContent = current.stepLabels[5];
+  document.querySelector("#contactTitle").textContent = current.stepLabels[3];
   document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
   document.querySelector("#profileTitle").textContent = uiState.language === "en" ? "Who is organizing and what is the occasion?" : "Quem está organizando e qual é a ocasião?";
   document.querySelector("#eventDetailsTitle").textContent = uiState.language === "en" ? "Event details" : "Detalhes do evento";
@@ -866,6 +884,7 @@ function setLanguage(language) {
   renderRecommendations();
   updateGuestOutput();
   renderFinalReview();
+  renderReturningClientCopy();
 }
 
 function setStatus(message, type = "neutral") {
@@ -901,6 +920,98 @@ function updateProgress(stepName = "moment") {
     step.toggleAttribute("data-active", stepIndex === index);
     step.toggleAttribute("data-complete", stepIndex < index);
   });
+}
+
+function getPublicSupabaseClient() {
+  if (!publicSupabaseClient && window.supabase?.createClient) {
+    publicSupabaseClient = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, {
+      auth: {
+        storageKey: "embaixada_public_client_auth_v1",
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    });
+  }
+  return publicSupabaseClient;
+}
+
+function getCaptureToken() {
+  let token = localStorage.getItem(CAPTURE_TOKEN_KEY) || "";
+  if (!token) {
+    token = window.crypto?.randomUUID?.() || `00000000-0000-4000-8000-${Math.random().toString(16).slice(2).padEnd(12, "0").slice(0, 12)}`;
+    localStorage.setItem(CAPTURE_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+function getOrCreateReferenceCode() {
+  let reference = localStorage.getItem(REFERENCE_CODE_KEY) || "";
+  if (!reference) {
+    reference = createReferenceCode();
+    localStorage.setItem(REFERENCE_CODE_KEY, reference);
+  }
+  return reference;
+}
+
+function resetCaptureIdentity() {
+  localStorage.removeItem(CAPTURE_TOKEN_KEY);
+  localStorage.removeItem(REFERENCE_CODE_KEY);
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+}
+
+function getPartialCaptureStatusNode() {
+  let node = document.querySelector("#partialCaptureStatus");
+  if (node) return node;
+  node = document.createElement("p");
+  node.id = "partialCaptureStatus";
+  node.className = "partial-capture-status";
+  const reassurance = document.querySelector(".contact-reassurance");
+  reassurance?.prepend(node);
+  return node;
+}
+
+function canCapturePartialLead() {
+  const name = fields.name.value.trim();
+  const email = fields.email.value.trim();
+  const phone = fields.phone.value.trim();
+  if (!hasUsableName(name)) return false;
+  return (email && isValidEmail(email)) || (phone && isValidContactPhone(phone));
+}
+
+function getCurrentProgressStep() {
+  const index = progressSteps.findIndex((step) => step.hasAttribute("data-active"));
+  return stepOrder[Math.max(0, index)] || "contact";
+}
+
+async function savePartialLead() {
+  if (!canCapturePartialLead()) return;
+  const client = getPublicSupabaseClient();
+  if (!client) return;
+  const snapshot = getSnapshot(getOrCreateReferenceCode());
+  const node = getPartialCaptureStatusNode();
+  try {
+    const { error } = await client.rpc("upsert_public_quote_draft", {
+      p_capture_token: getCaptureToken(),
+      p_snapshot: snapshot,
+      p_last_step: getCurrentProgressStep(),
+    });
+    if (error) {
+      if (!/function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
+        console.warn("Falha ao salvar lead parcial.", error);
+      }
+      return;
+    }
+    if (node) node.textContent = uiState.language === "en" ? "Request saved. You can continue without starting over." : "Pedido salvo. Você pode continuar sem começar de novo.";
+  } catch (error) {
+    console.warn("Falha silenciosa na captura parcial.", error);
+  }
+}
+
+function schedulePartialCapture() {
+  if (!canCapturePartialLead()) return;
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = window.setTimeout(savePartialLead, 1000);
 }
 
 function createReferenceCode() {
@@ -998,8 +1109,8 @@ function renderFinalReview() {
       ? "No must-have preference selected. That is fine if there is nothing essential."
       : "Nenhuma preferência indispensável marcada. Tudo bem se não houver.",
     contactMissing: isEn
-      ? "Please complete name, e-mail and Phone/WhatsApp so our team can reply."
-      : "Complete nome, e-mail e Celular/WhatsApp para a equipe retornar.",
+      ? "Complete your name and at least e-mail or WhatsApp so our team can reply."
+      : "Complete seu nome e pelo menos e-mail ou WhatsApp para a equipe retornar.",
     contactFallback: current.labels.defaultStatus,
   };
   const selectedPreferences = getSelectedPreferenceLabels();
@@ -1020,7 +1131,7 @@ function renderFinalReview() {
     fields.email.value.trim(),
     fields.phone.value.trim(),
   ].filter(Boolean);
-  const contactReady = fields.name.value.trim() && fields.email.value.trim() && fields.phone.value.trim();
+  const contactReady = Boolean(fields.name.value.trim() && (fields.email.value.trim() || fields.phone.value.trim()));
   const dateReady = fields.date.value || fields.dateFlex.value.trim();
   const timeReady = fields.time.value;
   const clientTypeLabel = getClientTypeDisplayLabel();
@@ -1425,7 +1536,7 @@ function selectFormat(formatId) {
   fields.eventType.value = item.label;
   setStepValidity("recommendation", true);
   renderRecommendations();
-  scrollToStep("eventDetails");
+  scrollToStep("briefing");
 }
 
 function handleChoiceClick(event) {
@@ -1609,11 +1720,13 @@ function validateSnapshot(snapshot) {
     return failValidation(fields.name, "contact", current.messages.invalidName);
   }
 
-  if (!snapshot.cliente.email) {
-    return failValidation(fields.email, "contact", current.messages.invalidEmail);
+  const hasEmail = Boolean(snapshot.cliente.email);
+  const hasPhone = Boolean(snapshot.cliente.whatsapp);
+  if (!hasEmail && !hasPhone) {
+    return failValidation(fields.email, "contact", uiState.language === "en" ? "Share an e-mail or WhatsApp so our team can reply." : "Informe um e-mail ou WhatsApp para a equipe retornar.");
   }
 
-  if (!isValidEmail(snapshot.cliente.email)) {
+  if (hasEmail && !isValidEmail(snapshot.cliente.email)) {
     setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidEmail], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.email, false);
@@ -1622,11 +1735,7 @@ function validateSnapshot(snapshot) {
     return false;
   }
 
-  if (!snapshot.cliente.whatsapp) {
-    return failValidation(fields.phone, "contact", current.messages.requiredPhone);
-  }
-
-  if (!isValidContactPhone(snapshot.cliente.whatsapp)) {
+  if (hasPhone && !isValidContactPhone(snapshot.cliente.whatsapp)) {
     setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidPhone], current.messages.fixThisPointFooter || "");
     setStepValidity("contact", false);
     setFieldValidity(fields.phone, false);
@@ -1638,6 +1747,223 @@ function validateSnapshot(snapshot) {
   return true;
 }
 
+function getCanonicalKeyByLabel(map, label) {
+  const normalized = String(label || "").trim().toLowerCase();
+  return Object.entries(map).find(([, value]) => String(value || "").trim().toLowerCase() === normalized)?.[0] || "";
+}
+
+function renderReturningClientCopy() {
+  const isEn = uiState.language === "en";
+  const copyMap = {
+    returningClientSummary: isEn ? "Have you held an event or received a proposal from us?" : "Já fez evento ou recebeu proposta conosco?",
+    returningClientSummaryAction: isEn ? "Access history" : "Acessar histórico",
+    returningClientTitle: isEn ? "Come back without filling everything out again" : "Volte sem preencher tudo de novo",
+    returningClientBody: isEn ? "Use the same e-mail as before to resume a proposal or repeat an event in a few steps." : "Use o mesmo e-mail de antes para retomar uma proposta ou repetir um evento em poucos passos.",
+    returningClientEmailLabel: isEn ? "Your e-mail" : "Seu e-mail",
+  };
+  Object.entries(copyMap).forEach(([id, value]) => {
+    const node = document.querySelector("#" + id);
+    if (node) node.textContent = value;
+  });
+  const button = document.querySelector("#returningClientSendOtp");
+  if (button) button.textContent = isEn ? "Send access link" : "Receber acesso por e-mail";
+}
+
+function getReturningStatusLabel(status) {
+  const labels = {
+    proposta_enviada: "Proposta enviada",
+    negociacao: "Em negociação",
+    confirmado: "Confirmado",
+    pagamento_final: "Pagamento final",
+    planejamento: "Planejamento",
+    evento_proximo: "Evento próximo",
+    pos_venda: "Evento realizado",
+    cancelado: "Encerrado",
+  };
+  return labels[status] || status || "Proposta";
+}
+
+function renderReturningClientHistory(rows = [], email = "") {
+  const container = document.querySelector("#returningClientHistory");
+  const status = document.querySelector("#returningClientStatus");
+  if (!container) return;
+  returningClientHistory = rows || [];
+  container.hidden = false;
+  if (!rows.length) {
+    container.innerHTML = `<p>${uiState.language === "en" ? "No previous events or proposals were found for this e-mail. You can continue with the form normally." : "Não encontramos eventos ou propostas anteriores para este e-mail. Você pode seguir pelo formulário normalmente."}</p>`;
+    if (status) status.textContent = email ? email : "";
+    return;
+  }
+  const isEn = uiState.language === "en";
+  container.innerHTML = `
+    <div class="returning-history-heading">
+      <span>${isEn ? "Your history" : "Seu histórico"}</span>
+      <strong>${rows.length} ${isEn ? "recent record(s)" : "registro(s) recente(s)"}</strong>
+    </div>
+    <div class="returning-history-list">
+      ${rows.map((item, index) => {
+        const date = item.data_evento ? formatReviewDate(item.data_evento) : (isEn ? "Date to define" : "Data a definir");
+        const open = ["proposta_enviada", "negociacao"].includes(item.status);
+        return `
+          <article class="returning-history-item">
+            <div>
+              <span>${escapeHtml(getReturningStatusLabel(item.status))}${item.versao ? ` · V${escapeHtml(item.versao)}` : ""}</span>
+              <strong>${escapeHtml(item.tipo_evento || (isEn ? "Event" : "Evento"))}</strong>
+              <small>${escapeHtml(date)} · ${escapeHtml(item.convidados || "")}${item.convidados ? " pax" : ""}${item.total ? ` · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.total))}` : ""}</small>
+            </div>
+            <div class="returning-history-actions">
+              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${isEn ? "Resume proposal" : "Retomar proposta"}</button>` : ""}
+              <button class="secondary" type="button" data-returning-repeat="${index}">${isEn ? "Use as a base" : "Usar como base"}</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+  if (status) status.textContent = isEn ? `Signed in as ${email}.` : `Acesso confirmado para ${email}.`;
+}
+
+async function loadReturningClientHistory() {
+  const client = getPublicSupabaseClient();
+  if (!client) return;
+  const status = document.querySelector("#returningClientStatus");
+  const { data: sessionData } = await client.auth.getSession();
+  const session = sessionData?.session;
+  if (!session?.user?.email) return;
+  if (status) status.textContent = uiState.language === "en" ? "Loading your history..." : "Carregando seu histórico...";
+  const { data, error } = await client.rpc("get_my_event_history");
+  if (error) {
+    console.warn("Falha ao carregar histórico do cliente.", error);
+    if (status) status.textContent = uiState.language === "en" ? "History is temporarily unavailable. You can continue with the form." : "O histórico está temporariamente indisponível. Você pode seguir pelo formulário.";
+    return;
+  }
+  const access = document.querySelector("#returningClientAccess");
+  if (access) access.open = true;
+  const input = document.querySelector("#returningClientEmail");
+  if (input) input.value = session.user.email;
+  renderReturningClientHistory(data || [], session.user.email);
+}
+
+async function sendReturningClientOtp() {
+  const client = getPublicSupabaseClient();
+  const input = document.querySelector("#returningClientEmail");
+  const button = document.querySelector("#returningClientSendOtp");
+  const status = document.querySelector("#returningClientStatus");
+  const email = String(input?.value || "").trim().toLowerCase();
+  if (!client || !isValidEmail(email)) {
+    if (status) status.textContent = uiState.language === "en" ? "Enter a valid e-mail." : "Informe um e-mail válido.";
+    input?.focus();
+    return;
+  }
+  if (button) button.disabled = true;
+  if (status) status.textContent = uiState.language === "en" ? "Sending secure access..." : "Enviando acesso seguro...";
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: CANONICAL_CLIENT_FORM_URL, shouldCreateUser: true },
+  });
+  if (button) button.disabled = false;
+  if (error) {
+    console.warn("Falha ao enviar OTP do cliente.", error);
+    if (status) status.textContent = uiState.language === "en" ? "We could not send the access e-mail. Try again shortly." : "Não conseguimos enviar o acesso agora. Tente novamente em instantes.";
+    return;
+  }
+  if (status) status.textContent = uiState.language === "en" ? "Access sent. Open the link in your e-mail to see your history." : "Acesso enviado. Abra o link no seu e-mail para ver seu histórico.";
+}
+
+function applyReturningHistoryAsBase(item) {
+  if (!item) return;
+  resetCaptureIdentity();
+  const snapshot = item.snapshot || {};
+  const source = snapshot.sourceRequestSnapshot || {};
+  const clientData = snapshot.client || source.cliente || {};
+  const eventData = snapshot.event || source.evento || {};
+  const qualification = snapshot.qualificacao || source.qualificacao || {};
+
+  fields.name.value = clientData.name || clientData.nome || item.cliente_nome || "";
+  fields.email.value = clientData.email || "";
+  fields.phone.value = clientData.phone || clientData.whatsapp || "";
+  fields.company.value = clientData.company || clientData.empresa || "";
+  fields.endClientName.value = clientData.finalClient || clientData.clienteFinal || qualification.clienteFinal || "";
+  fields.groupName.value = clientData.groupName || clientData.nomeGrupo || qualification.nomeGrupo || "";
+  fields.eventType.value = eventData.type || eventData.tipo || item.tipo_evento || "";
+  fields.date.value = "";
+  fields.dateFlex.value = "";
+  fields.guests.value = String(eventData.guests || eventData.convidados || item.convidados || 30);
+  fields.duration.value = String(eventData.duration || eventData.duracao || "");
+  fields.reason.value = eventData.reason || eventData.motivo || "";
+  fields.preferences.value = eventData.preferences || eventData.preferencias || "";
+  fields.notes.value = eventData.notes || eventData.observacoes || "";
+
+  fields.clientType.value = getCanonicalKeyByLabel(canonicalClientTypeLabels, qualification.tipoCliente || clientData.tipoCliente);
+  fields.budgetRange.value = getCanonicalKeyByLabel(canonicalBudgetRangeLabels, qualification.faixaInvestimento);
+  fields.leadSource.value = getCanonicalKeyByLabel(canonicalLeadSourceLabels, qualification.origem);
+  fields.moment.value = getCanonicalKeyByLabel(canonicalMomentLabels, eventData.momento || qualification.momento);
+
+  selectedProfiles.clear();
+  const profileText = String(eventData.ocasiao || eventData.perfil || qualification.ocasiao || "").toLowerCase();
+  Object.entries(canonicalProfileLabels).forEach(([key, label]) => {
+    if (profileText.includes(String(label).toLowerCase())) selectedProfiles.add(key);
+  });
+  if (selectedProfiles.size) fields.profile.value = [...selectedProfiles].join(",");
+
+  const savedTime = String(eventData.time || eventData.horario || item.horario_evento || "").slice(0, 5);
+  if (savedTime) {
+    const hour = Number(savedTime.slice(0, 2));
+    fields.timeRange.value = hour < 11 ? "morning" : hour < 19 ? "afternoon" : "night";
+    fillTimeOptions(fields.timeRange.value);
+    if ([...fields.time.options].some((option) => option.value === savedTime)) fields.time.value = savedTime;
+  }
+
+  updateGuestOutput("number");
+  renderLocalizedChoices();
+  renderRecommendations();
+  updateContactRequirements();
+  updateContactGuidance();
+  renderFinalReview();
+  schedulePartialCapture();
+  const status = document.querySelector("#returningClientStatus");
+  if (status) status.textContent = uiState.language === "en" ? "Previous event loaded. Confirm the new date and adjust only what changed." : "Evento anterior carregado. Confirme a nova data e ajuste apenas o que mudou.";
+  scrollToStep("eventDetails", true);
+}
+
+async function resumeReturningProposal(item) {
+  const client = getPublicSupabaseClient();
+  const status = document.querySelector("#returningClientStatus");
+  if (!client || !item?.proposal_id) return;
+  if (status) status.textContent = uiState.language === "en" ? "Opening your proposal..." : "Abrindo sua proposta...";
+  const { data, error } = await client.rpc("refresh_my_proposal_link", { p_proposal_id: item.proposal_id });
+  if (error || !data) {
+    if (status) status.textContent = uiState.language === "en" ? "We could not reopen this proposal. Continue below and we will prepare a new version." : "Não conseguimos reabrir esta proposta. Continue abaixo e prepararemos uma nova versão.";
+    return;
+  }
+  window.location.href = `./proposta.html?p=${encodeURIComponent(data)}`;
+}
+
+function initReturningClientAccess() {
+  renderReturningClientCopy();
+  document.querySelector("#returningClientSendOtp")?.addEventListener("click", sendReturningClientOtp);
+  document.querySelector("#returningClientEmail")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      sendReturningClientOtp();
+    }
+  });
+  document.querySelector("#returningClientHistory")?.addEventListener("click", (event) => {
+    const repeat = event.target.closest("[data-returning-repeat]");
+    if (repeat) {
+      applyReturningHistoryAsBase(returningClientHistory[Number(repeat.dataset.returningRepeat)]);
+      return;
+    }
+    const resume = event.target.closest("[data-returning-resume]");
+    if (resume) resumeReturningProposal(returningClientHistory[Number(resume.dataset.returningResume)]);
+  });
+  const client = getPublicSupabaseClient();
+  client?.auth?.onAuthStateChange((_event, session) => {
+    if (session?.user?.email) window.setTimeout(loadReturningClientHistory, 0);
+  });
+  loadReturningClientHistory();
+}
+
 async function submitRequest(event) {
   event.preventDefault();
   const current = getCopy();
@@ -1647,7 +1973,7 @@ async function submitRequest(event) {
     return;
   }
 
-  const referenceCode = createReferenceCode();
+  const referenceCode = getOrCreateReferenceCode();
   const snapshot = getSnapshot(referenceCode);
   if (!validateSnapshot(snapshot)) return;
 
@@ -1655,8 +1981,15 @@ async function submitRequest(event) {
   setStatus(current.messages.submitting, "neutral");
 
   try {
-    const client = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
-    const { error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot));
+    const client = getPublicSupabaseClient();
+    let { error } = await client.rpc("submit_public_quote_request", {
+      p_capture_token: getCaptureToken(),
+      p_snapshot: snapshot,
+    });
+
+    if (error && /function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
+      ({ error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot)));
+    }
 
     if (error) {
       console.warn("Falha ao enviar solicitacao.", error);
@@ -1673,6 +2006,7 @@ async function submitRequest(event) {
     submitButton.disabled = false;
   }
 
+  resetCaptureIdentity();
   form.reset();
   fields.moment.value = "";
   fields.clientType.value = "";
@@ -1691,6 +2025,8 @@ async function submitRequest(event) {
   renderSuccessStatus(referenceCode);
 }
 
+applyConversionStepOrder();
+initReturningClientAccess();
 fillGuestOptions();
 resetFlexibleDateField();
 fillTimeOptions("");
@@ -1709,6 +2045,8 @@ finalReviewGrid?.addEventListener("click", (event) => {
 });
 form.addEventListener("input", renderFinalReview);
 form.addEventListener("change", renderFinalReview);
+form.addEventListener("input", schedulePartialCapture);
+form.addEventListener("change", schedulePartialCapture);
 fields.timeRange.addEventListener("change", () => {
   fillTimeOptions();
   setFieldValidity(fields.timeRange, true);
