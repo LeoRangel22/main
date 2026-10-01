@@ -11171,13 +11171,35 @@ function buildReopenedSnapshot(snapshot = {}, nextStatus = "negociacao") {
 }
 
 function getCancelReason() {
-  const options = cancelReasons.map((reason, index) => `${index + 1}. ${reason}`).join("\n");
-  const answer = window.prompt(`Motivo do cancelamento:\n\n${options}\n\nUse 6 para leads de teste. Digite o número ou escreva outro motivo.`);
-  if (answer === null) return "";
-  const trimmed = answer.trim();
-  if (!trimmed) return "";
-  const selectedIndex = Number(trimmed) - 1;
-  return cancelReasons[selectedIndex] || trimmed;
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "action-plan-dialog cancel-reason-dialog";
+    dialog.setAttribute("aria-labelledby", "cancelReasonTitle");
+    dialog.innerHTML = `<form method="dialog" class="action-plan-form">
+      <h2 id="cancelReasonTitle">Registrar cancelamento</h2>
+      <p>Escolha o motivo. O registro e o histórico comercial serão preservados.</p>
+      <label>Motivo
+        <select name="reason" required>
+          ${cancelReasons.map((reason) => `<option value="${escapeHtml(reason)}">${escapeHtml(reason)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Detalhe, se escolher outro motivo
+        <input name="otherReason" type="text" maxlength="300" placeholder="Descreva o motivo" />
+      </label>
+      <div class="action-plan-dialog-actions">
+        <button class="secondary" type="submit" value="cancel" autofocus>Voltar</button>
+        <button class="primary" type="submit" value="confirm">Registrar cancelamento</button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => {
+      const selected = dialog.querySelector('[name="reason"]').value;
+      const custom = dialog.querySelector('[name="otherReason"]').value.trim();
+      resolve(dialog.returnValue === "confirm" ? (selected === "Outro motivo" ? custom : selected) : "");
+      dialog.remove();
+    }, { once: true });
+    dialog.showModal();
+  });
 }
 
 async function deleteTestPipelineItem(kind, id) {
@@ -11278,7 +11300,7 @@ async function reopenPipelineItem(kind, id, targetStatus = "") {
 
 async function cancelPipelineItem(kind, id) {
   if (!state.supabase || !state.session) return;
-  const reason = getCancelReason();
+  const reason = await getCancelReason();
   if (!reason) {
     showToast("Cancelamento não registrado.");
     renderPipeline();
