@@ -377,7 +377,6 @@ test.describe("Proposta manual no admin", () => {
 
   test("proposta manual completa salva, aprova checklist e envia WhatsApp em QA", async ({ page }) => {
     const errors = collectBrowserErrors(page);
-    page.on("dialog", (dialog) => dialog.accept());
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
@@ -415,6 +414,11 @@ test.describe("Proposta manual no admin", () => {
     await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
 
     await page.locator("#whatsappBtn").click();
+    const confirmation = page.locator(".send-confirm-dialog");
+    await expect(confirmation).toContainText("Canal: WhatsApp");
+    await expect(confirmation).toContainText("99606-0692");
+    await confirmation.getByRole("button", { name: "Confirmar envio" }).click();
+    await expect(confirmation).toHaveCount(0);
     await expect(page.locator("#integrationLogList")).toContainText(/WhatsApp/i);
     await expect(page.locator("#integrationLogList")).toContainText(/enviada|Simulado|Proposta/i);
 
