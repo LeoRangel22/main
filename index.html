@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261001-sales-ux-v173" />
+    <link rel="stylesheet" href="./styles.css?v=20261001-sales-ux-v174" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -81,6 +81,18 @@
         </header>
 
         <section class="team-panel" aria-label="Equipe e histórico">
+          <section class="action-center" aria-label="Ações de hoje">
+            <div class="action-center-heading">
+              <div>
+                <span>Hoje</span>
+                <strong>O que precisa da sua atenção agora</strong>
+              </div>
+              <small id="actionCenterMeta">Atualiza com o funil.</small>
+            </div>
+            <div class="action-list" id="actionList">
+              <p>Entre com Supabase para ver ações.</p>
+            </div>
+          </section>
           <div class="owner-metrics" aria-label="Resumo do funil">
             <button class="metric-stage-lead" type="button" data-pipeline-stage-jump="lead_recebido" aria-label="Ir para leads no funil">
               <span>Lead</span>
@@ -117,18 +129,6 @@
           </div>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
-          <section class="action-center" aria-label="Ações de hoje">
-            <div class="action-center-heading">
-              <div>
-                <span>Hoje</span>
-                <strong>O que precisa da sua atenção agora</strong>
-              </div>
-              <small id="actionCenterMeta">Atualiza com o funil.</small>
-            </div>
-            <div class="action-list" id="actionList">
-              <p>Entre com Supabase para ver ações.</p>
-            </div>
-          </section>
           <section class="operations-agenda" aria-label="Agenda operacional">
             <div class="operations-agenda-heading">
               <div>
@@ -765,6 +765,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261001-sales-ux-v173"></script>
+  <script defer src="./app.js?v=20261001-sales-ux-v174"></script>
   </body>
 </html>

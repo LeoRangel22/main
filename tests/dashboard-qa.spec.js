@@ -11,6 +11,7 @@ test.describe("Dashboard interno em modo QA", () => {
   test("plano comercial salva responsável, prazo e contato e acompanha versão visualizada", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
+    expect(await page.evaluate(() => Boolean(document.querySelector(".action-center").compareDocumentPosition(document.querySelector(".owner-metrics")) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 
     const card = page.locator('[data-pipeline-card-id="qa-request-prioridade"]');
     await expect(card).toContainText("Sem responsável");
@@ -30,7 +31,7 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator(".proposal-journey")).toContainText("Envio pelo sistema");
     await expect(page.locator(".proposal-journey")).toContainText("Ainda não registrado");
     await expect(page.locator(".proposal-journey")).toContainText("1 · última");
-    await expect(page.locator(".proposal-version-list")).toContainText("1 versão preservada");
+    await expect(page.locator(".proposal-version-list summary")).toHaveText("Ver 1 versão preservada");
     await page.evaluate(() => {
       const current = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
       state.proposals.unshift({ ...current, id: "qa-proposal-v2-draft", versao: 2, is_current: false, publication_status: "draft", sent_at: null });
