@@ -7484,13 +7484,16 @@ function createQaRequest(input) {
 }
 
 function createQaSupabaseClient() {
+  const qaOpportunities = [];
   const tableMap = {
     propostas: () => state.proposals,
     solicitacoes_cotacao: () => state.quoteRequests,
+    oportunidades: () => qaOpportunities,
   };
   const setTable = (table, rows) => {
     if (table === "propostas") state.proposals = rows;
     if (table === "solicitacoes_cotacao") state.quoteRequests = rows;
+    if (table === "oportunidades") qaOpportunities.splice(0, qaOpportunities.length, ...rows);
   };
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -7530,6 +7533,7 @@ function createQaSupabaseClient() {
           return query.ascending ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
         });
       }
+      if (Number.isFinite(query.rangeEnd)) data = data.slice(query.rangeStart, query.rangeEnd + 1);
       if (Number.isFinite(query.limitValue)) data = data.slice(0, query.limitValue);
     }
 
@@ -7545,6 +7549,8 @@ function createQaSupabaseClient() {
       orderColumn: "",
       ascending: true,
       limitValue: Infinity,
+      rangeStart: 0,
+      rangeEnd: Infinity,
       head: false,
     };
     const chain = {
@@ -7559,6 +7565,11 @@ function createQaSupabaseClient() {
       },
       limit(value) {
         query.limitValue = Number(value);
+        return chain;
+      },
+      range(from, to) {
+        query.rangeStart = Number(from) || 0;
+        query.rangeEnd = Number(to);
         return chain;
       },
       insert(payload) {
@@ -10673,17 +10684,35 @@ function renderQuoteRequests() {
   renderPipeline();
 }
 
+async function fetchAllRows(table, orderColumn = "created_at", pageSize = 500) {
+  if (!state.supabase) return { data: [], error: null };
+  if (state.supabase.__qa) {
+    return state.supabase.from(table).select("*").order(orderColumn, { ascending: false }).limit(1000);
+  }
+
+  const allRows = [];
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await state.supabase
+      .from(table)
+      .select("*")
+      .order(orderColumn, { ascending: false })
+      .range(from, to);
+    if (error) return { data: allRows, error };
+    const batch = data || [];
+    allRows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return { data: allRows, error: null };
+}
+
 async function loadQuoteRequests() {
   if (!state.supabase || !state.session) {
     renderQuoteRequests();
     return;
   }
 
-  const { data, error } = await state.supabase
-    .from("solicitacoes_cotacao")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(30);
+  const { data, error } = await fetchAllRows("solicitacoes_cotacao");
 
   if (error) {
     console.warn("Falha ao carregar solicitacoes.", error);
@@ -10768,6 +10797,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
 
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
+  state.activeOpportunityId = request.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   resetProposalDraftState();
@@ -11559,6 +11589,7 @@ async function logoutSupabase() {
   state.quoteRequests = [];
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.activeOpportunityId = "";
   state.manualSourceKey = "";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
@@ -11811,11 +11842,7 @@ async function loadProposalHistory() {
     return;
   }
 
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(60);
+  const { data, error } = await fetchAllRows("propostas");
 
   if (error) {
     console.warn("Falha ao carregar histórico.", error);
@@ -11913,6 +11940,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
+  state.activeOpportunityId = proposal.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   applyProposalSnapshot(proposal.snapshot);
@@ -12231,6 +12259,7 @@ function startNewProposal(options = {}) {
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
+  state.activeOpportunityId = "";
   delete state.sourceOverrides["manual:draft"];
   delete state.sourceOverrides["manual:realized"];
   state.manualSourceKey = isRealizedMode ? "manual:realized" : "manual:draft";
