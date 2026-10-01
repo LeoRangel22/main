@@ -1048,6 +1048,7 @@ begin
    and current_p.public_token_expires_at > now()
   where requested.public_token = proposal_token
     and requested.public_token_revoked_at is null
+    and (current_p.id is not null or requested.public_token_expires_at > now())
   limit 1;
 
   if target_id is null or current_snapshot is null then
