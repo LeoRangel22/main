@@ -62,6 +62,28 @@
             </div>
           </div>
         </div>
+        <details class="returning-client-card" id="returningClientAccess">
+          <summary>
+            <span id="returningClientSummary">Já fez evento ou recebeu proposta conosco?</span>
+            <strong id="returningClientSummaryAction">Acessar histórico</strong>
+          </summary>
+          <div class="returning-client-body">
+            <div>
+              <h3 id="returningClientTitle">Volte sem preencher tudo de novo</h3>
+              <p id="returningClientBody">Use o mesmo e-mail de antes para retomar uma proposta ou repetir um evento em poucos passos.</p>
+            </div>
+            <div class="returning-client-login" id="returningClientLogin">
+              <label>
+                <span id="returningClientEmailLabel">Seu e-mail</span>
+                <input id="returningClientEmail" type="email" autocomplete="email" placeholder="voce@empresa.com.br" />
+              </label>
+              <button class="primary" id="returningClientSendOtp" type="button">Receber acesso por e-mail</button>
+            </div>
+            <div class="returning-client-status" id="returningClientStatus" aria-live="polite"></div>
+            <div class="returning-client-history" id="returningClientHistory" hidden></div>
+          </div>
+        </details>
+
         <form id="clientQuoteForm" class="client-quote-form" autocomplete="off" novalidate>
           <input id="requestMoment" name="momento" type="hidden" />
           <input id="requestClientType" name="tipo_cliente" type="hidden" />
