@@ -383,6 +383,16 @@ begin
     return new;
   end if;
 
+  -- Depois que existe proposta atual, ela e a fonte do status e dos dados
+  -- comerciais. Atualizacoes da solicitacao nao podem regredir o funil.
+  if exists (
+    select 1 from public.propostas p
+    where p.oportunidade_id = new.oportunidade_id
+      and p.is_current = true
+  ) then
+    return new;
+  end if;
+
   update public.oportunidades
   set
     status = case
