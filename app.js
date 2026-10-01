@@ -7216,6 +7216,66 @@ function getPersistableQuoteRequestId() {
   return isValidUuid(state.activeQuoteRequestId) ? state.activeQuoteRequestId : null;
 }
 
+function getActiveOpportunityId() {
+  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
+  return state.activeOpportunityId || activeProposal?.oportunidade_id || activeRequest?.oportunidade_id || "";
+}
+
+async function ensureActiveOpportunity(snapshot, status = "proposta_enviada") {
+  const existingId = getActiveOpportunityId();
+  if (existingId) {
+    state.activeOpportunityId = existingId;
+    return existingId;
+  }
+
+  if (state.supabase?.__qa) {
+    state.activeOpportunityId = "00000000-0000-4000-8000-000000000001";
+    return state.activeOpportunityId;
+  }
+
+  const user = state.session?.user;
+  const { data, error } = await state.supabase
+    .from("oportunidades")
+    .insert({
+      status: normalizeProposalStatus(status),
+      cliente_nome: snapshot.client?.name || "Cliente",
+      cliente_email: snapshot.client?.email || null,
+      cliente_whatsapp: snapshot.client?.phone || null,
+      empresa: snapshot.client?.company || null,
+      tipo_evento: snapshot.event?.type || null,
+      data_evento: snapshot.event?.date || null,
+      horario_evento: snapshot.event?.time || null,
+      convidados: snapshot.event?.guests || null,
+      valor_atual: snapshot.totals?.total || 0,
+      responsavel_id: user?.id || null,
+      responsavel_email: user?.email || null,
+      origem: state.activeQuoteRequestId ? "formulario" : "manual",
+      metadata: { criadoPeloApp: true },
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    console.warn("Falha ao criar oportunidade.", error);
+    return "";
+  }
+
+  state.activeOpportunityId = data.id;
+  const requestId = getPersistableQuoteRequestId();
+  if (requestId) {
+    const result = await state.supabase
+      .from("solicitacoes_cotacao")
+      .update({ oportunidade_id: data.id })
+      .eq("id", requestId);
+    if (result.error) console.warn("Falha ao vincular lead à oportunidade.", result.error);
+    state.quoteRequests = state.quoteRequests.map((item) =>
+      item.id === requestId ? { ...item, oportunidade_id: data.id } : item,
+    );
+  }
+  return data.id;
+}
+
 function getProposalRow(snapshot, status = "proposta_enviada") {
   const user = state.session?.user;
   return {
@@ -7234,6 +7294,7 @@ function getProposalRow(snapshot, status = "proposta_enviada") {
     privatizacao: snapshot.totals.privatizationAmount,
     total: snapshot.totals.total,
     status,
+    oportunidade_id: getActiveOpportunityId() || null,
     public_token_expires_at: getPublicTokenExpiresAt(),
     solicitacao_id: getPersistableQuoteRequestId(),
     snapshot,
