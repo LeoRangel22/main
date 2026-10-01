@@ -2062,7 +2062,7 @@ function renderProposalJourney(proposal) {
         <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
       </div>
       <details class="proposal-version-list">
-        <summary>Ver ${versions.length} ${versions.length === 1 ? "versão" : "versões"} preservadas</summary>
+        <summary>Ver ${versions.length} ${versions.length === 1 ? "versão preservada" : "versões preservadas"}</summary>
         <div>${versions.map((row) => `
           <div class="proposal-version-row">
             <span>V${escapeHtml(row.versao || 1)} · ${row.publication_status === "draft" ? "Rascunho" : row.id === published?.id ? "Publicada" : "Anterior"} · ${escapeHtml(formatMoney(row.total))}</span>
