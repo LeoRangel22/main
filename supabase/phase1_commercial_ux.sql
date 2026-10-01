@@ -898,10 +898,10 @@ set search_path = ''
 as $$
 declare
   target_id uuid;
-  target_store_id uuid;
+  has_store_column boolean;
 begin
-  select coalesce(current_p.id, requested.id), coalesce(current_p.store_id, requested.store_id)
-    into target_id, target_store_id
+  select coalesce(current_p.id, requested.id)
+    into target_id
   from public.propostas requested
   left join public.propostas current_p
     on current_p.oportunidade_id = requested.oportunidade_id
@@ -913,16 +913,38 @@ begin
     return false;
   end if;
 
-  insert into public.proposta_visualizacoes (proposta_id, public_token, store_id, user_agent, referrer)
-  values (target_id, proposal_token, target_store_id, left(coalesce(user_agent, ''), 500), left(coalesce(referrer, ''), 500));
+  select exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'proposta_visualizacoes'
+      and column_name = 'store_id'
+  ) into has_store_column;
+
+  if has_store_column then
+    execute $sql$
+      insert into public.proposta_visualizacoes (proposta_id, public_token, store_id, user_agent, referrer)
+      select
+        $1,
+        $2,
+        coalesce(p.store_id, '00000000-0000-4000-8000-000000000001'::uuid),
+        left(coalesce($3, ''), 500),
+        left(coalesce($4, ''), 500)
+      from public.propostas p
+      where p.id = $1
+    $sql$
+    using target_id, proposal_token, user_agent, referrer;
+  else
+    insert into public.proposta_visualizacoes (proposta_id, public_token, user_agent, referrer)
+    values (
+      target_id,
+      proposal_token,
+      left(coalesce(user_agent, ''), 500),
+      left(coalesce(referrer, ''), 500)
+    );
+  end if;
 
   return true;
-exception
-  when undefined_column then
-    -- Compatibilidade caso a fase multi-loja ainda nao tenha adicionado store_id.
-    insert into public.proposta_visualizacoes (proposta_id, public_token, user_agent, referrer)
-    values (target_id, proposal_token, left(coalesce(user_agent, ''), 500), left(coalesce(referrer, ''), 500));
-    return true;
 end;
 $$;
 
