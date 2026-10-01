@@ -2,6 +2,16 @@ const { test, expect } = require("@playwright/test");
 const { collectBrowserErrors, expectNoBrowserErrors, expectNoHorizontalOverflow } = require("./support");
 
 test.describe("Formulário público do cliente", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/rest/v1/rpc/upsert_public_quote_draft**", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "42883", message: "function not found in test" }),
+      });
+    });
+  });
+
   test("mantém defaults, campos críticos e UX mobile sem envio real", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
@@ -88,6 +98,7 @@ test.describe("Formulário público do cliente", () => {
     const errors = collectBrowserErrors(page);
     let captured = null;
 
+    await page.unroute("**/rest/v1/rpc/upsert_public_quote_draft**");
     await page.route("**/rest/v1/rpc/upsert_public_quote_draft**", async (route) => {
       captured = route.request().postDataJSON();
       await route.fulfill({
