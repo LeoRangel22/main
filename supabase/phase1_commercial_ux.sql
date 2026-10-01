@@ -117,6 +117,8 @@ alter table public.propostas
   add column if not exists oportunidade_id uuid references public.oportunidades(id) on delete set null,
   add column if not exists versao integer not null default 1,
   add column if not exists is_current boolean not null default true,
+  add column if not exists publication_status text not null default 'sent',
+  add column if not exists sent_at timestamptz,
   add column if not exists superseded_at timestamptz;
 
 create index if not exists propostas_oportunidade_idx
@@ -217,6 +219,8 @@ update public.propostas p
 set
   versao = ranked.rn,
   is_current = (ranked.reverse_rn = 1),
+  publication_status = 'sent',
+  sent_at = coalesce(p.sent_at, p.created_at),
   superseded_at = case when ranked.reverse_rn = 1 then null else coalesce(p.updated_at, p.created_at) end
 from ranked
 where p.id = ranked.id;
@@ -272,6 +276,36 @@ create trigger propostas_prepare_version
 before insert on public.propostas
 for each row
 execute function public.prepare_proposal_version();
+
+create or replace function public.promote_proposal_version()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  if new.oportunidade_id is not null
+     and coalesce(new.is_current, false) = true
+     and coalesce(old.is_current, false) = false then
+    update public.propostas
+      set is_current = false,
+          superseded_at = now()
+      where oportunidade_id = new.oportunidade_id
+        and id <> new.id
+        and is_current = true;
+    new.publication_status := 'sent';
+    new.sent_at := coalesce(new.sent_at, now());
+    new.superseded_at := null;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists propostas_promote_version on public.propostas;
+create trigger propostas_promote_version
+before update of is_current on public.propostas
+for each row
+execute function public.promote_proposal_version();
 
 create or replace function public.sync_opportunity_from_proposal()
 returns trigger
