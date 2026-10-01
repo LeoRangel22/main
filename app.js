@@ -2046,6 +2046,7 @@ function renderProposalJourney(proposal) {
     versions.find((row) => row.publication_status !== "draft");
   const views = state.proposalViews.filter((view) => view.proposta_id === published?.id);
   const lastView = views.reduce((last, view) => !last || view.created_at > last ? view.created_at : last, "");
+  const lastSend = getCommercialHistory(published?.snapshot || {}).find((entry) => ["email_envio", "whatsapp_envio"].includes(entry.type));
   const clientResponse = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao || proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao;
   const responseLabel = { confirmar: "Aprovou", alteracao: "Pediu ajustes", cancelar: "Não vai seguir" }[clientResponse] || "Aguardando resposta";
   return `
@@ -2056,6 +2057,7 @@ function renderProposalJourney(proposal) {
       </div>
       <div class="proposal-journey-facts">
         <div><span>Link publicado</span><strong>${published?.sent_at ? escapeHtml(formatSavedAt(published.sent_at)) : "Sem data registrada"}</strong></div>
+        <div><span>Envio pelo sistema</span><strong>${lastSend ? `${lastSend.type === "email_envio" ? "E-mail" : "WhatsApp"} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
         <div><span>Visualização do link</span><strong>${views.length ? `${views.length} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
         <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
       </div>

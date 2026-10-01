@@ -1745,6 +1745,8 @@ textarea[aria-invalid="true"] {
 
 .action-focus-card .action-plan span {
   color: rgba(255, 255, 255, 0.92);
+  font-size: 0.75rem;
+  text-transform: none;
 }
 
 .action-plan.is-overdue span:last-of-type,
@@ -11094,7 +11096,7 @@ input[type="range"] {
 .proposal-journey-facts {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .proposal-journey-facts > div {
