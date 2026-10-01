@@ -178,37 +178,29 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessag
   const customMessageHtml = formatCustomMessageHtml(customMessage);
 
   return `
-    <div style="background:#eef3ef; padding:26px 14px; font-family:Arial,Helvetica,sans-serif; color:#183a2d;">
-      <div style="max-width:680px; margin:0 auto; background:#ffffff; border:1px solid #d7e3dc; border-radius:18px; overflow:hidden;">
-        <div style="background:#183a2d; color:#ffffff; padding:24px 28px;">
-          <div style="font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#f2d9a2;">Embaixada Carioca</div>
-          <h1 style="margin:10px 0 0; font-size:30px; line-height:1.1;">Sua proposta está pronta para revisão</h1>
-          <p style="margin:12px 0 0; color:#e8f1ec; font-size:16px; line-height:1.55;">
-            Olá, ${escapeHtml(firstName)}. Preparamos sua proposta com base nas informações enviadas para o evento no Morro da Urca.
-          </p>
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${escapeHtml(eventType)} · ${escapeHtml(dateLabel)} às ${escapeHtml(timeLabel)} · ${formatMoney(total)}. Veja e responda sua proposta.</div>
+    <div style="background:#eef3ef; padding:12px 8px; font-family:Arial,Helvetica,sans-serif; color:#183a2d;">
+      <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #d7e3dc; border-radius:14px; overflow:hidden;">
+        <div style="background:#183a2d; color:#ffffff; padding:18px 22px;">
+          <div style="font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#f2d9a2;">Embaixada Carioca</div>
+          <h1 style="margin:6px 0 0; font-size:24px; line-height:1.2;">Sua proposta de evento</h1>
+          <p style="margin:7px 0 0; color:#e8f1ec; font-size:14px; line-height:1.4;">Olá, ${escapeHtml(firstName)}. Confira os dados e responda pelo link.</p>
         </div>
 
-        <div style="padding:24px 28px 28px;">
-          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px;">
-            <div style="border:1px solid #d7e3dc; border-radius:12px; padding:14px;">
-              <span style="display:block; color:#6b7280; font-size:11px; font-weight:900; text-transform:uppercase;">Formato</span>
-              <strong style="display:block; margin-top:8px; color:#183a2d; font-size:16px;">${escapeHtml(eventType)}</strong>
-            </div>
-            <div style="border:1px solid #d7e3dc; border-radius:12px; padding:14px;">
-              <span style="display:block; color:#6b7280; font-size:11px; font-weight:900; text-transform:uppercase;">Data e horário</span>
-              <strong style="display:block; margin-top:8px; color:#183a2d; font-size:16px;">${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</strong>
-            </div>
-            <div style="border:1px solid #d7e3dc; border-radius:12px; padding:14px;">
-              <span style="display:block; color:#6b7280; font-size:11px; font-weight:900; text-transform:uppercase;">Grupo</span>
-              <strong style="display:block; margin-top:8px; color:#183a2d; font-size:16px;">${escapeHtml(String(guests || "A definir"))} pax · ${escapeHtml(durationLabel)}</strong>
-            </div>
+        <div style="padding:16px 22px 24px;">
+          <div style="background:#f1e6c9; border-radius:10px; padding:14px 16px;">
+            <strong style="display:block; color:#183a2d; font-size:17px; line-height:1.3;">${escapeHtml(eventType)}</strong>
+            <span style="display:block; margin-top:4px; color:#335d4a; font-size:14px; line-height:1.35;">${escapeHtml(dateLabel)} às ${escapeHtml(timeLabel)} · ${escapeHtml(String(guests || "A definir"))} pax · ${escapeHtml(durationLabel)}</span>
+            <span style="display:block; margin-top:10px; color:#335d4a; font-size:11px; font-weight:800; text-transform:uppercase;">Total estimado</span>
+            <strong style="display:block; margin-top:3px; color:#183a2d; font-size:28px; line-height:1.1;">${formatMoney(total)}</strong>
+            <span style="display:block; margin-top:3px; color:#5d6d64; font-size:12px;">Taxa de serviço incluída conforme proposta.</span>
           </div>
 
-          <div style="background:#f1e6c9; border-radius:14px; padding:18px; margin-bottom:18px;">
-            <span style="display:block; color:#335d4a; font-size:12px; font-weight:900; text-transform:uppercase;">Total estimado</span>
-            <strong style="display:block; margin-top:6px; color:#183a2d; font-size:34px; line-height:1;">${formatMoney(total)}</strong>
-            <span style="display:block; margin-top:8px; color:#5d6d64; font-size:13px;">Taxa de serviço incluída conforme proposta.</span>
-          </div>
+          <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:800; font-size:16px; padding:14px 18px; border-radius:9px; margin:14px 0 20px;">
+            Ver e responder proposta
+          </a>
+
+          <div style="border-top:1px solid #d7e3dc; padding-top:18px; color:#335d4a; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;">Itens da proposta</div>
 
           <table role="presentation" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
             ${getItemsHtml(items)}
@@ -231,11 +223,7 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessag
               : ""
           }
 
-          <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:900; font-size:16px; padding:16px 22px; border-radius:10px; margin-top:18px;">
-            Ver e responder proposta
-          </a>
-
-          <p style="margin:18px 0 0; color:#5d6d64; font-size:13px; line-height:1.6;">
+          <p style="margin:16px 0 0; color:#5d6d64; font-size:13px; line-height:1.6;">
             Se quiser alinhar algum detalhe antes de responder, fale com a equipe de eventos pelo e-mail eventos@embaixadacarioca.com.br ou pelo WhatsApp (21) 97142-6007.
           </p>
         </div>
@@ -245,14 +233,6 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessag
 }
 
 function buildProposalEmailText(proposal: any, proposalUrl: string, customMessage = "") {
-  if (safeText(customMessage)) {
-    return [
-      safeText(customMessage),
-      "",
-      "Equipe de Eventos | Embaixada Carioca",
-    ].join("\n");
-  }
-
   const snapshot = proposal?.snapshot || {};
   const eventType = safeText(proposal?.tipo_evento || snapshot?.event?.type, "Evento");
   const total = formatMoney(proposal?.total || snapshot?.totals?.total || 0);
@@ -269,6 +249,7 @@ function buildProposalEmailText(proposal: any, proposalUrl: string, customMessag
     "Abra sua proposta pelo link abaixo:",
     proposalUrl,
     "",
+    ...(safeText(customMessage) ? ["Mensagem da equipe:", safeText(customMessage), ""] : []),
     "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal.",
     "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
     "Para manter o atendimento organizado, prefira responder pelo link. Se responder este e-mail, sua mensagem chega direto à equipe de eventos.",
