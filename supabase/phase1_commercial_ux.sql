@@ -184,6 +184,11 @@ begin
     values (
       case
         when r.status = 'cancelado' then 'perdido'
+        when r.status in ('rascunho','qualificado') then 'proposta_enviada'
+        when r.status = 'aguardando_sinal' then 'negociacao'
+        when r.status = 'pronto' then 'planejamento'
+        when r.status in ('pre_evento','evento_hoje_amanha') then 'evento_proximo'
+        when r.status = 'realizado' then 'pos_venda'
         else coalesce(r.status, 'proposta_enviada')
       end,
       r.cliente_nome, r.cliente_email, r.cliente_whatsapp,
