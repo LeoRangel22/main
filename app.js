@@ -9703,12 +9703,16 @@ function renderLoadedEditorBar() {
   const dateLabel = context.date ? formatDateFromIso(context.date) : "Data a definir";
   const timeLabel = context.time ? String(context.time).slice(0, 5) : "Horário a definir";
   const stageLabel = getProposalStatusLabel(context.status || "lead_recebido");
+  const activeProposal = getActiveProposal();
+  const versionLabel = activeProposal?.versao
+    ? `V${activeProposal.versao}${activeProposal.publication_status === "draft" ? " · rascunho" : ""}`
+    : "";
   nodes.loadedEditorBar.classList.remove("is-hidden");
   nodes.loadedEditorBar.innerHTML = `
     <div class="loaded-editor-main">
       <span>${escapeHtml(context.sourceLabel || "Carregado do funil")}</span>
       <strong>Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
-      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${dirty ? " · alterações não salvas" : ""}</small>
+      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
     </div>
     <div class="loaded-editor-actions">
       ${dirty ? `<span class="loaded-editor-dirty">Não salvo</span>` : `<span class="loaded-editor-saved">Atualizado</span>`}
@@ -10539,6 +10543,10 @@ function renderPipelineCard(item) {
   const followUpBadge = followUp
     ? `<small class="follow-up-badge follow-up-${escapeHtml(followUp.level)}">${escapeHtml(followUp.label)}</small>`
     : "";
+  const versionBadge =
+    item.kind === "proposal" && item.version
+      ? `<small class="proposal-version-badge${item.isDraft ? " is-draft" : ""}">V${escapeHtml(item.version)}${item.isDraft ? " · rascunho" : ""}</small>`
+      : "";
   const stageChipLabel = item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
@@ -10617,6 +10625,7 @@ function renderPipelineCard(item) {
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
         ${leadAgeBadge}
         ${followUpBadge}
+        ${versionBadge}
         ${topAction}
       </div>
       <div class="pipeline-card-event-row">
