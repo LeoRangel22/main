@@ -614,6 +614,8 @@ const state = {
   session: null,
   proposals: [],
   quoteRequests: [],
+  opportunities: [],
+  proposalViews: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
   activeOpportunityId: "",
@@ -1965,6 +1967,7 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
           : `<p>Salve, envie ou registre pagamentos para criar o histórico deste evento.</p>`
       }
     </div>
+    ${renderProposalJourney(proposal)}
     <div class="timeline-executive-summary">
       ${timelineSummaryCards
         .map(
@@ -2027,6 +2030,44 @@ function renderCommercialTimeline(proposal = getActiveProposal()) {
       }
     </div>
   `;
+}
+
+function getProposalVersions(proposal) {
+  if (!proposal) return [];
+  const key = proposal.oportunidade_id;
+  return state.proposals
+    .filter((row) => key ? row.oportunidade_id === key : row.id === proposal.id)
+    .sort((a, b) => Number(b.versao || 1) - Number(a.versao || 1) || new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+function renderProposalJourney(proposal) {
+  const versions = getProposalVersions(proposal);
+  const published = versions.find((row) => row.is_current && row.publication_status !== "draft") ||
+    versions.find((row) => row.publication_status !== "draft");
+  const views = state.proposalViews.filter((view) => view.proposta_id === published?.id);
+  const lastView = views.reduce((last, view) => !last || view.created_at > last ? view.created_at : last, "");
+  const clientResponse = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao || proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao;
+  const responseLabel = { confirmar: "Aprovou", alteracao: "Pediu ajustes", cancelar: "Não vai seguir" }[clientResponse] || "Aguardando resposta";
+  return `
+    <section class="proposal-journey" aria-label="Acompanhamento da proposta">
+      <div class="proposal-journey-heading">
+        <div><span>Jornada da proposta</span><strong>${published ? `V${escapeHtml(published.versao || 1)} publicada` : "Rascunho"}</strong></div>
+        <small>${escapeHtml(responseLabel)}</small>
+      </div>
+      <div class="proposal-journey-facts">
+        <div><span>Link publicado</span><strong>${published?.sent_at ? escapeHtml(formatSavedAt(published.sent_at)) : "Sem data registrada"}</strong></div>
+        <div><span>Visualização do link</span><strong>${views.length ? `${views.length} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
+        <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
+      </div>
+      <details class="proposal-version-list">
+        <summary>Ver ${versions.length} ${versions.length === 1 ? "versão" : "versões"} preservadas</summary>
+        <div>${versions.map((row) => `
+          <div class="proposal-version-row">
+            <span>V${escapeHtml(row.versao || 1)} · ${row.publication_status === "draft" ? "Rascunho" : row.id === published?.id ? "Publicada" : "Anterior"} · ${escapeHtml(formatMoney(row.total))}</span>
+            <button class="secondary" type="button" data-proposal-id="${escapeHtml(row.id)}" ${row.id === proposal.id ? "disabled" : ""}>${row.id === proposal.id ? "Aberta" : "Abrir"}</button>
+          </div>`).join("")}</div>
+      </details>
+    </section>`;
 }
 
 function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
@@ -7492,6 +7533,11 @@ function createQaProposal(input) {
   const snapshot = createQaProposalSnapshot(input);
   return {
     id: input.id,
+    oportunidade_id: `qa-opp-${input.id}`,
+    versao: 1,
+    is_current: true,
+    publication_status: "sent",
+    sent_at: now,
     responsavel_id: "qa-user",
     responsavel_email: QA_USER_EMAIL,
     cliente_nome: input.clientName,
@@ -7523,6 +7569,7 @@ function createQaRequest(input) {
   const snapshot = createQaSourceSnapshot(input);
   return {
     id: input.id,
+    oportunidade_id: `qa-opp-${input.id}`,
     cliente_nome: input.clientName,
     cliente_email: input.email,
     cliente_whatsapp: input.phone,
@@ -7545,16 +7592,17 @@ function createQaRequest(input) {
 }
 
 function createQaSupabaseClient() {
-  const qaOpportunities = [];
   const tableMap = {
     propostas: () => state.proposals,
     solicitacoes_cotacao: () => state.quoteRequests,
-    oportunidades: () => qaOpportunities,
+    oportunidades: () => state.opportunities,
+    proposta_visualizacoes: () => state.proposalViews,
   };
   const setTable = (table, rows) => {
     if (table === "propostas") state.proposals = rows;
     if (table === "solicitacoes_cotacao") state.quoteRequests = rows;
-    if (table === "oportunidades") qaOpportunities.splice(0, qaOpportunities.length, ...rows);
+    if (table === "oportunidades") state.opportunities = rows;
+    if (table === "proposta_visualizacoes") state.proposalViews = rows;
   };
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -7875,6 +7923,14 @@ function loadQaFixtures() {
 
   state.quoteRequests = [request];
   state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining];
+  state.opportunities = [...state.quoteRequests, ...state.proposals].map((row) => ({
+    id: row.oportunidade_id,
+    status: row.status,
+    responsavel_email: row.id === "qa-request-prioridade" ? null : QA_USER_EMAIL,
+    proxima_acao: row.id === "qa-request-prioridade" ? "Responder lead" : "Retomar cliente",
+    proxima_acao_em: createQaTimestamp(1, 12, 0),
+  }));
+  state.proposalViews = [{ id: "qa-view-1", proposta_id: proposalWaiting.id, created_at: createQaTimestamp(-1, 16, 0) }];
 }
 
 async function initQaMode() {
@@ -8317,6 +8373,10 @@ function getWorkingProposals() {
   return [...grouped.values()];
 }
 
+function getOpportunityForItem(item) {
+  return state.opportunities.find((row) => row.id === item?.opportunityId) || null;
+}
+
 function getPipelineItems() {
   const workingProposals = getWorkingProposals();
   const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
@@ -8353,6 +8413,7 @@ function getPipelineItems() {
         captureStatus: request.capture_status || "complete",
         lastFormStep: request.last_form_step || "",
         opportunityId: request.oportunidade_id || "",
+        ownerEmail: getOpportunityForItem({ opportunityId: request.oportunidade_id })?.responsavel_email || "",
         eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
       };
     });
@@ -8388,6 +8449,7 @@ function getPipelineItems() {
       reference: snapshot.referencia || "",
       snapshot,
       opportunityId: proposal.oportunidade_id || "",
+      ownerEmail: getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.responsavel_email || proposal.responsavel_email || "",
       version: Number(proposal.versao || 1),
       publicationStatus: proposal.publication_status || "sent",
       isDraft: proposal.publication_status === "draft",
@@ -9946,16 +10008,100 @@ function getActionTasks(items = getPipelineItems()) {
   }
 
   const profile = getTeamProfile();
-  const rankedTasks = tasks.map((task) => ({
-    ...task,
-    priority:
-      profile.canManageFinance && getActionTrack(task) === "Financeiro"
-        ? task.priority + 12
-        : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
-          ? task.priority + 6
-          : task.priority,
-  }));
+  const rankedTasks = tasks.map((task) => {
+    const plan = getTaskPlan(task.item);
+    const basePriority = profile.canManageFinance && getActionTrack(task) === "Financeiro"
+      ? task.priority + 12
+      : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
+        ? task.priority + 6 : task.priority;
+    return { ...task, plan, priority: basePriority + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
+  });
   return rankedTasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
+}
+
+function getTaskPlan(item) {
+  const opportunity = getOpportunityForItem(item);
+  const owner = opportunity ? opportunity.responsavel_email || "" : item.ownerEmail || "";
+  const due = opportunity?.proxima_acao_em || "";
+  const dueDate = due ? new Date(due) : null;
+  return {
+    owner,
+    action: opportunity?.proxima_acao || "Definir próximo passo",
+    due,
+    overdue: Boolean(dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()),
+  };
+}
+
+function renderTaskPlan(task) {
+  const plan = task.plan || getTaskPlan(task.item);
+  return `<div class="action-plan${plan.overdue ? " is-overdue" : ""}">
+    <span>${plan.owner ? `Responsável: ${escapeHtml(plan.owner)}` : "Sem responsável"}</span>
+    <span>${escapeHtml(plan.action)} · ${plan.due ? escapeHtml(formatSavedAt(plan.due)) : "sem prazo"}${plan.overdue ? " · atrasado" : ""}</span>
+    <button class="secondary action-plan-button" type="button" data-plan-kind="${escapeHtml(task.item.kind)}" data-plan-id="${escapeHtml(task.item.id)}">Definir ação</button>
+  </div>`;
+}
+
+function openActionPlanDialog(kind, id) {
+  const item = getPipelineItems().find((row) => row.kind === kind && row.id === id);
+  if (!item?.opportunityId) {
+    showToast("Este registro ainda não tem vínculo comercial. Atualize o funil e tente novamente.");
+    return;
+  }
+  const plan = getTaskPlan(item);
+  const localDue = getLocalInputDateTime(plan.due || new Date(Date.now() + 864e5));
+  const dialog = document.createElement("dialog");
+  dialog.className = "action-plan-dialog";
+  dialog.innerHTML = `<form method="dialog" class="action-plan-form">
+    <div><span>Próxima ação</span><h2>${escapeHtml(item.name || "Cliente")}</h2><p>Defina quem fará o próximo contato e quando. O plano aparece em Hoje e no funil.</p></div>
+    <label>Responsável<select name="owner" required>
+      <option value="">Escolha uma pessoa</option>
+      ${TEAM_EMAILS.map((email) => `<option value="${escapeHtml(email)}" ${plan.owner === email ? "selected" : ""}>${escapeHtml(email)}</option>`).join("")}
+    </select></label>
+    <label>Próximo passo<input name="action" maxlength="120" required value="${escapeHtml(plan.action === "Definir próximo passo" ? "" : plan.action)}" placeholder="Ex.: ligar para confirmar o formato" /></label>
+    <label>Prazo<input name="due" type="datetime-local" required value="${localDue.date}T${localDue.time}" /></label>
+    <label class="action-plan-contact"><input name="contact" type="checkbox" /> Contato realizado agora</label>
+    <p class="action-plan-error" role="alert" hidden></p>
+    <div class="action-plan-dialog-actions"><button class="secondary" type="button" data-close-plan>Cancelar</button><button class="primary" type="submit">Salvar plano</button></div>
+  </form>`;
+  document.body.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.querySelector("[data-close-plan]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const due = new Date(form.elements.due.value);
+    if (Number.isNaN(due.getTime())) return;
+    const submit = form.querySelector('[type="submit"]');
+    submit.disabled = true;
+    const auth = await ensureTeamSessionForWrite("salvar o plano comercial");
+    if (!auth.ok) {
+      form.querySelector(".action-plan-error").textContent = auth.message;
+      form.querySelector(".action-plan-error").hidden = false;
+      submit.disabled = false;
+      return;
+    }
+    const changes = {
+      responsavel_email: form.elements.owner.value,
+      responsavel_id: form.elements.owner.value === normalizeEmail(state.session?.user?.email) ? state.session?.user?.id || null : null,
+      proxima_acao: form.elements.action.value.trim(),
+      proxima_acao_em: due.toISOString(),
+      ...(form.elements.contact.checked ? { ultimo_contato_em: new Date().toISOString() } : {}),
+    };
+    const { data, error } = await state.supabase.from("oportunidades").update(changes).eq("id", item.opportunityId).select("*").single();
+    if (error || !data) {
+      form.querySelector(".action-plan-error").textContent = "Não foi possível salvar. Confira a conexão e tente novamente.";
+      form.querySelector(".action-plan-error").hidden = false;
+      submit.disabled = false;
+      return;
+    }
+    state.opportunities = state.opportunities.map((row) => row.id === data.id ? data : row);
+    dialog.close();
+    renderPipeline();
+    renderCommercialTimeline(getActiveProposal());
+    showToast("Responsável e próxima ação salvos.");
+  });
+  dialog.showModal();
 }
 
 function getActionTaskSteps(task = {}) {
@@ -10034,6 +10180,7 @@ function renderActionTasks(items = getPipelineItems()) {
         <strong>${escapeHtml(topTask.title)}</strong>
         <small>${escapeHtml(topItem.name || "Cliente")} · ${escapeHtml(topTask.meta)}</small>
         <p>${escapeHtml(topTask.note)}</p>
+        ${renderTaskPlan(topTask)}
         <ol class="action-focus-steps">${topSteps}</ol>
       </div>
       ${topActionButton}
@@ -10066,6 +10213,7 @@ function renderActionTasks(items = getPipelineItems()) {
             <small>${escapeHtml(task.meta)}</small>
             ${task.sla ? `<small class="action-task-sla sla-${escapeHtml(task.sla.level)}">${escapeHtml(task.sla.label)}</small>` : ""}
             <p>${escapeHtml(task.note)}</p>
+            ${renderTaskPlan(task)}
           </div>
           ${clientChangeBlock}
           <div class="action-task-footer">
@@ -10607,6 +10755,11 @@ function renderPipelineCard(item) {
       ${primaryActionButton}
     </div>
   `;
+  const plan = getTaskPlan(item);
+  const planLine = item.opportunityId && item.status !== "cancelado" ? `<div class="pipeline-plan-line${plan.overdue ? " is-overdue" : ""}">
+    <span>${plan.owner ? escapeHtml(plan.owner) : "Sem responsável"} · ${escapeHtml(plan.action)} · ${plan.due ? escapeHtml(formatSavedAt(plan.due)) : "sem prazo"}</span>
+    <button class="secondary" type="button" data-plan-kind="${escapeHtml(item.kind)}" data-plan-id="${escapeHtml(item.id)}">Planejar</button>
+  </div>` : "";
   const remainingButton =
     item.kind === "proposal" && item.status === "pagamento_final" && !item.hasPaymentComplete
       ? `<button class="pipeline-top-action pipeline-final-payment-action" type="button" data-mark-final-payment="${escapeHtml(item.id)}" title="Registrar pagamento restante">Registrar saldo</button>`
@@ -10669,6 +10822,7 @@ function renderPipelineCard(item) {
       ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
       ${riskAlertsLine}
       ${primaryActionLine}
+      ${planLine}
       ${clientResponseLine}
       <div class="pipeline-card-bottom-row">
         <small class="pipeline-card-reference-bottom">${escapeHtml(item.reference || "Sem referência")}</small>
@@ -10818,8 +10972,22 @@ async function loadQuoteRequests() {
   }
 
   state.quoteRequests = data || [];
+  await loadCommercialInsights();
   renderQuoteRequests();
   await applyPendingDashboardTarget();
+}
+
+async function loadCommercialInsights() {
+  if (!state.supabase || !state.session) return;
+  const [opportunities, views] = await Promise.all([
+    fetchAllRows("oportunidades"),
+    fetchAllRows("proposta_visualizacoes"),
+  ]);
+  if (opportunities.error) console.warn("Falha ao carregar planos comerciais.", opportunities.error);
+  else state.opportunities = opportunities.data || [];
+  if (views.error) console.warn("Falha ao carregar visualizações de propostas.", views.error);
+  else state.proposalViews = views.data || [];
+  renderCommercialTimeline(getActiveProposal());
 }
 
 function buildNotesFromRequest(request) {
@@ -11377,6 +11545,8 @@ async function initSupabase() {
       else {
         state.proposals = [];
         state.quoteRequests = [];
+        state.opportunities = [];
+        state.proposalViews = [];
         renderHistory();
         renderConfirmedEvents();
         renderQuoteRequests();
@@ -11682,6 +11852,8 @@ async function logoutSupabase() {
   state.session = null;
   state.proposals = [];
   state.quoteRequests = [];
+  state.opportunities = [];
+  state.proposalViews = [];
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   state.activeOpportunityId = "";
@@ -13862,7 +14034,11 @@ function bindEvents() {
   });
   document.querySelector("#recoverMagicLinkBtn")?.addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn")?.addEventListener("click", logoutSupabase);
-  document.querySelector("#refreshHistoryBtn")?.addEventListener("click", loadProposalHistory);
+  document.querySelector("#refreshHistoryBtn")?.addEventListener("click", async () => {
+    await loadProposalHistory();
+    await loadCommercialInsights();
+    renderPipeline();
+  });
   document.querySelector("#refreshPipelineBtn")?.addEventListener("click", async () => {
     await loadProposalHistory();
     await loadQuoteRequests();
@@ -13896,6 +14072,11 @@ function bindEvents() {
     if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Relatório");
   });
   nodes.actionList?.addEventListener("click", async (event) => {
+    const planButton = event.target.closest("button[data-plan-id]");
+    if (planButton) {
+      openActionPlanDialog(planButton.dataset.planKind, planButton.dataset.planId);
+      return;
+    }
     const changeButton = event.target.closest("[data-client-change-id]");
     if (changeButton) {
       showClientChangeDetails(changeButton.dataset.clientChangeKind, changeButton.dataset.clientChangeId);
@@ -14065,7 +14246,16 @@ function bindEvents() {
     if (!button) return;
     await safeOpenSavedProposal(button.dataset.proposalId, "Histórico");
   });
+  nodes.commercialTimeline?.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-proposal-id]");
+    if (button) await safeOpenSavedProposal(button.dataset.proposalId, "Versões da proposta");
+  });
   nodes.pipelineBoard?.addEventListener("click", async (event) => {
+    const planButton = event.target.closest("button[data-plan-id]");
+    if (planButton) {
+      openActionPlanDialog(planButton.dataset.planKind, planButton.dataset.planId);
+      return;
+    }
     const changeButton = event.target.closest("[data-client-change-id]");
     if (changeButton) {
       showClientChangeDetails(changeButton.dataset.clientChangeKind, changeButton.dataset.clientChangeId);

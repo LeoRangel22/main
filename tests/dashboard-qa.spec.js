@@ -8,6 +8,39 @@ const {
 } = require("./support");
 
 test.describe("Dashboard interno em modo QA", () => {
+  test("plano comercial salva responsável, prazo e contato e acompanha versão visualizada", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+
+    const card = page.locator('[data-pipeline-card-id="qa-request-prioridade"]');
+    await expect(card).toContainText("Sem responsável");
+    await card.getByRole("button", { name: "Planejar" }).click();
+    const dialog = page.locator(".action-plan-dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.locator('[name="owner"]').selectOption("eventos@embaixadacarioca.com.br");
+    await dialog.locator('[name="action"]').fill("Ligar para alinhar o almoço");
+    await dialog.locator('[name="contact"]').check();
+    await dialog.getByRole("button", { name: "Salvar plano" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(card).toContainText("Ligar para alinhar o almoço");
+    expect(await page.evaluate(() => state.opportunities.find((row) => row.id === "qa-opp-qa-request-prioridade")?.ultimo_contato_em)).toBeTruthy();
+
+    await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]').getByRole("button", { name: /Reenviar|Abrir/i }).click();
+    await expect(page.locator(".proposal-journey")).toContainText("V1 publicada");
+    await expect(page.locator(".proposal-journey")).toContainText("1 · última");
+    await expect(page.locator(".proposal-version-list")).toContainText("1 versão preservada");
+    await page.evaluate(() => {
+      const current = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
+      state.proposals.unshift({ ...current, id: "qa-proposal-v2-draft", versao: 2, is_current: false, publication_status: "draft", sent_at: null });
+      renderCommercialTimeline(current);
+    });
+    await expect(page.locator(".proposal-journey")).toContainText("V1 publicada");
+    await page.locator(".proposal-version-list summary").click();
+    await expect(page.locator(".proposal-version-list")).toContainText("V2 · Rascunho");
+    await expect(page.locator(".proposal-version-list")).toContainText("V1 · Publicada");
+    await expectNoBrowserErrors(errors);
+  });
+
   test("abre um lead pelo funil e leva a equipe direto para o editor", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
