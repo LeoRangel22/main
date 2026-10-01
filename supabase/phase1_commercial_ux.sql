@@ -880,3 +880,241 @@ set status = status
 where proxima_acao is null
   and status not in ('perdido','cancelado');
 
+
+
+-- ---------------------------------------------------------------------------
+-- 9. Respostas e visualizacoes de links antigos tambem seguem a versao atual
+-- ---------------------------------------------------------------------------
+
+create or replace function public.record_public_proposal_view(
+  proposal_token uuid,
+  user_agent text default null,
+  referrer text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_id uuid;
+  target_store_id uuid;
+begin
+  select coalesce(current_p.id, requested.id), coalesce(current_p.store_id, requested.store_id)
+    into target_id, target_store_id
+  from public.propostas requested
+  left join public.propostas current_p
+    on current_p.oportunidade_id = requested.oportunidade_id
+   and current_p.is_current = true
+  where requested.public_token = proposal_token
+  limit 1;
+
+  if target_id is null then
+    return false;
+  end if;
+
+  insert into public.proposta_visualizacoes (proposta_id, public_token, store_id, user_agent, referrer)
+  values (target_id, proposal_token, target_store_id, left(coalesce(user_agent, ''), 500), left(coalesce(referrer, ''), 500));
+
+  return true;
+exception
+  when undefined_column then
+    -- Compatibilidade caso a fase multi-loja ainda nao tenha adicionado store_id.
+    insert into public.proposta_visualizacoes (proposta_id, public_token, user_agent, referrer)
+    values (target_id, proposal_token, left(coalesce(user_agent, ''), 500), left(coalesce(referrer, ''), 500));
+    return true;
+end;
+$$;
+
+grant execute on function public.record_public_proposal_view(uuid, text, text) to anon, authenticated;
+
+create or replace function public.respond_public_proposal(
+  proposal_token uuid,
+  action text,
+  requested_date date default null,
+  requested_time time default null,
+  requested_guests integer default null,
+  message text default null,
+  payment_proof jsonb default null
+)
+returns table (
+  ok boolean,
+  status text,
+  cliente_resposta text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  normalized_action text := lower(trim(coalesce(action, '')));
+  clean_message text := nullif(trim(coalesce(message, '')), '');
+  target_id uuid;
+  current_status text;
+  current_snapshot jsonb;
+  response_payload jsonb;
+  history_entry jsonb;
+  proof_history_entry jsonb := null;
+  clean_proof jsonb := null;
+  signal_payment jsonb := null;
+  next_status text;
+  new_snapshot jsonb;
+  proposal_total numeric := 0;
+  proof_name text;
+  proof_type text;
+  proof_size integer;
+  proof_data_url text;
+begin
+  if normalized_action not in ('confirmar', 'cancelar', 'alteracao') then
+    raise exception 'Acao invalida.';
+  end if;
+
+  if requested_guests is not null and (requested_guests < 1 or requested_guests > 500) then
+    raise exception 'Numero de convidados invalido.';
+  end if;
+
+  if normalized_action in ('cancelar', 'alteracao') and length(coalesce(clean_message, '')) < 3 then
+    raise exception 'Mensagem obrigatoria.';
+  end if;
+
+  select
+    coalesce(current_p.id, requested.id),
+    coalesce(current_p.status, requested.status),
+    coalesce(current_p.snapshot, requested.snapshot, '{}'::jsonb),
+    coalesce(current_p.total, requested.total, 0)
+  into target_id, current_status, current_snapshot, proposal_total
+  from public.propostas requested
+  left join public.propostas current_p
+    on current_p.oportunidade_id = requested.oportunidade_id
+   and current_p.is_current = true
+   and current_p.public_token_revoked_at is null
+   and current_p.public_token_expires_at > now()
+  where requested.public_token = proposal_token
+    and requested.public_token_revoked_at is null
+  limit 1;
+
+  if target_id is null or current_snapshot is null then
+    raise exception 'Proposta nao encontrada ou link expirado.';
+  end if;
+
+  if current_status not in ('proposta_enviada', 'negociacao') then
+    raise exception 'Esta proposta nao aceita mais respostas pelo link publico.';
+  end if;
+
+  if payment_proof is not null then
+    proof_name := left(nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''), 160);
+    proof_type := lower(nullif(trim(coalesce(payment_proof ->> 'tipo', '')), ''));
+    proof_data_url := nullif(trim(coalesce(payment_proof ->> 'dataUrl', '')), '');
+    proof_size := nullif(trim(coalesce(payment_proof ->> 'tamanho', '')), '')::integer;
+
+    if proof_name is null or proof_type is null or proof_data_url is null then
+      raise exception 'Comprovante incompleto.';
+    end if;
+    if proof_size is null or proof_size <= 0 or proof_size > 5242880 then
+      raise exception 'Comprovante acima do limite permitido.';
+    end if;
+    if proof_type not in ('application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif') then
+      raise exception 'Tipo de comprovante nao permitido.';
+    end if;
+    if length(proof_data_url) > 7200000 or proof_data_url !~ '^data:(application/pdf|image/(jpeg|png|webp|heic|heif));base64,' then
+      raise exception 'Formato do comprovante invalido.';
+    end if;
+
+    clean_proof := jsonb_strip_nulls(jsonb_build_object(
+      'nome', proof_name,
+      'tipo', proof_type,
+      'tamanho', proof_size,
+      'dataUrl', proof_data_url,
+      'anexadoEm', coalesce(payment_proof ->> 'anexadoEm', now()::text)
+    ));
+  end if;
+
+  response_payload := jsonb_strip_nulls(jsonb_build_object(
+    'acao', normalized_action,
+    'data', requested_date,
+    'horario', requested_time,
+    'convidados', requested_guests,
+    'mensagem', clean_message,
+    'comprovante', clean_proof,
+    'registradoEm', now()
+  ));
+
+  history_entry := jsonb_build_object(
+    'id', 'cliente-' || extract(epoch from now())::text,
+    'type', 'cliente_resposta',
+    'title', case
+      when normalized_action = 'confirmar' then 'Cliente aprovou a proposta'
+      when normalized_action = 'cancelar' then 'Cliente solicitou cancelamento'
+      else 'Cliente solicitou alteração'
+    end,
+    'detail', coalesce(clean_message, 'Resposta registrada pelo link público.') ||
+      case when clean_proof is not null then ' Comprovante anexado: ' || coalesce(clean_proof ->> 'nome', 'arquivo') else '' end,
+    'at', now(),
+    'actor', 'Cliente'
+  );
+
+  next_status := case when normalized_action = 'cancelar' then 'cancelado' else 'negociacao' end;
+  new_snapshot := jsonb_set(current_snapshot, '{clienteResposta}', response_payload, true);
+
+  if normalized_action = 'cancelar' then
+    new_snapshot := jsonb_set(
+      new_snapshot,
+      '{cancelamento}',
+      jsonb_build_object(
+        'motivo', coalesce(clean_message, 'Cancelado pelo cliente'),
+        'canceladoEm', now(),
+        'canceladoPor', 'cliente'
+      ),
+      true
+    );
+  end if;
+
+  if normalized_action = 'confirmar' and clean_proof is not null then
+    signal_payment := jsonb_strip_nulls(jsonb_build_object(
+      'valor', round(coalesce(proposal_total, 0) * 0.5, 2),
+      'data', current_date,
+      'bancos', jsonb_build_array('A validar'),
+      'comprovante', clean_proof,
+      'registradoEm', now(),
+      'registradoPor', 'Cliente via proposta pública',
+      'origem', 'proposta_publica',
+      'validacaoPendente', true
+    ));
+
+    proof_history_entry := jsonb_build_object(
+      'id', 'sinal-cliente-' || extract(epoch from now())::text,
+      'type', 'comprovante_sinal',
+      'title', 'Comprovante enviado pelo cliente',
+      'detail', 'Comprovante anexado pelo link público. Validar no banco antes da confirmação operacional: ' || coalesce(clean_proof ->> 'nome', 'arquivo'),
+      'at', now(),
+      'actor', 'Cliente'
+    );
+  end if;
+
+  new_snapshot := jsonb_set(
+    new_snapshot,
+    '{commercialHistory}',
+    (case when proof_history_entry is not null then jsonb_build_array(proof_history_entry, history_entry) else jsonb_build_array(history_entry) end)
+      || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
+    true
+  );
+
+  if signal_payment is not null then
+    new_snapshot := jsonb_set(new_snapshot, '{pagamentoSinal}', signal_payment, true);
+  end if;
+
+  update public.propostas
+  set
+    status = next_status,
+    cliente_resposta = normalized_action,
+    cliente_resposta_em = now(),
+    cliente_mensagem = clean_message,
+    cliente_solicitacao = response_payload,
+    snapshot = new_snapshot
+  where id = target_id;
+
+  return query select true, next_status, normalized_action;
+end;
+$$;
+
+grant execute on function public.respond_public_proposal(uuid, text, date, time, integer, text, jsonb) to anon, authenticated;
