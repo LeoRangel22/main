@@ -8147,20 +8147,24 @@ function renderHistory() {
     return;
   }
 
-  nodes.historyList.innerHTML = state.proposals
+  nodes.historyList.innerHTML = getWorkingProposals()
+    .slice(0, 100)
     .map((proposal) => {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
       const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
       const statusLabel = getProposalStatusLabel(proposal.status);
       const statusClass = operationStatuses.has(normalizeProposalStatus(proposal.status)) ? " confirmed" : "";
+      const versionLabel = proposal.versao
+        ? `V${proposal.versao}${proposal.publication_status === "draft" ? " · rascunho" : ""}`
+        : "";
       return `
         <button class="history-item" type="button" data-proposal-id="${escapeHtml(proposal.id)}">
           <strong>
             <span>${escapeHtml(proposal.cliente_nome || "Cliente")}</span>
             <span>${formatMoney(proposal.total)}</span>
           </strong>
-          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</small>
-          <small><span class="status-chip${statusClass}">${escapeHtml(statusLabel)}</span>Salva em ${escapeHtml(formatSavedAt(proposal.created_at))}</small>
+          <small>${escapeHtml(proposal.tipo_evento || "Evento")} · ${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}</small>
+          <small><span class="status-chip${statusClass}">${escapeHtml(statusLabel)}</span>Atualizada em ${escapeHtml(formatSavedAt(proposal.updated_at || proposal.created_at))}</small>
         </button>
       `;
     })
