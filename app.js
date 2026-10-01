@@ -1033,7 +1033,16 @@ function saveGeneralTerms() {
 function loadSupabaseConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem(SUPABASE_CONFIG_KEY) || "null");
-    if (saved && saved.url && saved.anonKey) return saved;
+    if (saved && saved.url && saved.anonKey) {
+      // Evita que uma chave antiga salva neste navegador continue prevalecendo
+      // depois de uma atualização da configuração oficial do projeto.
+      if (saved.url === DEFAULT_SUPABASE_URL && saved.anonKey !== DEFAULT_SUPABASE_ANON_KEY) {
+        const canonical = { url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY };
+        localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(canonical));
+        return canonical;
+      }
+      return saved;
+    }
   } catch (error) {
     console.warn("Não foi possível carregar configuração do Supabase.", error);
   }
@@ -11293,6 +11302,65 @@ async function loginWithEmail() {
   }
 }
 
+function getPasswordLoginErrorMessage(error) {
+  const raw = [error?.message, error?.code, error?.name, error?.status].filter(Boolean).join(" ");
+  const text = raw.toLowerCase();
+
+  if (text.includes("invalid login credentials") || text.includes("invalid_credentials")) {
+    return "E-mail ou senha não conferem no Supabase Auth.";
+  }
+  if (text.includes("email not confirmed") || text.includes("email_not_confirmed")) {
+    return "Este usuário existe, mas o e-mail ainda não foi confirmado no Supabase Auth.";
+  }
+  if (text.includes("email provider is disabled") || text.includes("email signups are disabled") || text.includes("provider_disabled")) {
+    return "O login por e-mail está desabilitado no Supabase. Ative Authentication > Providers > Email.";
+  }
+  if (text.includes("invalid api key") || text.includes("invalid jwt") || text.includes("jwt") && text.includes("invalid")) {
+    return "A chave pública do Supabase não foi aceita. A conexão oficial será restaurada e você pode tentar novamente.";
+  }
+  if (
+    text.includes("failed to fetch") ||
+    text.includes("network") ||
+    text.includes("503") ||
+    text.includes("502") ||
+    text.includes("504") ||
+    text.includes("project") && text.includes("paused") ||
+    text.includes("database error")
+  ) {
+    return "O Supabase ainda não respondeu normalmente após a reativação. Aguarde alguns segundos e tente novamente.";
+  }
+
+  console.warn("Falha de login Supabase não categorizada.", {
+    message: error?.message,
+    code: error?.code,
+    status: error?.status,
+    name: error?.name,
+  });
+  return `Falha no login do Supabase${error?.status ? ` (HTTP ${error.status})` : ""}: ${error?.message || "erro não identificado"}.`;
+}
+
+function shouldRetrySupabasePasswordLogin(error) {
+  const text = [error?.message, error?.code, error?.name, error?.status].filter(Boolean).join(" ").toLowerCase();
+  return (
+    text.includes("failed to fetch") ||
+    text.includes("network") ||
+    text.includes("502") ||
+    text.includes("503") ||
+    text.includes("504") ||
+    text.includes("project") && text.includes("paused") ||
+    text.includes("database error")
+  );
+}
+
+function shouldRestoreCanonicalSupabaseConfig(error) {
+  const text = [error?.message, error?.code, error?.name, error?.status].filter(Boolean).join(" ").toLowerCase();
+  return text.includes("invalid api key") || text.includes("invalid jwt") || text.includes("apikey");
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 async function loginWithPassword() {
   if (!state.supabase) {
     showToast("A conexão da equipe ainda está carregando. Tente novamente em instantes.");
@@ -11318,19 +11386,46 @@ async function loginWithPassword() {
   }
 
   try {
-    const { error } = await state.supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      const text = `${error.message || ""}`.toLowerCase();
-      const message = text.includes("invalid login credentials")
-        ? "Senha não conferiu para este e-mail. Revise a senha cadastrada no Supabase Auth."
-        : "Não foi possível entrar com senha agora. Confira o usuário no Supabase Auth.";
+    let result = await state.supabase.auth.signInWithPassword({ email, password });
+
+    // Ao sair de um estado pausado o Auth pode levar alguns segundos para responder.
+    // Fazemos uma única tentativa adicional para falhas transitórias.
+    if (result.error && shouldRetrySupabasePasswordLogin(result.error)) {
+      nodes.authStatus.textContent = "Supabase reativado, aguardando o serviço de autenticação...";
+      await wait(1800);
+      result = await state.supabase.auth.signInWithPassword({ email, password });
+    }
+
+    // Se este navegador guardou uma chave antiga, volta automaticamente para a
+    // configuração oficial embarcada no app e tenta mais uma vez.
+    if (result.error && shouldRestoreCanonicalSupabaseConfig(result.error)) {
+      saveSupabaseConfig(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+      state.supabase = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+      if (fields.supabaseUrl) fields.supabaseUrl.value = DEFAULT_SUPABASE_URL;
+      if (fields.supabaseAnonKey) fields.supabaseAnonKey.value = DEFAULT_SUPABASE_ANON_KEY;
+      result = await state.supabase.auth.signInWithPassword({ email, password });
+    }
+
+    if (result.error) {
+      const message = getPasswordLoginErrorMessage(result.error);
       nodes.authStatus.textContent = message;
       showToast(message);
       return;
     }
+
+    state.session = result.data?.session || null;
     if (fields.loginPassword) fields.loginPassword.value = "";
     nodes.authStatus.textContent = "Acesso liberado com senha.";
+    updateAuthUI();
+    if (state.session) {
+      await loadProposalHistory();
+      await loadQuoteRequests();
+    }
     showToast("Acesso liberado.");
+  } catch (error) {
+    const message = getPasswordLoginErrorMessage(error);
+    nodes.authStatus.textContent = message;
+    showToast(message);
   } finally {
     if (button) {
       button.disabled = false;
