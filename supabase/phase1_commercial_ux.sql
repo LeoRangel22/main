@@ -205,20 +205,29 @@ begin
 end
 $$;
 
--- Numera versoes antigas por oportunidade e deixa apenas a mais recente como atual.
-with ranked as (
-  select
-    id,
-    row_number() over (
-      partition by oportunidade_id
-      order by created_at asc, id asc
-    ) as rn,
-    row_number() over (
-      partition by oportunidade_id
-      order by created_at desc, id desc
-    ) as reverse_rn
+-- Numera somente o legado ainda não migrado. O filtro por sent_at evita que
+-- uma reexecução futura transforme um rascunho novo em versão publicada.
+with migration_targets as (
+  select distinct oportunidade_id
   from public.propostas
   where oportunidade_id is not null
+    and publication_status = 'sent'
+    and sent_at is null
+),
+ranked as (
+  select
+    p.id,
+    row_number() over (
+      partition by p.oportunidade_id
+      order by p.created_at asc, p.id asc
+    ) as rn,
+    row_number() over (
+      partition by p.oportunidade_id
+      order by p.created_at desc, p.id desc
+    ) as reverse_rn
+  from public.propostas p
+  join migration_targets mt on mt.oportunidade_id = p.oportunidade_id
+  where p.publication_status = 'sent'
 )
 update public.propostas p
 set
