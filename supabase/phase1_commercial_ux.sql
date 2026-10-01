@@ -931,6 +931,29 @@ where proxima_acao is null
 
 
 
+-- O schema em producao pode ter sido instalado antes da tabela de visualizacoes.
+-- Cria a dependencia sem alterar as propostas e solicitacoes legadas.
+create table if not exists public.proposta_visualizacoes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  proposta_id uuid not null references public.propostas(id) on delete cascade,
+  public_token uuid not null,
+  user_agent text,
+  referrer text
+);
+
+create index if not exists proposta_visualizacoes_proposta_idx
+  on public.proposta_visualizacoes (proposta_id, created_at desc);
+
+alter table public.proposta_visualizacoes enable row level security;
+
+drop policy if exists "Equipe autenticada pode ler visualizacoes de proposta" on public.proposta_visualizacoes;
+create policy "Equipe autenticada pode ler visualizacoes de proposta"
+on public.proposta_visualizacoes
+for select
+to authenticated
+using ((select public.is_team_member()));
+
 -- ---------------------------------------------------------------------------
 -- 9. Respostas e visualizacoes de links antigos tambem seguem a versao atual
 -- ---------------------------------------------------------------------------
