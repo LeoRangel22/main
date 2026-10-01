@@ -296,7 +296,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   if new.oportunidade_id is not null
      and coalesce(new.is_current, false) = true
@@ -313,7 +313,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists propostas_promote_version on public.propostas;
 create trigger propostas_promote_version
