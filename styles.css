@@ -1833,6 +1833,50 @@ textarea[aria-invalid="true"] {
   justify-content: flex-end;
 }
 
+.send-confirm-dialog {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(14, 35, 27, 0.24);
+  color: var(--ink);
+  max-height: min(90vh, 800px);
+  max-width: min(92vw, 560px);
+  padding: 24px;
+  width: 100%;
+}
+
+.send-confirm-dialog::backdrop {
+  background: rgba(15, 35, 27, 0.56);
+}
+
+.send-confirm-form {
+  display: grid;
+  gap: 18px;
+}
+
+.send-confirm-form h2 {
+  line-height: 1.15;
+  margin: 0;
+}
+
+.send-confirm-details {
+  background: rgba(24, 58, 45, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 55vh;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
+.send-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .action-plan-form .action-plan-error {
   color: var(--danger);
 }
