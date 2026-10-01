@@ -337,6 +337,11 @@ begin
         then coalesce(ganho_em, now())
       else ganho_em
     end,
+    motivo_perda = case
+      when new.status = 'cancelado'
+        then coalesce(nullif(new.snapshot #>> '{cancelamento,motivo}', ''), motivo_perda, 'Cancelado')
+      else null
+    end,
     perdido_em = case
       when new.status = 'cancelado' then coalesce(perdido_em, now())
       else null
@@ -379,7 +384,16 @@ begin
     data_evento = coalesce(new.data_evento, data_evento),
     horario_evento = coalesce(new.horario_evento, horario_evento),
     convidados = coalesce(new.convidados, convidados),
-    origem = coalesce(new.origem, origem)
+    origem = coalesce(new.origem, origem),
+    motivo_perda = case
+      when new.status = 'cancelado'
+        then coalesce(nullif(new.snapshot #>> '{cancelamento,motivo}', ''), motivo_perda, 'Cancelado')
+      else null
+    end,
+    perdido_em = case
+      when new.status = 'cancelado' then coalesce(perdido_em, now())
+      else null
+    end
   where id = new.oportunidade_id;
 
   return new;
@@ -842,24 +856,28 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.status in ('lead_recebido') then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Responder lead');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '2 hours');
+  if tg_op = 'UPDATE' and new.status is not distinct from old.status then
+    return new;
+  end if;
+
+  if new.status = 'lead_recebido' then
+    new.proxima_acao := 'Responder lead';
+    new.proxima_acao_em := now() + interval '2 hours';
   elsif new.status = 'proposta_enviada' then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Retomar cliente');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '1 day');
+    new.proxima_acao := 'Retomar cliente';
+    new.proxima_acao_em := now() + interval '1 day';
   elsif new.status = 'negociacao' then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Avancar negociacao');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '1 day');
+    new.proxima_acao := 'Avancar negociacao';
+    new.proxima_acao_em := now() + interval '1 day';
   elsif new.status in ('confirmado','pagamento_final') then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Fechar pagamento');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '1 day');
+    new.proxima_acao := 'Fechar pagamento';
+    new.proxima_acao_em := now() + interval '1 day';
   elsif new.status in ('planejamento','evento_proximo') then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Revisar operacao');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '1 day');
-  elsif new.status in ('pos_venda') then
-    new.proxima_acao := coalesce(new.proxima_acao, 'Fazer pos-venda');
-    new.proxima_acao_em := coalesce(new.proxima_acao_em, now() + interval '2 days');
+    new.proxima_acao := 'Revisar operacao';
+    new.proxima_acao_em := now() + interval '1 day';
+  elsif new.status = 'pos_venda' then
+    new.proxima_acao := 'Fazer pos-venda';
+    new.proxima_acao_em := now() + interval '2 days';
   elsif new.status in ('perdido','cancelado') then
     new.proxima_acao := null;
     new.proxima_acao_em := null;
