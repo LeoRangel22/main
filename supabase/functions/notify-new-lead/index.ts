@@ -15,6 +15,8 @@
   observacoes?: string
   origem?: string
   status?: string
+  capture_status?: string
+  last_form_step?: string
   snapshot?: Record<string, unknown>
 }
 
@@ -92,6 +94,16 @@ function getDaysUntil(value?: string | null) {
 function getPriorityMeta(record: LeadRecord) {
   const daysUntil = getDaysUntil(record.data_evento)
   const guests = Number(record.convidados || 0)
+
+  if (record.capture_status === "partial" || record.status === "rascunho_cliente") {
+    return {
+      label: "Lead capturado",
+      subjectPrefix: "[LEAD CAPTURADO]",
+      badgeBackground: "#fff2d8",
+      badgeColor: "#8a5a00",
+      note: "O cliente deixou contato antes de concluir o formulário. O cadastro continua sendo atualizado; se ele não concluir, retome sem pedir que comece de novo.",
+    }
+  }
 
   if ((daysUntil !== null && daysUntil <= 7) || guests >= 120) {
     return {
@@ -193,7 +205,7 @@ function buildEmailHtml(record: LeadRecord) {
           <div style="font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#f2d9a2;">Embaixada Carioca</div>
           <h1 style="margin:10px 0 0; font-size:32px; line-height:1.08;">Novo lead de evento</h1>
           <p style="margin:12px 0 0; font-size:16px; line-height:1.55; color:#e8f1ec;">
-            Entrou uma nova solicitação pelo formulário externo. Vale fazer o primeiro contato enquanto o interesse está quente.
+            ${\n              record.capture_status === "partial" || record.status === "rascunho_cliente"\n                ? "O cliente deixou contato antes de concluir o formulário. O lead já está salvo e continuará sendo atualizado enquanto ele preenche."\n                : "Entrou uma nova solicitação pelo formulário externo. Vale fazer o primeiro contato enquanto o interesse está quente."\n            }
           </p>
         </div>
 
