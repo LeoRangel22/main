@@ -884,6 +884,7 @@ function setLanguage(language) {
   renderRecommendations();
   updateGuestOutput();
   renderFinalReview();
+  renderReturningClientCopy();
 }
 
 function setStatus(message, type = "neutral") {
@@ -1740,6 +1741,223 @@ function validateSnapshot(snapshot) {
   return true;
 }
 
+function getCanonicalKeyByLabel(map, label) {
+  const normalized = String(label || "").trim().toLowerCase();
+  return Object.entries(map).find(([, value]) => String(value || "").trim().toLowerCase() === normalized)?.[0] || "";
+}
+
+function renderReturningClientCopy() {
+  const isEn = uiState.language === "en";
+  const copyMap = {
+    returningClientSummary: isEn ? "Have you held an event or received a proposal from us?" : "Já fez evento ou recebeu proposta conosco?",
+    returningClientSummaryAction: isEn ? "Access history" : "Acessar histórico",
+    returningClientTitle: isEn ? "Come back without filling everything out again" : "Volte sem preencher tudo de novo",
+    returningClientBody: isEn ? "Use the same e-mail as before to resume a proposal or repeat an event in a few steps." : "Use o mesmo e-mail de antes para retomar uma proposta ou repetir um evento em poucos passos.",
+    returningClientEmailLabel: isEn ? "Your e-mail" : "Seu e-mail",
+  };
+  Object.entries(copyMap).forEach(([id, value]) => {
+    const node = document.querySelector("#" + id);
+    if (node) node.textContent = value;
+  });
+  const button = document.querySelector("#returningClientSendOtp");
+  if (button) button.textContent = isEn ? "Send access link" : "Receber acesso por e-mail";
+}
+
+function getReturningStatusLabel(status) {
+  const labels = {
+    proposta_enviada: "Proposta enviada",
+    negociacao: "Em negociação",
+    confirmado: "Confirmado",
+    pagamento_final: "Pagamento final",
+    planejamento: "Planejamento",
+    evento_proximo: "Evento próximo",
+    pos_venda: "Evento realizado",
+    cancelado: "Encerrado",
+  };
+  return labels[status] || status || "Proposta";
+}
+
+function renderReturningClientHistory(rows = [], email = "") {
+  const container = document.querySelector("#returningClientHistory");
+  const status = document.querySelector("#returningClientStatus");
+  if (!container) return;
+  returningClientHistory = rows || [];
+  container.hidden = false;
+  if (!rows.length) {
+    container.innerHTML = `<p>${uiState.language === "en" ? "No previous events or proposals were found for this e-mail. You can continue with the form normally." : "Não encontramos eventos ou propostas anteriores para este e-mail. Você pode seguir pelo formulário normalmente."}</p>`;
+    if (status) status.textContent = email ? email : "";
+    return;
+  }
+  const isEn = uiState.language === "en";
+  container.innerHTML = `
+    <div class="returning-history-heading">
+      <span>${isEn ? "Your history" : "Seu histórico"}</span>
+      <strong>${rows.length} ${isEn ? "recent record(s)" : "registro(s) recente(s)"}</strong>
+    </div>
+    <div class="returning-history-list">
+      ${rows.map((item, index) => {
+        const date = item.data_evento ? formatReviewDate(item.data_evento) : (isEn ? "Date to define" : "Data a definir");
+        const open = ["proposta_enviada", "negociacao"].includes(item.status);
+        return `
+          <article class="returning-history-item">
+            <div>
+              <span>${escapeHtml(getReturningStatusLabel(item.status))}${item.versao ? ` · V${escapeHtml(item.versao)}` : ""}</span>
+              <strong>${escapeHtml(item.tipo_evento || (isEn ? "Event" : "Evento"))}</strong>
+              <small>${escapeHtml(date)} · ${escapeHtml(item.convidados || "")}${item.convidados ? " pax" : ""}${item.total ? ` · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.total))}` : ""}</small>
+            </div>
+            <div class="returning-history-actions">
+              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${isEn ? "Resume proposal" : "Retomar proposta"}</button>` : ""}
+              <button class="secondary" type="button" data-returning-repeat="${index}">${isEn ? "Use as a base" : "Usar como base"}</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+  if (status) status.textContent = isEn ? `Signed in as ${email}.` : `Acesso confirmado para ${email}.`;
+}
+
+async function loadReturningClientHistory() {
+  const client = getPublicSupabaseClient();
+  if (!client) return;
+  const status = document.querySelector("#returningClientStatus");
+  const { data: sessionData } = await client.auth.getSession();
+  const session = sessionData?.session;
+  if (!session?.user?.email) return;
+  if (status) status.textContent = uiState.language === "en" ? "Loading your history..." : "Carregando seu histórico...";
+  const { data, error } = await client.rpc("get_my_event_history");
+  if (error) {
+    console.warn("Falha ao carregar histórico do cliente.", error);
+    if (status) status.textContent = uiState.language === "en" ? "History is temporarily unavailable. You can continue with the form." : "O histórico está temporariamente indisponível. Você pode seguir pelo formulário.";
+    return;
+  }
+  const access = document.querySelector("#returningClientAccess");
+  if (access) access.open = true;
+  const input = document.querySelector("#returningClientEmail");
+  if (input) input.value = session.user.email;
+  renderReturningClientHistory(data || [], session.user.email);
+}
+
+async function sendReturningClientOtp() {
+  const client = getPublicSupabaseClient();
+  const input = document.querySelector("#returningClientEmail");
+  const button = document.querySelector("#returningClientSendOtp");
+  const status = document.querySelector("#returningClientStatus");
+  const email = String(input?.value || "").trim().toLowerCase();
+  if (!client || !isValidEmail(email)) {
+    if (status) status.textContent = uiState.language === "en" ? "Enter a valid e-mail." : "Informe um e-mail válido.";
+    input?.focus();
+    return;
+  }
+  if (button) button.disabled = true;
+  if (status) status.textContent = uiState.language === "en" ? "Sending secure access..." : "Enviando acesso seguro...";
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: CANONICAL_CLIENT_FORM_URL, shouldCreateUser: true },
+  });
+  if (button) button.disabled = false;
+  if (error) {
+    console.warn("Falha ao enviar OTP do cliente.", error);
+    if (status) status.textContent = uiState.language === "en" ? "We could not send the access e-mail. Try again shortly." : "Não conseguimos enviar o acesso agora. Tente novamente em instantes.";
+    return;
+  }
+  if (status) status.textContent = uiState.language === "en" ? "Access sent. Open the link in your e-mail to see your history." : "Acesso enviado. Abra o link no seu e-mail para ver seu histórico.";
+}
+
+function applyReturningHistoryAsBase(item) {
+  if (!item) return;
+  resetCaptureIdentity();
+  const snapshot = item.snapshot || {};
+  const source = snapshot.sourceRequestSnapshot || {};
+  const clientData = snapshot.client || source.cliente || {};
+  const eventData = snapshot.event || source.evento || {};
+  const qualification = snapshot.qualificacao || source.qualificacao || {};
+
+  fields.name.value = clientData.name || clientData.nome || item.cliente_nome || "";
+  fields.email.value = clientData.email || "";
+  fields.phone.value = clientData.phone || clientData.whatsapp || "";
+  fields.company.value = clientData.company || clientData.empresa || "";
+  fields.endClientName.value = clientData.finalClient || clientData.clienteFinal || qualification.clienteFinal || "";
+  fields.groupName.value = clientData.groupName || clientData.nomeGrupo || qualification.nomeGrupo || "";
+  fields.eventType.value = eventData.type || eventData.tipo || item.tipo_evento || "";
+  fields.date.value = "";
+  fields.dateFlex.value = "";
+  fields.guests.value = String(eventData.guests || eventData.convidados || item.convidados || 30);
+  fields.duration.value = String(eventData.duration || eventData.duracao || "");
+  fields.reason.value = eventData.reason || eventData.motivo || "";
+  fields.preferences.value = eventData.preferences || eventData.preferencias || "";
+  fields.notes.value = eventData.notes || eventData.observacoes || "";
+
+  fields.clientType.value = getCanonicalKeyByLabel(canonicalClientTypeLabels, qualification.tipoCliente || clientData.tipoCliente);
+  fields.budgetRange.value = getCanonicalKeyByLabel(canonicalBudgetRangeLabels, qualification.faixaInvestimento);
+  fields.leadSource.value = getCanonicalKeyByLabel(canonicalLeadSourceLabels, qualification.origem);
+  fields.moment.value = getCanonicalKeyByLabel(canonicalMomentLabels, eventData.momento || qualification.momento);
+
+  selectedProfiles.clear();
+  const profileText = String(eventData.ocasiao || eventData.perfil || qualification.ocasiao || "").toLowerCase();
+  Object.entries(canonicalProfileLabels).forEach(([key, label]) => {
+    if (profileText.includes(String(label).toLowerCase())) selectedProfiles.add(key);
+  });
+  if (selectedProfiles.size) fields.profile.value = [...selectedProfiles].join(",");
+
+  const savedTime = String(eventData.time || eventData.horario || item.horario_evento || "").slice(0, 5);
+  if (savedTime) {
+    const hour = Number(savedTime.slice(0, 2));
+    fields.timeRange.value = hour < 11 ? "morning" : hour < 19 ? "afternoon" : "night";
+    fillTimeOptions(fields.timeRange.value);
+    if ([...fields.time.options].some((option) => option.value === savedTime)) fields.time.value = savedTime;
+  }
+
+  updateGuestOutput("number");
+  renderLocalizedChoices();
+  renderRecommendations();
+  updateContactRequirements();
+  updateContactGuidance();
+  renderFinalReview();
+  schedulePartialCapture();
+  const status = document.querySelector("#returningClientStatus");
+  if (status) status.textContent = uiState.language === "en" ? "Previous event loaded. Confirm the new date and adjust only what changed." : "Evento anterior carregado. Confirme a nova data e ajuste apenas o que mudou.";
+  scrollToStep("eventDetails", true);
+}
+
+async function resumeReturningProposal(item) {
+  const client = getPublicSupabaseClient();
+  const status = document.querySelector("#returningClientStatus");
+  if (!client || !item?.proposal_id) return;
+  if (status) status.textContent = uiState.language === "en" ? "Opening your proposal..." : "Abrindo sua proposta...";
+  const { data, error } = await client.rpc("refresh_my_proposal_link", { p_proposal_id: item.proposal_id });
+  if (error || !data) {
+    if (status) status.textContent = uiState.language === "en" ? "We could not reopen this proposal. Continue below and we will prepare a new version." : "Não conseguimos reabrir esta proposta. Continue abaixo e prepararemos uma nova versão.";
+    return;
+  }
+  window.location.href = `./proposta.html?p=${encodeURIComponent(data)}`;
+}
+
+function initReturningClientAccess() {
+  renderReturningClientCopy();
+  document.querySelector("#returningClientSendOtp")?.addEventListener("click", sendReturningClientOtp);
+  document.querySelector("#returningClientEmail")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      sendReturningClientOtp();
+    }
+  });
+  document.querySelector("#returningClientHistory")?.addEventListener("click", (event) => {
+    const repeat = event.target.closest("[data-returning-repeat]");
+    if (repeat) {
+      applyReturningHistoryAsBase(returningClientHistory[Number(repeat.dataset.returningRepeat)]);
+      return;
+    }
+    const resume = event.target.closest("[data-returning-resume]");
+    if (resume) resumeReturningProposal(returningClientHistory[Number(resume.dataset.returningResume)]);
+  });
+  const client = getPublicSupabaseClient();
+  client?.auth?.onAuthStateChange((_event, session) => {
+    if (session?.user?.email) window.setTimeout(loadReturningClientHistory, 0);
+  });
+  loadReturningClientHistory();
+}
+
 async function submitRequest(event) {
   event.preventDefault();
   const current = getCopy();
@@ -1802,6 +2020,7 @@ async function submitRequest(event) {
 }
 
 applyConversionStepOrder();
+initReturningClientAccess();
 fillGuestOptions();
 resetFlexibleDateField();
 fillTimeOptions("");
