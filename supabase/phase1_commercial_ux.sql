@@ -892,9 +892,26 @@ before insert or update of status on public.oportunidades
 for each row
 execute function public.set_default_next_action();
 
--- Reaplica defaults para oportunidades abertas ja migradas.
+-- Aplica defaults às oportunidades abertas já migradas sem sobrescrever
+-- uma próxima ação que já tenha sido definida manualmente.
 update public.oportunidades
-set status = status
+set
+  proxima_acao = case
+    when status = 'lead_recebido' then 'Responder lead'
+    when status = 'proposta_enviada' then 'Retomar cliente'
+    when status = 'negociacao' then 'Avancar negociacao'
+    when status in ('confirmado','pagamento_final') then 'Fechar pagamento'
+    when status in ('planejamento','evento_proximo') then 'Revisar operacao'
+    when status = 'pos_venda' then 'Fazer pos-venda'
+    else proxima_acao
+  end,
+  proxima_acao_em = case
+    when status = 'lead_recebido' then now() + interval '2 hours'
+    when status in ('proposta_enviada','negociacao','confirmado','pagamento_final','planejamento','evento_proximo')
+      then now() + interval '1 day'
+    when status = 'pos_venda' then now() + interval '2 days'
+    else proxima_acao_em
+  end
 where proxima_acao is null
   and status not in ('perdido','cancelado');
 
