@@ -616,6 +616,7 @@ const state = {
   quoteRequests: [],
   activeProposalId: "",
   activeQuoteRequestId: "",
+  activeOpportunityId: "",
   activeEditorContext: null,
   loadedEditorSignature: "",
   pendingOpenSourceLabel: "",
@@ -8097,6 +8098,7 @@ function renderHistory() {
 function normalizeRequestStatus(status) {
   const legacy = {
     novo: "lead_recebido",
+    rascunho_cliente: "lead_recebido",
     em_cotacao: "lead_recebido",
     analisado: "lead_recebido",
     qualificado: "lead_recebido",
@@ -8213,8 +8215,35 @@ function getGroupNameFromSnapshot(snapshot = {}) {
   );
 }
 
+function getWorkingProposals() {
+  const grouped = new Map();
+  state.proposals.forEach((proposal) => {
+    const key = proposal.oportunidade_id || proposal.id;
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, proposal);
+      return;
+    }
+    const proposalIsDraft = proposal.publication_status === "draft";
+    const currentIsDraft = current.publication_status === "draft";
+    if (proposalIsDraft && !currentIsDraft) {
+      grouped.set(key, proposal);
+      return;
+    }
+    if (proposalIsDraft === currentIsDraft) {
+      const proposalTime = new Date(proposal.updated_at || proposal.created_at || 0).getTime();
+      const currentTime = new Date(current.updated_at || current.created_at || 0).getTime();
+      if (proposalTime > currentTime) grouped.set(key, proposal);
+      return;
+    }
+    if (!currentIsDraft && proposal.is_current === true && current.is_current !== true) grouped.set(key, proposal);
+  });
+  return [...grouped.values()];
+}
+
 function getPipelineItems() {
-  const linkedRequests = new Set(state.proposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
+  const workingProposals = getWorkingProposals();
+  const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
   const requestItems = state.quoteRequests
     .filter((request) => !request.proposta_id && !linkedRequests.has(request.id))
     .map((request) => {
@@ -8245,11 +8274,14 @@ function getPipelineItems() {
         clientType: getLeadSegment(request),
         meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
         cancelReason: request.snapshot?.cancelamento?.motivo || "",
+        captureStatus: request.capture_status || "complete",
+        lastFormStep: request.last_form_step || "",
+        opportunityId: request.oportunidade_id || "",
         eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
       };
     });
 
-  const proposalItems = state.proposals.map((proposal) => {
+  const proposalItems = workingProposals.map((proposal) => {
     const status = normalizeProposalStatus(proposal.status);
     const snapshot = proposal.snapshot || {};
     const paymentCoverage = getPaymentCoverage(proposal.total || snapshot.totals?.total || 0, snapshot.pagamentoSinal, snapshot.pagamentoRestante);
@@ -8279,6 +8311,11 @@ function getPipelineItems() {
       updatedAt: proposal.updated_at || proposal.created_at,
       reference: snapshot.referencia || "",
       snapshot,
+      opportunityId: proposal.oportunidade_id || "",
+      version: Number(proposal.versao || 1),
+      publicationStatus: proposal.publication_status || "sent",
+      isDraft: proposal.publication_status === "draft",
+      isCurrentVersion: proposal.is_current !== false,
       finalClient: getFinalClientFromSnapshot(snapshot),
       groupName: getGroupNameFromSnapshot(snapshot),
       clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
@@ -8791,6 +8828,14 @@ function getPipelinePrimaryAction(item) {
   const age = getLeadAgeInfo(item);
   const followUp = getProposalFollowUpInfo(item);
   if (item.kind === "request" && status === "lead_recebido") {
+    if (item.captureStatus === "partial") {
+      return {
+        tone: age && ["danger", "critical"].includes(age.level) ? "danger" : "warning",
+        eyebrow: "Lead capturado",
+        label: "Retomar lead incompleto",
+        note: "O cliente começou o formulário e deixou contato. Complete o briefing sem fazê-lo preencher tudo de novo.",
+      };
+    }
     return {
       tone: age && ["danger", "critical"].includes(age.level) ? "danger" : age?.level === "warning" ? "warning" : "fresh",
       eyebrow: "Próxima ação",
@@ -8853,6 +8898,9 @@ function getPipelineRiskAlerts(item) {
   const age = getLeadAgeInfo(item);
   const score = getCommercialScore(item);
 
+  if (item.kind === "request" && item.captureStatus === "partial") {
+    alerts.push({ level: "warning", label: "Formulário incompleto" });
+  }
   if (age && age.level !== "fresh") {
     alerts.push({ level: age.level, label: age.level === "critical" ? "Lead 48h+" : age.level === "danger" ? "Lead 24h+" : "Lead 12h+" });
   }
@@ -9671,8 +9719,8 @@ function getActionTasks(items = getPipelineItems()) {
       const age = getLeadAgeInfo(item);
       tasks.push({
         ...base,
-        title: "Responder lead",
-        note: age?.label || "Novo pedido recebido",
+        title: item.captureStatus === "partial" ? "Retomar lead incompleto" : "Responder lead",
+        note: item.captureStatus === "partial" ? "Cliente deixou contato antes de concluir o formulário." : age?.label || "Novo pedido recebido",
         priority: age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
         track: "Comercial",
       });
@@ -9816,6 +9864,9 @@ function getActionTasks(items = getPipelineItems()) {
 function getActionTaskSteps(task = {}) {
   const title = String(task.title || "").toLowerCase();
   const track = getActionTrack(task);
+  if (title.includes("lead incompleto")) {
+    return ["Abrir o que o cliente já informou", "Completar apenas o que realmente falta", "Responder sem pedir que ele recomece o formulário"];
+  }
   if (title.includes("responder lead")) {
     return ["Abrir lead", "Conferir data, horário, pax e contato", "Enviar proposta ou resposta inicial"];
   }
@@ -9889,6 +9940,7 @@ function renderActionTasks(items = getPipelineItems()) {
     </article>
     <div class="action-track-summary">${groupedLine}</div>
     ${tasks
+    .slice(1)
     .map((task) => {
       const item = task.item;
       const actionButton =
