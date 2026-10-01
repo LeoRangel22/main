@@ -11670,7 +11670,7 @@ function upsertProposalState(proposal) {
   state.proposals = state.proposals.slice(0, 60);
 }
 
-async function saveCurrentProposal(status, signalInfo = null) {
+async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   state.lastProposalSaveError = "";
   const sessionCheck = await ensureTeamSessionForWrite("salvar a proposta");
   if (!sessionCheck.ok) {
@@ -11682,6 +11682,12 @@ async function saveCurrentProposal(status, signalInfo = null) {
   const snapshot = getProposalSnapshot();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const nextStatus = status || activeProposal?.status || "proposta_enviada";
+  const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
+  if (!opportunityId) {
+    state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
+    showToast(state.lastProposalSaveError);
+    return null;
+  }
   const normalizedNext = normalizeProposalStatus(nextStatus);
   const finalPaymentRequiredStatuses = new Set(["planejamento", "evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
@@ -11764,6 +11770,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   snapshot.pagamentoRestante = snapshot.pagamentoRestante || activeProposal?.snapshot?.pagamentoRestante || null;
   const historyEntries = [];
   const previousStatus = normalizeProposalStatus(activeProposal?.status || "");
+  const proposalChanges = activeProposal ? getProposalChangeList(activeProposal.snapshot || {}, snapshot) : [];
   if (!activeProposal) {
     historyEntries.push(
       createCommercialHistoryEntry("proposta", "Proposta criada", `${formatMoney(snapshot.totals.total)} · ${snapshot.event.guests} pax · ${snapshot.event.type || "Evento"}.`),
@@ -11783,7 +11790,6 @@ async function saveCurrentProposal(status, signalInfo = null) {
     );
   }
   if (activeProposal) {
-    const proposalChanges = getProposalChangeList(activeProposal.snapshot || {}, snapshot);
     if (proposalChanges.length) {
       historyEntries.push(
         createCommercialHistoryEntry(
@@ -11845,9 +11851,43 @@ async function saveCurrentProposal(status, signalInfo = null) {
   if (state.activeProposalId && !persistableProposalId) {
     console.warn("ID ativo da proposta não é UUID persistível; criando novo registro no Supabase.", state.activeProposalId);
   }
-  const query = persistableProposalId
-    ? state.supabase.from("propostas").update(row).eq("id", persistableProposalId)
-    : state.supabase.from("propostas").insert(row);
+
+  const activeIsDraft = activeProposal?.publication_status === "draft";
+  const activeWasPublished =
+    Boolean(activeProposal) &&
+    activeProposal?.publication_status !== "draft" &&
+    ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
+  const needsNewVersion = activeWasPublished && proposalChanges.length > 0;
+
+  let query;
+  if (activeIsDraft && persistableProposalId) {
+    const draftRow = {
+      ...row,
+      is_current: Boolean(options.forSharing),
+      publication_status: options.forSharing ? "sent" : "draft",
+      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+    };
+    query = state.supabase.from("propostas").update(draftRow).eq("id", persistableProposalId);
+  } else if (needsNewVersion) {
+    const versionRow = {
+      ...row,
+      oportunidade_id: opportunityId,
+      is_current: Boolean(options.forSharing),
+      publication_status: options.forSharing ? "sent" : "draft",
+      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+    };
+    query = state.supabase.from("propostas").insert(versionRow);
+  } else if (persistableProposalId) {
+    query = state.supabase.from("propostas").update(row).eq("id", persistableProposalId);
+  } else {
+    query = state.supabase.from("propostas").insert({
+      ...row,
+      oportunidade_id: opportunityId,
+      is_current: true,
+      publication_status: "sent",
+      sent_at: new Date().toISOString(),
+    });
+  }
   const { data, error } = await query.select("*").single();
 
   if (error) {
@@ -11867,6 +11907,7 @@ async function saveCurrentProposal(status, signalInfo = null) {
   }
 
   state.activeProposalId = data.id;
+  state.activeOpportunityId = data.oportunidade_id || opportunityId;
   upsertProposalState(data);
   const persistableQuoteRequestId = getPersistableQuoteRequestId();
   if (persistableQuoteRequestId) {
@@ -11888,7 +11929,13 @@ async function saveCurrentProposal(status, signalInfo = null) {
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
   markEditorClean(getEditorContextFromCurrent("proposal", `Funil: ${getProposalStatusLabel(data.status)}`));
-  showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta enviada salva no funil.");
+  if (data.publication_status === "draft") {
+    showToast("Nova versão V" + (data.versao || "") + " salva como rascunho. O cliente continua vendo a versão anterior até o envio.");
+  } else if (needsNewVersion || (activeIsDraft && options.forSharing)) {
+    showToast("Versão V" + (data.versao || "") + " publicada. Links antigos passam a abrir esta versão.");
+  } else {
+    showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta salva no funil.");
+  }
   return data;
 }
 
@@ -12515,7 +12562,7 @@ async function ensureProposalForSharing() {
   if (!ensureProposalReadyForSending()) return null;
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
-  const saved = await saveCurrentProposal(status);
+  const saved = await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
     return null;
