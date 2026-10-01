@@ -13,6 +13,12 @@ const progressBar = document.querySelector("#formProgressBar");
 const progressSteps = [...document.querySelectorAll(".public-form-steps li")];
 const mobileFormQuery = window.matchMedia("(max-width: 720px)");
 const LANGUAGE_KEY = "embaixada_form_language_v1";
+const CAPTURE_TOKEN_KEY = "embaixada_form_capture_token_v1";
+const REFERENCE_CODE_KEY = "embaixada_form_reference_v1";
+const CANONICAL_CLIENT_FORM_URL = "https://leorangel22.github.io/main/formulario.html";
+let publicSupabaseClient = null;
+let partialCaptureTimer = null;
+let returningClientHistory = [];
 const langButtons = [...document.querySelectorAll("[data-lang]")];
 
 const canonicalMomentLabels = {
@@ -915,6 +921,92 @@ function updateProgress(stepName = "moment") {
   });
 }
 
+function getPublicSupabaseClient() {
+  if (!publicSupabaseClient && window.supabase?.createClient) {
+    publicSupabaseClient = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+  }
+  return publicSupabaseClient;
+}
+
+function getCaptureToken() {
+  let token = localStorage.getItem(CAPTURE_TOKEN_KEY) || "";
+  if (!token) {
+    token = window.crypto?.randomUUID?.() || `00000000-0000-4000-8000-${Math.random().toString(16).slice(2).padEnd(12, "0").slice(0, 12)}`;
+    localStorage.setItem(CAPTURE_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+function getOrCreateReferenceCode() {
+  let reference = localStorage.getItem(REFERENCE_CODE_KEY) || "";
+  if (!reference) {
+    reference = createReferenceCode();
+    localStorage.setItem(REFERENCE_CODE_KEY, reference);
+  }
+  return reference;
+}
+
+function resetCaptureIdentity() {
+  localStorage.removeItem(CAPTURE_TOKEN_KEY);
+  localStorage.removeItem(REFERENCE_CODE_KEY);
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+}
+
+function getPartialCaptureStatusNode() {
+  let node = document.querySelector("#partialCaptureStatus");
+  if (node) return node;
+  node = document.createElement("p");
+  node.id = "partialCaptureStatus";
+  node.className = "partial-capture-status";
+  const reassurance = document.querySelector(".contact-reassurance");
+  reassurance?.prepend(node);
+  return node;
+}
+
+function canCapturePartialLead() {
+  const name = fields.name.value.trim();
+  const email = fields.email.value.trim();
+  const phone = fields.phone.value.trim();
+  if (!hasUsableName(name)) return false;
+  return (email && isValidEmail(email)) || (phone && isValidContactPhone(phone));
+}
+
+function getCurrentProgressStep() {
+  const index = progressSteps.findIndex((step) => step.hasAttribute("data-active"));
+  return stepOrder[Math.max(0, index)] || "contact";
+}
+
+async function savePartialLead() {
+  if (!canCapturePartialLead()) return;
+  const client = getPublicSupabaseClient();
+  if (!client) return;
+  const snapshot = getSnapshot(getOrCreateReferenceCode());
+  const node = getPartialCaptureStatusNode();
+  try {
+    const { error } = await client.rpc("upsert_public_quote_draft", {
+      p_capture_token: getCaptureToken(),
+      p_snapshot: snapshot,
+      p_last_step: getCurrentProgressStep(),
+    });
+    if (error) {
+      if (!/function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
+        console.warn("Falha ao salvar lead parcial.", error);
+      }
+      return;
+    }
+    if (node) node.textContent = uiState.language === "en" ? "Request saved. You can continue without starting over." : "Pedido salvo. Você pode continuar sem começar de novo.";
+  } catch (error) {
+    console.warn("Falha silenciosa na captura parcial.", error);
+  }
+}
+
+function schedulePartialCapture() {
+  if (!canCapturePartialLead()) return;
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = window.setTimeout(savePartialLead, 1000);
+}
+
 function createReferenceCode() {
   const now = new Date();
   const datePart = [
@@ -1032,7 +1124,7 @@ function renderFinalReview() {
     fields.email.value.trim(),
     fields.phone.value.trim(),
   ].filter(Boolean);
-  const contactReady = fields.name.value.trim() && fields.email.value.trim() && fields.phone.value.trim();
+  const contactReady = Boolean(fields.name.value.trim() && (fields.email.value.trim() || fields.phone.value.trim()));
   const dateReady = fields.date.value || fields.dateFlex.value.trim();
   const timeReady = fields.time.value;
   const clientTypeLabel = getClientTypeDisplayLabel();
@@ -1657,7 +1749,7 @@ async function submitRequest(event) {
     return;
   }
 
-  const referenceCode = createReferenceCode();
+  const referenceCode = getOrCreateReferenceCode();
   const snapshot = getSnapshot(referenceCode);
   if (!validateSnapshot(snapshot)) return;
 
@@ -1665,8 +1757,15 @@ async function submitRequest(event) {
   setStatus(current.messages.submitting, "neutral");
 
   try {
-    const client = window.supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
-    const { error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot));
+    const client = getPublicSupabaseClient();
+    let { error } = await client.rpc("submit_public_quote_request", {
+      p_capture_token: getCaptureToken(),
+      p_snapshot: snapshot,
+    });
+
+    if (error && /function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
+      ({ error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot)));
+    }
 
     if (error) {
       console.warn("Falha ao enviar solicitacao.", error);
@@ -1683,6 +1782,7 @@ async function submitRequest(event) {
     submitButton.disabled = false;
   }
 
+  resetCaptureIdentity();
   form.reset();
   fields.moment.value = "";
   fields.clientType.value = "";
@@ -1720,6 +1820,8 @@ finalReviewGrid?.addEventListener("click", (event) => {
 });
 form.addEventListener("input", renderFinalReview);
 form.addEventListener("change", renderFinalReview);
+form.addEventListener("input", schedulePartialCapture);
+form.addEventListener("change", schedulePartialCapture);
 fields.timeRange.addEventListener("change", () => {
   fillTimeOptions();
   setFieldValidity(fields.timeRange, true);
