@@ -8,6 +8,27 @@ const {
 } = require("./support");
 
 test.describe("Dashboard interno em modo QA", () => {
+  test("cancelamento de teste preserva a proposta e registra o motivo", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    const card = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+    await card.locator('[data-cancel-id="qa-proposal-sem-resposta"]').click();
+    const dialog = page.locator(".cancel-reason-dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Voltar" }).click();
+    expect(await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-sem-resposta")?.status)).toBe("proposta_enviada");
+
+    await card.locator('[data-cancel-id="qa-proposal-sem-resposta"]').click();
+    await dialog.locator('[name="reason"]').selectOption("Teste / cadastro de teste");
+    await dialog.getByRole("button", { name: "Registrar cancelamento" }).click();
+    await expect(dialog).toHaveCount(0);
+    const saved = await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-sem-resposta"));
+    expect(saved?.status).toBe("cancelado");
+    expect(saved?.snapshot?.cancelamento?.motivo).toBe("Teste / cadastro de teste");
+    expect(saved?.snapshot?.commercialHistory?.[0]?.type).toBeTruthy();
+    await expectNoBrowserErrors(errors);
+  });
+
   test("plano comercial salva responsável, prazo e contato e acompanha versão visualizada", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
