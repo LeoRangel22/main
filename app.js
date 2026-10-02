@@ -12187,6 +12187,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
 
   const snapshot = getProposalSnapshot();
+  const sourceKeyBeforeSave = getSourceOverrideKey();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
   const nextStatus = status || activeProposal?.status || "proposta_pronta";
   const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
@@ -12416,6 +12417,16 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
 
   state.activeProposalId = data.id;
+  const newSourceKey = `proposal:${data.id}`;
+  if (sourceKeyBeforeSave && sourceKeyBeforeSave !== newSourceKey) {
+    state.sourceOverrides[newSourceKey] = {
+      ...(data.snapshot?.sourceOverrides || {}),
+      ...(state.sourceOverrides[sourceKeyBeforeSave] || {}),
+    };
+    if (nodes.formSourcePanel?.dataset.sourceKey === sourceKeyBeforeSave) {
+      nodes.formSourcePanel.dataset.sourceKey = newSourceKey;
+    }
+  }
   state.activeOpportunityId = data.oportunidade_id || opportunityId;
   upsertProposalState(data);
   const persistableQuoteRequestId = getPersistableQuoteRequestId();
