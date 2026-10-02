@@ -59,6 +59,9 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#quickPathLink").click();
     await expect(page).toHaveURL(/#eventDetailsStep$/);
     await expect(page.locator("#eventDetailsStep")).toBeInViewport();
+    await page.locator("#quickContactLink").click();
+    await expect(page).toHaveURL(/#contactStep$/);
+    await expect(page.locator("#contactStep")).toBeInViewport();
     await expectNoHorizontalOverflow(page);
     await expectNoBrowserErrors(errors);
   });
@@ -76,6 +79,8 @@ test.describe("Formulário público do cliente", () => {
     await expect(page.locator("#quickPathLink")).toHaveText("Go to essentials");
     await page.locator("#quickPathLink").click();
     await page.locator("#requestEventDate").fill("2026-11-20");
+    await page.locator("#quickContactLink").click();
+    await expect(page.locator("#contactStep")).toBeInViewport();
     await page.locator("#requestClientName").fill("Alex Smith");
     await page.locator("#requestClientEmail").fill("alex@example.com");
     await page.locator("#submitClientQuoteBtn").click();

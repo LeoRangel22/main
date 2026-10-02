@@ -880,6 +880,8 @@ function setLanguage(language) {
     const node = document.querySelector(`#${id}`);
     if (node) node.textContent = shortcutCopy[index];
   });
+  const quickContact = document.querySelector("#quickContactLink");
+  if (quickContact) quickContact.textContent = uiState.language === "en" ? "I have the essentials. Go to contact" : "Já tenho o essencial. Ir para contato";
   langButtons.forEach((button) => {
     const active = button.dataset.lang === uiState.language;
     button.classList.toggle("is-active", active);

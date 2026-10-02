@@ -9958,6 +9958,16 @@ input[type="range"] {
 .public-form-shortcut a.primary { background: var(--verde-escuro); color: var(--white); }
 .public-form-shortcut a.secondary { border: 1px solid var(--verde-escuro); color: var(--verde-escuro); }
 
+.quick-continue-link {
+  align-items: center;
+  color: var(--verde-escuro);
+  display: inline-flex;
+  font-weight: 800;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 @media (max-width: 1080px) {
   .communication-template-grid {
     grid-template-columns: 1fr;
