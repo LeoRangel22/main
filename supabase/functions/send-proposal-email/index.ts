@@ -43,12 +43,12 @@ function formatMoney(value: unknown) {
   }).format(Number.isFinite(number) ? number : 0);
 }
 
-function formatDate(value: unknown) {
+function formatDate(value: unknown, en = false) {
   const raw = safeText(value);
-  if (!raw) return "A definir";
+  if (!raw) return en ? "To be confirmed" : "A definir";
   const date = new Date(`${raw.slice(0, 10)}T12:00:00`);
   if (Number.isNaN(date.getTime())) return raw;
-  return new Intl.DateTimeFormat("pt-BR", {
+  return new Intl.DateTimeFormat(en ? "en-US" : "pt-BR", {
     timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
@@ -56,14 +56,14 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
-function formatTime(value: unknown) {
+function formatTime(value: unknown, en = false) {
   const raw = safeText(value);
-  return raw ? raw.slice(0, 5) : "A definir";
+  return raw ? raw.slice(0, 5) : en ? "To be confirmed" : "A definir";
 }
 
-function formatDuration(value: unknown) {
+function formatDuration(value: unknown, en = false) {
   const number = Number(value || 0);
-  if (!Number.isFinite(number) || number <= 0) return "A definir";
+  if (!Number.isFinite(number) || number <= 0) return en ? "To be confirmed" : "A definir";
   const hours = Math.floor(number);
   const minutes = Math.round((number - hours) * 60);
   if (!hours && minutes) return `${minutes} min`;
@@ -120,12 +120,12 @@ function getZeptoErrorMessage(status: number) {
   return `ZeptoMail recusou o envio (HTTP ${status}).`;
 }
 
-function getSignalDeadlineLabel(snapshot: Record<string, unknown>) {
-  const hours = Number(snapshot?.signalDeadlineHours || snapshot?.prazoSinalHoras || 48);
-  if (!Number.isFinite(hours) || hours <= 0) return "Prazo do sinal: 2 dias";
-  if (hours < 24) return `Prazo do sinal: ${hours}h`;
+function getSignalDeadlineLabel(snapshot: Record<string, any>, en = false) {
+  const hours = Number(snapshot?.event?.signalDeadlineHours || snapshot?.signalDeadlineHours || snapshot?.prazoSinalHoras || 48);
+  if (!Number.isFinite(hours) || hours <= 0) return en ? "Deposit due within 2 days" : "Prazo do sinal: 2 dias";
+  if (hours < 24) return en ? `Deposit due within ${hours}h` : `Prazo do sinal: ${hours}h`;
   const days = Math.round(hours / 24);
-  return `Prazo do sinal: ${days} ${days === 1 ? "dia" : "dias"}`;
+  return en ? `Deposit due within ${days} ${days === 1 ? "day" : "days"}` : `Prazo do sinal: ${days} ${days === 1 ? "dia" : "dias"}`;
 }
 
 function getItemsHtml(items: any[]) {
@@ -165,42 +165,44 @@ function formatCustomMessageHtml(message: string) {
 
 function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessage = "") {
   const snapshot = proposal?.snapshot || {};
+  const en = snapshot?.event?.clientLanguage === "en";
+  const t = (pt: string, english: string) => en ? english : pt;
   const clientName = safeText(proposal?.cliente_nome || snapshot?.client?.name, "cliente");
   const firstName = clientName.split(/\s+/)[0] || "tudo";
   const eventType = safeText(proposal?.tipo_evento || snapshot?.event?.type, "Evento");
   const guests = proposal?.convidados || snapshot?.event?.guests || 0;
   const total = proposal?.total || snapshot?.totals?.total || 0;
-  const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
-  const dateLabel = formatDate(proposal?.data_evento || snapshot?.event?.date);
-  const timeLabel = formatTime(proposal?.horario_evento || snapshot?.event?.time);
-  const durationLabel = formatDuration(proposal?.duracao || snapshot?.event?.duration);
-  const signalLabel = getSignalDeadlineLabel(snapshot);
+  const items = Array.isArray(snapshot?.selectedItems) ? snapshot.selectedItems : [];
+  const dateLabel = formatDate(proposal?.data_evento || snapshot?.event?.date, en);
+  const timeLabel = formatTime(proposal?.horario_evento || snapshot?.event?.time, en);
+  const durationLabel = formatDuration(proposal?.duracao || snapshot?.event?.duration, en);
+  const signalLabel = getSignalDeadlineLabel(snapshot, en);
   const customMessageHtml = formatCustomMessageHtml(customMessage);
 
   return `
-    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${escapeHtml(eventType)} · ${escapeHtml(dateLabel)} às ${escapeHtml(timeLabel)} · ${formatMoney(total)}. Veja e responda sua proposta.</div>
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${escapeHtml(eventType)} · ${escapeHtml(dateLabel)} ${t("às", "at")} ${escapeHtml(timeLabel)} · ${formatMoney(total)}. ${t("Veja e responda sua proposta.", "View and respond to your proposal.")}</div>
     <div style="background:#eef3ef; padding:12px 8px; font-family:Arial,Helvetica,sans-serif; color:#183a2d;">
       <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #d7e3dc; border-radius:14px; overflow:hidden;">
         <div style="background:#183a2d; color:#ffffff; padding:18px 22px;">
           <div style="font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#f2d9a2;">Embaixada Carioca</div>
-          <h1 style="margin:6px 0 0; font-size:24px; line-height:1.2;">Sua proposta de evento</h1>
-          <p style="margin:7px 0 0; color:#e8f1ec; font-size:14px; line-height:1.4;">Olá, ${escapeHtml(firstName)}. Confira os dados e responda pelo link.</p>
+          <h1 style="margin:6px 0 0; font-size:24px; line-height:1.2;">${t("Sua proposta de evento", "Your event proposal")}</h1>
+          <p style="margin:7px 0 0; color:#e8f1ec; font-size:14px; line-height:1.4;">${t("Olá", "Hello")}, ${escapeHtml(firstName)}. ${t("Confira os dados e responda pelo link.", "Review the details and respond through the link.")}</p>
         </div>
 
         <div style="padding:16px 22px 24px;">
           <div style="background:#f1e6c9; border-radius:10px; padding:14px 16px;">
             <strong style="display:block; color:#183a2d; font-size:17px; line-height:1.3;">${escapeHtml(eventType)}</strong>
-            <span style="display:block; margin-top:4px; color:#335d4a; font-size:14px; line-height:1.35;">${escapeHtml(dateLabel)} às ${escapeHtml(timeLabel)} · ${escapeHtml(String(guests || "A definir"))} pax · ${escapeHtml(durationLabel)}</span>
-            <span style="display:block; margin-top:10px; color:#335d4a; font-size:11px; font-weight:800; text-transform:uppercase;">Total estimado</span>
+            <span style="display:block; margin-top:4px; color:#335d4a; font-size:14px; line-height:1.35;">${escapeHtml(dateLabel)} ${t("às", "at")} ${escapeHtml(timeLabel)} · ${escapeHtml(String(guests || t("A definir", "TBC")))} ${t("pax", "guests")} · ${escapeHtml(durationLabel)}</span>
+            <span style="display:block; margin-top:10px; color:#335d4a; font-size:11px; font-weight:800; text-transform:uppercase;">${t("Total estimado", "Estimated total")}</span>
             <strong style="display:block; margin-top:3px; color:#183a2d; font-size:28px; line-height:1.1;">${formatMoney(total)}</strong>
-            <span style="display:block; margin-top:3px; color:#5d6d64; font-size:12px;">Taxa de serviço incluída conforme proposta.</span>
+            <span style="display:block; margin-top:3px; color:#5d6d64; font-size:12px;">${t("Taxa de serviço incluída conforme proposta.", "Service charge included as detailed in the proposal.")}</span>
           </div>
 
           <a href="${escapeHtml(proposalUrl)}" style="display:block; text-align:center; background:#183a2d; color:#ffffff; text-decoration:none; font-weight:800; font-size:16px; padding:14px 18px; border-radius:9px; margin:14px 0 20px;">
-            Ver e responder proposta
+            ${t("Ver e responder proposta", "View and respond to proposal")}
           </a>
 
-          <div style="border-top:1px solid #d7e3dc; padding-top:18px; color:#335d4a; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;">Itens da proposta</div>
+          <div style="border-top:1px solid #d7e3dc; padding-top:18px; color:#335d4a; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;">${t("Itens da proposta", "Proposal items")}</div>
 
           <table role="presentation" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
             ${getItemsHtml(items)}
@@ -209,22 +211,22 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessag
           <div style="background:#f7faf8; border:1px solid #d7e3dc; border-radius:14px; padding:16px 18px; margin-bottom:20px;">
             <strong style="display:block; color:#183a2d; font-size:16px;">${escapeHtml(signalLabel)}</strong>
             <p style="margin:8px 0 0; color:#5d6d64; font-size:14px; line-height:1.6;">
-              Pelo link você pode aprovar a proposta, solicitar ajustes ou anexar o comprovante do sinal com segurança. A data e o horário ficam reservados após validação da equipe e confirmação do sinal.
-              Para manter o atendimento organizado, prefira responder pelo botão da proposta. Se responder este e-mail, sua mensagem chega direto à equipe de eventos.
+              ${t("Pelo link você pode aprovar, solicitar ajustes ou anexar o comprovante do sinal. A data fica reservada após validação da equipe e confirmação do sinal.", "Through the link you can approve, request changes or upload your deposit receipt. The date is reserved after our team verifies the deposit.")}
+              ${t("Se responder este e-mail, sua mensagem chega à equipe de eventos.", "You may also reply to this email to reach our events team.")}
             </p>
           </div>
 
           ${
             customMessageHtml
               ? `<div style="margin:20px 0 0; background:#fbf7ed; border:1px solid #ead9af; border-radius:14px; padding:16px 18px;">
-                  <strong style="display:block; color:#183a2d; font-size:15px; margin-bottom:10px;">Mensagem da equipe</strong>
+                  <strong style="display:block; color:#183a2d; font-size:15px; margin-bottom:10px;">${t("Mensagem da equipe", "Message from our team")}</strong>
                   ${customMessageHtml}
                 </div>`
               : ""
           }
 
           <p style="margin:16px 0 0; color:#5d6d64; font-size:13px; line-height:1.6;">
-            Se quiser alinhar algum detalhe antes de responder, fale com a equipe de eventos pelo e-mail eventos@embaixadacarioca.com.br ou pelo WhatsApp (21) 97142-6007.
+            ${t("Para esclarecer algum detalhe, fale com a equipe por", "For any questions, contact our team at")} <a href="mailto:eventos@embaixadacarioca.com.br">eventos@embaixadacarioca.com.br</a> ${t("ou pelo", "or on")} <a href="https://wa.me/5521971426007">WhatsApp (21) 97142-6007</a>.
           </p>
         </div>
       </div>
@@ -234,25 +236,27 @@ function buildProposalEmailHtml(proposal: any, proposalUrl: string, customMessag
 
 function buildProposalEmailText(proposal: any, proposalUrl: string, customMessage = "") {
   const snapshot = proposal?.snapshot || {};
+  const en = snapshot?.event?.clientLanguage === "en";
+  const t = (pt: string, english: string) => en ? english : pt;
   const eventType = safeText(proposal?.tipo_evento || snapshot?.event?.type, "Evento");
   const total = formatMoney(proposal?.total || snapshot?.totals?.total || 0);
   return [
-    "Sua proposta da Embaixada Carioca está pronta para revisão.",
+    t("Sua proposta da Embaixada Carioca está pronta para revisão.", "Your Embaixada Carioca event proposal is ready for review."),
     "",
-    `Formato: ${eventType}`,
-    `Data: ${formatDate(proposal?.data_evento || snapshot?.event?.date)}`,
-    `Horário: ${formatTime(proposal?.horario_evento || snapshot?.event?.time)}`,
-    `Convidados: ${proposal?.convidados || snapshot?.event?.guests || "A definir"} pax`,
-    `Total estimado: ${total}`,
-    `${getSignalDeadlineLabel(snapshot)}.`,
+    `${t("Formato", "Format")}: ${eventType}`,
+    `${t("Data", "Date")}: ${formatDate(proposal?.data_evento || snapshot?.event?.date, en)}`,
+    `${t("Horário", "Time")}: ${formatTime(proposal?.horario_evento || snapshot?.event?.time, en)}`,
+    `${t("Convidados", "Guests")}: ${proposal?.convidados || snapshot?.event?.guests || t("A definir", "TBC")}`,
+    `${t("Total estimado", "Estimated total")}: ${total}`,
+    `${getSignalDeadlineLabel(snapshot, en)}.`,
     "",
-    "Abra sua proposta pelo link abaixo:",
+    t("Abra sua proposta pelo link abaixo:", "Open your proposal at the link below:"),
     proposalUrl,
     "",
-    ...(safeText(customMessage) ? ["Mensagem da equipe:", safeText(customMessage), ""] : []),
-    "Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal.",
-    "A data e o horário ficam reservados após validação da equipe e confirmação do sinal.",
-    "Para manter o atendimento organizado, prefira responder pelo link. Se responder este e-mail, sua mensagem chega direto à equipe de eventos.",
+    ...(safeText(customMessage) ? [t("Mensagem da equipe:", "Message from our team:"), safeText(customMessage), ""] : []),
+    t("Pelo link você pode aprovar, pedir ajustes ou anexar o comprovante do sinal.", "Through the link you can approve, request changes or upload your deposit receipt."),
+    t("A data e o horário ficam reservados após validação da equipe e confirmação do sinal.", "The date is reserved after our team verifies the deposit."),
+    t("Você também pode responder este e-mail para falar com a equipe.", "You can also reply to this email to reach our team."),
     "",
     "Equipe de Eventos | Embaixada Carioca",
   ].join("\n");

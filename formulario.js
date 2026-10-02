@@ -873,6 +873,15 @@ function renderLocalizedChoices() {
 function setLanguage(language) {
   uiState.language = language === "en" ? "en" : "pt";
   localStorage.setItem(LANGUAGE_KEY, uiState.language);
+  const shortcutCopy = uiState.language === "en"
+    ? ["Already know your date and group size?", "Send the essentials now. Our team can help choose the format later.", "Go to essentials", "Talk to our team"]
+    : ["Já sabe a data e o tamanho do grupo?", "Envie o essencial agora. A equipe ajuda a definir o formato depois.", "Ir ao essencial", "Falar com a equipe"];
+  ["quickPathTitle", "quickPathDescription", "quickPathLink", "quickHumanLink"].forEach((id, index) => {
+    const node = document.querySelector(`#${id}`);
+    if (node) node.textContent = shortcutCopy[index];
+  });
+  const quickContact = document.querySelector("#quickContactLink");
+  if (quickContact) quickContact.textContent = uiState.language === "en" ? "I have the essentials. Go to contact" : "Já tenho o essencial. Ir para contato";
   langButtons.forEach((button) => {
     const active = button.dataset.lang === uiState.language;
     button.classList.toggle("is-active", active);
@@ -1595,6 +1604,7 @@ function getSnapshot(referenceCode) {
   return {
     referencia: referenceCode,
     cliente: {
+      idioma: uiState.language,
       nome: fields.name.value.trim(),
       email: fields.email.value.trim(),
       whatsapp: fields.phone.value.trim(),

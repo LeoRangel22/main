@@ -50,6 +50,44 @@ test.describe("Formulário público do cliente", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("caminho rápido no celular leva ao essencial sem exigir cards consultivos", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/formulario.html");
+    await expect(page.locator("#quickPathLink")).toBeVisible();
+    await expect(page.locator("#quickHumanLink")).toHaveAttribute("href", /wa\.me\/5521971426007/);
+    await page.locator("#quickPathLink").click();
+    await expect(page).toHaveURL(/#eventDetailsStep$/);
+    await expect(page.locator("#eventDetailsStep")).toBeInViewport();
+    await page.locator("#quickContactLink").click();
+    await expect(page).toHaveURL(/#contactStep$/);
+    await expect(page.locator("#contactStep")).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("pedido em inglês preserva idioma e aceita apenas dados essenciais", async ({ page }) => {
+    let payload;
+    await page.route("**/rest/v1/rpc/submit_public_quote_request**", (route) => route.fulfill({ status: 404, contentType: "application/json", body: '{"code":"42883"}' }));
+    await page.route("**/rest/v1/solicitacoes_cotacao**", (route) => {
+      const body = route.request().postDataJSON();
+      payload = Array.isArray(body) ? body[0] : body;
+      return route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
+    });
+    await page.goto("/formulario.html");
+    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await expect(page.locator("#quickPathLink")).toHaveText("Go to essentials");
+    await page.locator("#quickPathLink").click();
+    await page.locator("#requestEventDate").fill("2026-11-20");
+    await page.locator("#quickContactLink").click();
+    await expect(page.locator("#contactStep")).toBeInViewport();
+    await page.locator("#requestClientName").fill("Alex Smith");
+    await page.locator("#requestClientEmail").fill("alex@example.com");
+    await page.locator("#submitClientQuoteBtn").click();
+    await expect(page.locator("#clientFormStatus")).toContainText(/received|sent/i);
+    expect(payload?.snapshot?.cliente?.idioma).toBe("en");
+  });
+
   test("bloqueia envio incompleto com orientação clara", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 

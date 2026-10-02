@@ -6,7 +6,20 @@ const card = document.querySelector("#publicProposalCard");
 const title = document.querySelector("#proposalPublicTitle");
 const subtitle = document.querySelector("#proposalPublicSubtitle");
 const token = new URLSearchParams(window.location.search).get("p") || "";
+const requestedLanguage = new URLSearchParams(window.location.search).get("lang");
+let language = requestedLanguage === "en" || (!requestedLanguage && localStorage.getItem("embaixada_form_language_v1") === "en") ? "en" : "pt";
 const supabaseClient = window.supabase?.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
+const tr = (pt, en) => language === "en" ? en : pt;
+
+function syncLanguage() {
+  document.documentElement.lang = language === "en" ? "en" : "pt-BR";
+  document.title = tr("Proposta de Evento | Embaixada Carioca", "Event Proposal | Embaixada Carioca");
+  document.querySelectorAll("[data-proposal-lang]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.proposalLang === language));
+  });
+  document.querySelector(".public-proposal-hero-copy > p").textContent = tr("Proposta comercial", "Event proposal");
+  if (currentProposal) renderProposal(currentProposal);
+}
 
 const PAYMENT_INFO = {
   bank: "Itaú (341)",
@@ -35,25 +48,26 @@ function escapeHtml(value) {
 }
 
 function formatMoney(value) {
-  return new Intl.NumberFormat("pt-BR", {
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(Number(value || 0));
 }
 
 function formatDate(value) {
-  if (!value) return "A definir";
+  if (!value) return tr("A definir", "To be confirmed");
   const [year, month, day] = String(value).slice(0, 10).split("-");
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  if (!year || !month || !day) return value;
+  return language === "en" ? `${month}/${day}/${year}` : `${day}/${month}/${year}`;
 }
 
 function formatTime(value) {
-  return value ? String(value).slice(0, 5) : "A definir";
+  return value ? String(value).slice(0, 5) : tr("A definir", "To be confirmed");
 }
 
 function formatDuration(value) {
   const number = Number(value || 0);
-  if (!number) return "A definir";
+  if (!number) return tr("A definir", "To be confirmed");
   return number % 1 === 0 ? `${number}h` : `${String(number).replace(".", "h")}`;
 }
 
@@ -64,7 +78,7 @@ function formatMultiline(value) {
 function formatDateTime(value) {
   if (!value) return "";
   try {
-    return new Intl.DateTimeFormat("pt-BR", {
+    return new Intl.DateTimeFormat(language === "en" ? "en-US" : "pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -78,9 +92,9 @@ function formatDateTime(value) {
 
 function formatDeadlineHours(hours) {
   const value = Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS);
-  if (value < 24) return `${value} horas`;
+  if (value < 24) return `${value} ${tr("horas", "hours")}`;
   const days = value / 24;
-  return `${days} ${days === 1 ? "dia" : "dias"}`;
+  return `${days} ${days === 1 ? tr("dia", "day") : tr("dias", "days")}`;
 }
 
 function formatFileSize(bytes) {
@@ -94,15 +108,15 @@ function getSignalDeadlineCopy(proposal = currentProposal) {
   const event = proposal?.snapshot?.event || {};
   const deadlineAt = formatDateTime(event.signalDeadlineAt);
   if (deadlineAt) {
-    return `Para manter esta condição e priorizar a reserva, envie o sinal até ${deadlineAt}.`;
+    return tr(`Para manter esta condição e priorizar a reserva, envie o sinal até ${deadlineAt}.`, `To keep these terms and prioritize the booking, send the deposit by ${deadlineAt}.`);
   }
-  return `Prazo padrão para o sinal: ${formatDeadlineHours(event.signalDeadlineHours)}.`;
+  return tr(`Prazo padrão para o sinal: ${formatDeadlineHours(event.signalDeadlineHours)}.`, `Deposit due within ${formatDeadlineHours(event.signalDeadlineHours)} after the proposal is sent.`);
 }
 
 function getSignalDeadlineLabel(proposal = currentProposal) {
   const event = proposal?.snapshot?.event || {};
   const deadlineAt = formatDateTime(event.signalDeadlineAt);
-  return deadlineAt ? `Sinal até ${deadlineAt}` : `Sinal em até ${formatDeadlineHours(event.signalDeadlineHours)}`;
+  return deadlineAt ? tr(`Sinal até ${deadlineAt}`, `Deposit by ${deadlineAt}`) : tr(`Sinal em até ${formatDeadlineHours(event.signalDeadlineHours)}`, `Deposit within ${formatDeadlineHours(event.signalDeadlineHours)}`);
 }
 
 function getSignalAmount(proposal = currentProposal) {
@@ -113,7 +127,7 @@ function getSignalAmount(proposal = currentProposal) {
 function renderDeadlineCard(proposal = currentProposal) {
   return `
     <div class="public-deadline-card">
-      <span>Prazo do sinal</span>
+      <span>${tr("Prazo do sinal", "Deposit deadline")}</span>
       <strong>${escapeHtml(getSignalDeadlineLabel(proposal))}</strong>
       <p>${escapeHtml(getSignalDeadlineCopy(proposal))}</p>
     </div>
@@ -128,15 +142,15 @@ function isAllowedProofFile(file) {
 function readProofFile(file) {
   return new Promise((resolve, reject) => {
     if (!file) {
-      reject(new Error("Arquivo não encontrado."));
+      reject(new Error(tr("Arquivo não encontrado.", "File not found.")));
       return;
     }
     if (file.size > PROOF_MAX_BYTES) {
-      reject(new Error("O comprovante pode ter no máximo 5 MB."));
+      reject(new Error(tr("O comprovante pode ter no máximo 5 MB.", "The receipt must be no larger than 5 MB.")));
       return;
     }
     if (!isAllowedProofFile(file)) {
-      reject(new Error("Use PDF, JPG, PNG, WebP, HEIC ou HEIF."));
+      reject(new Error(tr("Use PDF, JPG, PNG, WebP, HEIC ou HEIF.", "Use PDF, JPG, PNG, WebP, HEIC or HEIF.")));
       return;
     }
     const reader = new FileReader();
@@ -148,24 +162,24 @@ function readProofFile(file) {
         dataUrl: reader.result,
         anexadoEm: new Date().toISOString(),
       });
-    reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+    reader.onerror = () => reject(new Error(tr("Não foi possível ler o arquivo.", "We could not read the file.")));
     reader.readAsDataURL(file);
   });
 }
 
 function renderProofUploader() {
   return `
-    <section class="public-proof-uploader" aria-label="Anexar comprovante do sinal">
+    <section class="public-proof-uploader" aria-label="${tr("Anexar comprovante do sinal", "Upload deposit receipt")}">
       <div class="public-proof-heading">
-        <span>Comprovante</span>
-        <strong>Anexe o comprovante do sinal</strong>
-        <p>Opcional agora, mas agiliza a validação da equipe. Aceitamos PDF, JPG, PNG, WebP, HEIC ou HEIF até 5 MB.</p>
+        <span>${tr("Comprovante", "Receipt")}</span>
+        <strong>${tr("Anexe o comprovante do sinal", "Upload your deposit receipt")}</strong>
+        <p>${tr("Opcional agora, mas agiliza a validação da equipe. Aceitamos PDF, JPG, PNG, WebP, HEIC ou HEIF até 5 MB.", "You may send this later. PDF, JPG, PNG, WebP, HEIC or HEIF, up to 5 MB.")}</p>
       </div>
       <label class="public-proof-dropzone" for="publicProofInput">
         <input id="publicProofInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" />
-        <span>Arraste o comprovante aqui, clique para escolher ou cole uma imagem copiada.</span>
+        <span>${tr("Clique para escolher o comprovante ou cole uma imagem copiada.", "Choose a receipt or paste an image.")}</span>
       </label>
-      <p class="public-proof-status" id="publicProofStatus">Nenhum comprovante anexado.</p>
+      <p class="public-proof-status" id="publicProofStatus">${tr("Nenhum comprovante anexado.", "No receipt selected.")}</p>
     </section>
   `;
 }
@@ -176,7 +190,7 @@ function renderProofSummary(proof) {
   const href = proof.dataUrl || "";
   return `
     <div class="public-proof-summary">
-      <span>Comprovante anexado</span>
+      <span>${tr("Comprovante anexado", "Receipt received")}</span>
       ${
         href
           ? `<a href="${escapeHtml(href)}" download="${escapeHtml(name)}">${escapeHtml(name)}</a>`
@@ -190,14 +204,14 @@ function updateProofStatus() {
   const status = document.querySelector("#publicProofStatus");
   if (!status) return;
   if (!selectedProof) {
-    status.textContent = "Nenhum comprovante anexado.";
+    status.textContent = tr("Nenhum comprovante anexado.", "No receipt selected.");
     status.dataset.status = "empty";
     return;
   }
   const size = formatFileSize(selectedProof.tamanho);
   status.innerHTML = `
-    <span>Comprovante anexado: <strong>${escapeHtml(selectedProof.nome)}</strong>${size ? ` · ${escapeHtml(size)}` : ""}</span>
-    <button type="button" data-remove-proof>Remover</button>
+    <span>${tr("Comprovante anexado", "Receipt selected")}: <strong>${escapeHtml(selectedProof.nome)}</strong>${size ? ` · ${escapeHtml(size)}` : ""}</span>
+    <button type="button" data-remove-proof>${tr("Remover", "Remove")}</button>
   `;
   status.dataset.status = "ok";
 }
@@ -206,16 +220,17 @@ async function selectProofFile(file) {
   try {
     selectedProof = await readProofFile(file);
     updateProofStatus();
-    setMessage("Comprovante anexado. Agora é só enviar a resposta para a equipe.", "success");
+    setMessage(tr("Comprovante selecionado. Envie para a equipe quando estiver pronto.", "Receipt selected. Send it to our team when ready."), "success");
   } catch (error) {
     selectedProof = null;
     updateProofStatus();
-    setMessage(error.message || "Não foi possível anexar o comprovante.", "error");
+    setMessage(error.message || tr("Não foi possível anexar o comprovante.", "We could not attach the receipt."), "error");
   }
 }
 
 function getStatusLabel(value) {
   const labels = {
+    proposta_pronta: "Proposta disponível",
     proposta_enviada: "Proposta enviada",
     negociacao: "Em negociação",
     confirmado: "Sinal recebido",
@@ -225,7 +240,12 @@ function getStatusLabel(value) {
     pos_venda: "Pós-venda",
     cancelado: "Cancelado",
   };
-  return labels[value] || value || "Proposta";
+  const english = {
+    proposta_pronta: "Proposal available", proposta_enviada: "Proposal sent", negociacao: "In discussion",
+    confirmado: "Deposit confirmed", pagamento_final: "Final payment pending", planejamento: "Planning",
+    evento_proximo: "Event approaching", pos_venda: "After the event", cancelado: "Closed",
+  };
+  return (language === "en" ? english : labels)[value] || value || tr("Proposta", "Proposal");
 }
 
 function getActionLabel(value) {
@@ -234,38 +254,56 @@ function getActionLabel(value) {
     cancelar: "Cancelamento solicitado pelo cliente",
     alteracao: "Alteração solicitada pelo cliente",
   };
-  return labels[value] || "";
+  const english = { confirmar: "Proposal approved", cancelar: "Cancellation requested", alteracao: "Changes requested" };
+  return (language === "en" ? english : labels)[value] || "";
 }
 
-function getDecisionCopy(proposal) {
+function getDecisionCopy(proposal, response) {
   const status = proposal.status || "";
   if (status === "confirmado") {
     return {
-      title: "Sinal recebido e reserva confirmada",
-      note: "A proposta já avançou de etapa. Se precisar rever algum detalhe, a equipe pode seguir com você por e-mail ou WhatsApp.",
+      title: tr("Sinal recebido e reserva confirmada", "Deposit confirmed and date reserved"),
+      note: tr("A equipe seguirá com os detalhes do evento.", "Our team will follow up on the event details."),
     };
   }
   if (status === "pagamento_final") {
     return {
-      title: "Pagamento restante em andamento",
-      note: "A equipe acompanha o saldo final e os próximos combinados do evento.",
+      title: tr("Pagamento restante em andamento", "Final payment in progress"),
+      note: tr("A equipe acompanha o saldo final e os próximos combinados do evento.", "Our team is coordinating the remaining balance and event details."),
     };
   }
   if (status === "planejamento" || status === "evento_proximo") {
     return {
-      title: "Evento em preparação",
-      note: "Os detalhes operacionais já estão sendo conduzidos pela equipe da Embaixada Carioca.",
+      title: tr("Evento em preparação", "Your event is being prepared"),
+      note: tr("Os detalhes operacionais já estão sendo conduzidos pela equipe da Embaixada Carioca.", "Our team is coordinating the event details."),
     };
   }
   if (status === "cancelado") {
     return {
-      title: "Pedido encerrado",
-      note: "Se quiser retomar a conversa em outro momento, a equipe pode montar uma nova proposta com você.",
+      title: tr("Pedido encerrado", "Request closed"),
+      note: tr("Se quiser retomar a conversa em outro momento, a equipe pode montar uma nova proposta com você.", "If you wish to resume later, our team can prepare a new proposal."),
     };
   }
+  if (response === "confirmar") {
+    const hasProof = Boolean(proposal.cliente_solicitacao?.comprovante || proposal.snapshot?.clienteResposta?.comprovante);
+    return {
+      title: tr("Aprovação recebida", "Approval received"),
+      note: hasProof
+        ? tr("Comprovante recebido. A equipe valida o pagamento antes de confirmar a reserva.", "Proof received. Our team will verify the payment before confirming the booking.")
+        : tr("Envie o comprovante quando pagar o sinal. A equipe validará o pagamento e confirmará a reserva.", "Send the receipt after paying the deposit. Our team will verify it and confirm the booking."),
+    };
+  }
+  if (response === "alteracao") return {
+    title: tr("Ajuste solicitado", "Changes requested"),
+    note: tr("A equipe recebeu seu pedido e retornará com uma proposta atualizada.", "Our team received your request and will follow up with an updated proposal."),
+  };
+  if (status === "proposta_pronta") return {
+    title: tr("Proposta em preparação para envio", "Proposal being prepared for delivery"),
+    note: tr("A equipe enviará o link para sua revisão.", "Our team will send the link for your review."),
+  };
   return {
-    title: "Pronto para reservar sua data?",
-    note: "Confira a proposta e aprove para seguir. A equipe valida a disponibilidade e o sinal confirma a reserva da data e do horário.",
+    title: tr("Pronto para reservar sua data?", "Ready to reserve your date?"),
+    note: tr("Confira valores e condições antes de aprovar. A equipe valida a disponibilidade; o sinal confirma a reserva.", "Review the price and terms before approving. Our team checks availability; the deposit secures the booking."),
   };
 }
 
@@ -278,18 +316,18 @@ function setMessage(message, type = "neutral") {
 
 function getPublicResponseErrorMessage(error) {
   const raw = String(error?.message || error?.details || "").trim();
-  if (/link expirado|nao encontrada|não encontrada/i.test(raw)) return "Este link expirou ou não está mais disponível. Fale com a equipe para receber uma proposta atualizada.";
-  if (/nao aceita|não aceita|status/i.test(raw)) return "Esta proposta não aceita mais respostas pelo link. Fale com a equipe para alinhar os próximos passos.";
-  if (/comprovante|payload|too large|limite|tipo|formato/i.test(raw)) return "Não foi possível registrar o comprovante. Revise o arquivo ou envie por e-mail/WhatsApp para a equipe.";
-  return "Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.";
+  if (/link expirado|nao encontrada|não encontrada/i.test(raw)) return tr("Este link expirou ou não está mais disponível. Fale com a equipe para receber uma proposta atualizada.", "This link has expired. Please ask our team for an updated proposal.");
+  if (/nao aceita|não aceita|status|já enviado/i.test(raw)) return tr("Esta proposta não aceita mais respostas pelo link. Fale com a equipe.", "This proposal no longer accepts responses. Please contact our team.");
+  if (/comprovante|payload|too large|limite|tipo|formato/i.test(raw)) return tr("Não foi possível registrar o comprovante. Revise o arquivo ou envie por e-mail/WhatsApp.", "We could not save the receipt. Check the file or send it by email or WhatsApp.");
+  return tr("Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.", "We could not save your response. Try again or contact our team.");
 }
 
 function renderError(message) {
   card.innerHTML = `
     <div class="public-proposal-empty">
-      <h2>Não conseguimos abrir esta proposta.</h2>
+      <h2>${tr("Não conseguimos abrir esta proposta.", "We could not open this proposal.")}</h2>
       <p>${escapeHtml(message)}</p>
-      <a href="mailto:eventos@embaixadacarioca.com.br">Falar com a equipe de eventos</a>
+      <a href="mailto:eventos@embaixadacarioca.com.br">${tr("Falar com a equipe de eventos", "Contact our events team")}</a>
     </div>
   `;
 }
@@ -297,27 +335,27 @@ function renderError(message) {
 function renderPaymentInfo({ proof = null } = {}) {
   const signalAmount = getSignalAmount();
   return `
-    <section class="public-payment-info" aria-label="Dados bancários para sinal de reserva">
+    <section class="public-payment-info" aria-label="${tr("Dados bancários para sinal de reserva", "Bank details for deposit")}">
       <div class="public-payment-heading">
-        <span>Sinal de reserva</span>
-        <h3>Dados para pagamento do sinal</h3>
-        <p>A reserva fica confirmada após validação da equipe e pagamento do sinal.</p>
+        <span>${tr("Sinal de reserva", "Booking deposit")}</span>
+        <h3>${tr("Dados para pagamento do sinal", "Deposit payment details")}</h3>
+        <p>${tr("A reserva fica confirmada após validação da equipe e pagamento do sinal.", "The booking is confirmed after our team verifies the deposit.")}</p>
       </div>
       ${renderDeadlineCard()}
       <div class="public-payment-grid">
-        ${signalAmount ? `<div class="public-payment-highlight"><span>Valor do sinal</span><strong>${formatMoney(signalAmount)}</strong></div>` : ""}
-        <div><span>Banco</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
-        <div><span>Agência</span><strong>${escapeHtml(PAYMENT_INFO.agency)}</strong></div>
-        <div><span>Conta corrente</span><strong>${escapeHtml(PAYMENT_INFO.account)}</strong></div>
+        ${signalAmount ? `<div class="public-payment-highlight"><span>${tr("Valor do sinal", "Deposit amount")}</span><strong>${formatMoney(signalAmount)}</strong></div>` : ""}
+        <div><span>${tr("Banco", "Bank")}</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
+        <div><span>${tr("Agência", "Branch")}</span><strong>${escapeHtml(PAYMENT_INFO.agency)}</strong></div>
+        <div><span>${tr("Conta corrente", "Account")}</span><strong>${escapeHtml(PAYMENT_INFO.account)}</strong></div>
         <div><span>CNPJ</span><strong>${escapeHtml(PAYMENT_INFO.cnpj)}</strong></div>
       </div>
       <div class="public-payment-pix">
         <div>
-          <span>Chave Pix</span>
+          <span>${tr("Chave Pix", "Pix key")}</span>
           <strong>${escapeHtml(PAYMENT_INFO.pix)}</strong>
-          <small>O botão copia apenas os números, para funcionar melhor no app do banco.</small>
+          <small>${tr("O botão copia apenas os números, para funcionar melhor no app do banco.", "The button copies only the digits for your banking app.")}</small>
         </div>
-        <button class="public-copy-pix" type="button" data-copy-pix>Copiar chave Pix</button>
+        <button class="public-copy-pix" type="button" data-copy-pix>${tr("Copiar chave Pix", "Copy Pix key")}</button>
       </div>
       ${renderProofSummary(proof)}
     </section>
@@ -337,6 +375,29 @@ function copyTextFallback(text) {
   return copied;
 }
 
+function renderCommercialSummary(snapshot) {
+  const event = snapshot.event || {};
+  const payment = Array.isArray(snapshot.paymentTerms) ? snapshot.paymentTerms : [];
+  const defaultPayment = payment.length === 2 && /^50%/.test(payment[0]) && /^50%/.test(payment[1]);
+  const terms = String(snapshot.generalTerms || "");
+  const ticketExclusion = /INGRESSOS TELEFÉRICO[^\n]*não incluem/i.test(terms);
+  const standardCancellation = /Mais de 5 dias úteis[^\n]*25%/.test(terms)
+    && /Entre 5 dias úteis e 48 horas[^\n]*50%/.test(terms)
+    && /Menos de 48 horas[^\n]*100%/.test(terms);
+  return `<section class="public-commercial-summary" aria-label="${tr("Condições essenciais", "Key terms")}">
+    <h3>${tr("Antes de decidir", "Before you decide")}</h3>
+    <ul>
+      <li>${tr("O total abaixo inclui a taxa de serviço indicada no detalhamento.", "The total below includes the service charge shown in the breakdown.")}</li>
+      ${event.validity ? `<li>${tr("Validade comercial", "Proposal validity")}: <strong>${escapeHtml(event.validity)}</strong> ${tr("a partir do envio.", "from delivery.")}</li>` : ""}
+      ${defaultPayment ? `<li>${tr("Sinal de 50% para reservar; saldo de 50% até 72 horas antes do evento.", "50% deposit to book; remaining 50% due 72 hours before the event.")}</li>` : payment.map((term) => `<li>${escapeHtml(term)}</li>`).join("")}
+      ${ticketExclusion ? `<li>${tr("Ingressos do teleférico não incluídos; compra separada.", "Cable car tickets are not included and must be purchased separately.")}</li>` : ""}
+      ${standardCancellation ? `<li>${tr("Cancelamento: 25% com mais de 5 dias úteis; 50% até 48h; 100% com menos de 48h do evento.", "Cancellation: 25% more than 5 business days before; 50% between 5 business days and 48 hours; 100% within 48 hours of the event.")}</li>` : ""}
+      ${terms ? `<li>${tr("Leia as regras de alteração e cancelamento em Condições comerciais abaixo.", "Read the change and cancellation terms in Commercial terms below.")}</li>` : ""}
+    </ul>
+    ${language === "en" && terms ? `<p>${tr("", "The detailed commercial terms provided by the team below remain in their original language. Ask us for an English copy before approving if needed.")}</p>` : ""}
+  </section>`;
+}
+
 async function copyPixKey(button) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -346,15 +407,15 @@ async function copyPixKey(button) {
     }
     if (button) {
       const original = button.textContent;
-      button.textContent = "Chave Pix copiada";
+      button.textContent = tr("Chave Pix copiada", "Pix key copied");
       window.setTimeout(() => {
-        button.textContent = original || "Copiar chave Pix";
+        button.textContent = original || tr("Copiar chave Pix", "Copy Pix key");
       }, 2200);
     }
-    setMessage("Chave Pix copiada só com números. Agora é só colar no app do banco.", "success");
+    setMessage(tr("Chave Pix copiada só com números. Agora é só colar no app do banco.", "Pix key copied as digits. Paste it into your banking app."), "success");
   } catch (error) {
     console.warn("Falha ao copiar chave Pix.", error);
-    setMessage(`Não foi possível copiar automaticamente. Chave Pix sem pontuação: ${PAYMENT_INFO.pixCopy}`, "error");
+    setMessage(tr(`Não foi possível copiar automaticamente. Chave Pix sem pontuação: ${PAYMENT_INFO.pixCopy}`, `Could not copy automatically. Pix key: ${PAYMENT_INFO.pixCopy}`), "error");
   }
 }
 
@@ -367,74 +428,79 @@ function renderProposal(proposal) {
   const response = proposal.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const responseMessage = proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "";
   const responseProof = proposal.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || null;
-  const decision = getDecisionCopy(proposal);
-  const eventTitle = event.type || proposal.tipo_evento || "Proposta de evento";
+  const decision = getDecisionCopy(proposal, response);
+  const canDecide = !response && ["proposta_enviada", "negociacao"].includes(proposal.status);
+  const canSendProof = response === "confirmar" && !responseProof && proposal.status === "negociacao";
+  const eventTitle = event.type || proposal.tipo_evento || tr("Proposta de evento", "Event proposal");
   const guests = proposal.convidados || event.guests || 0;
   const dateLabel = formatDate(proposal.data_evento);
   const timeLabel = formatTime(proposal.horario_evento);
   const durationLabel = formatDuration(proposal.duracao || event.duration);
 
   title.textContent = eventTitle;
-  subtitle.textContent = `${proposal.cliente_nome || "Cliente"} · ${dateLabel} · ${guests} convidados`;
+  subtitle.textContent = `${proposal.cliente_nome || tr("Cliente", "Guest")} · ${dateLabel} · ${guests} ${tr("convidados", "guests")}`;
 
   card.innerHTML = `
     <div class="public-proposal-topline">
       <span class="public-proposal-chip is-status">${escapeHtml(getStatusLabel(proposal.status))}</span>
       <span class="public-proposal-chip">${escapeHtml(eventTitle)}</span>
-      <span class="public-proposal-chip">${escapeHtml(String(guests))} convidados</span>
+      <span class="public-proposal-chip">${escapeHtml(String(guests))} ${tr("convidados", "guests")}</span>
       <span class="public-proposal-chip public-proposal-chip-deadline">${escapeHtml(getSignalDeadlineLabel(proposal))}</span>
     </div>
 
     <div class="public-proposal-stage">
       <div class="public-proposal-stage-copy">
-        <span>Experiência sugerida</span>
+        <span>${tr("Experiência sugerida", "Suggested experience")}</span>
         <h2>${escapeHtml(eventTitle)}</h2>
-        <p>Uma experiência no Morro da Urca para receber ${escapeHtml(String(guests))} convidados com vista, serviço e gastronomia carioca. Duração prevista: ${escapeHtml(durationLabel)}.</p>
+        <p>${tr(`Uma experiência no Morro da Urca para ${escapeHtml(String(guests))} convidados. Duração prevista: ${escapeHtml(durationLabel)}.`, `An experience at Morro da Urca for ${escapeHtml(String(guests))} guests. Expected duration: ${escapeHtml(durationLabel)}.`)}</p>
       </div>
       <div class="public-proposal-decision-card">
-        <span>Próximo passo</span>
+        <span>${tr("Próximo passo", "Next step")}</span>
         <strong>${escapeHtml(decision.title)}</strong>
         <p>${escapeHtml(decision.note)}</p>
         ${renderDeadlineCard(proposal)}
       </div>
     </div>
 
-    <div class="public-proposal-next-steps" aria-label="Próximos passos da reserva">
+    <div class="public-proposal-next-steps" aria-label="${tr("Próximos passos da reserva", "Booking steps")}">
       <article>
         <span>01</span>
-        <strong>Aprovação</strong>
-        <p>Você confirma que o formato, a data e o investimento fazem sentido.</p>
+        <strong>${tr("Aprovação", "Approval")}</strong>
+        <p>${tr("Você confirma que o formato, a data e o investimento fazem sentido.", "Confirm that the format, date and price work for you.")}</p>
       </article>
       <article>
         <span>02</span>
-        <strong>Sinal de reserva</strong>
-        <p>Ao aprovar, os dados bancários e a chave Pix aparecem para facilitar o pagamento.</p>
+        <strong>${tr("Sinal de reserva", "Deposit")}</strong>
+        <p>${tr("Depois de aprovar, você recebe os dados para o pagamento.", "After approval, you will see the payment details.")}</p>
       </article>
       <article>
         <span>03</span>
-        <strong>Data reservada</strong>
-        <p>Após a validação do sinal, seguimos com os combinados finais do evento.</p>
+        <strong>${tr("Data reservada", "Date reserved")}</strong>
+        <p>${tr("Após validar o sinal, a equipe confirma a reserva.", "Our team confirms the booking after verifying the deposit.")}</p>
       </article>
     </div>
 
     <div class="public-proposal-summary">
       <div>
-        <span>Cliente</span>
-        <strong>${escapeHtml(proposal.cliente_nome || "Cliente")}</strong>
+        <span>${tr("Cliente", "Client")}</span>
+        <strong>${escapeHtml(proposal.cliente_nome || tr("Cliente", "Client"))}</strong>
       </div>
       <div>
-        <span>Data e horário</span>
+        <span>${tr("Data e horário", "Date and time")}</span>
         <strong>${escapeHtml(dateLabel)} · ${escapeHtml(timeLabel)}</strong>
       </div>
       <div>
-        <span>Convidados</span>
+        <span>${tr("Convidados", "Guests")}</span>
         <strong>${escapeHtml(String(guests))}</strong>
       </div>
       <div>
-        <span>Total estimado</span>
+        <span>${tr("Total estimado", "Estimated total")}</span>
         <strong>${formatMoney(proposal.total || totals.total)}</strong>
       </div>
     </div>
+
+    <a class="public-proposal-jump" href="#decisionActions">${tr("Ver condições e responder", "Review terms and respond")}</a>
+    ${renderCommercialSummary(snapshot)}
 
     ${
       response
@@ -443,52 +509,54 @@ function renderProposal(proposal) {
     }
     ${response === "confirmar" ? renderPaymentInfo({ proof: responseProof }) : ""}
 
-    <div class="public-proposal-actions">
+    <div class="public-proposal-actions" id="decisionActions">
       <div class="public-proposal-actions-copy">
-        <h3>Escolha seu próximo passo</h3>
-        <p>Se estiver tudo certo, aprove para seguir com a reserva. Se precisar, peça um ajuste antes.</p>
+        <h3>${tr("Seu próximo passo", "Your next step")}</h3>
+        <p>${canDecide ? tr("Confira os itens e condições. Depois, aprove ou peça um ajuste.", "Review the items and terms. Then approve or request a change.") : escapeHtml(decision.note)}</p>
       </div>
       <div class="public-proposal-buttons">
-        <button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">Aprovar e seguir para reserva</button>
-        <button class="secondary" type="button" data-public-action="alteracao">Pedir ajuste</button>
-        <button class="secondary danger-light" type="button" data-public-action="cancelar">Não seguir com esta proposta</button>
+        ${canDecide ? `<button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">${tr("Aprovar e seguir para reserva", "Approve and proceed to booking")}</button>
+        <button class="secondary" type="button" data-public-action="alteracao">${tr("Pedir ajuste", "Request a change")}</button>
+        <button class="secondary danger-light" type="button" data-public-action="cancelar">${tr("Não seguir com esta proposta", "Decline this proposal")}</button>` : ""}
+        ${canSendProof ? `<button class="primary public-proposal-main-cta" type="button" data-upload-proof>${tr("Enviar comprovante do sinal", "Send deposit receipt")}</button>` : ""}
+        <a class="secondary" href="https://wa.me/5521971426007?text=${encodeURIComponent(tr(`Olá! Tenho uma dúvida sobre a proposta de ${eventTitle} em ${dateLabel}.`, `Hello! I have a question about the ${eventTitle} proposal for ${dateLabel}.`))}" target="_blank" rel="noopener noreferrer">${tr("Tirar dúvida no WhatsApp", "Ask us on WhatsApp")}</a>
       </div>
+      ${canSendProof ? `<form id="publicLaterProofForm" class="public-proposal-change-form" hidden>${renderProofUploader()}<button class="primary" type="submit">${tr("Enviar comprovante", "Send receipt")}</button></form>` : ""}
 
       <form class="public-proposal-change-form" id="publicProposalResponseForm" hidden>
         <input type="hidden" id="publicProposalAction" />
         <div class="public-proposal-form-grid">
           <label>
-            Nova data
+            ${tr("Nova data", "New date")}
             <input id="publicRequestedDate" type="date" />
           </label>
           <label>
-            Novo horário
+            ${tr("Novo horário", "New time")}
             <input id="publicRequestedTime" type="time" step="900" />
           </label>
           <label>
-            Convidados
+            ${tr("Convidados", "Guests")}
             <input id="publicRequestedGuests" type="number" min="1" max="500" placeholder="${escapeHtml(String(guests || ""))}" />
           </label>
         </div>
         <label>
-          Mensagem para a equipe
-          <textarea id="publicResponseMessage" rows="4" placeholder="Conte o que precisa ajustar ou o motivo do cancelamento."></textarea>
+          ${tr("Mensagem para a equipe", "Message to our team")}
+          <textarea id="publicResponseMessage" rows="4" placeholder="${tr("Conte o que precisa ajustar ou o motivo do cancelamento.", "Tell us what to change or why you are declining.")}"></textarea>
         </label>
         <div id="publicPaymentInfoSlot" hidden>
-          ${renderPaymentInfo()}
-          ${renderProofUploader()}
+          ${canDecide ? `${renderPaymentInfo()}${renderProofUploader()}` : ""}
         </div>
         <div class="public-proposal-form-actions">
-          <button class="primary" id="publicSubmitResponse" type="submit">Enviar resposta</button>
-          <button class="secondary" type="button" id="publicCancelResponse">Voltar</button>
+          <button class="primary" id="publicSubmitResponse" type="submit">${tr("Enviar resposta", "Send response")}</button>
+          <button class="secondary" type="button" id="publicCancelResponse">${tr("Voltar", "Back")}</button>
         </div>
       </form>
-      <p id="publicProposalStatus" class="public-proposal-status" role="status" aria-live="polite">Status atual: ${escapeHtml(getStatusLabel(proposal.status))}.</p>
+      <p id="publicProposalStatus" class="public-proposal-status" role="status" aria-live="polite">${tr("Status atual", "Current status")}: ${escapeHtml(getStatusLabel(proposal.status))}.</p>
     </div>
 
     <div class="public-proposal-layout">
       <div class="public-proposal-items">
-        <h3>Itens incluídos</h3>
+        <h3>${tr("Itens incluídos", "Included items")}</h3>
         ${
           selectedItems.length
             ? selectedItems
@@ -505,27 +573,27 @@ function renderProposal(proposal) {
                   `,
                 )
                 .join("")
-            : "<p>Itens a confirmar com a equipe de eventos.</p>"
+            : `<p>${tr("Itens a confirmar com a equipe de eventos.", "Items to be confirmed with our events team.")}</p>`
         }
       </div>
 
       <aside class="public-proposal-side-stack">
         <div class="public-proposal-totals">
-          <div><span>Subtotal</span><strong>${formatMoney(proposal.subtotal || totals.subtotal)}</strong></div>
-          <div><span>Taxa de serviço</span><strong>${formatMoney(proposal.taxa_servico || totals.serviceFee)}</strong></div>
-          <div><span>Privatização</span><strong>${formatMoney(proposal.privatizacao || totals.privatizationAmount)}</strong></div>
-          <div><span>Total estimado</span><strong>${formatMoney(proposal.total || totals.total)}</strong></div>
+          <div><span>${tr("Subtotal", "Subtotal")}</span><strong>${formatMoney(proposal.subtotal || totals.subtotal)}</strong></div>
+          <div><span>${tr("Taxa de serviço", "Service charge")}</span><strong>${formatMoney(proposal.taxa_servico || totals.serviceFee)}</strong></div>
+          <div><span>${tr("Privatização", "Private venue")}</span><strong>${formatMoney(proposal.privatizacao || totals.privatizationAmount)}</strong></div>
+          <div><span>${tr("Total estimado", "Estimated total")}</span><strong>${formatMoney(proposal.total || totals.total)}</strong></div>
         </div>
 
         <div class="public-proposal-contact-card">
-          <span>Contato da equipe</span>
+          <span>${tr("Contato da equipe", "Contact our team")}</span>
           <strong>Eventos Embaixada Carioca</strong>
-          <p>Se preferir falar antes de responder, escreva para eventos@embaixadacarioca.com.br ou chame no +55 21 97142-6007.</p>
+          <p>${tr("Prefere conversar antes de responder?", "Want to talk before responding?")} <a href="mailto:eventos@embaixadacarioca.com.br?subject=${encodeURIComponent(tr("Dúvida sobre proposta de evento", "Question about event proposal"))}">eventos@embaixadacarioca.com.br</a> · <a href="https://wa.me/5521971426007" target="_blank" rel="noopener noreferrer">+55 21 97142-6007</a></p>
         </div>
 
         ${
           snapshot.generalTerms
-            ? `<details class="public-proposal-terms"><summary>Condições comerciais</summary><p>${formatMultiline(snapshot.generalTerms)}</p></details>`
+            ? `<details class="public-proposal-terms" id="commercialTerms"><summary>${tr("Condições comerciais completas", "Full commercial terms")}</summary><p>${formatMultiline(snapshot.generalTerms)}</p></details>`
             : ""
         }
       </aside>
@@ -548,21 +616,21 @@ function openResponseForm(action) {
     updateProofStatus();
   }
   if (action === "confirmar") {
-    message.placeholder = "Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.";
-    if (submitButton) submitButton.textContent = "Enviar aprovação à equipe";
+    message.placeholder = tr("Se quiser, deixe uma observação para a equipe antes de seguir com o sinal.", "Optional note for our team before sending your approval.");
+    if (submitButton) submitButton.textContent = tr("Enviar aprovação à equipe", "Send approval to our team");
     updateProofStatus();
-    setMessage("Confira os dados bancários, copie o Pix e anexe o comprovante quando tiver. A equipe valida o pagamento e confirma a reserva.", "neutral");
+    setMessage(tr("Confira os dados bancários. Você pode anexar o comprovante agora ou depois de aprovar.", "Review the bank details. You may upload your receipt now or after approving."), "neutral");
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   if (action === "cancelar") {
-    message.placeholder = "Conte brevemente o motivo do cancelamento.";
-    if (submitButton) submitButton.textContent = "Enviar cancelamento";
-    setMessage("Conte brevemente o motivo para a equipe registrar corretamente.", "neutral");
+    message.placeholder = tr("Conte brevemente o motivo do cancelamento.", "Briefly explain why you are declining.");
+    if (submitButton) submitButton.textContent = tr("Enviar cancelamento", "Send cancellation");
+    setMessage(tr("Conte brevemente o motivo para a equipe registrar corretamente.", "Tell us briefly why you are declining."), "neutral");
   } else {
-    message.placeholder = "Conte qual data, horário, número de convidados ou detalhe precisa mudar.";
-    if (submitButton) submitButton.textContent = "Enviar pedido de ajuste";
-    setMessage("Conte o que gostaria de ajustar: data, horário, convidados ou outro detalhe.", "neutral");
+    message.placeholder = tr("Conte qual data, horário, número de convidados ou detalhe precisa mudar.", "Tell us what date, time, guest count or detail you would like to change.");
+    if (submitButton) submitButton.textContent = tr("Enviar pedido de ajuste", "Request changes");
+    setMessage(tr("Conte o que gostaria de ajustar: data, horário, convidados ou outro detalhe.", "Tell us what to change: date, time, guest count or anything else."), "neutral");
   }
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -578,11 +646,14 @@ async function submitPublicResponse(event) {
   const needsMessage = action === "cancelar" || action === "alteracao";
 
   if (needsMessage && message.length < 3) {
-    setMessage("Escreva uma mensagem breve para a equipe entender sua solicitação.", "error");
+    setMessage(tr("Escreva uma mensagem breve para a equipe entender sua solicitação.", "Please include a short message so our team understands your request."), "error");
     return;
   }
 
-  setMessage("Enviando sua resposta...", "neutral");
+  const submitButton = document.querySelector("#publicSubmitResponse");
+  if (submitButton?.disabled) return;
+  if (submitButton) submitButton.disabled = true;
+  setMessage(tr("Enviando sua resposta...", "Sending your response..."), "neutral");
   const payload = {
     proposal_token: token,
     action,
@@ -592,64 +663,69 @@ async function submitPublicResponse(event) {
     message,
     payment_proof: action === "confirmar" ? selectedProof : null,
   };
-  let { data, error } = await supabaseClient.rpc("respond_public_proposal", payload);
-  const retryWithoutProof = false;
-
-  if (retryWithoutProof && error && payload.payment_proof) {
-    console.warn("Falha ao responder proposta com comprovante. Tentando registrar sem anexo.", error);
-    const fallbackPayload = { ...payload };
-    delete fallbackPayload.payment_proof;
-    ({ data, error } = await supabaseClient.rpc("respond_public_proposal", fallbackPayload));
-    if (!error && data?.[0]?.ok) {
-      setMessage("Aprovação registrada. O anexo não foi salvo; envie o comprovante por e-mail ou WhatsApp.", "error");
-      await loadProposal();
-      return;
-    }
+  let data, error;
+  try {
+    ({ data, error } = await supabaseClient.rpc("respond_public_proposal", payload));
+  } catch (requestError) {
+    error = requestError;
   }
+  if (submitButton) submitButton.disabled = false;
 
   if (error || !data?.[0]?.ok) {
     console.warn("Falha ao responder proposta.", error);
     setMessage(getPublicResponseErrorMessage(error), "error");
     return;
-    setMessage("Não conseguimos registrar sua resposta agora. Tente novamente ou fale com a equipe.", "error");
-    return;
   }
 
   if (action === "confirmar") {
-    setMessage(
-      selectedProof
-        ? "Aprovação e comprovante registrados. A equipe vai validar o sinal e confirmar a reserva."
-        : "Aprovação registrada. Use os dados de pagamento e envie o comprovante para a equipe.",
-      "success",
-    );
     await loadProposal();
+    setMessage(tr("Aprovação recebida. A equipe validará o sinal antes de confirmar a reserva.", "Approval received. Our team will verify the deposit before confirming the booking."), "success");
     return;
   }
 
-  setMessage(
-    action === "confirmar"
-      ? "Aprovação registrada. Use os dados de pagamento e envie o comprovante para a equipe."
-      : "Resposta registrada. Nossa equipe recebeu sua atualização.",
-    "success",
-  );
   await loadProposal();
+  setMessage(tr("Resposta registrada. Nossa equipe recebeu sua atualização.", "Response received. Our team has your request."), "success");
+}
+
+async function submitPublicProof(event) {
+  event.preventDefault();
+  if (!selectedProof || currentProposal?.cliente_resposta !== "confirmar") {
+    setMessage(tr("Escolha um comprovante antes de enviar.", "Choose a receipt before sending."), "error");
+    return;
+  }
+  const button = event.target.querySelector('[type="submit"]');
+  if (button.disabled) return;
+  button.disabled = true;
+  setMessage(tr("Enviando comprovante...", "Sending receipt..."), "neutral");
+  let result, error;
+  try {
+    ({ data: result, error } = await supabaseClient.rpc("submit_public_signal_proof", { proposal_token: token, payment_proof: selectedProof }));
+  } catch (requestError) { error = requestError; }
+  button.disabled = false;
+  if (error || !result?.[0]?.ok) {
+    setMessage(getPublicResponseErrorMessage(error), "error");
+    return;
+  }
+  selectedProof = null;
+  await loadProposal();
+  setMessage(tr("Comprovante recebido. A equipe validará o pagamento.", "Receipt received. Our team will verify the payment."), "success");
 }
 
 async function loadProposal() {
   if (!token) {
-    renderError("O link está sem código de proposta.");
+    renderError(tr("O link está sem código de proposta.", "The link is missing a proposal code."));
     return;
   }
 
   if (!supabaseClient) {
-    renderError("Não foi possível carregar a conexão. Tente novamente.");
+    renderError(tr("Não foi possível carregar a conexão. Tente novamente.", "Connection unavailable. Please try again."));
     return;
   }
 
   const { data, error } = await supabaseClient.rpc("get_public_proposal", { proposal_token: token });
   if (error || !data?.length) {
     console.warn("Falha ao carregar proposta pública.", error);
-    renderError("O link pode ter expirado ou ainda falta ativar a consulta pública no Supabase.");
+    renderError(tr("O link pode ter expirado ou ainda falta ativar a consulta pública.", "The link may have expired or the proposal may be temporarily unavailable."));
     return;
   }
   renderProposal(data[0]);
@@ -671,6 +747,13 @@ async function recordProposalView() {
 }
 
 card.addEventListener("click", (event) => {
+  const laterProofButton = event.target.closest("[data-upload-proof]");
+  if (laterProofButton) {
+    const form = document.querySelector("#publicLaterProofForm");
+    form.hidden = false;
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   const copyPixButton = event.target.closest("[data-copy-pix]");
   if (copyPixButton) {
     copyPixKey(copyPixButton);
@@ -681,7 +764,7 @@ card.addEventListener("click", (event) => {
     const input = document.querySelector("#publicProofInput");
     if (input) input.value = "";
     updateProofStatus();
-    setMessage("Comprovante removido. Você pode anexar outro arquivo antes de enviar.", "neutral");
+    setMessage(tr("Comprovante removido. Você pode anexar outro arquivo antes de enviar.", "Receipt removed. You can choose another file before sending."), "neutral");
     return;
   }
   const actionButton = event.target.closest("[data-public-action]");
@@ -689,7 +772,7 @@ card.addEventListener("click", (event) => {
   if (event.target.closest("#publicCancelResponse")) {
     const form = document.querySelector("#publicProposalResponseForm");
     if (form) form.hidden = true;
-    setMessage(`Status atual: ${getStatusLabel(currentProposal?.status)}.`, "neutral");
+    setMessage(`${tr("Status atual", "Current status")}: ${getStatusLabel(currentProposal?.status)}.`, "neutral");
   }
 });
 
@@ -727,5 +810,18 @@ card.addEventListener("paste", (event) => {
   if (file) selectProofFile(file);
 });
 
-card.addEventListener("submit", submitPublicResponse);
+card.addEventListener("submit", (event) => {
+  if (event.target.id === "publicLaterProofForm") submitPublicProof(event);
+  else if (event.target.id === "publicProposalResponseForm") submitPublicResponse(event);
+});
+document.querySelectorAll("[data-proposal-lang]").forEach((button) => button.addEventListener("click", () => {
+  language = button.dataset.proposalLang;
+  localStorage.setItem("embaixada_form_language_v1", language);
+  const url = new URL(window.location.href);
+  url.searchParams.set("lang", language);
+  window.history.replaceState(null, "", url);
+  syncLanguage();
+  if (!currentProposal) loadProposal();
+}));
+syncLanguage();
 loadProposal();
