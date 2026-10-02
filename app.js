@@ -7284,12 +7284,6 @@ function getSignalDeadlineHours() {
   return Math.min(MAX_SIGNAL_DEADLINE_HOURS, Math.max(MIN_SIGNAL_DEADLINE_HOURS, raw));
 }
 
-function calculateSignalDeadlineAt(hours = getSignalDeadlineHours()) {
-  const deadline = new Date();
-  deadline.setHours(deadline.getHours() + Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS));
-  return deadline.toISOString();
-}
-
 function formatSignalDeadlineHours(hours = getSignalDeadlineHours()) {
   const value = Number(hours || DEFAULT_SIGNAL_DEADLINE_HOURS);
   if (value < 24) return `${value} horas`;
@@ -7356,7 +7350,10 @@ function getProposalSnapshot() {
   const activeRequest = state.quoteRequests.find((item) => item.id === state.activeQuoteRequestId);
   const activeProposal = getActiveProposal();
   const signalDeadlineHours = getSignalDeadlineHours();
-  const signalDeadlineAt = calculateSignalDeadlineAt(signalDeadlineHours);
+  const signalDeadlineAt = activeProposal?.snapshot?.event?.signalDeadlineAt ||
+    (activeProposal?.sent_at
+      ? new Date(new Date(activeProposal.sent_at).getTime() + signalDeadlineHours * 36e5).toISOString()
+      : null);
   const reviewItems = getProposalReviewItems();
   const reviewAlerts = getSmartProposalAlerts(reviewItems);
   const reviewConfidence = getProposalConfidence(reviewItems, reviewAlerts);
@@ -12367,7 +12364,13 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     ["proposta_pronta", "proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
   const needsNewVersion = activeWasPublished && proposalChanges.length > 0;
   const publishNewVersion = Boolean(options.forSharing && (activeIsDraft || needsNewVersion));
-  if (publishNewVersion) row.status = "proposta_pronta";
+  if (publishNewVersion) {
+    row.status = "proposta_pronta";
+    row.snapshot = {
+      ...row.snapshot,
+      event: { ...row.snapshot.event, signalDeadlineAt: null },
+    };
+  }
 
   let query;
   if (activeIsDraft && persistableProposalId) {
@@ -13104,19 +13107,43 @@ async function ensureProposalForSharing() {
 async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   if (!proposal || proposal.status !== "proposta_pronta") return true;
   const sentAt = new Date().toISOString();
-  const manualSnapshot = manualChannel
+  // A Edge Function pode ter acrescentado o registro do envio ao snapshot.
+  // Leia a versão mais recente antes de gravar o prazo e o histórico manual.
+  const { data: currentRow, error: readError } = await state.supabase
+    .from("propostas")
+    .select("snapshot")
+    .eq("id", proposal.id)
+    .single();
+  if (manualChannel && (readError || !currentRow?.snapshot)) {
+    showToast("Não foi possível carregar o histórico da proposta. Atualize e tente registrar o envio novamente.");
+    return false;
+  }
+  const currentSnapshot = currentRow?.snapshot;
+  const signalDeadlineHours = Number(currentSnapshot?.event?.signalDeadlineHours) || 0;
+  const snapshotWithDeadline = currentSnapshot
+    ? {
+        ...currentSnapshot,
+        event: {
+          ...(currentSnapshot.event || {}),
+          signalDeadlineAt: signalDeadlineHours > 0
+            ? new Date(new Date(sentAt).getTime() + signalDeadlineHours * 36e5).toISOString()
+            : null,
+        },
+      }
+    : null;
+  const updatedSnapshot = manualChannel && snapshotWithDeadline
     ? withCommercialHistoryEntries(
-        { ...(proposal.snapshot || {}), ultimoEnvioManualEm: sentAt },
+        { ...snapshotWithDeadline, ultimoEnvioManualEm: sentAt },
         [createCommercialHistoryEntry("envio", "Envio manual registrado", `Canal: ${manualChannel}. Confirmado pela equipe.`)],
       )
-    : null;
+    : snapshotWithDeadline;
   const { data, error } = await state.supabase
     .from("propostas")
     .update({
       status: "proposta_enviada",
       publication_status: "sent",
       sent_at: sentAt,
-      ...(manualSnapshot ? { snapshot: manualSnapshot } : {}),
+      ...(updatedSnapshot ? { snapshot: updatedSnapshot } : {}),
     })
     .eq("id", proposal.id)
     .eq("status", "proposta_pronta")

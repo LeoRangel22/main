@@ -415,9 +415,14 @@ test.describe("Proposta manual no admin", () => {
 
     const prepared = await page.evaluate(async () => {
       const share = await window.ensureProposalForSharing();
-      return { status: share?.saved?.status, sentAt: share?.saved?.sent_at, publication: share?.saved?.publication_status };
+      return {
+        status: share?.saved?.status,
+        sentAt: share?.saved?.sent_at,
+        publication: share?.saved?.publication_status,
+        signalDeadlineAt: share?.saved?.snapshot?.event?.signalDeadlineAt,
+      };
     });
-    expect(prepared).toEqual({ status: "proposta_pronta", sentAt: null, publication: "ready" });
+    expect(prepared).toEqual({ status: "proposta_pronta", sentAt: null, publication: "ready", signalDeadlineAt: null });
 
     await page.locator("#whatsappBtn").click();
     const confirmation = page.locator(".send-confirm-dialog");
@@ -435,6 +440,9 @@ test.describe("Proposta manual no admin", () => {
     expect(activeProposal.activeProposal?.cliente_whatsapp.replace(/\D/g, "")).toContain("99606");
     expect(activeProposal.activeProposal?.status).toBe("proposta_enviada");
     expect(activeProposal.activeProposal?.sent_at).toBeTruthy();
+    expect(Date.parse(activeProposal.activeProposal?.snapshot?.event?.signalDeadlineAt)).toBeGreaterThan(
+      Date.parse(activeProposal.activeProposal.sent_at),
+    );
 
     await expectNoBrowserErrors(errors);
   });
