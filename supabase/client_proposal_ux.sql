@@ -63,16 +63,6 @@ begin
   );
   new_snapshot := coalesce(proposal_row.snapshot, '{}'::jsonb);
   new_snapshot := jsonb_set(new_snapshot, '{clienteResposta,comprovante}', clean_proof, true);
-  new_snapshot := jsonb_set(new_snapshot, '{pagamentoSinal}', jsonb_build_object(
-    'valor', round(coalesce(proposal_row.total, 0) * 0.5, 2),
-    'data', current_date,
-    'bancos', jsonb_build_array('A validar'),
-    'comprovante', clean_proof,
-    'registradoEm', now(),
-    'registradoPor', 'Cliente via proposta publica',
-    'origem', 'proposta_publica',
-    'validacaoPendente', true
-  ), true);
   new_snapshot := jsonb_set(new_snapshot, '{commercialHistory}',
     jsonb_build_array(jsonb_build_object(
       'id', 'sinal-cliente-' || extract(epoch from now())::text,
