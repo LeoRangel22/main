@@ -424,6 +424,13 @@ function renderProposal(proposal) {
   const snapshot = proposal.snapshot || {};
   const event = snapshot.event || {};
   const totals = snapshot.totals || {};
+  const experienceAmount = Number(proposal.privatizacao ?? totals.privatizationAmount ?? totals.privatization?.amount ?? 0);
+  const experienceMode = totals.privatization?.mode;
+  const experienceLabel = experienceMode === "required-partial"
+    ? tr("Área Dedicada & Serviço Prioritário", "Dedicated Area & Priority Service")
+    : ["required-full", "optional"].includes(experienceMode)
+      ? tr("Experiência Exclusiva", "Exclusive Experience")
+      : tr("Experiência do evento", "Event experience");
   const selectedItems = Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems : [];
   const response = proposal.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const responseMessage = proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "";
@@ -581,7 +588,7 @@ function renderProposal(proposal) {
         <div class="public-proposal-totals">
           <div><span>${tr("Subtotal", "Subtotal")}</span><strong>${formatMoney(proposal.subtotal || totals.subtotal)}</strong></div>
           <div><span>${tr("Taxa de serviço", "Service charge")}</span><strong>${formatMoney(proposal.taxa_servico || totals.serviceFee)}</strong></div>
-          <div><span>${tr("Privatização", "Private venue")}</span><strong>${formatMoney(proposal.privatizacao || totals.privatizationAmount)}</strong></div>
+          ${experienceAmount > 0 ? `<div><span>${experienceLabel}</span><strong>${formatMoney(experienceAmount)}</strong></div>` : ""}
           <div><span>${tr("Total estimado", "Estimated total")}</span><strong>${formatMoney(proposal.total || totals.total)}</strong></div>
         </div>
 
