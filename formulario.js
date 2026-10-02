@@ -614,9 +614,9 @@ const copy = {
       groupNameHelp: "For receptive tourism/DMC. It helps us identify groups and itineraries.",
       contactIntroTitle: "How should our team reach you?",
       contactIntroBody:
-        "Full name, e-mail and phone help us reply. For company or agency requests, include the organization.",
+        "Tell us your name and at least one contact channel. You can complete the rest later.",
       contactRequirementNote:
-        "Name, e-mail and phone are essential for our reply. Company, final client and group help our team prepare the proposal faster.",
+        "Name plus e-mail or WhatsApp is enough to send your request. Company, final client and group help our team reply faster.",
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
       contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
