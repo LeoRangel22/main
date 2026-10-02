@@ -46,6 +46,28 @@ async function openProposal(page, initial = proposal, query = "") {
 }
 
 test.describe("Decisão do cliente na proposta", () => {
+  test("investimento exibe a experiência contratada e oculta a linha quando não há valor", async ({ page }) => {
+    await openProposal(page);
+    await expect(page.locator(".public-proposal-totals")).not.toContainText(/Privatizaç|Área Dedicada|Experiência Exclusiva/);
+
+    const dedicated = structuredClone(proposal);
+    dedicated.privatizacao = 6000;
+    dedicated.total = 8240;
+    dedicated.snapshot.totals = {
+      ...dedicated.snapshot.totals,
+      privatizationAmount: 6000,
+      privatization: { mode: "required-partial", amount: 6000, title: "Pico obrigatório: privatização parcial" },
+    };
+    await page.evaluate((fixture) => renderProposal(fixture), dedicated);
+    await expect(page.locator(".public-proposal-totals")).toContainText("Área Dedicada & Serviço Prioritário");
+    await expect(page.locator(".public-proposal-totals")).toContainText("R$ 6.000,00");
+    await expect(page.locator(".public-proposal-totals")).not.toContainText(/Privatizaç|Pico obrigatório/);
+
+    dedicated.snapshot.totals.privatization.mode = "required-full";
+    await page.evaluate((fixture) => renderProposal(fixture), dedicated);
+    await expect(page.locator(".public-proposal-totals")).toContainText("Experiência Exclusiva");
+  });
+
   test("mobile mostra investimento e próximo passo na primeira tela, com condições antes da aprovação", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.setViewportSize({ width: 390, height: 844 });

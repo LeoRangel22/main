@@ -6269,6 +6269,26 @@ function getQuoteTotals() {
   };
 }
 
+function getClientExperience(privatization) {
+  if (!privatization || privatization.amount <= 0) return null;
+  if (privatization.mode === "required-partial") {
+    return {
+      label: "Área Dedicada & Serviço Prioritário",
+      description: "Uma área dedicada ao seu evento, com atendimento prioritário. As demais áreas seguem abertas ao público.",
+    };
+  }
+  if (privatization.mode === "required-full" || privatization.mode === "optional") {
+    return {
+      label: "Experiência Exclusiva",
+      description: "O espaço reservado exclusivamente para o seu evento durante o período contratado.",
+    };
+  }
+  return {
+    label: "Experiência do evento",
+    description: "Condições especiais de espaço e atendimento para o seu evento, conforme alinhado com nossa equipe.",
+  };
+}
+
 function getTotal() {
   return getQuoteTotals().total;
 }
@@ -7296,6 +7316,7 @@ function buildProposalText() {
   const clientName = fields.clientName.value.trim() || "Cliente";
   const eventType = getCurrentEventType() || "Evento";
   const totals = getQuoteTotals();
+  const clientExperience = getClientExperience(totals.privatization);
   const sourceData = getFormSourceData();
   const reason = fields.eventReason.value.trim() || sourceData.reason;
   const lines = [
@@ -7332,7 +7353,7 @@ function buildProposalText() {
     ``,
     `Subtotal: ${formatMoney(totals.subtotal)}`,
     `Taxa de serviço (12%): ${formatMoney(totals.serviceFee)}`,
-    `Privatização: ${formatMoney(totals.privatization.amount)} - ${totals.privatization.title}`,
+    ...(clientExperience ? [`${clientExperience.label}: ${formatMoney(totals.privatization.amount)}`, clientExperience.description] : []),
     `Total estimado: ${formatMoney(totals.total)}`,
   );
   if (totals.adjustment) lines.splice(lines.length - 1, 0, `${totals.adjustmentLabel}: ${formatMoney(totals.adjustment)}`);
@@ -12613,6 +12634,7 @@ function renderProposal() {
   const reason = fields.eventReason.value.trim() || sourceData.reason;
   const terms = fields.generalTerms.value.trim();
   const totals = getQuoteTotals();
+  const clientExperience = getClientExperience(totals.privatization);
   const repeatedHeader = `
     <div class="proposal-header proposal-header-repeat" aria-hidden="true">
       <div class="proposal-lockup">
@@ -12731,14 +12753,12 @@ function renderProposal() {
       <div class="proposal-totals">
         <div><span>Subtotal</span><strong>${formatMoney(totals.subtotal)}</strong></div>
         <div><span>Taxa de serviço 12%</span><strong>${formatMoney(totals.serviceFee)}</strong></div>
-        <div><span>Privatização</span><strong>${formatMoney(totals.privatization.amount)}</strong></div>
+        ${clientExperience ? `<div><span>${escapeHtml(clientExperience.label)}</span><strong>${formatMoney(totals.privatization.amount)}</strong></div>` : ""}
         ${totals.adjustment ? `<div><span>${escapeHtml(totals.adjustmentLabel)}</span><strong>${formatMoney(totals.adjustment)}</strong></div>` : ""}
         <div><span>Total estimado</span><strong>${formatMoney(totals.total)}</strong></div>
       </div>
 
-      <div class="proposal-note">
-        <span>Privatização</span>${escapeHtml(totals.privatization.title)}. ${escapeHtml(totals.privatization.description)}
-      </div>
+      ${clientExperience ? `<div class="proposal-note"><span>${escapeHtml(clientExperience.label)}</span>${escapeHtml(clientExperience.description)}</div>` : ""}
 
       <div class="proposal-section-title">
         <span>05</span>
