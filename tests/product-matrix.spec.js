@@ -195,6 +195,24 @@ test.describe("Matriz pesada de produtos, clientes e privatizacao", () => {
       if (scenario.expectedPrivatizationMode) {
         expect(state.totals.privatization.mode).toBe(scenario.expectedPrivatizationMode);
       }
+      const clientProposal = page.locator("#proposalContent");
+      await expect(clientProposal).not.toContainText(/Privatizaç|Pico obrigatório|Ajuste aplicado/);
+      if (scenario.expectedPrivatizationAmount > 0) {
+        await expect(clientProposal).toContainText(
+          scenario.expectedPrivatizationMode === "required-partial"
+            ? "Área Dedicada & Serviço Prioritário"
+            : "Experiência Exclusiva",
+        );
+      }
+      const message = await page.evaluate(() => buildProposalText());
+      expect(message).not.toMatch(/Privatizaç|Pico obrigatório|Ajuste aplicado/);
+      if (scenario.expectedPrivatizationAmount > 0) {
+        expect(message).toContain(
+          scenario.expectedPrivatizationMode === "required-partial"
+            ? "Área Dedicada & Serviço Prioritário"
+            : "Experiência Exclusiva",
+        );
+      }
 
       const selectedIds = state.selected.map((item) => item.id);
       expect(selectedIds).toEqual(expect.arrayContaining(scenario.expectedItemIds));
