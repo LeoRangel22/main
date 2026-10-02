@@ -20,6 +20,7 @@ test.describe("Seguranca da proposta publica", () => {
     expect(block).toContain("proof_size > 5242880");
     expect(block).toContain("for update");
     expect(block).not.toContain("set status = 'confirmado'");
+    expect(block).not.toContain("jsonb_set(new_snapshot, '{pagamentoSinal}'");
   });
   test("consulta publica devolve apenas snapshot sanitizado", () => {
     const schema = fs.readFileSync(schemaPath, "utf8");
