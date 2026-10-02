@@ -40,8 +40,9 @@ begin
     raise exception 'Esta proposta nao aceita mais comprovantes pelo link publico.';
   end if;
   if proposal_row.cliente_solicitacao -> 'comprovante' is not null
-     or proposal_row.snapshot -> 'pagamentoSinal' -> 'comprovante' is not null then
-    raise exception 'Comprovante ja enviado. Fale com a equipe para substitui-lo.';
+     or proposal_row.snapshot -> 'clienteResposta' -> 'comprovante' is not null
+     or proposal_row.snapshot -> 'pagamentoSinal' is not null then
+    raise exception 'Ja existe um comprovante ou sinal registrado. Fale com a equipe para conferir antes de altera-lo.';
   end if;
 
   proof_name := left(nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''), 160);
