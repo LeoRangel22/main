@@ -216,6 +216,7 @@ async function selectProofFile(file) {
 
 function getStatusLabel(value) {
   const labels = {
+    proposta_pronta: "Proposta disponível",
     proposta_enviada: "Proposta enviada",
     negociacao: "Em negociação",
     confirmado: "Sinal recebido",

@@ -413,6 +413,12 @@ test.describe("Proposta manual no admin", () => {
     await page.locator('#sendReviewPanel button[data-send-review-action="approve"]').first().click();
     await expect(page.locator("#sendReviewPanel")).toHaveClass(/is-approved/);
 
+    const prepared = await page.evaluate(async () => {
+      const share = await window.ensureProposalForSharing();
+      return { status: share?.saved?.status, sentAt: share?.saved?.sent_at, publication: share?.saved?.publication_status };
+    });
+    expect(prepared).toEqual({ status: "proposta_pronta", sentAt: null, publication: "ready" });
+
     await page.locator("#whatsappBtn").click();
     const confirmation = page.locator(".send-confirm-dialog");
     await expect(confirmation).toContainText("Canal: WhatsApp");
@@ -428,6 +434,7 @@ test.describe("Proposta manual no admin", () => {
     expect(activeProposal.activeProposal?.cliente_email).toBe("leorangel@gmail.com");
     expect(activeProposal.activeProposal?.cliente_whatsapp.replace(/\D/g, "")).toContain("99606");
     expect(activeProposal.activeProposal?.status).toBe("proposta_enviada");
+    expect(activeProposal.activeProposal?.sent_at).toBeTruthy();
 
     await expectNoBrowserErrors(errors);
   });

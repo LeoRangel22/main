@@ -100,6 +100,13 @@ const funnelStages = [
     statuses: ["lead_recebido"],
   },
   {
+    id: "proposta_pronta",
+    row: "commercial",
+    title: "PRONTA PARA ENVIO",
+    description: "Proposta salva e revisada, ainda sem envio confirmado.",
+    statuses: ["proposta_pronta"],
+  },
+  {
     id: "proposta_enviada",
     row: "commercial",
     title: "SEM RESPOSTA",
@@ -158,6 +165,7 @@ const funnelStages = [
 ];
 
 const proposalStatusOptions = [
+  "proposta_pronta",
   "proposta_enviada",
   "negociacao",
   "confirmado",
@@ -648,6 +656,13 @@ const state = {
   lastSendReviewPointerApprovalAt: 0,
   lastProposalSaveError: "",
   lastProposalShareError: "",
+  sharedSettings: {},
+  sharedSaveTimers: {},
+  sharedSaving: {},
+  sharedQueued: {},
+  firstReplySourceId: "",
+  firstReplyDraft: "",
+  firstReplyChannel: "",
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -736,6 +751,7 @@ const nodes = {
   pipelineBoard: document.querySelector("#pipelineBoard"),
   ownerMetrics: document.querySelector(".owner-metrics"),
   metricStageLead: document.querySelector("#metricStageLead"),
+  metricStageReady: document.querySelector("#metricStageReady"),
   metricStageSemResposta: document.querySelector("#metricStageSemResposta"),
   metricStageNegociacao: document.querySelector("#metricStageNegociacao"),
   metricStageSinal: document.querySelector("#metricStageSinal"),
@@ -750,6 +766,7 @@ const nodes = {
   operationsAgendaMeta: document.querySelector("#operationsAgendaMeta"),
   pipelineQuickFilters: document.querySelector("#pipelineQuickFilters"),
   loadedEditorBar: document.querySelector("#loadedEditorBar"),
+  firstReplyPanel: document.querySelector("#firstReplyPanel"),
   quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
@@ -1017,20 +1034,110 @@ function loadGeneralTerms() {
   return defaultGeneralTerms;
 }
 
-function savePrices() {
+function savePrices({ localOnly = false } = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.prices));
+  if (!localOnly && document.body.dataset.page === "valores") queueSharedSettingSave("catalog");
 }
 
 function saveSelectedIds() {
   localStorage.setItem(SELECTED_KEY, JSON.stringify([...state.selectedIds]));
 }
 
-function savePrivatizationRules() {
+function savePrivatizationRules({ localOnly = false } = {}) {
   localStorage.setItem(PRIVATIZATION_KEY, JSON.stringify(state.privatizationRules));
+  if (!localOnly && document.body.dataset.page === "valores") queueSharedSettingSave("privatization");
 }
 
 function saveGeneralTerms() {
   localStorage.setItem(TERMS_KEY, fields.generalTerms.value);
+}
+
+function getCommercialSettingValue(key) {
+  if (key === "catalog") return state.prices;
+  if (key === "privatization") return state.privatizationRules;
+  return loadCommunicationTemplates();
+}
+
+async function persistCommercialSetting(key, { firstPublication = false } = {}) {
+  if (!state.supabase || !state.session || state.supabase.__qa) return false;
+  if (!firstPublication && !state.sharedSettings[key]) return false;
+  if (state.sharedSaving[key]) {
+    state.sharedQueued[key] = true;
+    return false;
+  }
+  state.sharedSaving[key] = true;
+  const expected = state.sharedSettings[key]?.version || 0;
+  const value = getCommercialSettingValue(key);
+  try {
+    const { data, error } = await state.supabase.rpc("save_commercial_setting", {
+      p_key: key, p_value: value, p_expected_version: expected,
+    });
+    if (error || !data) {
+      console.warn("Falha ao sincronizar configuração comercial.", key, error);
+      showToast("Esta configuração mudou em outro navegador ou não foi salva. Recarregue antes de editar novamente.");
+      return false;
+    }
+    state.sharedSettings[key] = data;
+    renderSharedSettingStatus();
+    return true;
+  } finally {
+    state.sharedSaving[key] = false;
+    if (state.sharedQueued[key]) {
+      state.sharedQueued[key] = false;
+      queueSharedSettingSave(key, 0);
+    }
+  }
+}
+
+function queueSharedSettingSave(key, delay = 900) {
+  if (!state.sharedSettings[key] || !state.session) return;
+  clearTimeout(state.sharedSaveTimers[key]);
+  state.sharedSaveTimers[key] = window.setTimeout(() => persistCommercialSetting(key), delay);
+}
+
+function renderSharedSettingStatus() {
+  const catalog = document.querySelector("#catalogSharedStatus");
+  const communication = document.querySelector("#communicationSharedStatus");
+  if (catalog) catalog.textContent = state.sharedSettings.catalog && state.sharedSettings.privatization
+    ? `Preços e regras compartilhados · versões ${state.sharedSettings.catalog.version} e ${state.sharedSettings.privatization.version}.`
+    : "Valores deste navegador. Publique o catálogo e as regras aprovadas para compartilhar com a equipe.";
+  if (communication) communication.textContent = state.sharedSettings.communication
+    ? `Modelos compartilhados · versão ${state.sharedSettings.communication.version}.`
+    : "Modelos deste navegador. Publique a versão aprovada para compartilhar com a equipe.";
+}
+
+async function loadSharedSettings() {
+  if (!state.supabase || !state.session || state.supabase.__qa) return;
+  const { data, error } = await state.supabase.from("commercial_settings").select("*");
+  if (error) {
+    console.warn("Não foi possível carregar configurações compartilhadas.", error);
+    renderSharedSettingStatus();
+    return;
+  }
+  state.sharedSettings = Object.fromEntries((data || []).map((row) => [row.config_key, row]));
+  const editingEvent = Boolean(state.activeProposalId || state.activeQuoteRequestId);
+  if (!editingEvent && Array.isArray(state.sharedSettings.catalog?.value)) {
+    state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
+    savePrices({ localOnly: true });
+  }
+  if (!editingEvent && Array.isArray(state.sharedSettings.privatization?.value)) {
+    state.privatizationRules = state.sharedSettings.privatization.value;
+    savePrivatizationRules({ localOnly: true });
+  }
+  if (Array.isArray(state.sharedSettings.communication?.value)) {
+    localStorage.setItem(COMMUNICATION_TEMPLATES_KEY, JSON.stringify(state.sharedSettings.communication.value));
+  }
+  renderSharedSettingStatus();
+  renderAll();
+}
+
+async function publishCommercialSettings(keys) {
+  if (!state.session) {
+    showToast("Entre com o e-mail da equipe antes de publicar.");
+    return;
+  }
+  const results = await Promise.all(keys.map((key) => persistCommercialSetting(key, { firstPublication: true })));
+  if (results.every(Boolean)) showToast("Configuração compartilhada com a equipe.");
 }
 
 function loadSupabaseConfig() {
@@ -1325,7 +1432,8 @@ function getLifecycleStageIndex(stageId) {
 function getLifecycleStepCopy(stageId) {
   const copy = {
     lead_recebido: "Lead recebido e contexto inicial capturado.",
-    proposta_enviada: "Proposta pronta para envio e acompanhamento.",
+    proposta_pronta: "Proposta revisada, aguardando envio.",
+    proposta_enviada: "Envio confirmado; acompanhar resposta.",
     negociacao: "Ajustes comerciais e retorno do cliente em andamento.",
     confirmado: "Sinal registrado e reserva confirmada.",
     pagamento_final: "Saldo final alinhado ou aguardando confirmação.",
@@ -1339,6 +1447,7 @@ function getLifecycleStepCopy(stageId) {
 function getHistoryEntryForStage(proposal, stageId) {
   const history = getDisplayCommercialHistory(proposal);
   const labels = {
+    proposta_pronta: "Proposta pronta para envio.",
     proposta_enviada: "Proposta enviada",
     negociacao: "Negociação",
     confirmado: "Sinal registrado",
@@ -1513,13 +1622,23 @@ function getProposalNextStepConfig() {
       };
     }
 
+    if (status === "proposta_pronta") {
+      return {
+        tone: "commercial",
+        title: "Enviar proposta ao cliente",
+        note: "A proposta está pronta. Escolha WhatsApp ou e-mail e confirme o envio antes de iniciar o acompanhamento.",
+        action: "focus_review",
+        actionLabel: "Revisar e enviar",
+      };
+    }
+
     if (status === "proposta_enviada") {
       return {
         tone: "commercial",
-        title: "Enviar o link público e acompanhar retorno",
-      note: "Gere o link, envie ao cliente e acompanhe o retorno nas próximas horas.",
-        action: "copy_link",
-        actionLabel: "Copiar link público",
+        title: "Acompanhar retorno do cliente",
+        note: "Confira o envio no histórico e escolha uma retomada curta se o cliente ainda não respondeu.",
+        action: "focus_quick_replies",
+        actionLabel: "Ver respostas rápidas",
       };
     }
 
@@ -1610,8 +1729,8 @@ function getProposalNextStepConfig() {
   if (request || hasDraft) {
     return {
       tone: "commercial",
-      title: "Salvar proposta enviada e começar o acompanhamento",
-      note: "Salve a proposta para entrar no funil e seguir com envio e retorno.",
+      title: "Salvar proposta pronta para envio",
+      note: "Salve a proposta e confira o canal antes de enviar ao cliente.",
       action: "save_proposal",
       actionLabel: "Salvar proposta",
     };
@@ -1639,6 +1758,126 @@ function renderProposalNextStep() {
       <button class="secondary" type="button" data-next-step-action="${escapeHtml(config.action)}">${escapeHtml(config.actionLabel)}</button>
     </div>
   `;
+}
+
+function buildFirstReplyDraft(request) {
+  const name = String(request.cliente_nome || fields.clientName.value || "").trim().split(/\s+/)[0] || "olá";
+  const type = request.tipo_evento || fields.eventType.value || "seu evento";
+  const date = request.data_evento || fields.eventDate.value;
+  const guests = Number(request.convidados || 0);
+  const context = [date ? `para ${formatDateFromIso(date)}` : "", guests > 1 ? `para ${guests} pessoas` : ""].filter(Boolean).join(" ");
+  const missing = [
+    !date ? "qual data você tem em mente?" : "",
+    !request.horario_evento ? "qual seria o horário?" : "",
+    !guests ? "quantas pessoas participarão?" : "",
+  ].filter(Boolean);
+  return [
+    `Olá, ${name}! Recebemos seu pedido para ${type}${context ? ` ${context}` : ""} na Embaixada Carioca.`,
+    missing.length ? `Para preparar uma opção precisa, preciso confirmar: ${missing.slice(0, 2).join(" ")}` : "Vou conferir os detalhes e volto com uma proposta adequada ao seu grupo.",
+    "Se tiver alguma preferência ou necessidade especial, pode me contar por aqui.",
+  ].join("\n\n");
+}
+
+function renderFirstReplyPanel() {
+  if (!nodes.firstReplyPanel) return;
+  const request = getActiveQuoteRequest();
+  if (!request || getActiveProposal()) {
+    nodes.firstReplyPanel.classList.add("is-hidden");
+    nodes.firstReplyPanel.innerHTML = "";
+    return;
+  }
+  if (state.firstReplySourceId !== request.id) {
+    state.firstReplySourceId = request.id;
+    state.firstReplyDraft = buildFirstReplyDraft(request);
+    state.firstReplyChannel = "";
+  }
+  const opportunity = getOpportunityForItem({ opportunityId: request.oportunidade_id });
+  const responded = Boolean(opportunity?.metadata?.first_reply_sent_at);
+  const summary = [
+    request.tipo_evento || "Formato a confirmar",
+    request.data_evento ? formatDateFromIso(request.data_evento) : "Data a confirmar",
+    request.horario_evento || "Horário a confirmar",
+    request.convidados ? `${request.convidados} pax` : "Pax a confirmar",
+  ].join(" · ");
+  nodes.firstReplyPanel.classList.remove("is-hidden");
+  nodes.firstReplyPanel.innerHTML = `
+    <div class="first-reply-heading">
+      <div><span>Atendimento imediato</span><h2>${escapeHtml(responded ? "Primeiro contato registrado" : "Responda antes de fechar a proposta")}</h2></div>
+      <small>${escapeHtml(summary)}</small>
+    </div>
+    <label for="firstReplyText">Mensagem editável</label>
+    <textarea id="firstReplyText" rows="5">${escapeHtml(state.firstReplyDraft)}</textarea>
+    <div class="first-reply-actions">
+      ${request.cliente_whatsapp ? '<button class="primary" type="button" data-first-reply-action="whatsapp">Abrir WhatsApp</button>' : ""}
+      ${request.cliente_email ? '<button class="secondary" type="button" data-first-reply-action="email">Abrir e-mail</button>' : ""}
+      <button class="secondary" type="button" data-first-reply-action="copy">Copiar mensagem</button>
+      <button class="secondary" type="button" data-first-reply-action="register" ${state.firstReplyChannel ? "" : "disabled"}>Registrar contato feito</button>
+    </div>
+    <small>Abra ou copie, envie pelo canal escolhido e depois registre o contato. A proposta pode ser montada em seguida.</small>
+  `;
+}
+
+async function runFirstReplyAction(action) {
+  const request = getActiveQuoteRequest();
+  if (!request) return;
+  const message = String(state.firstReplyDraft || "").trim();
+  if (!message) {
+    showToast("Escreva a mensagem antes de continuar.");
+    nodes.firstReplyPanel?.querySelector("textarea")?.focus();
+    return;
+  }
+  if (action === "register") {
+    const opportunity = getOpportunityForItem({ opportunityId: request.oportunidade_id });
+    if (!opportunity || !state.firstReplyChannel) {
+      showToast("Abra um canal ou copie a mensagem antes de registrar o contato.");
+      return;
+    }
+    const at = new Date().toISOString();
+    const followsDefault = opportunity.metadata?.next_action_source === "default";
+    const { data, error } = await state.supabase.from("oportunidades")
+      .update({
+        ultimo_contato_em: at,
+        ...(followsDefault ? { proxima_acao: "Montar proposta", proxima_acao_em: new Date(Date.now() + 864e5).toISOString() } : {}),
+        metadata: {
+          ...(opportunity.metadata || {}),
+          first_reply_sent_at: at,
+          first_reply_channel: state.firstReplyChannel,
+          first_reply_text: message.slice(0, 3000),
+        },
+      })
+      .eq("id", opportunity.id).select("*").single();
+    if (error || !data) {
+      showToast("Não foi possível registrar o contato. Tente novamente.");
+      return;
+    }
+    state.opportunities = state.opportunities.map((row) => row.id === data.id ? data : row);
+    state.firstReplyChannel = "";
+    renderFirstReplyPanel();
+    renderPipeline();
+    showToast("Primeiro contato registrado. Agora monte a proposta.");
+    return;
+  }
+  if (action === "copy") {
+    try {
+      await navigator.clipboard.writeText(message);
+      state.firstReplyChannel = "copiado";
+      renderFirstReplyPanel();
+      showToast("Mensagem copiada. Após enviar, registre o contato.");
+    } catch (_error) {
+      showToast("Não foi possível copiar. Selecione o texto para copiar manualmente.");
+    }
+    return;
+  }
+  if (action === "email" && request.cliente_email) {
+    window.location.href = `mailto:${encodeURIComponent(request.cliente_email)}?subject=${encodeURIComponent("Seu evento na Embaixada Carioca")}&body=${encodeURIComponent(message)}`;
+  } else if (action === "whatsapp" && request.cliente_whatsapp) {
+    const digits = request.cliente_whatsapp.replace(/\D/g, "");
+    const phone = digits.startsWith("55") ? digits : `55${digits}`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  } else return;
+  state.firstReplyChannel = action;
+  renderFirstReplyPanel();
+  showToast("Confira e envie a mensagem no aplicativo. Depois registre o contato.");
 }
 
 function getActiveServiceContext() {
@@ -2046,18 +2285,18 @@ function renderProposalJourney(proposal) {
     versions.find((row) => row.publication_status !== "draft");
   const views = state.proposalViews.filter((view) => view.proposta_id === published?.id);
   const lastView = views.reduce((last, view) => !last || view.created_at > last ? view.created_at : last, "");
-  const lastSend = getCommercialHistory(published?.snapshot || {}).find((entry) => ["email_envio", "whatsapp_envio"].includes(entry.type));
+  const lastSend = getCommercialHistory(published?.snapshot || {}).find((entry) => ["email_envio", "whatsapp_envio", "envio"].includes(entry.type));
   const clientResponse = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao || proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao;
   const responseLabel = { confirmar: "Aprovou", alteracao: "Pediu ajustes", cancelar: "Não vai seguir" }[clientResponse] || "Aguardando resposta";
   return `
     <section class="proposal-journey" aria-label="Acompanhamento da proposta">
       <div class="proposal-journey-heading">
-        <div><span>Jornada da proposta</span><strong>${published ? `V${escapeHtml(published.versao || 1)} publicada` : "Rascunho"}</strong></div>
+        <div><span>Jornada da proposta</span><strong>${published ? `V${escapeHtml(published.versao || 1)} ${published.publication_status === "ready" ? "pronta" : "publicada"}` : "Rascunho"}</strong></div>
         <small>${escapeHtml(responseLabel)}</small>
       </div>
       <div class="proposal-journey-facts">
-        <div><span>Link publicado</span><strong>${published?.sent_at ? escapeHtml(formatSavedAt(published.sent_at)) : "Sem data registrada"}</strong></div>
-        <div><span>Envio pelo sistema</span><strong>${lastSend ? `${lastSend.type === "email_envio" ? "E-mail" : "WhatsApp"} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
+        <div><span>Link disponível</span><strong>${published ? escapeHtml(formatSavedAt(published.created_at)) : "Não gerado"}</strong></div>
+        <div><span>Envio registrado</span><strong>${lastSend ? `${lastSend.type === "email_envio" ? "E-mail" : lastSend.type === "whatsapp_envio" ? "WhatsApp" : "Manual"} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
         <div><span>Visualização do link</span><strong>${views.length ? `${views.length} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
         <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
       </div>
@@ -2065,7 +2304,7 @@ function renderProposalJourney(proposal) {
         <summary>Ver ${versions.length} ${versions.length === 1 ? "versão preservada" : "versões preservadas"}</summary>
         <div>${versions.map((row) => `
           <div class="proposal-version-row">
-            <span>V${escapeHtml(row.versao || 1)} · ${row.publication_status === "draft" ? "Rascunho" : row.id === published?.id ? "Publicada" : "Anterior"} · ${escapeHtml(formatMoney(row.total))}</span>
+            <span>V${escapeHtml(row.versao || 1)} · ${row.publication_status === "draft" ? "Rascunho" : row.publication_status === "ready" ? "Pronta" : row.id === published?.id ? "Publicada" : "Anterior"} · ${escapeHtml(formatMoney(row.total))}</span>
             <button class="secondary" type="button" data-proposal-id="${escapeHtml(row.id)}" ${row.id === proposal.id ? "disabled" : ""}>${row.id === proposal.id ? "Aberta" : "Abrir"}</button>
           </div>`).join("")}</div>
       </details>
@@ -2672,6 +2911,7 @@ function saveCommunicationTemplates(templates) {
       })),
     ),
   );
+  queueSharedSettingSave("communication", 0);
 }
 
 function getCommunicationTemplate(id) {
@@ -8257,6 +8497,7 @@ function normalizeProposalStatus(status) {
 function getProposalStatusLabel(status) {
   const labels = {
     lead_recebido: "Lead",
+    proposta_pronta: "Pronta para envio",
     proposta_enviada: "Proposta sem resposta",
     negociacao: "Em negociação",
     confirmado: "Sinal recebido",
@@ -8416,6 +8657,7 @@ function getPipelineItems() {
         lastFormStep: request.last_form_step || "",
         opportunityId: request.oportunidade_id || "",
         ownerEmail: getOpportunityForItem({ opportunityId: request.oportunidade_id })?.responsavel_email || "",
+        firstReplySentAt: getOpportunityForItem({ opportunityId: request.oportunidade_id })?.metadata?.first_reply_sent_at || "",
         eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
       };
     });
@@ -8448,6 +8690,7 @@ function getPipelineItems() {
       privatizationAmount: proposal.privatizacao ?? snapshot.totals?.privatizationAmount ?? snapshot.totals?.privatization?.amount ?? 0,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at || proposal.created_at,
+      sentAt: proposal.sent_at || "",
       reference: snapshot.referencia || "",
       snapshot,
       opportunityId: proposal.oportunidade_id || "",
@@ -8878,6 +9121,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   if (!nodes.metricStageLead) return;
   const counts = {
     lead: 0,
+    pronta: 0,
     semResposta: 0,
     negociacao: 0,
     sinal: 0,
@@ -8891,6 +9135,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
     const status = item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
     if (item.kind === "request" && status === "lead_recebido") counts.lead += 1;
     if (item.kind !== "proposal") return;
+    if (status === "proposta_pronta") counts.pronta += 1;
     if (status === "proposta_enviada") counts.semResposta += 1;
     if (status === "negociacao") counts.negociacao += 1;
     if (status === "confirmado") counts.sinal += 1;
@@ -8901,6 +9146,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   });
 
   nodes.metricStageLead.textContent = String(counts.lead);
+  if (nodes.metricStageReady) nodes.metricStageReady.textContent = String(counts.pronta);
   nodes.metricStageSemResposta.textContent = String(counts.semResposta);
   nodes.metricStageNegociacao.textContent = String(counts.negociacao);
   nodes.metricStageSinal.textContent = String(counts.sinal);
@@ -8916,7 +9162,8 @@ function renderPipelineMetrics(items = getPipelineItems()) {
 function getProposalTransitionOptions(currentStatus) {
   const status = normalizeProposalStatus(currentStatus);
   if (status === "cancelado") return ["cancelado", "negociacao"];
-  return ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"];
+  if (status === "proposta_pronta") return ["proposta_pronta", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"];
+  return ["proposta_pronta", "proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"];
 }
 
 function renderStatusSelect(item) {
@@ -8938,7 +9185,7 @@ function renderStatusSelect(item) {
 }
 
 function getLeadAgeInfo(item) {
-  if (item.kind !== "request" || item.status !== "lead_recebido" || !item.createdAt) return null;
+  if (item.kind !== "request" || item.status !== "lead_recebido" || !item.createdAt || item.firstReplySentAt) return null;
   const created = new Date(item.createdAt);
   const elapsed = Date.now() - created.getTime();
   if (!Number.isFinite(elapsed) || elapsed < 0) return null;
@@ -8950,7 +9197,7 @@ function getLeadAgeInfo(item) {
 
 function getProposalFollowUpInfo(item) {
   if (item.kind !== "proposal" || item.isDraft || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
-  const hours = getHoursSince(item.updatedAt || item.createdAt);
+  const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
   if (hours < 24) return null;
   const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
   const label = `Sem retorno há ${hours}h`;
@@ -8977,6 +9224,9 @@ function getPipelinePrimaryAction(item) {
     };
   }
   if (item.kind === "request" && status === "lead_recebido") {
+    if (item.firstReplySentAt) {
+      return { tone: "success", eyebrow: "Contato feito", label: "Montar proposta", note: "Primeira resposta registrada. Confira briefing e preços." };
+    }
     if (item.captureStatus === "partial") {
       return {
         tone: age && ["danger", "critical"].includes(age.level) ? "danger" : "warning",
@@ -8990,6 +9240,14 @@ function getPipelinePrimaryAction(item) {
       eyebrow: "Próxima ação",
       label: age && age.level !== "fresh" ? "Responder agora" : "Criar proposta",
       note: age && age.level !== "fresh" ? "Lead esfriando. Abra, revise e envie proposta." : "Qualifique e monte a primeira proposta.",
+    };
+  }
+  if (status === "proposta_pronta") {
+    return {
+      tone: "warning",
+      eyebrow: "Envio pendente",
+      label: "Enviar proposta",
+      note: "O link foi preparado. Escolha o canal e confirme o envio para iniciar o acompanhamento.",
     };
   }
   if (status === "proposta_enviada") {
@@ -9087,6 +9345,7 @@ function getPipelineRiskAlerts(item) {
 function getSlaMeta(item) {
   const status = getReportStatus(item);
   if (item.kind === "request" && status === "lead_recebido") {
+    if (item.firstReplySentAt) return { label: "Primeiro contato registrado · montar proposta", level: "success" };
     const hours = getHoursSince(item.createdAt);
     const nextLimit = hours < 12 ? "12h" : hours < 24 ? "24h" : hours < 48 ? "48h" : "estourado";
     const level = hours >= 48 ? "critical" : hours >= 24 ? "danger" : hours >= 12 ? "warning" : "fresh";
@@ -9096,7 +9355,7 @@ function getSlaMeta(item) {
     };
   }
   if (item.kind === "proposal" && status === "proposta_enviada") {
-    const hours = getHoursSince(item.updatedAt || item.createdAt);
+    const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
     const nextLimit = hours < 24 ? "24h" : hours < 48 ? "48h" : hours < 72 ? "72h" : "estourado";
     const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : hours >= 24 ? "warning" : "fresh";
     return {
@@ -9615,6 +9874,7 @@ function getClientNextAction(item) {
   if (!item) return "Cadastrar primeiro contato.";
   const status = normalizeProposalStatus(item.status);
   if (item.kind === "request" || status === "lead_recebido") return "Abrir lead e montar proposta.";
+  if (status === "proposta_pronta") return "Enviar proposta ao cliente.";
   if (status === "proposta_enviada") return "Retomar contato e buscar resposta.";
   if (status === "negociacao") return "Resolver ajustes e avançar para sinal.";
   if (status === "confirmado") return "Registrar pagamento restante.";
@@ -9860,7 +10120,7 @@ function getActionTasks(items = getPipelineItems()) {
   const tasks = [];
   items.forEach((item) => {
     const status = getReportStatus(item);
-    const hours = getHoursSince(item.updatedAt || item.createdAt);
+    const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
     const eventDate = parseLocalIsoDate(item.date);
     const base = {
       item,
@@ -9872,9 +10132,9 @@ function getActionTasks(items = getPipelineItems()) {
       const age = getLeadAgeInfo(item);
       tasks.push({
         ...base,
-        title: item.captureStatus === "partial" ? "Retomar lead incompleto" : "Responder lead",
-        note: item.captureStatus === "partial" ? "Cliente deixou contato antes de concluir o formulário." : age?.label || "Novo pedido recebido",
-        priority: age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
+        title: item.firstReplySentAt ? "Montar proposta" : item.captureStatus === "partial" ? "Retomar lead incompleto" : "Responder lead",
+        note: item.firstReplySentAt ? "Contato inicial registrado. Prepare a proposta com o briefing." : item.captureStatus === "partial" ? "Cliente deixou contato antes de concluir o formulário." : age?.label || "Novo pedido recebido",
+        priority: item.firstReplySentAt ? 30 : age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
         track: "Comercial",
       });
     }
@@ -9885,6 +10145,14 @@ function getActionTasks(items = getPipelineItems()) {
         title: "Finalizar nova versão",
         note: "V" + (item.version || "") + " está em rascunho. A versão anterior continua disponível para o cliente até o novo envio.",
         priority: 84,
+        track: "Comercial",
+      });
+    } else if (item.kind === "proposal" && status === "proposta_pronta") {
+      tasks.push({
+        ...base,
+        title: "Enviar proposta pronta",
+        note: "O link existe, mas nenhum canal confirmou o envio. Abra a proposta e envie ou registre o envio manual.",
+        priority: 88,
         track: "Comercial",
       });
     } else if (item.kind === "proposal" && status === "proposta_enviada") {
@@ -10088,6 +10356,7 @@ function openActionPlanDialog(kind, id) {
       responsavel_id: form.elements.owner.value === normalizeEmail(state.session?.user?.email) ? state.session?.user?.id || null : null,
       proxima_acao: form.elements.action.value.trim(),
       proxima_acao_em: due.toISOString(),
+      metadata: { ...(state.opportunities.find((row) => row.id === item.opportunityId)?.metadata || {}), next_action_source: "manual" },
       ...(form.elements.contact.checked ? { ultimo_contato_em: new Date().toISOString() } : {}),
     };
     const { data, error } = await state.supabase.from("oportunidades").update(changes).eq("id", item.opportunityId).select("*").single();
@@ -10660,6 +10929,7 @@ function getPipelineOpenButtonLabel(item, primaryAction) {
   if (item.kind === "proposal" && item.isDraft) return "Continuar V" + (item.version || "");
   if (item.status === "cancelado") return "Abrir";
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
+  if (status === "proposta_pronta") return "Enviar";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
   if (status === "negociacao") return "Ajustar";
   if (status === "confirmado") return item.hasPaymentComplete ? "Planejar" : "Cobrar saldo";
@@ -10990,6 +11260,7 @@ async function loadCommercialInsights() {
   if (views.error) console.warn("Falha ao carregar visualizações de propostas.", views.error);
   else state.proposalViews = views.data || [];
   renderCommercialTimeline(getActiveProposal());
+  renderFirstReplyPanel();
 }
 
 function buildNotesFromRequest(request) {
@@ -11066,6 +11337,8 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
   resetProposalDraftState();
+  if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
+  if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
   fields.clientName.value = request.cliente_nome || "";
   fields.clientEmail.value = request.cliente_email || "";
   fields.clientPhone.value = request.cliente_whatsapp || "";
@@ -11133,6 +11406,9 @@ function canMoveProposalStatus(currentStatus, nextStatus) {
   if (current === next) return { ok: true };
   if (!proposalStatusOptions.includes(next)) {
     return { ok: false, message: "Propostas só podem avançar pelas etapas comerciais e operacionais." };
+  }
+  if (current === "proposta_pronta" && next === "proposta_enviada") {
+    return { ok: false, message: "Use Enviar ou Registrar envio fora do sistema para confirmar o contato." };
   }
   if (current === "cancelado" && !["negociacao", "proposta_enviada"].includes(next)) {
     return { ok: false, message: "Reabra primeiro para negociação antes de avançar para outra etapa." };
@@ -11554,7 +11830,7 @@ async function initSupabase() {
     if (error) throw error;
     state.session = data.session;
 
-    state.supabase.auth.onAuthStateChange((_event, session) => {
+    state.supabase.auth.onAuthStateChange((event, session) => {
       state.session = session;
       if (session?.user?.email && !isTeamEmail(session.user.email)) {
         state.supabase.auth.signOut();
@@ -11562,11 +11838,12 @@ async function initSupabase() {
         return;
       }
       updateAuthUI();
-      if (session) {
+      if (session && event !== "TOKEN_REFRESHED") {
+        loadSharedSettings();
         loadProposalHistory();
         loadQuoteRequests();
       }
-      else {
+      else if (!session) {
         state.proposals = [];
         state.quoteRequests = [];
         state.opportunities = [];
@@ -11588,6 +11865,7 @@ async function initSupabase() {
         renderConfirmedEvents();
         renderQuoteRequests();
       } else {
+        await loadSharedSettings();
         await loadProposalHistory();
         await loadQuoteRequests();
         await applyPendingDashboardTarget();
@@ -11910,7 +12188,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
 
   const snapshot = getProposalSnapshot();
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
-  const nextStatus = status || activeProposal?.status || "proposta_enviada";
+  const nextStatus = status || activeProposal?.status || "proposta_pronta";
   const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
   if (!opportunityId) {
     state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
@@ -11922,15 +12200,15 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
-  if (normalizedNext === "proposta_enviada") {
+  if (normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada") {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
     if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
       renderSendReview();
       showToast(
         reviewSummary.ready
-          ? "Antes de salvar como enviada, aprove o checklist de revisão."
-          : "Antes de salvar como enviada, corrija o checklist de revisão.",
+          ? "Antes de deixar a proposta pronta, aprove o checklist de revisão."
+          : "Antes de deixar a proposta pronta, corrija o checklist de revisão.",
       );
       nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
       return null;
@@ -12085,16 +12363,18 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   const activeWasPublished =
     Boolean(activeProposal) &&
     activeProposal?.publication_status !== "draft" &&
-    ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
+    ["proposta_pronta", "proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
   const needsNewVersion = activeWasPublished && proposalChanges.length > 0;
+  const publishNewVersion = Boolean(options.forSharing && (activeIsDraft || needsNewVersion));
+  if (publishNewVersion) row.status = "proposta_pronta";
 
   let query;
   if (activeIsDraft && persistableProposalId) {
     const draftRow = {
       ...row,
       is_current: Boolean(options.forSharing),
-      publication_status: options.forSharing ? "sent" : "draft",
-      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+      publication_status: options.forSharing ? "ready" : "draft",
+      ...(options.forSharing ? { sent_at: null } : {}),
     };
     query = state.supabase.from("propostas").update(draftRow).eq("id", persistableProposalId);
   } else if (needsNewVersion) {
@@ -12102,8 +12382,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       ...row,
       oportunidade_id: opportunityId,
       is_current: Boolean(options.forSharing),
-      publication_status: options.forSharing ? "sent" : "draft",
-      ...(options.forSharing ? { sent_at: new Date().toISOString() } : {}),
+      publication_status: options.forSharing ? "ready" : "draft",
+      ...(options.forSharing ? { sent_at: null } : {}),
     };
     query = state.supabase.from("propostas").insert(versionRow);
   } else if (persistableProposalId) {
@@ -12113,8 +12393,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       ...row,
       oportunidade_id: opportunityId,
       is_current: true,
-      publication_status: "sent",
-      sent_at: new Date().toISOString(),
+      publication_status: normalizedNext === "proposta_pronta" ? "ready" : "sent",
+      sent_at: normalizedNext === "proposta_pronta" ? null : new Date().toISOString(),
     });
   }
   const { data, error } = await query.select("*").single();
@@ -12142,7 +12422,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (persistableQuoteRequestId) {
     await updateQuoteRequest(
       persistableQuoteRequestId,
-      { status: "proposta_enviada", proposta_id: data.id },
+      { status: "proposta_gerada", proposta_id: data.id },
       false,
     );
   } else if (state.activeQuoteRequestId) {
@@ -12161,7 +12441,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (data.publication_status === "draft") {
     showToast("Nova versão V" + (data.versao || "") + " salva como rascunho. O cliente continua vendo a versão anterior até o envio.");
   } else if (needsNewVersion || (activeIsDraft && options.forSharing)) {
-    showToast("Versão V" + (data.versao || "") + " publicada. Links antigos passam a abrir esta versão.");
+    showToast("Versão V" + (data.versao || "") + " pronta. Confira o envio ao cliente.");
   } else {
     showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta salva no funil.");
   }
@@ -12245,7 +12525,7 @@ function applyProposalSnapshot(snapshot) {
 
   if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
-    savePrices();
+    savePrices({ localOnly: true });
   }
   if (Array.isArray(snapshot.selectedItems) && snapshot.selectedItems.length) {
     snapshot.selectedItems.forEach((item) => {
@@ -12261,7 +12541,7 @@ function applyProposalSnapshot(snapshot) {
 
   if (Array.isArray(snapshot.privatizationRules) && snapshot.privatizationRules.length) {
     state.privatizationRules = snapshot.privatizationRules;
-    savePrivatizationRules();
+    savePrivatizationRules({ localOnly: true });
     renderPrivatizationRulesTable();
   }
 
@@ -12529,12 +12809,13 @@ function handleSaveCommunicationTemplates() {
   saveCommunicationTemplates(collectCommunicationTemplateEditorValues());
   renderCommunicationTemplateEditor();
   renderQuickReplies();
-  showToast("Textos de comunicação salvos.");
+  showToast(state.sharedSettings.communication ? "Textos salvos; sincronizando com a equipe." : "Textos salvos neste navegador. Publique para compartilhar.");
 }
 
 function handleResetCommunicationTemplates() {
   if (!window.confirm("Restaurar os textos padrão de e-mail e WhatsApp?")) return;
   localStorage.removeItem(COMMUNICATION_TEMPLATES_KEY);
+  queueSharedSettingSave("communication", 0);
   renderCommunicationTemplateEditor();
   renderQuickReplies();
   showToast("Textos padrão restaurados.");
@@ -12566,6 +12847,7 @@ function renderAll() {
   renderFormSourcePanel();
   renderServiceCockpit();
   renderLoadedEditorBar();
+  renderFirstReplyPanel();
   renderLeadReviewPanel();
   renderProposalNextStep();
   renderManualContactPanel();
@@ -12579,6 +12861,7 @@ function renderAll() {
   renderSystemHealth();
   renderIntegrationLogs();
   renderCommunicationTemplateEditor();
+  renderSharedSettingStatus();
 }
 
 function startNewProposal(options = {}) {
@@ -12597,6 +12880,8 @@ function startNewProposal(options = {}) {
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   state.activeOpportunityId = "";
+  if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
+  if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
   delete state.sourceOverrides["manual:draft"];
   delete state.sourceOverrides["manual:realized"];
   state.manualSourceKey = isRealizedMode ? "manual:realized" : "manual:draft";
@@ -12790,7 +13075,7 @@ async function ensureProposalForSharing() {
   state.lastProposalShareError = "";
   if (!ensureProposalReadyForSending()) return null;
   const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
-  const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_enviada";
+  const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
   const saved = await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
@@ -12803,6 +13088,86 @@ async function ensureProposalForSharing() {
     return null;
   }
   return { saved, url };
+}
+
+async function registerConfirmedProposalSend(proposal, manualChannel = "") {
+  if (!proposal || proposal.status !== "proposta_pronta") return true;
+  const sentAt = new Date().toISOString();
+  const manualSnapshot = manualChannel
+    ? withCommercialHistoryEntries(
+        { ...(proposal.snapshot || {}), ultimoEnvioManualEm: sentAt },
+        [createCommercialHistoryEntry("envio", "Envio manual registrado", `Canal: ${manualChannel}. Confirmado pela equipe.`)],
+      )
+    : null;
+  const { data, error } = await state.supabase
+    .from("propostas")
+    .update({
+      status: "proposta_enviada",
+      publication_status: "sent",
+      sent_at: sentAt,
+      ...(manualSnapshot ? { snapshot: manualSnapshot } : {}),
+    })
+    .eq("id", proposal.id)
+    .eq("status", "proposta_pronta")
+    .select("*")
+    .single();
+  if (error || !data) {
+    console.warn("Mensagem enviada; falha ao avançar o funil.", error);
+    showToast("Mensagem enviada, mas a etapa não foi atualizada. Atualize o funil e confira o histórico.");
+    return false;
+  }
+  upsertProposalState(data);
+  if (data.solicitacao_id) {
+    const result = await state.supabase
+      .from("solicitacoes_cotacao")
+      .update({ status: "proposta_enviada" })
+      .eq("id", data.solicitacao_id);
+    if (result.error) console.warn("Envio confirmado; falha ao atualizar o lead.", result.error);
+  }
+  renderPipeline();
+  renderCommercialTimeline(data);
+  renderProposalNextStep();
+  return true;
+}
+
+function openManualSendDialog() {
+  const proposal = getActiveProposal();
+  if (!proposal || proposal.status !== "proposta_pronta") {
+    showToast("Abra uma proposta pronta para registrar o envio.");
+    return;
+  }
+  const dialog = document.createElement("dialog");
+  dialog.className = "send-confirm-dialog";
+  dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
+    <h2>Registrar envio feito fora do sistema</h2>
+    <p>Use após confirmar que o cliente recebeu o link. O registro inicia o acompanhamento no funil.</p>
+    <label>Canal <select name="channel" required>
+      <option value="">Selecione</option><option value="WhatsApp">WhatsApp</option>
+      <option value="E-mail">E-mail</option><option value="Outro">Outro</option>
+    </select></label>
+    <label><input type="checkbox" name="sent" required /> Enviei o link para o cliente</label>
+    <div class="send-confirm-actions">
+      <button type="button" class="secondary" data-close-manual>Voltar</button>
+      <button type="submit" class="primary">Registrar envio</button>
+    </div>
+  </form>`;
+  document.body.append(dialog);
+  dialog.querySelector("[data-close-manual]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    const ok = await registerConfirmedProposalSend(proposal, form.elements.channel.value);
+    if (ok) {
+      dialog.close();
+      await loadProposalHistory();
+      showToast("Envio manual registrado e acompanhamento iniciado.");
+    } else button.disabled = false;
+  });
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.showModal();
 }
 
 async function ensureProposalLink() {
@@ -12976,7 +13341,8 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       status: "success",
       detail: `Proposta enviada para ${phone}.`,
     });
-    showToast("Proposta enviada por WhatsApp e registrada no histórico.");
+    const stageUpdated = await registerConfirmedProposalSend(proposal);
+    if (stageUpdated) showToast("Proposta enviada por WhatsApp e registrada no histórico.");
     await loadProposalHistory();
     return true;
   } catch (error) {
@@ -13059,7 +13425,8 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
       status: "success",
       detail: `Proposta enviada para ${destination}.`,
     });
-    showToast("Proposta enviada por e-mail e registrada no histórico.");
+    const stageUpdated = await registerConfirmedProposalSend(proposal);
+    if (stageUpdated) showToast("Proposta enviada por e-mail e registrada no histórico.");
     await loadProposalHistory();
     return true;
   } catch (error) {
@@ -13186,6 +13553,9 @@ async function runProposalNextStepAction(action) {
       break;
     case "focus_review":
       scrollToReviewTarget("review");
+      break;
+    case "focus_quick_replies":
+      document.querySelector(".quick-replies-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
       break;
     case "focus_checklist":
       nodes.operationalChecklist?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -14016,9 +14386,17 @@ function bindEvents() {
     if (!button) return;
     jumpToPipelineStage(button.dataset.returnPipelineStage);
   });
+  nodes.firstReplyPanel?.addEventListener("input", (event) => {
+    if (event.target.id === "firstReplyText") state.firstReplyDraft = event.target.value;
+  });
+  nodes.firstReplyPanel?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-first-reply-action]");
+    if (button) runFirstReplyAction(button.dataset.firstReplyAction);
+  });
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
+  document.querySelector("#manualSendBtn")?.addEventListener("click", openManualSendDialog);
   document.addEventListener("click", (event) => {
     const emailButton = event.target.closest?.("#emailBtn");
     if (emailButton) {
@@ -14034,6 +14412,8 @@ function bindEvents() {
   });
   document.querySelector("#resetPricesBtn")?.addEventListener("click", resetPrices);
   document.querySelector("#saveCommunicationTemplatesBtn")?.addEventListener("click", handleSaveCommunicationTemplates);
+  document.querySelector("#publishCommunicationBtn")?.addEventListener("click", () => publishCommercialSettings(["communication"]));
+  document.querySelector("#publishCatalogBtn")?.addEventListener("click", () => publishCommercialSettings(["catalog", "privatization"]));
   document.querySelector("#resetCommunicationTemplatesBtn")?.addEventListener("click", handleResetCommunicationTemplates);
   document.querySelector("#clearFlowBtn")?.addEventListener("click", clearGuidedFlow);
   document.querySelector("#addItemBtn")?.addEventListener("click", createNewItem);

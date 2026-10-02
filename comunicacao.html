@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Comunicação | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260521-comunicacao-v158" />
+    <link rel="stylesheet" href="./styles.css?v=20261002-seller-ux-v177" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20260616-privatizacao-fora-pico-v167"></script>
+  <script defer src="./app.js?v=20261002-seller-ux-v177"></script>
   </head>
   <body class="auth-locked" data-page="comunicacao">
     <div class="app-shell">
@@ -95,8 +95,10 @@
           </div>
           <div class="communication-toolbar">
             <button class="primary" id="saveCommunicationTemplatesBtn" type="button">Salvar textos</button>
+            <button class="secondary" id="publishCommunicationBtn" type="button">Publicar modelos para a equipe</button>
             <button class="secondary" id="resetCommunicationTemplatesBtn" type="button">Restaurar padrão</button>
           </div>
+          <p id="communicationSharedStatus">Carregando origem dos modelos...</p>
         </section>
 
         <section class="communication-help-panel">

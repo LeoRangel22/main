@@ -758,7 +758,7 @@ textarea[aria-invalid="true"] {
 .owner-metrics {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
 }
 
 .owner-metrics button {
@@ -790,6 +790,10 @@ textarea[aria-invalid="true"] {
 
 .owner-metrics .metric-stage-lead {
   background: #c7473f;
+}
+
+.owner-metrics .metric-stage-pronta {
+  background: #d9633d;
 }
 
 .owner-metrics .metric-stage-sem-resposta {
@@ -2281,7 +2285,7 @@ textarea[aria-invalid="true"] {
 }
 
 .pipeline-row-commercial {
-  grid-template-columns: repeat(4, minmax(200px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .pipeline-row-operation {
@@ -11193,4 +11197,38 @@ input[type="range"] {
   .proposal-journey-facts { grid-template-columns: 1fr; }
   .action-plan-dialog { padding: 18px; }
   .action-plan-dialog-actions button { flex: 1; }
+}
+
+.first-reply-panel {
+  margin: 16px 0 22px;
+  padding: clamp(16px, 2.4vw, 26px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(12, 42, 34, .06);
+}
+.first-reply-panel.is-hidden { display: none; }
+.first-reply-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.first-reply-heading span {
+  color: var(--verde);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.first-reply-heading h2 { margin: 4px 0 0; font-size: clamp(1.1rem, 2vw, 1.4rem); }
+.first-reply-panel label { display: block; margin-bottom: 7px; font-weight: 700; }
+.first-reply-panel textarea { width: 100%; min-height: 126px; resize: vertical; }
+.first-reply-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.first-reply-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.first-reply-panel small { line-height: 1.45; }
+@media (max-width: 720px) {
+  .first-reply-heading { flex-direction: column; }
+  .first-reply-actions button { flex: 1 1 46%; }
 }

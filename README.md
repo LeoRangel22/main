@@ -2,6 +2,8 @@
 
 > **Fase comercial 1 (oportunidades, versões, captura parcial e recompra):** antes de publicar a branch `phase1-commercial-ux`, execute `supabase/phase1_commercial_ux.sql` no SQL Editor do Supabase. A migração é aditiva, preserva o histórico existente e faz o backfill das oportunidades. O frontend desta fase depende dessas novas colunas/RPCs.
 
+> **Atendimento rápido do vendedor:** antes de publicar a interface desta fase, revise o schema de produção e execute `supabase/seller_fast_response.sql`. O SQL preserva registros existentes, corrige o trigger de próxima ação e o versionamento de propostas, e cria configurações comerciais compartilhadas com histórico. Após o deploy, abra `Valores e produtos` no navegador que contém o catálogo aprovado e use **Publicar preços e regras para a equipe**; faça o mesmo em `Comunicação` para os modelos aprovados. Até a primeira publicação, cada navegador mantém seus valores locais. A partir dela, o Supabase passa a ser a fonte comum, com versões e detecção de conflito. Confira preços, regras e textos em outro navegador antes de atender leads reais. A função de envio de e-mail pode exigir deploy separado do Edge Function para receber alterações de seu HTML; esta fase não modifica esse template.
+
 Aplicativo estático para montar propostas da Embaixada Carioca com preços ajustáveis.
 
 ## Como abrir
