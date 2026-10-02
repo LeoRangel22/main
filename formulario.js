@@ -894,6 +894,10 @@ function setLanguage(language) {
   updateGuestOutput();
   renderFinalReview();
   renderReturningClientCopy();
+  if (statusNode.dataset.status === "error" && statusNode.querySelector("ul")) {
+    setStatus(getCopy().labels.defaultStatus, "neutral");
+    validateSnapshot(getSnapshot(getOrCreateReferenceCode()));
+  }
 }
 
 function setStatus(message, type = "neutral") {
