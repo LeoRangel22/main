@@ -117,6 +117,9 @@ create index if not exists commercial_settings_history_latest_idx
 
 alter table public.commercial_settings enable row level security;
 alter table public.commercial_settings_history enable row level security;
+-- O projeto concede privilegios diretos a anon por padrao. RLS protege as
+-- linhas, mas removemos tambem a permissao da tabela.
+revoke all on public.commercial_settings, public.commercial_settings_history from anon, public;
 grant select on public.commercial_settings, public.commercial_settings_history to authenticated;
 revoke insert, update, delete on public.commercial_settings, public.commercial_settings_history from anon, authenticated;
 
@@ -171,5 +174,6 @@ begin
 end;
 $$;
 
-revoke all on function public.save_commercial_setting(text, jsonb, integer) from public;
+-- Supabase tambem concede EXECUTE diretamente a anon em funcoes novas.
+revoke all on function public.save_commercial_setting(text, jsonb, integer) from anon, public;
 grant execute on function public.save_commercial_setting(text, jsonb, integer) to authenticated;
