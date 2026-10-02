@@ -133,3 +133,6 @@ O código do bot em Google Apps Script pode ser conectado depois para:
 - Receber pedidos de orçamento pelo WhatsApp.
 - Salvar propostas geradas em uma aba de histórico.
 - Enviar link de proposta ou PDF para a equipe.
+# Jornada do cliente: revisão da proposta
+
+Após `supabase/phase1_commercial_ux.sql` e `supabase/seller_fast_response.sql`, conferir o schema real e executar `supabase/client_proposal_ux.sql`; validar com `supabase/client_proposal_ux_verify.sql`. A RPC nova aceita comprovante após aprovação e não confirma a venda automaticamente. Publicar também a Edge Function `send-proposal-email` atualizada antes de liberar o fluxo de e-mail. Propostas antigas e histórico são preservados.

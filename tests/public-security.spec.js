@@ -13,6 +13,14 @@ function getFunctionBlock(source, name) {
 }
 
 test.describe("Seguranca da proposta publica", () => {
+  test("comprovante posterior exige aprovacao, limita arquivo e nao confirma venda", () => {
+    const migration = fs.readFileSync(path.join(__dirname, "..", "supabase", "client_proposal_ux.sql"), "utf8");
+    const block = getFunctionBlock(migration, "submit_public_signal_proof");
+    expect(block).toContain("proposal_row.cliente_resposta <> 'confirmar'");
+    expect(block).toContain("proof_size > 5242880");
+    expect(block).toContain("for update");
+    expect(block).not.toContain("set status = 'confirmado'");
+  });
   test("consulta publica devolve apenas snapshot sanitizado", () => {
     const schema = fs.readFileSync(schemaPath, "utf8");
     const block = getFunctionBlock(schema, "get_public_proposal");

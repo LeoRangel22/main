@@ -7398,6 +7398,7 @@ function getProposalSnapshot() {
     },
     event: {
       type: getCurrentEventType(),
+      clientLanguage: activeRequest?.snapshot?.cliente?.idioma || activeProposal?.snapshot?.event?.clientLanguage || "pt",
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
@@ -13014,7 +13015,9 @@ function getSupabaseSaveErrorMessage(error, context = {}) {
 
 function getPublicProposalUrl(proposal) {
   const token = proposal?.public_token;
-  return token ? `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}` : "";
+  if (!token) return "";
+  const language = proposal?.snapshot?.event?.clientLanguage === "en" ? "&lang=en" : "";
+  return `${CANONICAL_PUBLIC_PROPOSAL_URL}?p=${encodeURIComponent(token)}${language}`;
 }
 
 function scrollToReviewTarget(target) {

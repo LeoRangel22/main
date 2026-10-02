@@ -9195,6 +9195,27 @@ input[type="range"] {
   position: relative;
 }
 
+.public-proposal-language {
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  right: 20px;
+  top: 16px;
+  z-index: 5;
+}
+
+.public-proposal-language button {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--verde-escuro);
+  min-height: 40px;
+  min-width: 44px;
+}
+
+.public-proposal-language button[aria-pressed="true"] {
+  background: var(--verde-escuro);
+  color: var(--white);
+}
+
 .public-proposal-hero::after {
   background:
     linear-gradient(90deg, rgba(24, 58, 45, 0.92), rgba(24, 58, 45, 0.6) 46%, rgba(24, 58, 45, 0.06)),
@@ -9438,6 +9459,34 @@ input[type="range"] {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
+}
+
+.public-commercial-summary {
+  background: #fff;
+  border: 1px solid rgba(24, 58, 45, 0.14);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+
+.public-proposal-jump { display: none; }
+
+.public-commercial-summary h3 {
+  color: var(--verde-escuro);
+  margin: 0 0 8px;
+}
+
+.public-commercial-summary ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.public-commercial-summary li,
+.public-commercial-summary p {
+  color: var(--verde-escuro);
+  line-height: 1.35;
+  margin: 0;
 }
 
 .public-proposal-summary div {
@@ -9853,6 +9902,11 @@ input[type="range"] {
   padding-top: 14px;
 }
 
+.public-proposal-change-form[hidden],
+#publicPaymentInfoSlot[hidden] {
+  display: none;
+}
+
 .public-proposal-form-grid {
   display: grid;
   gap: 12px;
@@ -9879,6 +9933,30 @@ input[type="range"] {
   background: rgba(24, 58, 45, 0.1);
   border-left-color: var(--verde-escuro);
 }
+
+.public-form-shortcut {
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(24, 58, 45, 0.18);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+}
+
+.public-form-shortcut > div {
+  display: grid;
+  flex: 1 1 260px;
+  gap: 4px;
+}
+
+.public-form-shortcut strong { color: var(--verde-escuro); }
+.public-form-shortcut span { color: var(--muted); }
+.public-form-shortcut a { align-items: center; display: inline-flex; justify-content: center; min-height: 44px; padding: 10px 16px; text-decoration: none; }
+.public-form-shortcut a.primary { background: var(--verde-escuro); color: var(--white); }
+.public-form-shortcut a.secondary { border: 1px solid var(--verde-escuro); color: var(--verde-escuro); }
 
 @media (max-width: 1080px) {
   .communication-template-grid {
@@ -10320,7 +10398,7 @@ input[type="range"] {
   }
 
   .public-form-hero {
-    min-height: 410px;
+    min-height: 265px;
   }
 
   .public-form-hero-copy {
@@ -10339,7 +10417,7 @@ input[type="range"] {
   }
 
   .public-proposal-hero {
-    min-height: 390px;
+    min-height: 190px;
   }
 
   .public-proposal-hero-copy {
@@ -10347,16 +10425,37 @@ input[type="range"] {
   }
 
   .public-proposal-hero-copy h1 {
-    font-size: 2.35rem;
+    font-size: 1.7rem;
     line-height: 1;
   }
+
+  .public-proposal-hero-copy {
+    gap: 5px;
+    padding: 16px;
+  }
+
+  .public-proposal-hero-copy img { height: 44px; width: 44px; }
+  .public-proposal-card { gap: 10px; }
+  .public-proposal-topline { order: 0; }
+  .public-proposal-summary { order: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-proposal-summary div { padding: 10px; }
+  .public-proposal-jump { align-items: center; background: var(--verde-escuro); color: var(--white); display: flex; justify-content: center; min-height: 46px; order: 2; text-decoration: none; }
+  .public-commercial-summary { order: 3; padding: 12px 14px; }
+  .public-proposal-actions { order: 4; scroll-margin-top: 16px; }
+  .public-proposal-stage { order: 5; }
+  .public-proposal-next-steps { order: 6; }
+  .public-proposal-response { order: 7; }
+  .public-payment-info { order: 8; }
+  .public-proposal-layout { order: 9; }
+  .public-proposal-language { right: 10px; top: 8px; }
+  .public-form-shortcut { margin: 8px 0 14px; }
+  .public-form-shortcut a { flex: 1 1 160px; }
 
   .public-proposal-card {
     margin-top: -42px;
     padding: 0 14px 26px;
   }
 
-  .public-proposal-summary,
   .public-proposal-form-grid {
     grid-template-columns: 1fr;
   }
