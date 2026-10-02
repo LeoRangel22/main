@@ -2,6 +2,8 @@
 
 > **Fase comercial 1 (oportunidades, versões, captura parcial e recompra):** antes de publicar a branch `phase1-commercial-ux`, execute `supabase/phase1_commercial_ux.sql` no SQL Editor do Supabase. A migração é aditiva, preserva o histórico existente e faz o backfill das oportunidades. O frontend desta fase depende dessas novas colunas/RPCs.
 
+> **Atendimento rápido do vendedor:** antes de publicar a interface desta fase, revise o schema de produção e execute `supabase/seller_fast_response.sql` e `supabase/client_proposal_ux.sql`. O SQL preserva registros existentes, corrige o trigger de próxima ação e o versionamento de propostas, cria configurações comerciais compartilhadas com histórico e permite enviar comprovante após a aprovação sem registrar pagamento automaticamente. Após o deploy, abra `Valores e produtos` no navegador que contém o catálogo aprovado e use **Publicar preços e regras para a equipe**; faça o mesmo em `Comunicação` para os modelos aprovados. Até a primeira publicação, cada navegador mantém seus valores locais. A partir dela, o Supabase passa a ser a fonte comum, com versões e detecção de conflito. Confira preços, regras e textos em outro navegador antes de atender leads reais. Publique também a Edge Function `send-proposal-email` desta branch para receber o novo resumo do e-mail.
+
 Aplicativo estático para montar propostas da Embaixada Carioca com preços ajustáveis.
 
 ## Como abrir
@@ -131,3 +133,6 @@ O código do bot em Google Apps Script pode ser conectado depois para:
 - Receber pedidos de orçamento pelo WhatsApp.
 - Salvar propostas geradas em uma aba de histórico.
 - Enviar link de proposta ou PDF para a equipe.
+# Jornada do cliente: revisão da proposta
+
+Após `supabase/phase1_commercial_ux.sql` e `supabase/seller_fast_response.sql`, conferir o schema real e executar `supabase/client_proposal_ux.sql`; validar com `supabase/client_proposal_ux_verify.sql`. A RPC nova aceita comprovante após aprovação e não confirma a venda automaticamente. Publicar também a Edge Function `send-proposal-email` atualizada antes de liberar o fluxo de e-mail. Propostas antigas e histórico são preservados.

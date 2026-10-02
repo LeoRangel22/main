@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20260722-ajustes-priv-v169" />
+    <link rel="stylesheet" href="./styles.css?v=20261002-seller-ux-v177" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -68,7 +68,8 @@
               <div class="team-ready">
                 <span>Manutenção comercial</span>
                 <strong>Use esta tela para cadastrar produtos e atualizar regras.</strong>
-                <p>As alterações ficam salvas neste navegador e alimentam a montagem da proposta no sistema de eventos.</p>
+                <p id="catalogSharedStatus">Carregando origem dos preços e regras...</p>
+                <button class="secondary" id="publishCatalogBtn" type="button">Publicar preços e regras para a equipe</button>
               </div>
               <details class="team-advanced">
                 <summary>Configuração técnica</summary>
@@ -327,6 +328,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20260722-ajustes-priv-v169"></script>
+  <script defer src="./app.js?v=20261002-seller-ux-v177"></script>
   </body>
 </html>

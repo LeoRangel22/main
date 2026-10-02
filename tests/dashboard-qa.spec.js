@@ -8,6 +8,24 @@ const {
 } = require("./support");
 
 test.describe("Dashboard interno em modo QA", () => {
+  test("primeira resposta é editável e só vira contato após registro explícito", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.locator('[data-pipeline-card-id="qa-request-prioridade"] .pipeline-open-button').click();
+    const panel = page.locator("#firstReplyPanel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("textarea")).toHaveValue(/Almoço Carioca/);
+    await panel.locator("textarea").fill("Olá, Claudia! Vou confirmar a disponibilidade e retorno com as opções.");
+    const before = await page.evaluate(() => state.opportunities.find((row) => row.id === "qa-opp-qa-request-prioridade")?.metadata?.first_reply_sent_at);
+    expect(before).toBeFalsy();
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await panel.getByRole("button", { name: "Copiar mensagem" }).click();
+    await panel.getByRole("button", { name: "Registrar contato feito" }).click();
+    await expect(panel).toContainText("Primeiro contato registrado");
+    await expect(page.locator('[data-pipeline-card-id="qa-request-prioridade"]')).toContainText("Montar proposta");
+    await expectNoBrowserErrors(errors);
+  });
+
   test("cancelamento de teste preserva a proposta e registra o motivo", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
@@ -49,7 +67,7 @@ test.describe("Dashboard interno em modo QA", () => {
 
     await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]').getByRole("button", { name: /Reenviar|Abrir/i }).click();
     await expect(page.locator(".proposal-journey")).toContainText("V1 publicada");
-    await expect(page.locator(".proposal-journey")).toContainText("Envio pelo sistema");
+    await expect(page.locator(".proposal-journey")).toContainText("Envio registrado");
     await expect(page.locator(".proposal-journey")).toContainText("Ainda não registrado");
     await expect(page.locator(".proposal-journey")).toContainText("1 · última");
     await expect(page.locator(".proposal-version-list summary")).toHaveText("Ver 1 versão preservada");

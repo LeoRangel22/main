@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261001-cancel-dialog-v176" />
+    <link rel="stylesheet" href="./styles.css?v=20261002-seller-ux-v177" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -98,6 +98,10 @@
               <span>Lead</span>
               <strong id="metricStageLead">0</strong>
             </button>
+            <button class="metric-stage-pronta" type="button" data-pipeline-stage-jump="proposta_pronta" aria-label="Ir para propostas prontas para envio no funil">
+              <span>Pronta</span>
+              <strong id="metricStageReady">0</strong>
+            </button>
             <button class="metric-stage-sem-resposta" type="button" data-pipeline-stage-jump="proposta_enviada" aria-label="Ir para propostas sem resposta no funil">
               <span>Sem resposta</span>
               <strong id="metricStageSemResposta">0</strong>
@@ -145,7 +149,7 @@
             <div class="pipeline-stage-header">
               <div>
                 <span>Funil de eventos</span>
-                <strong>LEAD / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</strong>
+                <strong>LEAD / PRONTA PARA ENVIO / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</strong>
               </div>
               <div class="pipeline-header-actions">
                 <button class="primary" id="openNextPriorityBtn" type="button">Resolver próxima prioridade</button>
@@ -320,6 +324,7 @@
               <a href="#quoteTermsSection">Condições</a>
             </nav>
             <section class="loaded-editor-bar is-hidden" id="loadedEditorBar" aria-live="polite"></section>
+            <section class="first-reply-panel is-hidden" id="firstReplyPanel" aria-label="Primeira resposta ao lead"></section>
             <section class="quote-empty-state" id="quoteEmptyState" aria-label="Como começar uma proposta">
               <div class="quote-empty-copy">
                 <span>Nova proposta</span>
@@ -715,8 +720,9 @@
               <button class="secondary" id="newProposalBtn" type="button">Nova proposta</button>
               <button class="primary" id="whatsappBtn" type="button">Enviar link por WhatsApp</button>
               <button class="primary" id="emailBtn" type="button">Enviar link por e-mail</button>
-              <button class="primary" id="saveProposalBtn" type="button">Salvar como enviada</button>
+              <button class="primary" id="saveProposalBtn" type="button">Salvar proposta pronta</button>
               <button class="secondary" id="copyBtn" type="button">Copiar link público</button>
+              <button class="secondary" id="manualSendBtn" type="button">Registrar envio fora do sistema</button>
               <button class="secondary" id="printBtn" type="button">Criar PDF</button>
               <button class="secondary" id="confirmEventBtn" type="button">Sinal pago</button>
             </div>
@@ -765,6 +771,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261001-cancel-dialog-v176"></script>
+  <script defer src="./app.js?v=20261002-seller-ux-v177"></script>
   </body>
 </html>
