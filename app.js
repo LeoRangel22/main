@@ -6,6 +6,7 @@ const TERMS_KEY = "embaixada_orcamentos_condicoes_v1";
 const SUPABASE_CONFIG_KEY = "embaixada_orcamentos_supabase_v1";
 const INTEGRATION_LOG_KEY = "embaixada_orcamentos_envios_v1";
 const COMMUNICATION_TEMPLATES_KEY = "embaixada_orcamentos_comunicacao_v1";
+const WORKSPACE_MODE_KEY = "embaixada_orcamentos_modo_trabalho_v1";
 const DEFAULT_SUPABASE_URL = "https://pdgbnpztdnrvrphzdjas.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
@@ -156,6 +157,13 @@ const funnelStages = [
     statuses: ["pos_venda"],
   },
   {
+    id: "desfecho_pendente",
+    row: "archive",
+    title: "HISTÓRICO — DESFECHO PENDENTE",
+    description: "A data passou. Confirme o resultado real sem deixar o sistema adivinhar.",
+    statuses: ["desfecho_pendente"],
+  },
+  {
     id: "cancelado",
     row: "archive",
     title: "Cancelados",
@@ -188,6 +196,15 @@ const cancelReasons = [
   "Fechou com outro local",
   "Teste / cadastro de teste",
   "Outro motivo",
+];
+
+const pastEventOutcomes = [
+  { id: "realizado", label: "Realizado / vendido", detail: "O evento aconteceu e entra em pós-venda." },
+  { id: "concorrencia", label: "Perdemos para concorrência", detail: "O cliente fechou em outro local." },
+  { id: "preco", label: "Achou caro", detail: "O valor foi o principal motivo informado." },
+  { id: "desistencia", label: "Desistiu do evento", detail: "O cliente deixou de realizar o evento." },
+  { id: "remarcado", label: "Trocou de data", detail: "Informe a nova data para devolver a oportunidade ao funil." },
+  { id: "outro", label: "Outro desfecho", detail: "Registre o motivo real com suas palavras." },
 ];
 
 const initialPrices = [
@@ -613,6 +630,14 @@ ATRAÇÃO MUSICAL, ENTRETENIMENTO E DIVULGAÇÃO: a realização de atrações m
 UTILIZAÇÃO DA MARCA DO BONDINHO: qualquer uso comercial ou promocional envolvendo o Bondinho do Pão de Açúcar e os perfis dos morros deverá ser previamente aprovado pelo Setor de Eventos do Caminho Aéreo Pão de Açúcar.
 É expressamente proibida a distribuição de cartazes pela cidade, a fixação de materiais promocionais e a projeção de imagens nos morros sem autorização formal. O descumprimento poderá acarretar penalidades e multas legais, inclusive em momento posterior ao evento.`;
 
+function loadWorkspaceMode() {
+  try {
+    return localStorage.getItem(WORKSPACE_MODE_KEY) === "full" ? "full" : "sales";
+  } catch (_) {
+    return "sales";
+  }
+}
+
 const state = {
   prices: loadPrices(),
   productTypes: loadProductTypes(),
@@ -635,6 +660,7 @@ const state = {
   lastAppliedDashboardTarget: "",
   activeReportPreset: "currentMonth",
   activePipelineFilter: "all",
+  workspaceMode: loadWorkspaceMode(),
   quoteGuideDismissed: false,
   sourceOverrides: {},
   manualSourceKey: "",
@@ -663,6 +689,8 @@ const state = {
   firstReplySourceId: "",
   firstReplyDraft: "",
   firstReplyChannel: "",
+  smartDraftSuggestion: null,
+  smartDraftApproval: null,
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -762,11 +790,13 @@ const nodes = {
   periodMetrics: document.querySelector("#periodMetrics"),
   actionList: document.querySelector("#actionList"),
   actionCenterMeta: document.querySelector("#actionCenterMeta"),
+  workspaceModeSwitch: document.querySelector("#workspaceModeSwitch"),
   operationsAgenda: document.querySelector("#operationsAgenda"),
   operationsAgendaMeta: document.querySelector("#operationsAgendaMeta"),
   pipelineQuickFilters: document.querySelector("#pipelineQuickFilters"),
   loadedEditorBar: document.querySelector("#loadedEditorBar"),
   firstReplyPanel: document.querySelector("#firstReplyPanel"),
+  smartDraftPanel: document.querySelector("#smartDraftPanel"),
   quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
@@ -1776,6 +1806,142 @@ function buildFirstReplyDraft(request) {
     missing.length ? `Para preparar uma opção precisa, preciso confirmar: ${missing.slice(0, 2).join(" ")}` : "Vou conferir os detalhes e volto com uma proposta adequada ao seu grupo.",
     "Se tiver alguma preferência ou necessidade especial, pode me contar por aqui.",
   ].join("\n\n");
+}
+
+function buildSmartDraftSuggestion(request) {
+  if (!request) return null;
+  const eventKey = getGuidedEventKeyFromType(request.tipo_evento);
+  const template = smartEventTemplates[eventKey];
+  if (!template) return null;
+  const guests = Number(request.convidados || request.snapshot?.evento?.convidados || 0);
+  const text = normalizarTextoSeguro([
+    request.tipo_evento,
+    request.preferencias,
+    request.observacoes,
+    request.snapshot?.evento?.preferencias,
+    request.snapshot?.evento?.observacoes,
+    request.snapshot?.qualificacao?.momento,
+  ].filter(Boolean).join(" "));
+  let baseIds = template.ids.filter(itemExists);
+  if (eventKey === "cafe" && guests >= 50 && itemExists("cafe-completo")) baseIds = ["cafe-completo"];
+  if (eventKey === "coquetel" && guests > 0 && guests <= 25) {
+    baseIds = ["coquetel-caipirinha", "brasileiro-i"].filter(itemExists);
+  }
+  const defaultDurations = { coquetel: 2, workshop: 1.5, cafe: 1.5, almoco: 1.5, welcome: 1 };
+  const informedDuration = Number(request.duracao || request.snapshot?.evento?.duracao || 0);
+  const duration = informedDuration > 0 ? informedDuration : defaultDurations[eventKey] || 1;
+  const addOns = [];
+  if (eventKey === "coquetel" && guests >= 40 && itemExists("welcome-caipirinha")) {
+    addOns.push({ id: "welcome-caipirinha", reason: "Recepção fluida para grupo de 40 pessoas ou mais." });
+  }
+  if (eventKey === "coquetel" && /ingles|english|estrangeir|international/.test(text) && itemExists("workshop-caipirinha-en")) {
+    addOns.push({ id: "workshop-caipirinha-en", reason: "Experiência em inglês indicada pelo perfil internacional do grupo." });
+  }
+  if (eventKey === "almoco" && guests >= 40 && itemExists("welcome-caipirinha")) {
+    addOns.push({ id: "welcome-caipirinha", reason: "Ajuda a receber o grupo enquanto todos chegam para o almoço." });
+  }
+  const reasons = [
+    `Formato informado: ${request.tipo_evento || template.label}.`,
+    guests ? `Dimensionado para ${guests} convidados.` : "Público ainda precisa ser confirmado.",
+    informedDuration ? `Duração de ${duration}h preservada do briefing.` : `Duração inicial sugerida: ${duration}h.`,
+    request.snapshot?.qualificacao?.momento ? `Momento informado: ${request.snapshot.qualificacao.momento}.` : "Horário será validado antes do envio.",
+  ];
+  return {
+    requestId: request.id,
+    eventKey,
+    label: template.label,
+    baseIds,
+    addOns,
+    selectedAddOns: [],
+    duration,
+    reasons,
+    message: buildFirstReplyDraft(request),
+    dismissed: false,
+  };
+}
+
+function getSmartDraftItemLabel(id) {
+  return state.prices.find((item) => item.id === id)?.nome || id;
+}
+
+function renderSmartDraftPanel() {
+  if (!nodes.smartDraftPanel) return;
+  const suggestion = state.smartDraftSuggestion;
+  const request = getActiveQuoteRequest();
+  if (!suggestion || suggestion.dismissed || !request || suggestion.requestId !== request.id || getActiveProposal()) {
+    nodes.smartDraftPanel.classList.add("is-hidden");
+    nodes.smartDraftPanel.innerHTML = "";
+    return;
+  }
+  const approved = state.smartDraftApproval?.requestId === request.id;
+  const selectedAddOns = new Set(suggestion.selectedAddOns || []);
+  nodes.smartDraftPanel.classList.remove("is-hidden");
+  nodes.smartDraftPanel.innerHTML = `
+    <div class="smart-draft-heading">
+      <div><span>Rascunho inteligente</span><h2>${escapeHtml(approved ? "Sugestão aprovada pelo vendedor" : "Sugestão pronta para sua revisão")}</h2></div>
+      <small>Nada é enviado ou aplicado sem sua aprovação.</small>
+    </div>
+    <div class="smart-draft-grid">
+      <article>
+        <span>Pacote-base</span>
+        <strong>${escapeHtml(suggestion.baseIds.map(getSmartDraftItemLabel).join(" + ") || suggestion.label)}</strong>
+        <small>Duração sugerida: ${escapeHtml(String(suggestion.duration).replace(".5", "h30").replace(/^(\d+)$/, "$1h"))}</small>
+      </article>
+      <article>
+        <span>Por que foi sugerido</span>
+        <ul>${suggestion.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+      </article>
+    </div>
+    ${suggestion.addOns.length ? `<div class="smart-draft-addons"><span>Adicionais opcionais — escolha antes de aplicar</span>${suggestion.addOns.map((addOn) => `<button type="button" class="${selectedAddOns.has(addOn.id) ? "is-active" : ""}" data-smart-addon-id="${escapeHtml(addOn.id)}"><strong>${escapeHtml(getSmartDraftItemLabel(addOn.id))}</strong><small>${escapeHtml(addOn.reason)}</small></button>`).join("")}</div>` : ""}
+    <div class="smart-draft-actions">
+      ${approved
+        ? `<span class="smart-draft-approved">Aprovado em ${escapeHtml(formatSavedAt(state.smartDraftApproval.approvedAt))}. Você ainda pode editar qualquer campo.</span>`
+        : `<button class="primary" type="button" data-smart-draft-action="apply">Aplicar rascunho</button><button class="secondary" type="button" data-smart-draft-action="dismiss">Montar manualmente</button>`}
+    </div>
+  `;
+}
+
+function toggleSmartDraftAddOn(id) {
+  const suggestion = state.smartDraftSuggestion;
+  if (!suggestion?.addOns.some((item) => item.id === id)) return;
+  const selected = new Set(suggestion.selectedAddOns || []);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  suggestion.selectedAddOns = [...selected];
+  renderSmartDraftPanel();
+}
+
+function applySmartDraftSuggestion() {
+  const suggestion = state.smartDraftSuggestion;
+  if (!suggestion) return;
+  const appliedIds = [...new Set([...suggestion.baseIds, ...(suggestion.selectedAddOns || [])])].filter(itemExists);
+  state.selectedIds.clear();
+  appliedIds.forEach((id) => state.selectedIds.add(id));
+  state.guided.event = suggestion.eventKey;
+  state.guided.beverageId = appliedIds.find((id) => coquetelBeverageIds.includes(id)) || "";
+  state.guided.foodId = appliedIds.find((id) => coquetelFoodIds.includes(id)) || "";
+  state.guided.welcomeId = appliedIds.find((id) => welcomeDrinkIds.includes(id)) || "";
+  state.guided.workshopId = appliedIds.find((id) => workshopIds.includes(id)) || "";
+  fields.eventDuration.value = String(suggestion.duration);
+  fields.categoryFilter.value = getEventCategoryFromRequest(fields.eventType.value);
+  state.firstReplyDraft = suggestion.message;
+  state.smartDraftApproval = {
+    requestId: suggestion.requestId,
+    approvedAt: new Date().toISOString(),
+    approvedBy: getCurrentTeamEmail(),
+    appliedIds,
+    duration: suggestion.duration,
+    reasons: suggestion.reasons,
+  };
+  saveSelectedIds();
+  setChoiceState(nodes.flowEventOptions, suggestion.eventKey, "flowEvent");
+  setChoiceState(nodes.flowBeverageOptions, state.guided.beverageId, "selectPackage");
+  setChoiceState(nodes.flowFoodOptions, state.guided.foodId, "selectPackage");
+  setChoiceState(nodes.flowWelcomeOptions, state.guided.welcomeId, "selectPackage");
+  setChoiceState(nodes.flowWorkshopOptions, state.guided.workshopId, "selectPackage");
+  if (nodes.flowStatus) nodes.flowStatus.textContent = "Rascunho aplicado após aprovação humana. Revise itens, valores, disponibilidade e mensagem antes do envio.";
+  renderAll();
+  showToast("Rascunho aplicado. Revise e personalize antes de salvar ou enviar.");
 }
 
 function renderFirstReplyPanel() {
@@ -7491,6 +7657,7 @@ function getProposalSnapshot() {
     customerDecisionLoop,
     internalComments: getInternalComments(activeProposal?.snapshot || {}),
     eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
+    smartDraft: state.smartDraftApproval || activeProposal?.snapshot?.smartDraft || null,
     proposalText: buildProposalText(),
   };
 }
@@ -8182,8 +8349,34 @@ function loadQaFixtures() {
     updatedHour: 13,
   });
 
+  const pastOutcomePending = createQaProposal({
+    id: "qa-proposal-desfecho",
+    reference: "QA-20260511-DESFECHO",
+    clientName: "Marina Histórico",
+    email: "marina.qa@example.com",
+    phone: "+55 21 99999 0099",
+    company: "Agência Memória",
+    clientType: "Agência de marketing / eventos",
+    finalClient: "Cliente Histórico",
+    budgetRange: "R$ 15 mil a R$ 30 mil",
+    origin: "Agência / parceiro",
+    moment: "Fim de tarde",
+    occasion: "Evento corporativo",
+    type: "Coquetel",
+    date: createQaDate(-10),
+    time: "17:00",
+    guests: 45,
+    duration: 2,
+    selectedIds: ["coquetel-carioca", "brasileiro-ii"],
+    total: 13860,
+    status: "proposta_enviada",
+    createdOffsetDays: -20,
+    updatedOffsetDays: -12,
+    updatedHour: 14,
+  });
+
   state.quoteRequests = [request];
-  state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining];
+  state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining, pastOutcomePending];
   state.opportunities = [...state.quoteRequests, ...state.proposals].map((row) => ({
     id: row.oportunidade_id,
     status: row.status,
@@ -8524,6 +8717,7 @@ function getProposalStatusLabel(status) {
     planejamento: "Planejamento",
     evento_proximo: "Eventos hoje e amanhã",
     pos_venda: "Pós-venda",
+    desfecho_pendente: "Desfecho pendente",
     cancelado: "Cancelado",
   };
   return labels[normalizeProposalStatus(status)] || status || "Proposta enviada";
@@ -8639,6 +8833,18 @@ function getOpportunityForItem(item) {
   return state.opportunities.find((row) => row.id === item?.opportunityId) || null;
 }
 
+function isPastEventNeedingOutcome({ status, date, snapshot } = {}) {
+  const normalized = status === "lead_recebido" ? "lead_recebido" : normalizeProposalStatus(status);
+  if (["cancelado", "pos_venda", "desfecho_pendente"].includes(normalized)) return false;
+  if (snapshot?.eventOutcome?.closedAt && snapshot?.eventOutcome?.outcome !== "remarcado") return false;
+  const eventDate = parseLocalIsoDate(date);
+  return Boolean(eventDate && eventDate < startOfDay(new Date()));
+}
+
+function getPipelineStageForItem(status, date, snapshot = {}) {
+  return isPastEventNeedingOutcome({ status, date, snapshot }) ? "desfecho_pendente" : getPipelineStage(status);
+}
+
 function getPipelineItems() {
   const workingProposals = getWorkingProposals();
   const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
@@ -8652,7 +8858,7 @@ function getPipelineItems() {
         kind: "request",
         id: request.id,
         status,
-        stage: getPipelineStage(status),
+        stage: getPipelineStageForItem(status, request.data_evento || eventSnapshot.data || "", request.snapshot || {}),
         name: request.cliente_nome || "Cliente",
         email: request.cliente_email || request.snapshot?.cliente?.email || "",
         phone: request.cliente_whatsapp || request.snapshot?.cliente?.whatsapp || "",
@@ -8690,7 +8896,7 @@ function getPipelineItems() {
       kind: "proposal",
       id: proposal.id,
       status,
-      stage: getPipelineStage(status),
+      stage: getPipelineStageForItem(status, proposal.data_evento || "", snapshot),
       name: proposal.cliente_nome || "Cliente",
       email: proposal.cliente_email || snapshot.client?.email || snapshot.cliente?.email || "",
       phone: proposal.cliente_whatsapp || snapshot.client?.phone || snapshot.cliente?.whatsapp || "",
@@ -8887,6 +9093,7 @@ function toDateInputValue(date) {
 }
 
 function getReportStatus(item) {
+  if (item?.stage === "desfecho_pendente") return "desfecho_pendente";
   return item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
 }
 
@@ -9151,6 +9358,7 @@ function renderPipelineMetrics(items = getPipelineItems()) {
   };
 
   items.forEach((item) => {
+    if (item.stage === "desfecho_pendente") return;
     const status = item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
     if (item.kind === "request" && status === "lead_recebido") counts.lead += 1;
     if (item.kind !== "proposal") return;
@@ -9499,10 +9707,41 @@ function getActionUrgencyLabel(priority) {
   return "Acompanhar";
 }
 
+function renderWorkspaceMode() {
+  const mode = state.workspaceMode === "full" ? "full" : "sales";
+  document.body.classList.toggle("workspace-mode-sales", mode === "sales");
+  document.body.classList.toggle("workspace-mode-full", mode === "full");
+  nodes.workspaceModeSwitch?.querySelectorAll("[data-workspace-mode]").forEach((button) => {
+    const active = button.dataset.workspaceMode === mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  const title = document.querySelector("#workspaceModeTitle");
+  const description = document.querySelector("#workspaceModeDescription");
+  if (title) title.textContent = mode === "sales" ? "Modo Vendas" : "Visão completa";
+  if (description) {
+    description.textContent = mode === "sales"
+      ? "Somente ações que ajudam a responder, propor, negociar e fechar."
+      : "Comercial, financeiro, operação, histórico e gestão na mesma visão.";
+  }
+}
+
+function setWorkspaceMode(mode) {
+  state.workspaceMode = mode === "full" ? "full" : "sales";
+  try {
+    localStorage.setItem(WORKSPACE_MODE_KEY, state.workspaceMode);
+  } catch (_) {}
+  if (state.workspaceMode === "sales" && ["awaitingRemaining", "missingProof", "next7days"].includes(state.activePipelineFilter)) {
+    state.activePipelineFilter = "all";
+  }
+  renderWorkspaceMode();
+  renderPipeline();
+}
+
 function getPipelineQuickFilterDefinitions() {
   const today = startOfDay(new Date());
   const next7Days = addDays(today, 7);
-  return [
+  const definitions = [
     {
       id: "all",
       label: "Tudo",
@@ -9591,6 +9830,11 @@ function getPipelineQuickFilterDefinitions() {
       matches: (item) => /empresa/i.test(item.clientType || ""),
     },
   ];
+  if (state.workspaceMode === "sales") {
+    const salesFilters = new Set(["all", "lead_recebido", "proposta_enviada", "negociacao", "urgent", "highScore", "noProposal", "approved", "awaitingSignal", "agency", "company"]);
+    return definitions.filter((filter) => salesFilters.has(filter.id));
+  }
+  return definitions;
 }
 
 function getFilteredPipelineItems(items = getPipelineItems()) {
@@ -10147,6 +10391,17 @@ function getActionTasks(items = getPipelineItems()) {
       sla: getSlaMeta(item),
     };
 
+    if (item.stage === "desfecho_pendente") {
+      tasks.push({
+        ...base,
+        title: "Classificar desfecho do evento",
+        note: "A data passou. Confirme o resultado para limpar o funil e alimentar o aprendizado comercial.",
+        priority: 64,
+        track: "Gestão",
+      });
+      return;
+    }
+
     if (item.kind === "request" && status === "lead_recebido") {
       const age = getLeadAgeInfo(item);
       tasks.push({
@@ -10270,7 +10525,7 @@ function getActionTasks(items = getPipelineItems()) {
   });
 
   const scheduleItems = items.filter((item) => {
-    if (!item.date || !item.time || !isAvailabilityRelevantStatus(item.status)) return false;
+    if (item.stage === "desfecho_pendente" || !item.date || !item.time || !isAvailabilityRelevantStatus(item.status)) return false;
     return item.kind === "proposal" || item.kind === "request";
   });
   for (let index = 0; index < scheduleItems.length; index += 1) {
@@ -10297,7 +10552,7 @@ function getActionTasks(items = getPipelineItems()) {
   }
 
   const profile = getTeamProfile();
-  const rankedTasks = tasks.map((task) => {
+  let rankedTasks = tasks.map((task) => {
     const plan = getTaskPlan(task.item);
     const basePriority = profile.canManageFinance && getActionTrack(task) === "Financeiro"
       ? task.priority + 12
@@ -10305,6 +10560,9 @@ function getActionTasks(items = getPipelineItems()) {
         ? task.priority + 6 : task.priority;
     return { ...task, plan, priority: basePriority + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
   });
+  if (state.workspaceMode === "sales") {
+    rankedTasks = rankedTasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task)));
+  }
   return rankedTasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
 }
 
@@ -10609,7 +10867,7 @@ function getOperationalAgendaCollections(items = getPipelineItems()) {
       return (timeToMinutes(String(a.time).slice(0, 5)) || 0) - (timeToMinutes(String(b.time).slice(0, 5)) || 0);
     });
 
-  const scheduleItems = agendaItems.filter((item) => item.time && isAvailabilityRelevantStatus(item.status));
+  const scheduleItems = agendaItems.filter((item) => item.stage !== "desfecho_pendente" && item.time && isAvailabilityRelevantStatus(item.status));
   const conflictPairs = [];
   for (let index = 0; index < scheduleItems.length; index += 1) {
     for (let nextIndex = index + 1; nextIndex < scheduleItems.length; nextIndex += 1) {
@@ -10986,10 +11244,11 @@ function renderPipelineValueBreakdown(item = {}, className = "") {
 
 function renderPipelineCard(item) {
   const status = getReportStatus(item);
+  const needsOutcome = item.stage === "desfecho_pendente";
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
   const valueLabel = item.total ? formatMoney(item.total) : "Sem proposta";
-  const statusClass = item.status === "cancelado" ? " canceled" : operationStatuses.has(item.status) ? " confirmed" : "";
+  const statusClass = item.status === "cancelado" ? " canceled" : needsOutcome ? " pending-outcome" : operationStatuses.has(item.status) ? " confirmed" : "";
   const cancelInfo = item.cancelReason ? `<small>Cancelado: ${escapeHtml(item.cancelReason)}</small>` : "";
   const weekdayLabel = item.date ? formatWeekdayShortFromIso(item.date) : "";
   const eventLine = [dateLabel, weekdayLabel, timeLabel, `${item.guests} pax`].filter(Boolean).join(" · ");
@@ -11011,12 +11270,14 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && item.version
       ? `<small class="proposal-version-badge${item.isDraft ? " is-draft" : ""}">V${escapeHtml(item.version)}${item.isDraft ? " · rascunho" : ""}</small>`
       : "";
-  const stageChipLabel = item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
+  const stageChipLabel = needsOutcome ? "Desfecho pendente" : item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
   const scoreBadge = `<small class="pipeline-score-badge pipeline-score-${escapeHtml(commercialScore.level)}"${scoreTitle}>${escapeHtml(commercialScore.label)} ${commercialScore.value}</small>`;
-  const primaryAction = getPipelinePrimaryAction(item);
+  const primaryAction = needsOutcome
+    ? { tone: "attention", eyebrow: "A data passou", label: "Classificar o resultado real", note: "Informe se realizou, perdeu, desistiu ou mudou de data." }
+    : getPipelinePrimaryAction(item);
   const riskAlerts = getPipelineRiskAlerts(item);
   const riskAlertsLine = riskAlerts.length
     ? `<div class="pipeline-card-alerts">${riskAlerts
@@ -11033,7 +11294,7 @@ function renderPipelineCard(item) {
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.remainingProof.dataUrl)}" download="${escapeHtml(item.remainingProof.nome || "comprovante-restante")}">Comprovante restante</a>`
       : "";
   const signalButton =
-    item.kind === "proposal" && !item.isDraft && !operationStatuses.has(item.status) && item.status !== "cancelado"
+    !needsOutcome && item.kind === "proposal" && !item.isDraft && !operationStatuses.has(item.status) && item.status !== "cancelado"
       ? `<button class="pipeline-top-action pipeline-signal-action" type="button" data-mark-paid="${escapeHtml(item.id)}" title="Registrar sinal pago e confirmar a venda">Registrar sinal</button>`
       : "";
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
@@ -11047,7 +11308,7 @@ function renderPipelineCard(item) {
     </div>
   `;
   const plan = getTaskPlan(item);
-  const planLine = item.opportunityId && item.status !== "cancelado" ? `<div class="pipeline-plan-line${plan.overdue ? " is-overdue" : ""}">
+  const planLine = !needsOutcome && item.opportunityId && item.status !== "cancelado" ? `<div class="pipeline-plan-line${plan.overdue ? " is-overdue" : ""}">
     <span>${plan.owner ? escapeHtml(plan.owner) : "Sem responsável"} · ${escapeHtml(plan.action)} · ${plan.due ? escapeHtml(formatSavedAt(plan.due)) : "sem prazo"}</span>
     <button class="secondary" type="button" data-plan-kind="${escapeHtml(item.kind)}" data-plan-id="${escapeHtml(item.id)}">Planejar</button>
   </div>` : "";
@@ -11071,11 +11332,15 @@ function renderPipelineCard(item) {
   const deleteTestButton = canDeletePipelineItem(item)
     ? `<button class="secondary danger-light pipeline-delete-chip" type="button" data-delete-kind="${escapeHtml(item.kind)}" data-delete-id="${escapeHtml(item.id)}">Apagar teste</button>`
     : "";
+  const outcomeButton = needsOutcome
+    ? `<button class="primary pipeline-outcome-chip" type="button" data-outcome-kind="${escapeHtml(item.kind)}" data-outcome-id="${escapeHtml(item.id)}">Classificar desfecho</button>`
+    : "";
   const actionButtons = `
     <span class="pipeline-card-actions">
-      ${cancelButton}
-      ${reopenButton}
-      ${renderStatusSelect(item)}
+      ${needsOutcome ? "" : cancelButton}
+      ${needsOutcome ? "" : reopenButton}
+      ${needsOutcome ? "" : renderStatusSelect(item)}
+      ${outcomeButton}
       ${deleteTestButton}
       ${openButton}
     </span>
@@ -11205,11 +11470,12 @@ function renderPipeline() {
   renderOperationsAgenda(items);
   renderAvailabilityAlert();
 
-  const rows = [
+  const allRows = [
     { id: "commercial", title: "Comercial", stages: funnelStages.filter((stage) => stage.row === "commercial") },
     { id: "operation", title: "Operação", stages: funnelStages.filter((stage) => stage.row === "operation") },
     { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
   ];
+  const rows = state.workspaceMode === "sales" ? allRows.filter((row) => row.id === "commercial") : allRows;
 
   nodes.pipelineBoard.innerHTML = rows
     .map((row) => `
@@ -11355,6 +11621,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   state.activeOpportunityId = request.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
+  state.smartDraftApproval = null;
   resetProposalDraftState();
   if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
   if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
@@ -11373,13 +11640,13 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   const eventCategory = getEventCategoryFromRequest(request.tipo_evento);
   state.guided.event = guidedKey;
   fields.categoryFilter.value = eventCategory;
-  const templateStatus = applySmartTemplateForEvent(guidedKey);
+  state.smartDraftSuggestion = buildSmartDraftSuggestion(request);
   if (nodes.flowStatus) {
-    nodes.flowStatus.textContent = templateStatus
-      ? `${templateStatus} Revise data, horário, pax e observações antes de enviar.`
+    nodes.flowStatus.textContent = state.smartDraftSuggestion
+      ? "O sistema preparou uma sugestão explicada acima. Ela só altera a proposta depois da aprovação do vendedor."
       : eventCategory
-      ? `${eventCategory} carregado. Confira cardápio, pax e agenda.`
-      : "Lead carregado do formulário. Escolha o formato e confira os pontos essenciais.";
+        ? `${eventCategory} carregado. Confira cardápio, pax e agenda.`
+        : "Lead carregado do formulário. Escolha o formato e confira os pontos essenciais.";
   }
   nodes.coquetelChoices?.classList.toggle("is-hidden", guidedKey !== "coquetel");
   setChoiceState(nodes.flowEventOptions, guidedKey, "flowEvent");
@@ -11463,6 +11730,184 @@ function buildReopenedSnapshot(snapshot = {}, nextStatus = "negociacao") {
       `Registro reaberto para ${getProposalStatusLabel(nextStatus)}. Motivo anterior: ${cancelamento?.motivo || "sem motivo informado"}.`,
     ),
   ]);
+}
+
+function requestPastEventOutcome(item) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "action-plan-dialog past-event-outcome-dialog";
+    dialog.setAttribute("aria-labelledby", "pastEventOutcomeTitle");
+    dialog.innerHTML = `<form class="action-plan-form">
+      <div>
+        <span>Histórico comercial</span>
+        <h2 id="pastEventOutcomeTitle">Qual foi o desfecho real?</h2>
+        <p>${escapeHtml(item.name || "Cliente")} · ${escapeHtml(item.date ? formatDateFromIso(item.date) : "Data não informada")} · o sistema não presume o resultado.</p>
+      </div>
+      <label>Desfecho
+        <select name="outcome" required>
+          ${pastEventOutcomes.map((outcome) => `<option value="${escapeHtml(outcome.id)}">${escapeHtml(outcome.label)}</option>`).join("")}
+        </select>
+      </label>
+      <p class="past-event-outcome-help">${escapeHtml(pastEventOutcomes[0].detail)}</p>
+      <label class="past-event-new-date is-hidden">Nova data
+        <input name="newDate" type="date" />
+      </label>
+      <label>Observação
+        <textarea name="detail" rows="3" maxlength="500" placeholder="Contexto útil para futuras vendas. Obrigatório em Outro desfecho."></textarea>
+      </label>
+      <p class="action-plan-error" role="alert" hidden></p>
+      <div class="action-plan-dialog-actions">
+        <button class="secondary" type="button" data-close-outcome>Voltar</button>
+        <button class="primary" type="submit">Salvar desfecho</button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    const form = dialog.querySelector("form");
+    const outcomeSelect = form.elements.outcome;
+    const newDateLabel = dialog.querySelector(".past-event-new-date");
+    const help = dialog.querySelector(".past-event-outcome-help");
+    const syncFields = () => {
+      const config = pastEventOutcomes.find((outcome) => outcome.id === outcomeSelect.value) || pastEventOutcomes[0];
+      help.textContent = config.detail;
+      newDateLabel.classList.toggle("is-hidden", outcomeSelect.value !== "remarcado");
+      form.elements.newDate.required = outcomeSelect.value === "remarcado";
+    };
+    outcomeSelect.addEventListener("change", syncFields);
+    dialog.querySelector("[data-close-outcome]").addEventListener("click", () => dialog.close("cancel"));
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const detail = form.elements.detail.value.trim();
+      const newDate = form.elements.newDate.value;
+      const error = dialog.querySelector(".action-plan-error");
+      if (outcomeSelect.value === "remarcado" && (!newDate || parseLocalIsoDate(newDate) < startOfDay(new Date()))) {
+        error.textContent = "Informe uma nova data de hoje em diante para devolver o evento ao funil.";
+        error.hidden = false;
+        return;
+      }
+      if (outcomeSelect.value === "outro" && !detail) {
+        error.textContent = "Descreva o outro desfecho para preservar o aprendizado comercial.";
+        error.hidden = false;
+        return;
+      }
+      resolve({ outcome: outcomeSelect.value, detail, newDate });
+      dialog.close("saved");
+    });
+    dialog.addEventListener("close", () => {
+      if (dialog.returnValue !== "saved") resolve(null);
+      dialog.remove();
+    }, { once: true });
+    syncFields();
+    dialog.showModal();
+  });
+}
+
+function getPastEventOutcomeReason(outcome, detail = "") {
+  const reasons = {
+    concorrencia: "Perdeu para concorrência",
+    preco: "Orçamento acima da expectativa",
+    desistencia: "Evento cancelado pelo cliente",
+    outro: detail || "Outro motivo",
+  };
+  return reasons[outcome] || detail || "";
+}
+
+async function classifyPastEvent(kind, id) {
+  const item = findPipelineItem(kind, id);
+  if (!item || item.stage !== "desfecho_pendente") {
+    showToast("Este evento não está aguardando desfecho.");
+    return;
+  }
+  const auth = await ensureTeamSessionForWrite("registrar o desfecho do evento");
+  if (!auth.ok) {
+    showToast(auth.message);
+    return;
+  }
+  const answer = await requestPastEventOutcome(item);
+  if (!answer) return;
+
+  const source = kind === "proposal"
+    ? state.proposals.find((row) => row.id === id)
+    : state.quoteRequests.find((row) => row.id === id);
+  if (!source) return;
+  const config = pastEventOutcomes.find((outcome) => outcome.id === answer.outcome) || pastEventOutcomes[5];
+  const recordedAt = new Date().toISOString();
+  const actor = getCurrentTeamEmail();
+  const eventOutcome = {
+    outcome: answer.outcome,
+    label: config.label,
+    detail: answer.detail || "",
+    previousDate: item.date || "",
+    newDate: answer.newDate || "",
+    closedAt: recordedAt,
+    closedBy: actor,
+  };
+  const isRescheduled = answer.outcome === "remarcado";
+  const isRealized = answer.outcome === "realizado";
+  const nextStatus = isRescheduled ? (kind === "proposal" ? "negociacao" : "lead_recebido") : isRealized ? "pos_venda" : "cancelado";
+  const reason = getPastEventOutcomeReason(answer.outcome, answer.detail);
+  const baseSnapshot = { ...(source.snapshot || {}) };
+  const nextSnapshot = withCommercialHistoryEntries(
+    {
+      ...baseSnapshot,
+      eventOutcome,
+      ...(isRescheduled ? { cancelamento: null } : {}),
+      ...(!isRescheduled && !isRealized
+        ? { cancelamento: { motivo: reason, canceladoEm: recordedAt, canceladoPor: actor } }
+        : {}),
+      ...(kind === "proposal" && isRescheduled
+        ? { event: { ...(baseSnapshot.event || {}), date: answer.newDate } }
+        : {}),
+      ...(kind === "request" && isRescheduled
+        ? { evento: { ...(baseSnapshot.evento || {}), data: answer.newDate } }
+        : {}),
+    },
+    [
+      createCommercialHistoryEntry(
+        "desfecho",
+        config.label,
+        isRescheduled ? `Evento remarcado de ${formatDateFromIso(item.date)} para ${formatDateFromIso(answer.newDate)}.${answer.detail ? ` ${answer.detail}` : ""}` : answer.detail || config.detail,
+        { actor, outcome: answer.outcome, previousDate: item.date || "", newDate: answer.newDate || "" },
+      ),
+    ],
+  );
+
+  const table = kind === "proposal" ? "propostas" : "solicitacoes_cotacao";
+  const changes = {
+    status: nextStatus,
+    snapshot: nextSnapshot,
+    ...(isRescheduled ? { data_evento: answer.newDate } : {}),
+  };
+  const { data, error } = await state.supabase.from(table).update(changes).eq("id", id).select("*").single();
+  if (error || !data) {
+    console.warn("Falha ao salvar desfecho do evento.", error);
+    showToast("Não foi possível salvar o desfecho. Atualize e tente novamente.");
+    return;
+  }
+
+  if (kind === "proposal") state.proposals = state.proposals.map((row) => row.id === id ? data : row);
+  else state.quoteRequests = state.quoteRequests.map((row) => row.id === id ? data : row);
+
+  if (item.opportunityId) {
+    const opportunity = state.opportunities.find((row) => row.id === item.opportunityId);
+    const opportunityChanges = {
+      status: isRescheduled ? nextStatus : isRealized ? "pos_venda" : "perdido",
+      data_evento: isRescheduled ? answer.newDate : item.date || null,
+      motivo_perda: !isRescheduled && !isRealized ? reason : null,
+      perdido_em: !isRescheduled && !isRealized ? recordedAt : null,
+      ganho_em: isRealized ? (opportunity?.ganho_em || recordedAt) : opportunity?.ganho_em || null,
+      proxima_acao: isRescheduled ? "Retomar proposta para a nova data" : isRealized ? "Registrar pós-venda e recompra" : "",
+      proxima_acao_em: isRescheduled ? new Date(Date.now() + 864e5).toISOString() : null,
+      metadata: { ...(opportunity?.metadata || {}), eventOutcome },
+    };
+    const result = await state.supabase.from("oportunidades").update(opportunityChanges).eq("id", item.opportunityId).select("*").single();
+    if (!result.error && result.data) {
+      state.opportunities = state.opportunities.map((row) => row.id === result.data.id ? result.data : row);
+    }
+  }
+
+  renderHistory();
+  renderPipeline();
+  showToast(isRescheduled ? "Evento remarcado e devolvido ao funil." : "Desfecho registrado no histórico.");
 }
 
 function getCancelReason() {
@@ -12181,6 +12626,8 @@ async function logoutSupabase() {
   state.manualSourceKey = "";
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
+  state.smartDraftSuggestion = null;
+  state.smartDraftApproval = null;
   updateAuthUI();
   renderHistory();
   renderConfirmedEvents();
@@ -12551,6 +12998,8 @@ function applyProposalSnapshot(snapshot) {
   fields.eventReason.value = snapshot.event?.reason || "";
   fields.notes.value = snapshot.event?.notes || "";
   fields.generalTerms.value = snapshot.generalTerms || loadGeneralTerms();
+  state.smartDraftSuggestion = null;
+  state.smartDraftApproval = snapshot.smartDraft || null;
   renderProposalNextStep();
   renderSignalPaymentInfo(snapshot.pagamentoSinal, snapshot.pagamentoRestante);
   renderOperationalChecklist(getActiveProposal());
@@ -12596,6 +13045,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   state.activeOpportunityId = proposal.oportunidade_id || "";
   state.manualSourceKey = "";
   state.quoteGuideDismissed = true;
+  state.smartDraftSuggestion = null;
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
   focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
@@ -12870,6 +13320,7 @@ function ensureCommunicationShortcut() {
 }
 
 function renderAll() {
+  renderWorkspaceMode();
   ensureCommunicationShortcut();
   syncDateTimeFromFields();
   syncEventTypeFromSelection();
@@ -12883,6 +13334,7 @@ function renderAll() {
   renderServiceCockpit();
   renderLoadedEditorBar();
   renderFirstReplyPanel();
+  renderSmartDraftPanel();
   renderLeadReviewPanel();
   renderProposalNextStep();
   renderManualContactPanel();
@@ -12923,6 +13375,8 @@ function startNewProposal(options = {}) {
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
+  state.smartDraftSuggestion = null;
+  state.smartDraftApproval = null;
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
@@ -14454,6 +14908,21 @@ function bindEvents() {
     const button = event.target.closest("[data-first-reply-action]");
     if (button) runFirstReplyAction(button.dataset.firstReplyAction);
   });
+  nodes.smartDraftPanel?.addEventListener("click", (event) => {
+    const addOn = event.target.closest("button[data-smart-addon-id]");
+    if (addOn) {
+      toggleSmartDraftAddOn(addOn.dataset.smartAddonId);
+      return;
+    }
+    const action = event.target.closest("button[data-smart-draft-action]");
+    if (!action) return;
+    if (action.dataset.smartDraftAction === "apply") applySmartDraftSuggestion();
+    if (action.dataset.smartDraftAction === "dismiss") {
+      state.smartDraftSuggestion.dismissed = true;
+      renderSmartDraftPanel();
+      showToast("Sugestão ignorada. A proposta permanece livre para montagem manual.");
+    }
+  });
   document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
@@ -14624,6 +15093,11 @@ function bindEvents() {
     state.activePipelineFilter = button.dataset.pipelineFilter || "all";
     renderPipeline();
   });
+  nodes.workspaceModeSwitch?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-workspace-mode]");
+    if (!button) return;
+    setWorkspaceMode(button.dataset.workspaceMode);
+  });
   nodes.ownerMetrics?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-pipeline-stage-jump]");
     if (!button) return;
@@ -14734,6 +15208,11 @@ function bindEvents() {
     if (button) await safeOpenSavedProposal(button.dataset.proposalId, "Versões da proposta");
   });
   nodes.pipelineBoard?.addEventListener("click", async (event) => {
+    const outcomeButton = event.target.closest("button[data-outcome-id]");
+    if (outcomeButton) {
+      await classifyPastEvent(outcomeButton.dataset.outcomeKind, outcomeButton.dataset.outcomeId);
+      return;
+    }
     const planButton = event.target.closest("button[data-plan-id]");
     if (planButton) {
       openActionPlanDialog(planButton.dataset.planKind, planButton.dataset.planId);
