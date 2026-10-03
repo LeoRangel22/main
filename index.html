@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261002-seller-ux-v177" />
+    <link rel="stylesheet" href="./styles.css?v=20261003-sales-lifecycle-v180" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -81,6 +81,17 @@
         </header>
 
         <section class="team-panel" aria-label="Equipe e histórico">
+          <section class="workspace-mode-switch" id="workspaceModeSwitch" aria-label="Escolher visão de trabalho">
+            <div>
+              <span>Visão de trabalho</span>
+              <strong id="workspaceModeTitle">Modo Vendas</strong>
+              <small id="workspaceModeDescription">Somente ações que ajudam a responder, propor, negociar e fechar.</small>
+            </div>
+            <div class="workspace-mode-actions" role="group" aria-label="Modo do painel">
+              <button type="button" data-workspace-mode="sales">Modo Vendas</button>
+              <button type="button" data-workspace-mode="full">Visão completa</button>
+            </div>
+          </section>
           <section class="action-center" aria-label="Ações de hoje">
             <div class="action-center-heading">
               <div>
@@ -325,6 +336,7 @@
             </nav>
             <section class="loaded-editor-bar is-hidden" id="loadedEditorBar" aria-live="polite"></section>
             <section class="first-reply-panel is-hidden" id="firstReplyPanel" aria-label="Primeira resposta ao lead"></section>
+            <section class="smart-draft-panel is-hidden" id="smartDraftPanel" aria-label="Rascunho inteligente com aprovação humana"></section>
             <section class="quote-empty-state" id="quoteEmptyState" aria-label="Como começar uma proposta">
               <div class="quote-empty-copy">
                 <span>Nova proposta</span>
@@ -771,6 +783,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261002-experience-v179"></script>
+  <script defer src="./app.js?v=20261003-sales-lifecycle-v180"></script>
   </body>
 </html>

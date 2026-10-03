@@ -10815,6 +10815,207 @@ input[type="range"] {
   }
 }
 
+.workspace-mode-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(21, 65, 47, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(248, 252, 249, 0.98), rgba(239, 247, 242, 0.94));
+}
+
+.workspace-mode-switch > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-mode-switch span,
+.smart-draft-panel span {
+  color: var(--verde);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-mode-switch strong {
+  font-size: 1.08rem;
+}
+
+.workspace-mode-switch small {
+  color: var(--cinza-2);
+}
+
+.workspace-mode-actions {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(21, 65, 47, 0.12);
+}
+
+.workspace-mode-actions button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--verde);
+  font-weight: 800;
+}
+
+.workspace-mode-actions button.is-active {
+  background: var(--verde);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(21, 65, 47, 0.18);
+}
+
+.smart-draft-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(180, 132, 42, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fffdf5, #f7fbf8);
+  box-shadow: 0 16px 36px rgba(40, 56, 45, 0.08);
+}
+
+.smart-draft-panel.is-hidden {
+  display: none;
+}
+
+.smart-draft-heading,
+.smart-draft-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.smart-draft-heading h2 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+}
+
+.smart-draft-heading small {
+  max-width: 270px;
+  color: var(--cinza-2);
+  text-align: right;
+}
+
+.smart-draft-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+}
+
+.smart-draft-grid article {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(21, 65, 47, 0.1);
+}
+
+.smart-draft-grid ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--cinza-2);
+}
+
+.smart-draft-addons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.smart-draft-addons > span {
+  grid-column: 1 / -1;
+}
+
+.smart-draft-addons button {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(21, 65, 47, 0.16);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--preto);
+  text-align: left;
+}
+
+.smart-draft-addons button.is-active {
+  border-color: var(--verde);
+  background: rgba(21, 65, 47, 0.08);
+  box-shadow: inset 0 0 0 1px var(--verde);
+}
+
+.smart-draft-addons button small {
+  color: var(--cinza-2);
+  font-weight: 500;
+}
+
+.smart-draft-approved {
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(21, 65, 47, 0.1);
+  color: var(--verde);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.status-chip.pending-outcome,
+.pipeline-card-next-action.is-attention {
+  border-color: rgba(180, 132, 42, 0.35);
+  background: #fff8df;
+  color: #76500b;
+}
+
+.past-event-outcome-help {
+  margin: -4px 0 0;
+  color: var(--cinza-2);
+}
+
+.workspace-mode-sales .period-metrics,
+.workspace-mode-sales .finance-command-panel,
+.workspace-mode-sales .operations-agenda,
+.workspace-mode-sales .reports-panel,
+.workspace-mode-sales .metric-stage-pg-restante,
+.workspace-mode-sales .metric-stage-planejamento,
+.workspace-mode-sales .metric-stage-48h,
+.workspace-mode-sales .metric-stage-pos-venda {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .workspace-mode-switch,
+  .smart-draft-heading,
+  .smart-draft-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-mode-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .smart-draft-heading small {
+    max-width: none;
+    text-align: left;
+  }
+
+  .smart-draft-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media print {
   @page {
     margin: 0;

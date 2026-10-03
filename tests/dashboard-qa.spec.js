@@ -161,6 +161,7 @@ test.describe("Dashboard interno em modo QA", () => {
     const errors = collectBrowserErrors(page);
 
     await page.goto("/index.html?qa=1");
+    await page.getByRole("button", { name: "Visão completa" }).click();
     const fullPaymentCard = page.locator('[data-pipeline-card-id="qa-proposal-sinal-integral"]');
     await expect(fullPaymentCard).toBeVisible();
     await expect(fullPaymentCard).toContainText(/Planejar|Enviar para planejamento/i);
@@ -172,6 +173,7 @@ test.describe("Dashboard interno em modo QA", () => {
     const errors = collectBrowserErrors(page);
 
     await page.goto("/index.html?qa=1");
+    await page.getByRole("button", { name: "Visão completa" }).click();
     const signalCard = page.locator('[data-pipeline-card-id="qa-proposal-sinal"]');
     await expect(signalCard).toBeVisible();
     await signalCard.click();
@@ -203,6 +205,64 @@ test.describe("Dashboard interno em modo QA", () => {
     expect(checklistHtml).toContain("Conferência financeira operacional");
     expect(checklistHtml).not.toContain("R$");
 
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("modo vendas simplifica o painel e preserva a visão completa", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+
+    await expect(page.locator("body")).toHaveClass(/workspace-mode-sales/);
+    await expect(page.locator(".pipeline-row-commercial")).toBeVisible();
+    await expect(page.locator(".pipeline-row-operation")).toHaveCount(0);
+    await expect(page.locator("#operationsAgenda")).toBeHidden();
+
+    await page.getByRole("button", { name: "Visão completa" }).click();
+    await expect(page.locator("body")).toHaveClass(/workspace-mode-full/);
+    await expect(page.locator(".pipeline-row-operation")).toBeVisible();
+    await expect(page.locator(".pipeline-stage-desfecho_pendente")).toContainText("Marina Histórico");
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("evento passado sai do funil ativo e volta quando é remarcado", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.getByRole("button", { name: "Visão completa" }).click();
+
+    const pastCard = page.locator('[data-pipeline-card-id="qa-proposal-desfecho"]');
+    await expect(pastCard).toBeVisible();
+    await pastCard.getByRole("button", { name: "Classificar desfecho" }).click();
+    const dialog = page.locator(".past-event-outcome-dialog");
+    await dialog.locator('[name="outcome"]').selectOption("remarcado");
+    const futureDate = await page.evaluate(() => createQaDate(22));
+    await dialog.locator('[name="newDate"]').fill(futureDate);
+    await dialog.locator('[name="detail"]').fill("Cliente confirmou a nova janela.");
+    await dialog.getByRole("button", { name: "Salvar desfecho" }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.pipeline-stage-negociacao [data-pipeline-card-id="qa-proposal-desfecho"]')).toBeVisible();
+    const saved = await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-desfecho"));
+    expect(saved.status).toBe("negociacao");
+    expect(saved.data_evento).toBe(futureDate);
+    expect(saved.snapshot.eventOutcome.outcome).toBe("remarcado");
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("rascunho inteligente explica e só aplica após aprovação humana", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.locator('[data-pipeline-card-id="qa-request-prioridade"] .pipeline-open-button').click();
+
+    const panel = page.locator("#smartDraftPanel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("Nada é enviado ou aplicado sem sua aprovação");
+    await expect(panel).toContainText("Almoço Carioca");
+    expect(await page.evaluate(() => state.selectedIds.size)).toBe(0);
+
+    await panel.getByRole("button", { name: "Aplicar rascunho" }).click();
+    await expect(panel).toContainText("Sugestão aprovada pelo vendedor");
+    expect(await page.evaluate(() => state.selectedIds.size)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => state.smartDraftApproval?.approvedBy)).toBe("leorangel@gmail.com");
     await expectNoBrowserErrors(errors);
   });
 
