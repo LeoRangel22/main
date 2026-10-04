@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261004-final-v181" />
+    <link rel="stylesheet" href="./styles.css?v=20261004-client-v186" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -68,6 +68,8 @@
             <span id="quickPathDescription">Envie o essencial agora. A equipe ajuda a definir o formato depois.</span>
           </div>
           <a class="primary" id="quickPathLink" href="#eventDetailsStep">Ir ao essencial</a>
+          <a class="secondary" id="formContactNav" href="#contactStep">Contato</a>
+          <a class="secondary" id="formPersonalizeNav" href="#personalizeOptions">Personalizar</a>
           <a class="secondary" id="quickHumanLink" href="https://wa.me/5521971426007?text=Ol%C3%A1%2C%20quero%20conversar%20sobre%20um%20evento%20na%20Embaixada%20Carioca" target="_blank" rel="noopener noreferrer">Falar com a equipe</a>
         </div>
         <details class="returning-client-card" id="returningClientAccess">
@@ -362,6 +364,8 @@
                 </label>
               </div>
 
+              <details class="contact-optional-fields">
+                <summary id="contactOptionalSummary">Investimento e origem (opcional)</summary>
               <div class="fields-grid contact-fields-grid contact-secondary-grid">
                 <label>
                   <span id="leadSourceLabel">Como conheceu a Embaixada? (Opcional)</span>
@@ -387,12 +391,18 @@
                   </select>
                 </label>
               </div>
+              </details>
             </div>
             <div class="contact-reassurance">
               <p class="contact-promise" id="contactPromise">Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.</p>
               <p class="contact-assurance" id="contactAssurance">Solicitação sem compromisso. Usamos os dados apenas para preparar sua proposta.</p>
             </div>
           </section>
+
+          <details class="form-personalize" id="personalizeOptions">
+            <summary><strong id="personalizeTitle">Personalize seu evento (opcional)</strong><span id="personalizeDescription">Explore formatos, ocasião e preferências.</span></summary>
+            <div id="personalizeContent"></div>
+          </details>
 
           <section class="final-review-card" id="finalReviewCard" aria-live="polite">
             <div>
@@ -412,6 +422,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./formulario.js?v=20261002-client-ux-v180"></script>
+    <script defer src="./formulario.js?v=20261004-client-v186"></script>
   </body>
 </html>
