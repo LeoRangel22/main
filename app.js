@@ -11573,7 +11573,7 @@ function renderPipelineCard(item) {
       data-pipeline-card-status="${escapeHtml(item.status)}"
     >
       <div class="pipeline-card-name-row">
-        <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
+        <small class="pipeline-card-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</small>
       </div>
       <div class="pipeline-card-kicker">
         ${leadAgeBadge}
@@ -11594,9 +11594,11 @@ function renderPipelineCard(item) {
       ${primaryActionLine}
       ${planLine}
       ${clientResponseLine}
+      <div class="pipeline-card-footer">
       <details class="pipeline-card-details">
         <summary>Detalhes</summary>
         <div class="pipeline-card-details-content">
+          <small class="pipeline-card-full-name">Cliente: ${escapeHtml(displayName)}</small>
           <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
           ${item.isDraft ? "" : versionBadge}
           ${scoreBadge}
@@ -11610,6 +11612,7 @@ function renderPipelineCard(item) {
       </details>
       <div class="pipeline-card-bottom-row">
         ${actionButtons}
+      </div>
       </div>
       ${cancelInfo}
     </article>
