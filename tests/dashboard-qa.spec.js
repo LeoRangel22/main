@@ -83,6 +83,49 @@ test.describe("Dashboard interno em modo QA", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("alçada bloqueia desconto alto e versões mostram comparação e duplicação", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]').getByRole("button", { name: /Reenviar|Abrir/i }).click();
+
+    await page.locator("#manualAdjustment").fill("-1500");
+    await expect(page.locator("#commercialApprovalPanel")).toBeVisible();
+    await expect(page.locator("#commercialApprovalPanel")).toContainText("Aprovação do gestor necessária");
+    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("error");
+    await page.locator("#commercialApprovalBy").fill("gestor@embaixadacarioca.com.br");
+    await page.locator("#commercialApprovalConfirmed").check();
+    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("ok");
+
+    await page.evaluate(() => {
+      const current = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
+      const changed = structuredClone(current);
+      changed.id = "qa-proposal-v2-comparison";
+      changed.versao = 2;
+      changed.publication_status = "draft";
+      changed.snapshot.event.guests = Number(changed.snapshot.event.guests || 1) + 10;
+      changed.snapshot.totals.total = Number(changed.snapshot.totals.total || changed.total) + 500;
+      changed.total += 500;
+      state.proposals.unshift(changed);
+      renderCommercialTimeline(changed);
+    });
+    await expect(page.locator(".proposal-version-comparison")).toContainText("O que mudou");
+    await expect(page.locator(".proposal-version-comparison")).toContainText("Convidados");
+    await page.locator('[data-duplicate-proposal-id="qa-proposal-sem-resposta"]').click();
+    expect(await page.evaluate(() => state.forceNewVersionDraft)).toBe(true);
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("relatórios exibem aprendizado comercial acionável", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.getByRole("button", { name: /Visão completa/i }).click();
+    await expect(page.locator(".commercial-learning")).toContainText("Aprendizado comercial");
+    await expect(page.locator(".commercial-learning")).toContainText("Funil ponderado");
+    await expect(page.locator(".commercial-learning")).toContainText("Produtos mais vendidos");
+    await expect(page.locator(".commercial-learning")).toContainText("Motivos de perda");
+    await expectNoBrowserErrors(errors);
+  });
+
   test("abre um lead pelo funil e leva a equipe direto para o editor", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 

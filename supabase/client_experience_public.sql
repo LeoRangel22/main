@@ -75,6 +75,7 @@ as $$
         'privatization', jsonb_build_object('mode', p.snapshot #> '{totals,privatization,mode}')
       ),
       'selectedItems', p.snapshot -> 'selectedItems',
+      'versionChanges', p.snapshot -> 'versionChanges',
       'generalTerms', p.snapshot -> 'generalTerms',
       'paymentTerms', p.snapshot -> 'paymentTerms',
       'clienteResposta', p.snapshot -> 'clienteResposta',

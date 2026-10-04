@@ -133,4 +133,15 @@ test.describe("Decisão do cliente na proposta", () => {
     await page.getByRole("button", { name: "PT" }).click();
     await expect(page.getByRole("button", { name: "Aprovar e seguir para reserva" })).toBeVisible();
   });
+
+  test("nova versão destaca mudanças relevantes para o cliente", async ({ page }) => {
+    const revised = structuredClone(proposal);
+    revised.snapshot.versionChanges = [
+      { label: "Convidados", from: "30", to: "40" },
+      { label: "Total", from: "R$ 2.240,00", to: "R$ 2.800,00" },
+    ];
+    await openProposal(page, revised);
+    await expect(page.locator(".public-version-changes")).toContainText("O que mudou nesta proposta");
+    await expect(page.locator(".public-version-changes")).toContainText("30 → 40");
+  });
 });

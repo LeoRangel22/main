@@ -1,16 +1,37 @@
-# Orçamentos de Eventos
+# Sistema de Eventos
 
-> **Estado atual (03/10/2026):** a interface principal inclui Modo Vendas, Visão completa, ciclo de desfechos para eventos passados e rascunho inteligente com aprovação humana. Eventos com data passada deixam o funil ativo sem serem apagados; na Visão completa, aparecem em **Histórico — desfecho pendente** até alguém registrar realizado, concorrência, preço, desistência, remarcação ou outro resultado. Remarcações com nova data retornam ao funil. O sistema nunca infere o motivo.
+CRM comercial e operacional da Embaixada Carioca para captar leads, montar e versionar propostas, registrar decisões e pagamentos, planejar o evento e acompanhar o pós-venda.
 
-> **Operação segura:** o rascunho inteligente apenas sugere pacote-base, duração, adicionais e mensagem, sempre mostrando o motivo. Nada é aplicado ou enviado antes de o vendedor clicar em **Aplicar rascunho**; depois disso, todos os campos continuam editáveis e o checklist de envio permanece obrigatório.
+## Estado atual — 04/10/2026
 
-> **Visões:** o painel abre em **Modo Vendas**, priorizando leads, propostas prontas, propostas sem resposta, negociações e sinal. A **Visão completa** preserva financeiro, operação, agenda, relatórios e classificação dos eventos passados.
+- O painel abre em **Modo Vendas** e mantém financeiro, operação, agenda e relatórios na **Visão completa**.
+- Eventos passados saem do funil ativo e aguardam classificação humana; remarcações retornam ao acompanhamento.
+- O rascunho inteligente sugere pacote, adicionais, duração e mensagem, mas só é aplicado após aprovação humana.
+- Propostas preservam V1/V2/V3, podem ser duplicadas, comparadas e mostram ao cliente o que mudou.
+- Desconto acima de R$ 1.000 ou 10% do subtotal exige confirmação e e-mail do gestor antes do envio.
+- Relatórios medem primeira resposta, conversão, funil ponderado, recompra, produtos vendidos e motivos de perda.
 
-> **Fase comercial 1 (oportunidades, versões, captura parcial e recompra):** antes de publicar a branch `phase1-commercial-ux`, execute `supabase/phase1_commercial_ux.sql` no SQL Editor do Supabase. A migração é aditiva, preserva o histórico existente e faz o backfill das oportunidades. O frontend desta fase depende dessas novas colunas/RPCs.
+## Checklist de produção
 
-> **Atendimento rápido do vendedor:** antes de publicar a interface desta fase, revise o schema de produção e execute `supabase/seller_fast_response.sql` e `supabase/client_proposal_ux.sql`. O SQL preserva registros existentes, corrige o trigger de próxima ação e o versionamento de propostas, cria configurações comerciais compartilhadas com histórico e permite enviar comprovante após a aprovação sem registrar pagamento automaticamente. Após o deploy, abra `Valores e produtos` no navegador que contém o catálogo aprovado e use **Publicar preços e regras para a equipe**; faça o mesmo em `Comunicação` para os modelos aprovados. Até a primeira publicação, cada navegador mantém seus valores locais. A partir dela, o Supabase passa a ser a fonte comum, com versões e detecção de conflito. Confira preços, regras e textos em outro navegador antes de atender leads reais. Publique também a Edge Function `send-proposal-email` desta branch para receber o novo resumo do e-mail.
+As migrações são aditivas e devem ser executadas na ordem documentada, sem reaplicar `schema.sql` sobre uma base existente:
 
-Aplicativo estático para montar propostas da Embaixada Carioca com preços ajustáveis.
+1. `supabase/phase1_commercial_ux.sql`
+2. `supabase/seller_fast_response.sql`
+3. `supabase/client_proposal_ux.sql`
+4. `supabase/phase1_completion_notice.sql`
+5. `supabase/client_experience_public.sql`
+
+Valide com os arquivos `*_verify.sql`. O snapshot público restrito já foi validado operacionalmente; o trigger de lead parcial deve retornar sucesso em `supabase/phase1_completion_notice_verify.sql` antes da liberação.
+
+Depois do SQL e do deploy:
+
+1. Publique preços/regras e modelos de comunicação com um vendedor autenticado.
+2. Confira os dados compartilhados em um segundo navegador.
+3. Teste OTP real em `/painel/`.
+4. Rode os dry-runs autenticados de e-mail e WhatsApp com destinatário controlado.
+5. Reprocesse e confirme a entrega do lead que estiver em `FALHA`.
+
+Nunca use `service_role` no frontend e nunca trate comprovante como confirmação automática de pagamento ou reserva.
 
 ## Como abrir
 
@@ -131,14 +152,11 @@ Atenção: confira a linha de validade do tarifário antes de cada temporada com
 - `Fixo inclui mínimo`: usa o preço fixo até o mínimo de pessoas e cobra adicional por pessoa extra.
 - `Valor fixo total`: cobra apenas o preço fixo.
 
-## Próxima integração
+## Integrações operacionais
 
-O código do bot em Google Apps Script pode ser conectado depois para:
+- `notify-new-lead`: recebe entradas novas do bot e do formulário, com deduplicação e proteção contra loops.
+- `send-proposal-email`: envia o resumo e link público; valide primeiro em dry-run autenticado.
+- Link público: permite aprovar, pedir ajuste, cancelar, tirar dúvida e anexar comprovante sem confirmar a reserva automaticamente.
+- Configurações compartilhadas: preços, regras e modelos usam Supabase como fonte comum depois da primeira publicação autenticada.
 
-- Ler os preços direto da aba `Cardapio` ou de uma nova aba `Orcamentos`.
-- Receber pedidos de orçamento pelo WhatsApp.
-- Salvar propostas geradas em uma aba de histórico.
-- Enviar link de proposta ou PDF para a equipe.
-# Jornada do cliente: revisão da proposta
-
-Após `supabase/phase1_commercial_ux.sql` e `supabase/seller_fast_response.sql`, conferir o schema real e executar `supabase/client_proposal_ux.sql`; validar com `supabase/client_proposal_ux_verify.sql`. A RPC nova aceita comprovante após aprovação e não confirma a venda automaticamente. Publicar também a Edge Function `send-proposal-email` atualizada antes de liberar o fluxo de e-mail. Propostas antigas e histórico são preservados.
+Propostas e PDFs antigos são imutáveis. Para refletir uma correção, duplique a versão, ajuste e publique uma nova.

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261003-sales-lifecycle-v180" />
+    <link rel="stylesheet" href="./styles.css?v=20261004-final-v181" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -475,6 +475,21 @@
                   <input id="manualAdjustmentLabel" type="text" placeholder="Ex.: desconto comercial" />
                 </label>
               </div>
+              <section class="commercial-approval-panel is-hidden" id="commercialApprovalPanel" aria-label="Alçada de aprovação comercial">
+                <div>
+                  <span>Alçada comercial</span>
+                  <strong id="commercialApprovalTitle">Aprovação do gestor necessária</strong>
+                  <p id="commercialApprovalDetail"></p>
+                </div>
+                <label>
+                  Aprovado por
+                  <input id="commercialApprovalBy" type="email" placeholder="gestor@empresa.com.br" />
+                </label>
+                <label class="commercial-approval-check">
+                  <input id="commercialApprovalConfirmed" type="checkbox" />
+                  Confirmo que o gestor revisou valor e motivo.
+                </label>
+              </section>
               <div class="availability-alert is-hidden" id="availabilityAlert"></div>
               <div class="form-source-panel is-hidden" id="formSourcePanel"></div>
               <div class="lead-review-panel is-hidden" id="leadReviewPanel"></div>
@@ -783,6 +798,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261003-sales-lifecycle-v180"></script>
+  <script defer src="./app.js?v=20261004-final-v181"></script>
   </body>
 </html>
