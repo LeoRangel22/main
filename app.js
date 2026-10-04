@@ -11571,6 +11571,9 @@ function renderPipelineCard(item) {
       data-pipeline-card-id="${escapeHtml(item.id)}"
       data-pipeline-card-status="${escapeHtml(item.status)}"
     >
+      <div class="pipeline-card-name-row">
+        <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
+      </div>
       <div class="pipeline-card-kicker">
         <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
         ${leadAgeBadge}
@@ -11587,9 +11590,6 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-breakdown-row">
         ${renderPipelineValueBreakdown(item)}
         ${scoreBadge}
-      </div>
-      <div class="pipeline-card-name-row">
-        <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
       ${riskAlertsLine}
