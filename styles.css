@@ -2450,6 +2450,7 @@ textarea[aria-invalid="true"] {
 .pipeline-column-list {
   align-content: start;
   display: grid;
+  grid-auto-rows: max-content;
   gap: 10px;
   min-height: 84px;
   transition: background 160ms ease, box-shadow 160ms ease;
@@ -2491,6 +2492,7 @@ textarea[aria-invalid="true"] {
   border-radius: 8px;
   cursor: pointer;
   display: grid;
+  min-height: max-content;
   gap: 3px;
   line-height: 1.12;
   overflow: hidden;
@@ -11335,6 +11337,47 @@ body[data-page="app"] .workspace {
 .auth-connected .loaded-editor-bar {
   position: sticky;
   top: 116px;
+}
+
+/* Critical event identity must never shrink or be ellipsized in a busy funnel. */
+body[data-page="app"] .pipeline-card {
+  gap: 7px;
+  padding: 10px;
+}
+
+body[data-page="app"] .pipeline-card-name {
+  display: block;
+  font-size: 1rem !important;
+  line-height: 1.3 !important;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
+
+body[data-page="app"] .pipeline-card-event-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+body[data-page="app"] .pipeline-card-event-line {
+  color: #183a2d !important;
+  font-size: 0.9rem !important;
+  line-height: 1.4 !important;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+body[data-page="app"] .pipeline-card-value-stack {
+  align-items: flex-start;
+  margin-left: 0;
+}
+
+body[data-page="app"] .pipeline-card-final-client {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1260px) {
