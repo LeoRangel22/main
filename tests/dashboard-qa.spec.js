@@ -313,6 +313,12 @@ test.describe("Dashboard interno em modo QA", () => {
               const range = document.createRange();
               range.selectNodeContents(node);
               const text = range.getBoundingClientRect();
+              if (selector === '.pipeline-card-name') {
+                const style = getComputedStyle(node);
+                return rect.height > 16 && rect.top >= box.top && rect.bottom <= box.bottom
+                  && style.whiteSpace === 'nowrap' && style.textOverflow === 'ellipsis'
+                  && Boolean(node.title);
+              }
               return rect.height > 16 && rect.top >= box.top && rect.bottom <= box.bottom
                 && text.top >= box.top && text.bottom <= box.bottom
                 && text.left >= box.left && text.right <= box.right
@@ -445,6 +451,7 @@ test.describe("Dashboard interno em modo QA", () => {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(card.locator('.pipeline-card-name')).toContainText('Anna Vieira');
+      await expect(card.locator('.pipeline-card-name')).toHaveAttribute('title', 'Anna Vieira - Abercrombie & Kent Brazil');
       await expect(card.locator('.pipeline-card-event-line')).toContainText('17:00');
       await expect(card.locator('.pipeline-card-event-line')).toContainText('25 pax');
       await expect(card.locator('.pipeline-card-value')).toBeVisible();
@@ -454,8 +461,24 @@ test.describe("Dashboard interno em modo QA", () => {
       const collapsed = await card.evaluate((node) => node.getBoundingClientRect().height);
       console.info(`Card compacto ${width}px: ${Math.round(collapsed)}px de altura`);
       expect(collapsed, `altura compacta em ${width}px`).toBeLessThan(360);
+      const alignment = await card.evaluate((node) => {
+        const name = node.querySelector('.pipeline-card-name').getBoundingClientRect();
+        const badge = node.querySelector('.follow-up-badge').getBoundingClientRect();
+        const details = node.querySelector('.pipeline-card-details > summary').getBoundingClientRect();
+        const actions = node.querySelector('.pipeline-card-bottom-row').getBoundingClientRect();
+        return { nameHeight: name.height, badgeGap: badge.top - name.bottom, badgeLeft: badge.left - name.left,
+          footerCenterGap: Math.abs((details.top + details.bottom - actions.top - actions.bottom) / 2),
+          footerOverlap: details.right > actions.left };
+      });
+      expect(alignment.nameHeight).toBeLessThan(25);
+      expect(alignment.badgeGap).toBeGreaterThanOrEqual(0);
+      expect(alignment.badgeGap).toBeLessThan(9);
+      expect(Math.abs(alignment.badgeLeft)).toBeLessThan(2);
+      expect(alignment.footerCenterGap).toBeLessThan(3);
+      expect(alignment.footerOverlap).toBe(false);
       await card.locator('.pipeline-card-details > summary').click();
       await expect(card.locator('.pipeline-stage-chip')).toBeVisible();
+      await expect(card.locator('.pipeline-card-full-name')).toHaveText('Cliente: Anna Vieira - Abercrombie & Kent Brazil');
       await expect(card.locator('.pipeline-value-breakdown')).not.toContainText('Priv.');
       await expect(card.locator('.pipeline-card-final-client')).not.toContainText('Cliente final:');
       await expect(card.locator('.pipeline-card-final-client')).toContainText('Brazil Ultimate Carnival 2028');
