@@ -10507,7 +10507,8 @@ function hasUnsavedEditorChanges() {
 function renderLoadedEditorBar() {
   if (!nodes.loadedEditorBar) return;
   const context = state.activeEditorContext;
-  if (!context || isQuoteWorkspaceEffectivelyEmpty()) {
+  const isNewManualDraft = context?.kind === "manual";
+  if (!context || (isQuoteWorkspaceEffectivelyEmpty() && !isNewManualDraft)) {
     nodes.loadedEditorBar.classList.add("is-hidden");
     nodes.loadedEditorBar.innerHTML = "";
     return;
@@ -10947,6 +10948,7 @@ function renderActionTasks(items = getPipelineItems()) {
       ${topActionButton}
     </article>
     <div class="action-track-summary">${groupedLine}</div>
+    ${tasks.length > 1 ? `<details class="action-backlog"><summary><span>Outras ações no radar</span><strong>${tasks.length - 1}</strong></summary><div class="action-backlog-grid">` : ""}
     ${tasks
     .slice(1)
     .map((task) => {
@@ -10985,6 +10987,7 @@ function renderActionTasks(items = getPipelineItems()) {
       `;
     })
     .join("")}
+    ${tasks.length > 1 ? `</div></details>` : ""}
   `;
 }
 
@@ -15115,6 +15118,7 @@ function bindEvents() {
 
   document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
+  document.querySelector("#topbarNewProposalBtn")?.addEventListener("click", startNewProposal);
   nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
   nodes.startRealizedEventBtn?.addEventListener("click", startRealizedEventRegistration);
   nodes.openNextPriorityBtn?.addEventListener("click", () => openNextPriorityItem());
