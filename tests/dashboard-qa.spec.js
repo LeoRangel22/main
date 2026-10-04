@@ -260,11 +260,42 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator(".pipeline-row-commercial")).toBeVisible();
     await expect(page.locator(".pipeline-row-operation")).toHaveCount(0);
     await expect(page.locator("#operationsAgenda")).toBeHidden();
+    await expect(page.locator(".admin-quick-nav")).toBeVisible();
+    await expect(page.locator("#topbarNewProposalBtn")).toBeVisible();
+    await expect(page.locator(".pipeline-guidance-shell")).not.toHaveAttribute("open", "");
+    await expect(page.locator(".action-backlog")).not.toHaveAttribute("open", "");
+
+    const compactLayout = await page.evaluate(() => {
+      const topbar = document.querySelector(".topbar").getBoundingClientRect();
+      const command = document.querySelector("#salesCommand").getBoundingClientRect();
+      const columnList = document.querySelector(".pipeline-column-list");
+      const columnStyle = getComputedStyle(columnList);
+      return {
+        topbarHeight: Math.round(topbar.height),
+        commandHeight: Math.round(command.height),
+        columnOverflow: columnStyle.overflowY,
+        columnMaxHeight: columnStyle.maxHeight,
+      };
+    });
+    expect(compactLayout.topbarHeight).toBeLessThan(150);
+    expect(compactLayout.commandHeight).toBeLessThan(440);
+    expect(compactLayout.columnOverflow).toBe("auto");
+    expect(compactLayout.columnMaxHeight).not.toBe("none");
 
     await page.getByRole("button", { name: "Visão completa" }).click();
     await expect(page.locator("body")).toHaveClass(/workspace-mode-full/);
     await expect(page.locator(".pipeline-row-operation")).toBeVisible();
     await expect(page.locator(".pipeline-stage-desfecho_pendente")).toContainText("Marina Histórico");
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("atalho de nova proposta leva direto ao editor sem rolagem manual", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    await page.goto("/index.html?qa=1");
+    await page.locator("#topbarNewProposalBtn").click();
+    await expect(page.locator("#loadedEditorBar")).toContainText("Nova proposta manual");
+    await expectScrolledNear(page, "#clientDataSection", 300);
+    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 160 });
     await expectNoBrowserErrors(errors);
   });
 

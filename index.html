@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261004-final-v181" />
+    <link rel="stylesheet" href="./styles.css?v=20261004-admin-v182" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -70,6 +70,12 @@
             </details>
           </div>
           <div class="topbar-actions">
+            <nav class="admin-quick-nav" aria-label="Atalhos do painel">
+              <a href="#salesCommand">Hoje</a>
+              <a href="#salesPipeline">Funil</a>
+              <a href="#quoteWorkspace">Proposta</a>
+            </nav>
+            <button class="primary topbar-new-proposal" id="topbarNewProposalBtn" type="button">+ Nova proposta</button>
             <a class="button-link secondary" href="./clientes.html">Clientes</a>
             <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
             <a class="button-link secondary" href="./comunicacao.html">Comunicação</a>
@@ -81,6 +87,7 @@
         </header>
 
         <section class="team-panel" aria-label="Equipe e histórico">
+          <section class="sales-command-surface" id="salesCommand" aria-label="Comando comercial">
           <section class="workspace-mode-switch" id="workspaceModeSwitch" aria-label="Escolher visão de trabalho">
             <div>
               <span>Visão de trabalho</span>
@@ -92,6 +99,7 @@
               <button type="button" data-workspace-mode="full">Visão completa</button>
             </div>
           </section>
+          <div class="sales-command-grid">
           <section class="action-center" aria-label="Ações de hoje">
             <div class="action-center-heading">
               <div>
@@ -142,6 +150,8 @@
               <strong id="metricStagePosVenda">0</strong>
             </button>
           </div>
+          </div>
+          </section>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
           <section class="operations-agenda" aria-label="Agenda operacional">
@@ -156,23 +166,26 @@
               <p>Entre com Supabase para ver a agenda.</p>
             </div>
           </section>
-          <div class="pipeline-panel">
+          <div class="pipeline-panel" id="salesPipeline">
             <div class="pipeline-stage-header">
               <div>
                 <span>Funil de eventos</span>
-                <strong>LEAD / PRONTA PARA ENVIO / SEM RESPOSTA / NEGOCIAÇÃO / SINAL / PG RESTANTE / PLANEJAMENTO / 48h / PÓS-VENDA</strong>
+                <strong>Da entrada do lead ao sinal, com a próxima ação sempre visível.</strong>
               </div>
               <div class="pipeline-header-actions">
                 <button class="primary" id="openNextPriorityBtn" type="button">Resolver próxima prioridade</button>
                 <button class="secondary" id="refreshPipelineBtn" type="button">Atualizar</button>
               </div>
             </div>
-            <div class="pipeline-guidance" aria-label="Como usar o funil">
-              <span><strong>1.</strong> Responda primeiro leads quentes, atrasados e propostas sem retorno.</span>
-              <span><strong>2.</strong> Abra a proposta, confira checklist, valor, data, horário e contato.</span>
-              <span><strong>3.</strong> Envie o link por WhatsApp/e-mail e registre o envio no histórico.</span>
-              <span><strong>4.</strong> Recebeu sinal? Marque o pagamento e leve para operação.</span>
-            </div>
+            <details class="pipeline-guidance-shell">
+              <summary>Como usar o funil</summary>
+              <div class="pipeline-guidance" aria-label="Como usar o funil">
+                <span><strong>1.</strong> Responda primeiro leads quentes, atrasados e propostas sem retorno.</span>
+                <span><strong>2.</strong> Abra a proposta, confira checklist, valor, data, horário e contato.</span>
+                <span><strong>3.</strong> Envie o link por WhatsApp/e-mail e registre o envio no histórico.</span>
+                <span><strong>4.</strong> Recebeu sinal? Marque o pagamento e leve para operação.</span>
+              </div>
+            </details>
             <div class="pipeline-quick-filters" aria-label="Filtros rápidos do funil">
               <span>Filtros rápidos</span>
               <div class="pipeline-filter-list" id="pipelineQuickFilters"></div>
@@ -325,7 +338,7 @@
           </section>
         </section>
 
-        <section class="quote-layout">
+        <section class="quote-layout" id="quoteWorkspace">
           <form class="quote-form" id="quoteForm">
             <nav class="quote-section-nav" aria-label="Navegação da proposta">
               <a href="#clientDataSection">Dados</a>
@@ -798,6 +811,6 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261004-final-v181"></script>
+  <script defer src="./app.js?v=20261004-admin-v182"></script>
   </body>
 </html>
