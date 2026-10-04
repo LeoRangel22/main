@@ -8505,6 +8505,17 @@ async function runSystemHealthCheck() {
     }
 
     try {
+      const { data, error } = await state.supabase.functions.invoke("send-proposal-email", { body: { dryRun: true } });
+      checks.push(
+        error || data?.ok === false
+          ? { status: "error", label: "E-mail de proposta", title: "ZeptoMail precisa de atenção", detail: data?.message || (await getFunctionErrorMessage(error)) || "Confira secrets e deploy da função send-proposal-email." }
+          : { status: "ok", label: "E-mail de proposta", title: "ZeptoMail configurado", detail: "Função de proposta respondeu em modo teste, sem enviar e-mail." },
+      );
+    } catch (error) {
+      checks.push({ status: "error", label: "E-mail de proposta", title: "Falha ao testar ZeptoMail", detail: getHealthErrorMessage(error) });
+    }
+
+    try {
       const { data, error } = await state.supabase.functions.invoke("notify-new-lead", { body: { dryRun: true } });
       checks.push(
         error || data?.ok === false
@@ -8516,6 +8527,7 @@ async function runSystemHealthCheck() {
     }
   } else {
     checks.push({ status: "warning", label: "WhatsApp", title: "Login necessário", detail: "Conecte a equipe para testar o envio direto." });
+    checks.push({ status: "warning", label: "E-mail de proposta", title: "Login necessário", detail: "Conecte a equipe para testar a função de envio da proposta." });
     checks.push({ status: "warning", label: "E-mail de lead", title: "Login necessário", detail: "Conecte a equipe para testar a função de aviso." });
   }
 
