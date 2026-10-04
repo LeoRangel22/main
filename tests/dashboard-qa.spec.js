@@ -110,6 +110,7 @@ test.describe("Dashboard interno em modo QA", () => {
     });
     await expect(page.locator(".proposal-version-comparison")).toContainText("O que mudou");
     await expect(page.locator(".proposal-version-comparison")).toContainText("Convidados");
+    await page.locator(".proposal-version-list summary").click();
     await page.locator('[data-duplicate-proposal-id="qa-proposal-sem-resposta"]').click();
     expect(await page.evaluate(() => state.forceNewVersionDraft)).toBe(true);
     await expectNoBrowserErrors(errors);
