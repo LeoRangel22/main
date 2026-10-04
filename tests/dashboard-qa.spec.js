@@ -289,6 +289,41 @@ test.describe("Dashboard interno em modo QA", () => {
     await expectNoBrowserErrors(errors);
   });
 
+  test("funil cheio preserva cliente data e hora sem comprimir cards", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    for (const width of [1440, 1024, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const result = await page.evaluate(() => {
+        const card = document.querySelector('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+        const list = card.parentElement;
+        if (!list.dataset.crowdedTest) {
+          card.querySelector('.pipeline-card-name').textContent = 'Cliente com nome completo extenso — Agência de Turismo e Eventos Internacionais';
+          card.querySelector('.pipeline-card-event-line').textContent = '21/10/2026 · qua · 16:30 · 120 pax';
+          for (let i = 0; i < 30; i++) list.append(card.cloneNode(true));
+          list.dataset.crowdedTest = 'true';
+        }
+        const cards = [...list.querySelectorAll('.pipeline-card')];
+        return {
+          scrollable: list.scrollHeight > list.clientHeight,
+          readable: cards.every((item) => {
+            const box = item.getBoundingClientRect();
+            return ['.pipeline-card-name', '.pipeline-card-event-line'].every((selector) => {
+              const node = item.querySelector(selector);
+              const rect = node.getBoundingClientRect();
+              return rect.height > 16 && rect.top >= box.top && rect.bottom <= box.bottom
+                && node.scrollHeight <= node.clientHeight + 1 && node.scrollWidth <= node.clientWidth + 1;
+            });
+          }),
+          minimumHeight: Math.min(...cards.map((item) => item.getBoundingClientRect().height)),
+        };
+      });
+      expect(result.scrollable).toBe(true);
+      expect(result.readable).toBe(true);
+      expect(result.minimumHeight).toBeGreaterThan(120);
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
   test("atalho de nova proposta leva direto ao editor sem rolagem manual", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
