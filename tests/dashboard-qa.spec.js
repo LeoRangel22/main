@@ -355,7 +355,7 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     await page.getByRole("button", { name: "Visão completa" }).click();
 
-    await page.locator(".pipeline-stage-desfecho_pendente > summary").click();
+    await page.locator(".pipeline-stage-desfecho_pendente .pipeline-column-summary").click();
     const pastCard = page.locator('[data-pipeline-card-id="qa-proposal-desfecho"]');
     await expect(pastCard).toBeVisible();
     await pastCard.getByRole("button", { name: "Classificar desfecho" }).click();
