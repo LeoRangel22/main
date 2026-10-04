@@ -11333,8 +11333,8 @@ body[data-page="app"] .workspace {
 }
 
 .auth-connected .loaded-editor-bar {
-  position: relative;
-  top: auto;
+  position: sticky;
+  top: 116px;
 }
 
 @media (max-width: 1260px) {
@@ -11365,6 +11365,10 @@ body[data-page="app"] .workspace {
   .auth-connected .quote-section-nav,
   .auth-connected .summary-panel {
     top: 8px;
+  }
+
+  .auth-connected .loaded-editor-bar {
+    top: 52px;
   }
 
   .auth-connected .topbar-actions {
