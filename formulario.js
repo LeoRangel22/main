@@ -173,15 +173,14 @@ const steps = {
 };
 
 function applyConversionStepOrder() {
-  const finalReviewCard = document.querySelector("#finalReviewCard");
-  if (!form || !finalReviewCard) return;
-  stepOrder.forEach((stepName, index) => {
-    const step = steps[stepName];
-    if (!step) return;
-    form.insertBefore(step, finalReviewCard);
-    const number = step.querySelector(".section-heading > span");
-    if (number) number.textContent = String(index + 1).padStart(2, "0");
+  const optional = document.querySelector("#personalizeOptions");
+  const content = document.querySelector("#personalizeContent");
+  if (!form || !optional || !content) return;
+  ["eventDetails", "contact"].forEach((name, index) => {
+    form.insertBefore(steps[name], optional);
+    steps[name].querySelector(".section-heading > span").textContent = String(index + 1).padStart(2, "0");
   });
+  ["moment", "profile", "recommendation", "briefing"].forEach((name) => content.append(steps[name]));
 }
 
 const momentLabels = {
@@ -327,8 +326,8 @@ const copy = {
     heroTitle: "Planeje seu evento na Embaixada Carioca",
     heroSubtitle: "Encontre o melhor formato para o seu evento no Morro da Urca.",
     introEyebrow: "Consultoria de eventos",
-    introTitle: "Conte-nos o essencial. A equipe desenha a experiência certa para o seu grupo.",
-    introBody: "Um fluxo rápido para orientar sua proposta com cuidado e precisão.",
+    introTitle: "Seu evento começa aqui",
+    introBody: "Informe a data, o grupo e seu contato. O formato pode ser definido com a equipe.",
     stepLabels: ["Quando", "Ocasião", "Data e grupo", "Contato", "Formato", "Preferências"],
     commercialSummary: "Ver janelas mais indicadas",
     commercialWindows: [
@@ -504,8 +503,8 @@ const copy = {
     heroTitle: "Plan your event at Embaixada Carioca",
     heroSubtitle: "Find the best format for your event at Morro da Urca.",
     introEyebrow: "Event advisory",
-    introTitle: "Tell us the essentials. Our team will shape the right experience for your group.",
-    introBody: "A quick flow to guide your proposal with care and precision.",
+    introTitle: "Your event starts here",
+    introBody: "Share your date, group size and contact. Our team can help you choose the format.",
     stepLabels: ["When", "Occasion", "Date & group", "Contact", "Format", "Preferences"],
     commercialSummary: "See the most recommended windows",
     commercialWindows: [
@@ -860,7 +859,7 @@ function applyStaticCopy() {
   current.select.leadSource.forEach((text, index) => {
     if (fields.leadSource.options[index]) fields.leadSource.options[index].text = text;
   });
-  updateProgress(stepOrder.find((step, index) => progressSteps[index]?.hasAttribute("data-active")) || "moment");
+  updateProgress(stepOrder.find((step, index) => progressSteps[index]?.hasAttribute("data-active")) || "eventDetails");
 }
 
 function renderLocalizedChoices() {
@@ -889,6 +888,10 @@ function setLanguage(language) {
   });
   renderLocalizedChoices();
   applyStaticCopy();
+  const compactCopy = uiState.language === "en"
+    ? { formContactNav: "Contact", formPersonalizeNav: "Personalize", personalizeTitle: "Personalize your event (optional)", personalizeDescription: "Explore formats, occasions and preferences.", contactOptionalSummary: "Budget and referral (optional)" }
+    : { formContactNav: "Contato", formPersonalizeNav: "Personalizar", personalizeTitle: "Personalize seu evento (opcional)", personalizeDescription: "Explore formatos, ocasião e preferências.", contactOptionalSummary: "Investimento e origem (opcional)" };
+  Object.entries(compactCopy).forEach(([id, text]) => { document.getElementById(id).textContent = text; });
   fillTimeOptions();
   renderRecommendations();
   updateGuestOutput();
@@ -923,11 +926,11 @@ function resetStatusIfError() {
   }
 }
 
-function updateProgress(stepName = "moment") {
+function updateProgress(stepName = "eventDetails") {
   const current = getCopy();
   const index = Math.max(0, stepOrder.indexOf(stepName));
   const percent = ((index + 1) / stepOrder.length) * 100;
-  if (progressText) progressText.textContent = current.progressLabel(index + 1, stepOrder.length);
+  if (progressText) progressText.textContent = uiState.language === "en" ? "Essentials first · About 2 minutes" : "O essencial primeiro · Cerca de 2 minutos";
   if (progressBar) progressBar.style.width = `${percent}%`;
   progressSteps.forEach((step, stepIndex) => {
     step.toggleAttribute("data-active", stepIndex === index);
@@ -1164,8 +1167,8 @@ function renderFinalReview() {
         profileLabel || reviewCopy.occasionMissing,
       ].join(" · "),
       step: "profile",
-      status: clientTypeLabel && profileLabel ? reviewCopy.ok : reviewCopy.required,
-      state: clientTypeLabel && profileLabel ? "is-ok" : "is-required",
+      status: clientTypeLabel && profileLabel ? reviewCopy.ok : reviewCopy.optional,
+      state: clientTypeLabel && profileLabel ? "is-ok" : "is-optional",
     },
     {
       label: isEn ? "Date and arrival" : "Data e chegada",
@@ -1174,8 +1177,8 @@ function renderFinalReview() {
         fields.time.value || reviewCopy.timeMissing,
       ].join(" · "),
       step: "eventDetails",
-      status: dateReady && timeReady ? reviewCopy.ok : reviewCopy.required,
-      state: dateReady && timeReady ? "is-ok" : "is-required",
+      status: dateReady ? reviewCopy.ok : reviewCopy.required,
+      state: dateReady ? "is-ok" : "is-required",
     },
     {
       label: isEn ? "Guests and duration" : "Convidados e duração",
@@ -1421,6 +1424,8 @@ function clearAllStepValidity() {
 function scrollToStep(stepName, force = false) {
   const step = steps[stepName];
   updateProgress(stepName);
+  const optional = step?.closest("details");
+  if (optional) optional.open = true;
   if (!step || (!force && !mobileFormQuery.matches)) return;
   window.requestAnimationFrame(() => {
     step.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2040,6 +2045,13 @@ async function submitRequest(event) {
 }
 
 applyConversionStepOrder();
+document.querySelector("#formPersonalizeNav").addEventListener("click", () => {
+  document.querySelector("#personalizeOptions").open = true;
+});
+form.addEventListener("focusin", (event) => {
+  const name = Object.keys(steps).find((key) => steps[key].contains(event.target));
+  if (name) updateProgress(name);
+});
 initReturningClientAccess();
 fillGuestOptions();
 resetFlexibleDateField();
