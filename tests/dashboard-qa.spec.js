@@ -310,8 +310,14 @@ test.describe("Dashboard interno em modo QA", () => {
             return ['.pipeline-card-name', '.pipeline-card-event-line'].every((selector) => {
               const node = item.querySelector(selector);
               const rect = node.getBoundingClientRect();
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              const text = range.getBoundingClientRect();
               return rect.height > 16 && rect.top >= box.top && rect.bottom <= box.bottom
-                && node.scrollHeight <= node.clientHeight + 1 && node.scrollWidth <= node.clientWidth + 1;
+                && text.top >= box.top && text.bottom <= box.bottom
+                && text.left >= box.left && text.right <= box.right
+                && getComputedStyle(node).overflow === 'visible'
+                && node.scrollWidth <= node.clientWidth + 1;
             });
           }),
           minimumHeight: Math.min(...cards.map((item) => item.getBoundingClientRect().height)),
