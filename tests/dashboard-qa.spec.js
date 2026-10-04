@@ -315,10 +315,20 @@ test.describe("Dashboard interno em modo QA", () => {
             });
           }),
           minimumHeight: Math.min(...cards.map((item) => item.getBoundingClientRect().height)),
+          measurements: cards.slice(0, 2).map((item) => ({
+            cardHeight: item.getBoundingClientRect().height,
+            fields: ['.pipeline-card-name', '.pipeline-card-event-line'].map((selector) => {
+              const node = item.querySelector(selector);
+              const rect = node.getBoundingClientRect();
+              const box = item.getBoundingClientRect();
+              return { selector, height: rect.height, top: rect.top - box.top, bottom: rect.bottom - box.bottom,
+                scroll: [node.scrollWidth, node.scrollHeight], client: [node.clientWidth, node.clientHeight] };
+            }),
+          })),
         };
       });
       expect(result.scrollable).toBe(true);
-      expect(result.readable).toBe(true);
+      expect(result.readable, JSON.stringify({ width, ...result })).toBe(true);
       expect(result.minimumHeight).toBeGreaterThan(120);
       await expectNoHorizontalOverflow(page);
     }
