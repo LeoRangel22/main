@@ -398,6 +398,16 @@ function renderCommercialSummary(snapshot) {
   </section>`;
 }
 
+function renderVersionChanges(snapshot) {
+  const changes = Array.isArray(snapshot.versionChanges) ? snapshot.versionChanges : [];
+  if (!changes.length) return "";
+  return `<section class="public-version-changes" aria-label="${tr("Mudanças desta versão", "Changes in this version")}">
+    <span>${tr("Nova versão", "New version")}</span>
+    <h3>${tr("O que mudou nesta proposta", "What changed in this proposal")}</h3>
+    <ul>${changes.map((change) => `<li><strong>${escapeHtml(change.label || "")}</strong><span>${escapeHtml(change.from || tr("Não informado", "Not specified"))} → ${escapeHtml(change.to || tr("Não informado", "Not specified"))}</span></li>`).join("")}</ul>
+  </section>`;
+}
+
 async function copyPixKey(button) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -507,6 +517,7 @@ function renderProposal(proposal) {
     </div>
 
     <a class="public-proposal-jump" href="#decisionActions">${tr("Ver condições e responder", "Review terms and respond")}</a>
+    ${renderVersionChanges(snapshot)}
     ${renderCommercialSummary(snapshot)}
 
     ${

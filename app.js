@@ -44,6 +44,8 @@ const TEAM_PROFILES = {
 const HUMAN_EVENTS_EMAIL = "eventos@embaixadacarioca.com.br";
 const HUMAN_EVENTS_WHATSAPP = "+55 21 97142-6007";
 const SERVICE_RATE = 0.12;
+const COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT = 1000;
+const COMMERCIAL_APPROVAL_PERCENT_LIMIT = 0.1;
 const paymentTerms = [
   "50% do valor total na confirmação da reserva.",
   "50% restante até 72 horas antes do evento.",
@@ -691,6 +693,8 @@ const state = {
   firstReplyChannel: "",
   smartDraftSuggestion: null,
   smartDraftApproval: null,
+  commercialApproval: null,
+  forceNewVersionDraft: false,
   integrationLogs: loadIntegrationLogs(),
   systemHealthChecks: [],
 };
@@ -709,6 +713,8 @@ const fields = {
   signalDeadlineHours: document.querySelector("#signalDeadlineHours"),
   manualAdjustment: document.querySelector("#manualAdjustment"),
   manualAdjustmentLabel: document.querySelector("#manualAdjustmentLabel"),
+  commercialApprovalBy: document.querySelector("#commercialApprovalBy"),
+  commercialApprovalConfirmed: document.querySelector("#commercialApprovalConfirmed"),
   privatizationAdjustment: document.querySelector("#privatizationAdjustment"),
   privatizationAdjustmentLabel: document.querySelector("#privatizationAdjustmentLabel"),
   notes: document.querySelector("#notes"),
@@ -797,6 +803,7 @@ const nodes = {
   loadedEditorBar: document.querySelector("#loadedEditorBar"),
   firstReplyPanel: document.querySelector("#firstReplyPanel"),
   smartDraftPanel: document.querySelector("#smartDraftPanel"),
+  commercialApprovalPanel: document.querySelector("#commercialApprovalPanel"),
   quoteEmptyState: document.querySelector("#quoteEmptyState"),
   reportOutput: document.querySelector("#reportOutput"),
   reportPresets: document.querySelector(".report-presets"),
@@ -1382,6 +1389,11 @@ function getProposalChangeList(previousSnapshot = {}, nextSnapshot = {}) {
   return checks
     .filter(([, from, to]) => String(from || "") !== String(to || ""))
     .map(([label, from, to]) => ({ label, from: String(from || ""), to: String(to || "") }));
+}
+
+function getClientVisibleProposalChanges(previousSnapshot = {}, nextSnapshot = {}) {
+  const visibleLabels = new Set(["Tipo", "Data", "Horário", "Convidados", "Duração", "Itens", "Total"]);
+  return getProposalChangeList(previousSnapshot, nextSnapshot).filter((change) => visibleLabels.has(change.label));
 }
 
 function formatCommercialHistoryDate(value) {
@@ -2447,6 +2459,9 @@ function getProposalVersions(proposal) {
 
 function renderProposalJourney(proposal) {
   const versions = getProposalVersions(proposal);
+  const newest = versions[0];
+  const previous = versions[1];
+  const versionChanges = newest && previous ? getClientVisibleProposalChanges(previous.snapshot || {}, newest.snapshot || {}) : [];
   const published = versions.find((row) => row.is_current && row.publication_status !== "draft") ||
     versions.find((row) => row.publication_status !== "draft");
   const views = state.proposalViews.filter((view) => view.proposta_id === published?.id);
@@ -2471,10 +2486,39 @@ function renderProposalJourney(proposal) {
         <div>${versions.map((row) => `
           <div class="proposal-version-row">
             <span>V${escapeHtml(row.versao || 1)} · ${row.publication_status === "draft" ? "Rascunho" : row.publication_status === "ready" ? "Pronta" : row.id === published?.id ? "Publicada" : "Anterior"} · ${escapeHtml(formatMoney(row.total))}</span>
-            <button class="secondary" type="button" data-proposal-id="${escapeHtml(row.id)}" ${row.id === proposal.id ? "disabled" : ""}>${row.id === proposal.id ? "Aberta" : "Abrir"}</button>
+            <span class="proposal-version-actions">
+              <button class="secondary" type="button" data-proposal-id="${escapeHtml(row.id)}" ${row.id === proposal.id ? "disabled" : ""}>${row.id === proposal.id ? "Aberta" : "Abrir"}</button>
+              <button class="secondary" type="button" data-duplicate-proposal-id="${escapeHtml(row.id)}">Duplicar e ajustar</button>
+            </span>
           </div>`).join("")}</div>
       </details>
+      ${
+        versionChanges.length
+          ? `<div class="proposal-version-comparison">
+              <span>Comparação V${escapeHtml(previous.versao || 1)} → V${escapeHtml(newest.versao || 1)}</span>
+              <strong>O que mudou</strong>
+              <ul>${versionChanges
+                .map((change) => `<li><b>${escapeHtml(change.label)}</b><span>${escapeHtml(change.from || "vazio")} → ${escapeHtml(change.to || "vazio")}</span></li>`)
+                .join("")}</ul>
+            </div>`
+          : ""
+      }
     </section>`;
+}
+
+async function duplicateProposalForAdjustment(proposalId) {
+  const proposal = state.proposals.find((row) => row.id === proposalId);
+  if (!proposal) {
+    showToast("Não foi possível localizar essa versão.");
+    return;
+  }
+  await safeOpenSavedProposal(proposalId, "Duplicar e ajustar");
+  state.forceNewVersionDraft = true;
+  state.sendReviewApprovedSignature = "";
+  state.sendReviewApproval = null;
+  renderSendReview();
+  showToast(`V${proposal.versao || 1} copiada para ajustes. Ao salvar, uma nova versão será preservada.`);
+  document.querySelector("#quoteBuilder")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
@@ -4613,6 +4657,7 @@ function getProposalReviewItems() {
     sourceData.extras ||
     sourceData.observations;
   const contactReview = getContactReviewState(contact);
+  const commercialApproval = getCommercialApprovalState();
 
   return [
     {
@@ -4702,6 +4747,17 @@ function getProposalReviewItems() {
       status: hasNotes ? "ok" : "warning",
       detail: hasNotes ? "Briefing e observações revisados." : "Sem observações. Se houver restrições, montagem ou pedido especial, registre.",
       target: "notes",
+    },
+    {
+      id: "commercial_approval",
+      label: "Alçada comercial",
+      status: commercialApproval.approved ? "ok" : "error",
+      detail: commercialApproval.required
+        ? commercialApproval.approved
+          ? `Desconto aprovado por ${commercialApproval.approvedBy}.`
+          : `Desconto de ${formatMoney(commercialApproval.discount)} exige confirmação e e-mail do gestor.`
+        : "Ajuste dentro da alçada do vendedor.",
+      target: "client",
     },
     {
       id: "value",
@@ -4923,6 +4979,7 @@ function renderCustomerDecisionLoop(loop = getCustomerDecisionLoop()) {
 function getSendReviewSignature(items = getProposalReviewItems()) {
   const totals = getQuoteTotals();
   const sourceData = getFormSourceData();
+  const commercialApproval = getCommercialApprovalState();
   return JSON.stringify({
     client: fields.clientName.value.trim(),
     email: fields.clientEmail.value.trim(),
@@ -4949,6 +5006,11 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     selectedIds: [...state.selectedIds].sort(),
     total: roundCurrency(totals.total),
     adjustment: roundCurrency(getManualAdjustment()),
+    commercialApproval: {
+      required: commercialApproval.required,
+      approved: commercialApproval.approved,
+      approvedBy: commercialApproval.approvedBy,
+    },
     notes: fields.notes.value.trim(),
     reason: fields.eventReason.value.trim(),
     review: items.map((item) => [item.id, item.status]),
@@ -6148,6 +6210,45 @@ function hasMeaningfulManualAdjustment() {
 
 function getManualAdjustmentLabel() {
   return fields.manualAdjustmentLabel?.value.trim() || (getManualAdjustment() < 0 ? "Desconto comercial" : "Ajuste comercial");
+}
+
+function getCommercialApprovalRequirement() {
+  const adjustment = getManualAdjustment();
+  const discount = Math.max(0, -adjustment);
+  const subtotal = Math.max(0, getSubtotal());
+  const percent = subtotal > 0 ? discount / subtotal : 0;
+  const required = discount > COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT || percent > COMMERCIAL_APPROVAL_PERCENT_LIMIT;
+  return {
+    required,
+    discount,
+    percent,
+    limit: Math.min(COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT, subtotal * COMMERCIAL_APPROVAL_PERCENT_LIMIT || COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT),
+  };
+}
+
+function getCommercialApprovalState() {
+  const requirement = getCommercialApprovalRequirement();
+  const approvedBy = fields.commercialApprovalBy?.value.trim() || "";
+  const confirmed = Boolean(fields.commercialApprovalConfirmed?.checked);
+  return {
+    ...requirement,
+    approved: !requirement.required || (confirmed && isLikelyEmailAddress(approvedBy)),
+    approvedBy,
+    confirmed,
+  };
+}
+
+function renderCommercialApprovalPanel() {
+  if (!nodes.commercialApprovalPanel) return;
+  const approval = getCommercialApprovalState();
+  nodes.commercialApprovalPanel.classList.toggle("is-hidden", !approval.required);
+  const title = document.querySelector("#commercialApprovalTitle");
+  const detail = document.querySelector("#commercialApprovalDetail");
+  if (title) title.textContent = approval.approved ? "Desconto aprovado pelo gestor" : "Aprovação do gestor necessária";
+  if (detail) {
+    detail.textContent = `${formatMoney(approval.discount)} de desconto (${Math.round(approval.percent * 100)}%). A alçada é acionada acima de ${formatMoney(COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT)} ou 10% do subtotal.`;
+  }
+  nodes.commercialApprovalPanel.classList.toggle("is-approved", approval.approved);
 }
 
 function getPrivatizationAdjustment() {
@@ -7546,6 +7647,7 @@ function getProposalSnapshot() {
   const reviewConfidence = getProposalConfidence(reviewItems, reviewAlerts);
   const automationReadiness = getProposalAutomationReadiness(reviewItems, reviewAlerts, reviewConfidence);
   const customerDecisionLoop = getCustomerDecisionLoop(activeProposal);
+  const commercialApprovalState = getCommercialApprovalState();
   const sourceData = getFormSourceData();
   const sourceQualification = {
     ...(activeRequest?.snapshot?.qualificacao || {}),
@@ -7615,6 +7717,17 @@ function getProposalSnapshot() {
       total: roundCurrency(totals.total),
       privatization: totals.privatization,
     },
+    commercialApproval: commercialApprovalState.required
+      ? {
+          required: true,
+          approved: commercialApprovalState.approved,
+          approvedBy: commercialApprovalState.approvedBy,
+          approvedAt: commercialApprovalState.approved ? new Date().toISOString() : null,
+          discount: roundCurrency(commercialApprovalState.discount),
+          percent: commercialApprovalState.percent,
+          policy: "Desconto acima de R$ 1.000 ou 10% do subtotal",
+        }
+      : { required: false, approved: true },
     selectedIds: [...state.selectedIds],
     selectedItems: selected.map((item) => ({
       id: item.id,
@@ -8932,6 +9045,7 @@ function getPipelineItems() {
       snapshot,
       opportunityId: proposal.oportunidade_id || "",
       ownerEmail: getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.responsavel_email || proposal.responsavel_email || "",
+      firstReplySentAt: getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.metadata?.first_reply_sent_at || "",
       version: Number(proposal.versao || 1),
       publicationStatus: proposal.publication_status || "sent",
       isDraft: proposal.publication_status === "draft",
@@ -9294,6 +9408,7 @@ function renderDashboardReports(items = getPipelineItems()) {
   const total = proposalItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const average = proposalItems.length ? total / proposalItems.length : 0;
   const insight = getReportActionInsight({ config, reportItems, proposalItems, soldItems });
+  const learning = getCommercialLearningMetrics(items);
 
   nodes.reportPresets?.querySelectorAll("[data-report-preset]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.reportPreset === state.activeReportPreset);
@@ -9330,10 +9445,96 @@ function renderDashboardReports(items = getPipelineItems()) {
         <strong>${escapeHtml(insight.topClientType)}</strong>
       </article>
     </div>
+    ${renderCommercialLearning(learning)}
     <div class="report-list">
       ${reportItems.length ? reportItems.slice(0, 14).map(renderReportItem).join("") : `<p>Nenhum item neste relatório.</p>`}
     </div>
   `;
+}
+
+function getCommercialLearningMetrics(items = getPipelineItems()) {
+  const proposals = items.filter((item) => item.kind === "proposal" && !item.isDraft);
+  const sold = proposals.filter(isSoldReportItem);
+  const responseHours = items
+    .filter((item) => item.createdAt && item.firstReplySentAt)
+    .map((item) => (new Date(item.firstReplySentAt).getTime() - new Date(item.createdAt).getTime()) / 36e5)
+    .filter((hours) => Number.isFinite(hours) && hours >= 0 && hours < 24 * 30);
+  const averageResponseHours = responseHours.length
+    ? responseHours.reduce((sum, value) => sum + value, 0) / responseHours.length
+    : null;
+  const stageWeights = {
+    lead_recebido: 0.1,
+    proposta_pronta: 0.25,
+    proposta_enviada: 0.4,
+    negociacao: 0.65,
+    confirmado: 0.85,
+    pagamento_final: 0.95,
+    planejamento: 1,
+    evento_proximo: 1,
+    pos_venda: 1,
+  };
+  const weightedPipeline = proposals.reduce(
+    (sum, item) => sum + (Number(item.total) || 0) * (stageWeights[item.stage] ?? (isSoldReportItem(item) ? 1 : 0.2)),
+    0,
+  );
+  const lossCounts = new Map();
+  items.forEach((item) => {
+    const reason = item.cancelReason || item.snapshot?.eventOutcome?.reason || item.snapshot?.eventOutcome?.outcome;
+    if (!reason) return;
+    lossCounts.set(reason, (lossCounts.get(reason) || 0) + 1);
+  });
+  const productCounts = new Map();
+  sold.forEach((item) => {
+    (item.snapshot?.selectedItems || []).forEach((product) => {
+      const name = product.nome || product.name;
+      if (!name) return;
+      productCounts.set(name, (productCounts.get(name) || 0) + 1);
+    });
+  });
+  const buyerCounts = new Map();
+  sold.forEach((item) => {
+    const key = String(item.email || item.phone || item.name || "").trim().toLowerCase();
+    if (key) buyerCounts.set(key, (buyerCounts.get(key) || 0) + 1);
+  });
+  const rank = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return {
+    averageResponseHours,
+    responseSamples: responseHours.length,
+    conversion: proposals.length ? Math.round((sold.length / proposals.length) * 100) : 0,
+    weightedPipeline,
+    repeatBuyers: [...buyerCounts.values()].filter((count) => count >= 2).length,
+    topProducts: rank(productCounts),
+    lossReasons: rank(lossCounts),
+  };
+}
+
+function formatResponseTime(hours) {
+  if (hours === null) return "Sem dados";
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
+  if (hours < 24) return `${hours.toFixed(hours < 10 ? 1 : 0).replace(".", ",")} h`;
+  return `${(hours / 24).toFixed(1).replace(".", ",")} dias`;
+}
+
+function renderCommercialLearning(learning) {
+  const list = (title, rows, empty) => `
+    <article class="commercial-learning-list">
+      <span>${escapeHtml(title)}</span>
+      ${rows.length ? `<ol>${rows.map(([label, count]) => `<li><b>${escapeHtml(label)}</b><strong>${count}</strong></li>`).join("")}</ol>` : `<p>${escapeHtml(empty)}</p>`}
+    </article>`;
+  return `
+    <section class="commercial-learning" aria-label="Aprendizado comercial">
+      <div class="commercial-learning-heading"><span>Aprendizado comercial</span><strong>Indicadores para melhorar a conversão</strong></div>
+      <div class="commercial-learning-kpis">
+        <article><span>1ª resposta</span><strong>${escapeHtml(formatResponseTime(learning.averageResponseHours))}</strong><small>${learning.responseSamples} amostra(s)</small></article>
+        <article><span>Conversão</span><strong>${learning.conversion}%</strong><small>propostas fechadas</small></article>
+        <article><span>Funil ponderado</span><strong>${escapeHtml(formatMoney(learning.weightedPipeline))}</strong><small>valor × chance da etapa</small></article>
+        <article><span>Recompra</span><strong>${learning.repeatBuyers}</strong><small>clientes com 2+ eventos</small></article>
+      </div>
+      <div class="commercial-learning-breakdown">
+        ${list("Produtos mais vendidos", learning.topProducts, "Feche eventos para formar o ranking.")}
+        ${list("Motivos de perda", learning.lossReasons, "Classifique perdas para identificar padrões.")}
+      </div>
+    </section>`;
 }
 
 function selectReportPreset(preset) {
@@ -11604,6 +11805,9 @@ function resetProposalDraftState() {
   saveSelectedIds();
   fields.manualAdjustment.value = "0";
   fields.manualAdjustmentLabel.value = "";
+  if (fields.commercialApprovalBy) fields.commercialApprovalBy.value = "";
+  if (fields.commercialApprovalConfirmed) fields.commercialApprovalConfirmed.checked = false;
+  state.forceNewVersionDraft = false;
   if (fields.privatizationAdjustment) fields.privatizationAdjustment.value = "0";
   if (fields.privatizationAdjustmentLabel) fields.privatizationAdjustmentLabel.value = "";
   if (fields.quickItemName) fields.quickItemName.value = "";
@@ -12640,6 +12844,7 @@ async function logoutSupabase() {
   state.loadedEditorSignature = "";
   state.smartDraftSuggestion = null;
   state.smartDraftApproval = null;
+  state.forceNewVersionDraft = false;
   updateAuthUI();
   renderHistory();
   renderConfirmedEvents();
@@ -12832,7 +13037,6 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
   const snapshotWithHistory = withCommercialHistoryEntries(snapshot, historyEntries);
 
-  const row = getProposalRow(snapshotWithHistory, nextStatus);
   const persistableProposalId = getPersistableProposalId();
   if (state.activeProposalId && !persistableProposalId) {
     console.warn("ID ativo da proposta não é UUID persistível; criando novo registro no Supabase.", state.activeProposalId);
@@ -12843,7 +13047,11 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     Boolean(activeProposal) &&
     activeProposal?.publication_status !== "draft" &&
     ["proposta_pronta", "proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
-  const needsNewVersion = activeWasPublished && proposalChanges.length > 0;
+  const needsNewVersion = activeWasPublished && (proposalChanges.length > 0 || state.forceNewVersionDraft);
+  if (needsNewVersion) {
+    snapshotWithHistory.versionChanges = getClientVisibleProposalChanges(activeProposal?.snapshot || {}, snapshotWithHistory);
+  }
+  const row = getProposalRow(snapshotWithHistory, nextStatus);
   const publishNewVersion = Boolean(options.forSharing && (activeIsDraft || needsNewVersion));
   if (publishNewVersion) {
     row.status = "proposta_pronta";
@@ -12901,6 +13109,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
 
   state.activeProposalId = data.id;
+  state.forceNewVersionDraft = false;
   const newSourceKey = `proposal:${data.id}`;
   if (sourceKeyBeforeSave && sourceKeyBeforeSave !== newSourceKey) {
     state.sourceOverrides[newSourceKey] = {
@@ -12997,6 +13206,8 @@ function applyProposalSnapshot(snapshot) {
   }
   fields.manualAdjustment.value = getManualAdjustmentInputValue(snapshot.event?.manualAdjustment, snapshot.totals?.adjustment);
   fields.manualAdjustmentLabel.value = snapshot.event?.manualAdjustmentLabel || snapshot.totals?.adjustmentLabel || "";
+  if (fields.commercialApprovalBy) fields.commercialApprovalBy.value = snapshot.commercialApproval?.approvedBy || "";
+  if (fields.commercialApprovalConfirmed) fields.commercialApprovalConfirmed.checked = Boolean(snapshot.commercialApproval?.approved);
   if (fields.privatizationAdjustment) {
     fields.privatizationAdjustment.value = getPrivatizationAdjustmentInputValue(
       snapshot.event?.privatizationAdjustment,
@@ -13347,6 +13558,7 @@ function renderAll() {
   renderLoadedEditorBar();
   renderFirstReplyPanel();
   renderSmartDraftPanel();
+  renderCommercialApprovalPanel();
   renderLeadReviewPanel();
   renderProposalNextStep();
   renderManualContactPanel();
@@ -14779,6 +14991,7 @@ function bindEvents() {
       renderAvailabilityAlert();
       renderFormSourcePanel();
       renderServiceCockpit();
+      renderCommercialApprovalPanel();
       renderLeadReviewPanel();
       renderProposalNextStep();
       renderQuickReplies();
@@ -15216,6 +15429,11 @@ function bindEvents() {
     await safeOpenSavedProposal(button.dataset.proposalId, "Histórico");
   });
   nodes.commercialTimeline?.addEventListener("click", async (event) => {
+    const duplicateButton = event.target.closest("button[data-duplicate-proposal-id]");
+    if (duplicateButton) {
+      await duplicateProposalForAdjustment(duplicateButton.dataset.duplicateProposalId);
+      return;
+    }
     const button = event.target.closest("button[data-proposal-id]");
     if (button) await safeOpenSavedProposal(button.dataset.proposalId, "Versões da proposta");
   });
