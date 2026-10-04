@@ -10507,7 +10507,8 @@ function hasUnsavedEditorChanges() {
 function renderLoadedEditorBar() {
   if (!nodes.loadedEditorBar) return;
   const context = state.activeEditorContext;
-  if (!context || isQuoteWorkspaceEffectivelyEmpty()) {
+  const isNewManualDraft = context?.kind === "manual";
+  if (!context || (isQuoteWorkspaceEffectivelyEmpty() && !isNewManualDraft)) {
     nodes.loadedEditorBar.classList.add("is-hidden");
     nodes.loadedEditorBar.innerHTML = "";
     return;
