@@ -11341,8 +11341,8 @@ body[data-page="app"] .workspace {
 
 /* Critical event identity must never shrink or be ellipsized in a busy funnel. */
 body[data-page="app"] .pipeline-card {
-  gap: 7px;
-  padding: 10px;
+  gap: 5px;
+  padding: 8px 10px;
 }
 
 body[data-page="app"] .pipeline-card-name {
@@ -11378,6 +11378,94 @@ body[data-page="app"] .pipeline-card-value-stack {
 body[data-page="app"] .pipeline-card-final-client {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Compact summary; secondary context expands without hiding the sales action. */
+.pipeline-card-kicker:not(:has(*)) {
+  display: none;
+}
+
+.pipeline-card-offer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+}
+
+.pipeline-card-product {
+  color: var(--verde-escuro);
+  font-size: 0.78rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+body[data-page="app"] .pipeline-card-next-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  justify-content: space-between;
+  padding: 5px 7px;
+}
+
+body[data-page="app"] .pipeline-card-next-action strong {
+  flex: 1 1 130px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+body[data-page="app"] .pipeline-plan-line {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+}
+
+body[data-page="app"] .pipeline-plan-line span {
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+body[data-page="app"] .pipeline-plan-line button {
+  min-height: 26px;
+  padding: 0 7px;
+  font-size: 0.65rem;
+}
+
+.pipeline-card-details {
+  min-width: 0;
+  border-top: 1px solid rgba(24, 58, 45, 0.1);
+  padding-top: 3px;
+}
+
+.pipeline-card-details > summary {
+  cursor: pointer;
+  color: #335d4a;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.pipeline-card-details-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+}
+
+.pipeline-card-details-content > small:not(.proposal-version-badge):not(.pipeline-score-badge),
+.pipeline-card-details-content > .pipeline-value-breakdown {
+  flex-basis: 100%;
+}
+
+body[data-page="app"] .pipeline-card-bottom-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1260px) {
