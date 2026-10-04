@@ -1,5 +1,8 @@
 [functions.notify-new-lead]
 verify_jwt = false
 
+[functions.send-proposal-email]
+verify_jwt = true
+
 [functions.send-proposal-whatsapp]
 verify_jwt = true
