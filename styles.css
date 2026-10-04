@@ -11625,6 +11625,101 @@ body[data-page="app"] .pipeline-card-bottom-row {
   }
 }
 
+/* Client request: essentials first, optional discovery on demand. */
+.public-form-body { background: #f3f5f2; }
+.public-form-body .public-form-shell { max-width: 1240px; margin: auto; }
+.public-form-body .public-form-hero { min-height: 0; border-radius: 0 0 20px 20px; }
+.public-form-body .public-form-hero > img { transform: none; object-position: center 40%; }
+.public-form-body .public-form-hero-copy {
+  max-width: none; padding: 24px 28px; gap: 7px;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+}
+.public-form-body .public-form-hero-copy > img { width: 54px; height: 54px; grid-column: 1; grid-row: 1 / 4; }
+.public-form-body .language-toggle { grid-column: 3; grid-row: 1 / 3; margin: 0; align-self: start; }
+.public-form-body .language-toggle button { min-height: 44px; }
+.public-form-body #heroEyebrow { grid-column: 2; margin: 0; }
+.public-form-body #heroTitle { grid-column: 2; font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.15; text-wrap: initial; }
+.public-form-body #heroSubtitle { grid-column: 2; font-size: 0.9rem; font-weight: 600; }
+.public-form-body .public-form-trust { grid-column: 2 / -1; gap: 5px; margin-top: 2px; }
+.public-form-body .public-form-trust b { padding: 4px 7px; font-size: 0.7rem; }
+.public-form-body #trustPoint2, .public-form-body #trustPoint3 { display: none; }
+.public-form-body .public-form-panel { max-width: none; margin-top: 16px; padding: 20px; background: #fff; border-radius: 16px; }
+.public-form-body .public-form-intro { grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 10px; padding-bottom: 10px; }
+.public-form-body .public-form-intro h2 { font-size: 1.4rem; line-height: 1.2; }
+.public-form-body .public-form-intro p:not(.eyebrow) { font-size: 0.9rem; font-weight: 500; margin-top: 5px; }
+.public-form-body #introEyebrow, .public-form-body .public-form-steps,
+.public-form-body .form-ux-cues, .public-form-body .form-progress > div { display: none; }
+.public-form-body .form-progress { font-size: 0.75rem; }
+.public-form-body .public-form-shortcut { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 10px; background: none; border: 0; }
+.public-form-body .public-form-shortcut > div { display: none; }
+.public-form-body .public-form-shortcut a { min-height: 44px; padding: 7px 12px; font-size: 0.8rem; border-radius: 8px; }
+.public-form-body #quickHumanLink { margin-left: auto; border-color: transparent; text-decoration: underline; }
+.public-form-body .returning-client-card { margin: 0 0 14px; padding: 0; box-shadow: none; }
+.public-form-body .returning-client-card > summary { padding: 10px 12px; font-size: 0.8rem; min-height: 44px; }
+.public-form-body .client-quote-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 14px; }
+.public-form-body #eventDetailsStep, .public-form-body #contactStep { min-width: 0; margin: 0; }
+.public-form-body .consult-step { background: #fff; padding: 14px; gap: 12px; border-radius: 12px; scroll-margin-top: 12px; }
+.public-form-body .section-heading { margin: 0; gap: 8px; }
+.public-form-body .section-heading h2 { font-size: 1.15rem; line-height: 1.25; }
+.public-form-body .event-details-grid, .public-form-body .contact-primary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.public-form-body .fields-grid label { min-width: 0; gap: 5px; font-size: 0.85rem; }
+.public-form-body .fields-grid input, .public-form-body .fields-grid select,
+.public-form-body textarea { min-width: 0; width: 100%; min-height: 44px; font-size: 1rem; }
+.public-form-body input[type="range"] { min-height: 24px; }
+.public-form-body .fields-grid label > small { min-height: 0; font-size: 0.72rem; line-height: 1.35; font-weight: 500; }
+.public-form-body .contact-step-shell { gap: 12px; }
+.public-form-body .contact-step-intro { padding: 0; border: 0; background: none; }
+.public-form-body #contactIntroTitle, .public-form-body #contactRequirementNote,
+.public-form-body #nameHelp:not([data-tone="warning"]), .public-form-body #companyHelp:not([data-tone="warning"]) { display: none; }
+.public-form-body #contactIntroBody { font-size: 0.85rem; margin: 0; line-height: 1.4; }
+.public-form-body .contact-reassurance { gap: 5px; }
+.public-form-body .contact-promise { padding: 8px 10px; font-size: 0.8rem; }
+.public-form-body .contact-assurance { font-size: 0.75rem; font-weight: 500; }
+.public-form-body .contact-optional-fields { border-top: 1px solid var(--line); padding-top: 7px; }
+.public-form-body .contact-optional-fields > summary { cursor: pointer; font-size: 0.8rem; color: var(--verde-escuro); min-height: 32px; }
+.public-form-body .contact-secondary-grid { margin-top: 10px; }
+.public-form-body .form-personalize, .public-form-body .final-review-card, .public-form-body .public-form-actions { grid-column: 1 / -1; }
+.public-form-body .form-personalize { border: 1px solid var(--line); border-radius: 12px; scroll-margin-top: 12px; }
+.public-form-body .form-personalize > summary { cursor: pointer; padding: 14px; color: var(--verde-escuro); }
+.public-form-body .form-personalize > summary span { display: block; margin: 5px 0 0 16px; font-size: 0.8rem; color: var(--muted); }
+.public-form-body #personalizeContent { display: grid; gap: 12px; padding: 0 12px 12px; }
+.public-form-body #personalizeContent .section-heading > span { display: none; }
+.public-form-body .choice-card-grid, .public-form-body .format-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.public-form-body .choice-card-grid button, .public-form-body .format-card { min-height: 64px; padding: 11px; gap: 5px; }
+.public-form-body .choice-card-grid span, .public-form-body .format-card em { font-size: 0.8rem; line-height: 1.35; }
+.public-form-body .final-review-card { padding: 12px; gap: 10px; }
+.public-form-body .final-review-card h2 { font-size: 1.1rem; }
+.public-form-body .final-review-card p { font-size: 0.8rem; margin: 0; }
+.public-form-body .final-review-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.public-form-body .final-review-grid button { min-height: 0; padding: 9px; gap: 4px; }
+.public-form-body .final-review-grid strong { font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; }
+.public-form-body .public-form-actions { border-top: 1px solid var(--line); padding-top: 12px; gap: 10px; }
+.public-form-body .public-form-actions button { min-height: 48px; }
+.public-form-body .public-form-actions p { font-size: 0.8rem; }
+.public-form-body a:focus-visible, .public-form-body summary:focus-visible, .public-form-body button:focus-visible { outline: 3px solid var(--amarelo); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .public-form-body .public-form-hero-copy { padding: 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .public-form-body .public-form-hero-copy > img { display: none; }
+  .public-form-body #heroEyebrow, .public-form-body #heroTitle, .public-form-body #heroSubtitle { grid-column: 1 / -1; }
+  .public-form-body #heroEyebrow { padding-right: 118px; min-height: 44px; display: flex; align-items: center; }
+  .public-form-body .language-toggle { position: absolute; right: 16px; top: 16px; }
+  .public-form-body #heroTitle { font-size: 1.45rem; }
+  .public-form-body #heroSubtitle { font-size: 0.8rem; }
+  .public-form-body .public-form-trust { grid-column: 1 / -1; }
+  .public-form-body .public-form-panel { margin: 8px; padding: 12px; }
+  .public-form-body .public-form-intro { grid-template-columns: 1fr; gap: 6px; }
+  .public-form-body .public-form-intro h2 { font-size: 1.2rem; }
+  .public-form-body .public-form-shortcut a { padding: 7px 9px; font-size: 0.75rem; }
+  .public-form-body #quickHumanLink { margin-left: 0; }
+  .public-form-body .client-quote-form { grid-template-columns: minmax(0, 1fr); }
+  .public-form-body .returning-client-card > summary { display: block; line-height: 1.4; }
+  .public-form-body .returning-client-card > summary strong { display: none; }
+  .public-form-body .contact-primary-grid { grid-template-columns: minmax(0, 1fr); }
+  .public-form-body .final-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-form-body .choice-card-grid, .public-form-body .format-grid { grid-template-columns: minmax(0, 1fr); }
+  .public-form-body .consult-step { padding: 12px; }
+}
+
 @media print {
   @page {
     margin: 0;
