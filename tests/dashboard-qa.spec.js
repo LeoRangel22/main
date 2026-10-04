@@ -355,7 +355,7 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     await page.getByRole("button", { name: "Visão completa" }).click();
 
-    await page.locator(".pipeline-stage-desfecho_pendente summary").click();
+    await page.locator(".pipeline-stage-desfecho_pendente .pipeline-column-summary").click();
     const pastCard = page.locator('[data-pipeline-card-id="qa-proposal-desfecho"]');
     await expect(pastCard).toBeVisible();
     await pastCard.getByRole("button", { name: "Classificar desfecho" }).click();
@@ -400,10 +400,16 @@ test.describe("Dashboard interno em modo QA", () => {
     const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
     await expect(proposalCard).toBeVisible();
     await expect(proposalCard.locator(".pipeline-stage-chip")).toContainText("Agência de turismo receptivo / DMC");
-    await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Café da Manhã / Brunch");
+    await expect(proposalCard.locator(".pipeline-card-product")).toContainText("Café da Manhã / Brunch");
     await expect(proposalCard.locator(".pipeline-card-event-line")).toContainText(/· (dom|seg|ter|qua|qui|sex|sáb) ·/i);
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("A&B");
-    await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("Priv.");
+    await expect(proposalCard.locator(".pipeline-value-breakdown")).not.toContainText("Priv.");
+    const paidArea = await page.evaluate(() => renderPipelineValueBreakdown(
+      { ...getPipelineItems().find((row) => row.id === 'qa-proposal-sem-resposta'), privatizationAmount: 100 },
+      '', { includeProduct: false, includeZero: false },
+    ));
+    expect(paidArea).toContain('Priv.');
+    expect(paidArea).toMatch(/100,00/);
     await expect(proposalCard.locator(".pipeline-value-breakdown")).toContainText("R$ 3.057,60");
     await expect(proposalCard.locator(".pipeline-card-final-client")).toContainText("Cliente final: Grupo Andes");
     await expect(proposalCard.locator(".pipeline-card-next-action [data-mark-paid]")).toBeVisible();
@@ -418,9 +424,45 @@ test.describe("Dashboard interno em modo QA", () => {
     const proposalCard = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
     await expect(proposalCard).toBeVisible();
     await expect(proposalCard.locator(".follow-up-badge")).toContainText(/Sem retorno há/i);
-    await expect(proposalCard.locator(".pipeline-card-next-action")).toContainText(/Retomar contato|Checar retorno/i);
+    const plannedAction = await page.evaluate(() => getTaskPlan(getPipelineItems().find((row) => row.id === 'qa-proposal-sem-resposta')).action);
+    await expect(proposalCard.locator(".pipeline-card-next-action strong")).toHaveText(plannedAction);
+    await expect(proposalCard.locator(".pipeline-plan-line")).not.toContainText(plannedAction);
     await expect(proposalCard.locator(".pipeline-card-next-action")).not.toContainText(/follow-up/i);
     await expect(proposalCard.locator(".pipeline-card-alerts")).not.toContainText(/follow-up/i);
     await expectNoBrowserErrors(errors);
+  });
+
+  test("card compacto mantém essenciais visíveis e expande contexto secundário", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    await page.evaluate(() => {
+      const item = getPipelineItems().find((row) => row.id === 'qa-proposal-sem-resposta');
+      Object.assign(item, { name: 'Anna Vieira', company: 'Abercrombie & Kent Brazil',
+        finalClient: 'Abercrombie & Kent Brazil', groupName: 'Brazil Ultimate Carnival 2028',
+        total: 1008, privatizationAmount: 0, type: 'Welcome Drink', date: '2028-10-24', time: '17:00', guests: 25 });
+      document.querySelector('[data-pipeline-card-id="qa-proposal-sem-resposta"]').outerHTML = renderPipelineCard(item);
+    });
+    const card = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(card.locator('.pipeline-card-name')).toContainText('Anna Vieira');
+      await expect(card.locator('.pipeline-card-event-line')).toContainText('17:00');
+      await expect(card.locator('.pipeline-card-event-line')).toContainText('25 pax');
+      await expect(card.locator('.pipeline-card-value')).toBeVisible();
+      await expect(card.locator('.pipeline-card-next-action')).toBeVisible();
+      await expect(card.locator('.pipeline-card-details')).not.toHaveAttribute('open', '');
+      await expect(card.locator('.pipeline-score-badge')).toBeHidden();
+      const collapsed = await card.evaluate((node) => node.getBoundingClientRect().height);
+      console.info(`Card compacto ${width}px: ${Math.round(collapsed)}px de altura`);
+      expect(collapsed, `altura compacta em ${width}px`).toBeLessThan(360);
+      await card.locator('.pipeline-card-details > summary').click();
+      await expect(card.locator('.pipeline-stage-chip')).toBeVisible();
+      await expect(card.locator('.pipeline-value-breakdown')).not.toContainText('Priv.');
+      await expect(card.locator('.pipeline-card-final-client')).not.toContainText('Cliente final:');
+      await expect(card.locator('.pipeline-card-final-client')).toContainText('Brazil Ultimate Carnival 2028');
+      const expanded = await card.evaluate((node) => node.getBoundingClientRect().height);
+      expect(expanded - collapsed).toBeGreaterThan(60);
+      await card.locator('.pipeline-card-details > summary').click();
+      await expectNoHorizontalOverflow(page);
+    }
   });
 });

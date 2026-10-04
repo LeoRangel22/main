@@ -11446,14 +11446,14 @@ function getPipelineValueBreakdown(item = {}) {
   };
 }
 
-function renderPipelineValueBreakdown(item = {}, className = "") {
+function renderPipelineValueBreakdown(item = {}, className = "", { includeProduct = true, includeZero = true } = {}) {
   const breakdown = getPipelineValueBreakdown(item);
   if (!breakdown) return "";
   return `
     <div class="pipeline-value-breakdown ${escapeHtml(className)}" aria-label="Composição do valor da proposta">
-      ${item.type ? `<span class="pipeline-product-chip" title="Formato do evento">${escapeHtml(item.type)}</span>` : ""}
+      ${includeProduct && item.type ? `<span class="pipeline-product-chip" title="Formato do evento">${escapeHtml(item.type)}</span>` : ""}
       <span title="Alimentos e bebidas">A&amp;B ${formatMoney(breakdown.foodBeverage)}</span>
-      <span class="${breakdown.privatization > 0 ? "has-privatization" : ""}" title="Privatização">Priv. ${formatMoney(breakdown.privatization)}</span>
+      ${includeZero || breakdown.privatization > 0 ? `<span class="${breakdown.privatization > 0 ? "has-privatization" : ""}" title="Privatização">Priv. ${formatMoney(breakdown.privatization)}</span>` : ""}
     </div>
   `;
 }
@@ -11470,7 +11470,9 @@ function renderPipelineCard(item) {
   const eventLine = [dateLabel, weekdayLabel, timeLabel, `${item.guests} pax`].filter(Boolean).join(" · ");
   const displayName = item.company ? `${item.name} - ${item.company}` : item.name;
   const clientTypeLine = item.clientType || item.meta[0] || "";
-  const finalClientLine = [item.finalClient ? `Cliente final: ${item.finalClient}` : "", item.groupName ? `Grupo: ${item.groupName}` : ""]
+  const sameIdentity = (a, b) => String(a || "").trim().toLocaleLowerCase() === String(b || "").trim().toLocaleLowerCase();
+  const distinctFinalClient = item.finalClient && ![item.name, item.company].some((value) => sameIdentity(value, item.finalClient));
+  const finalClientLine = [distinctFinalClient ? `Cliente final: ${item.finalClient}` : "", item.groupName ? `Grupo: ${item.groupName}` : ""]
     .filter(Boolean)
     .join(" · ");
   const leadAge = getLeadAgeInfo(item);
@@ -11515,17 +11517,16 @@ function renderPipelineCard(item) {
       : "";
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
   const primaryActionButton = actionInsideNext ? `<span class="pipeline-next-action-button">${actionInsideNext}</span>` : "";
+  const plan = getTaskPlan(item);
+  const hasPlannedAction = !needsOutcome && item.status !== "cancelado" && plan.action && plan.action !== "Definir próximo passo";
   const primaryActionLine = `
     <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}${primaryActionButton ? " has-action-button" : ""}">
-      <span>${escapeHtml(primaryAction.eyebrow)}</span>
-      <strong>${escapeHtml(primaryAction.label)}</strong>
-      <small>${escapeHtml(primaryAction.note || "")}</small>
+      <strong>${escapeHtml(hasPlannedAction ? plan.action : primaryAction.label)}</strong>
       ${primaryActionButton}
     </div>
   `;
-  const plan = getTaskPlan(item);
   const planLine = !needsOutcome && item.opportunityId && item.status !== "cancelado" ? `<div class="pipeline-plan-line${plan.overdue ? " is-overdue" : ""}">
-    <span>${plan.owner ? escapeHtml(plan.owner) : "Sem responsável"} · ${escapeHtml(plan.action)} · ${plan.due ? escapeHtml(formatSavedAt(plan.due)) : "sem prazo"}</span>
+    <span title="${escapeHtml(plan.owner || "Sem responsável")}">${plan.owner ? escapeHtml(plan.owner.split("@")[0]) : "Sem responsável"} · ${plan.due ? escapeHtml(formatSavedAt(plan.due)) : "sem prazo"}${plan.overdue ? " · atrasado" : ""}</span>
     <button class="secondary" type="button" data-plan-kind="${escapeHtml(item.kind)}" data-plan-id="${escapeHtml(item.id)}">Planejar</button>
   </div>` : "";
   const remainingButton =
@@ -11575,29 +11576,39 @@ function renderPipelineCard(item) {
         <small class="pipeline-card-name">${escapeHtml(displayName)}</small>
       </div>
       <div class="pipeline-card-kicker">
-        <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
         ${leadAgeBadge}
         ${followUpBadge}
-        ${versionBadge}
+        ${item.isDraft ? versionBadge : ""}
         ${topAction}
       </div>
       <div class="pipeline-card-event-row">
         <small class="pipeline-card-event-line">${escapeHtml(eventLine)}</small>
+      </div>
+      <div class="pipeline-card-offer">
+        <span class="pipeline-card-product">${escapeHtml(item.type || "Formato a definir")}</span>
         <span class="pipeline-card-value-stack">
           <span class="pipeline-card-value">${escapeHtml(valueLabel)}</span>
         </span>
       </div>
-      <div class="pipeline-card-breakdown-row">
-        ${renderPipelineValueBreakdown(item)}
-        ${scoreBadge}
-      </div>
-      ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
       ${riskAlertsLine}
       ${primaryActionLine}
       ${planLine}
       ${clientResponseLine}
+      <details class="pipeline-card-details">
+        <summary>Detalhes</summary>
+        <div class="pipeline-card-details-content">
+          <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
+          ${item.isDraft ? "" : versionBadge}
+          ${scoreBadge}
+          ${renderPipelineValueBreakdown(item, "", { includeProduct: false, includeZero: false })}
+          ${finalClientLine ? `<small class="pipeline-card-final-client">${escapeHtml(finalClientLine)}</small>` : ""}
+          <small>${escapeHtml(primaryAction.eyebrow)} · ${escapeHtml(primaryAction.note || primaryAction.label)}</small>
+          ${hasPlannedAction ? `<small>Sugestão do sistema: ${escapeHtml(primaryAction.label)}</small>` : ""}
+          ${plan.owner ? `<small>Responsável: ${escapeHtml(plan.owner)}</small>` : ""}
+          <small class="pipeline-card-reference-bottom">${escapeHtml(item.reference || "Sem referência")}</small>
+        </div>
+      </details>
       <div class="pipeline-card-bottom-row">
-        <small class="pipeline-card-reference-bottom">${escapeHtml(item.reference || "Sem referência")}</small>
         ${actionButtons}
       </div>
       ${cancelInfo}
