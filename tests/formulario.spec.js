@@ -25,6 +25,7 @@ test.describe("Formulário público do cliente", () => {
     await expect(page.locator("#phoneLabel")).toContainText("Celular/WhatsApp");
     await expect(page.locator("#leadSourceLabel")).toContainText(/Opcional/i);
 
+    await page.locator('#formPersonalizeNav').click();
     await page.locator('[data-choice-group="moment"][data-choice-value="weekday-morning"]').click();
     await page.locator('[data-choice-group="clientType"][data-choice-value="agency-tourism"]').click();
     await page.locator('[data-choice-group="profile"][data-choice-value="travel"]').click();
@@ -155,6 +156,41 @@ test.describe("Formulário público do cliente", () => {
     expect(captured?.p_snapshot?.cliente?.nome).toBe("Marina Costa");
     expect(captured?.p_snapshot?.cliente?.email).toBe("marina@example.com");
     await expect(page.locator("#partialCaptureStatus")).toContainText(/salvo|saved/i);
+    await expectNoBrowserErrors(errors);
+  });
+
+  test("essenciais primeiro e personalização opcional preservam dados em PT e EN", async ({ page }) => {
+    const errors = collectBrowserErrors(page);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto('/formulario.html');
+      await expect(page.locator('#personalizeOptions')).not.toHaveAttribute('open', '');
+      await expect(page.locator('#momentChoices')).toBeHidden();
+      await expect(page.locator('#requestEventDate')).toBeInViewport();
+      const layout = await page.evaluate(() => {
+        const event = document.querySelector('#eventDetailsStep').getBoundingClientRect();
+        const contact = document.querySelector('#contactStep').getBoundingClientRect();
+        const optional = document.querySelector('#personalizeOptions').getBoundingClientRect();
+        return { topGap: Math.abs(event.top - contact.top), optionalAfter: optional.top >= contact.bottom,
+          hero: document.querySelector('.public-form-hero').getBoundingClientRect().height };
+      });
+      if (width === 1440) expect(layout.topGap).toBeLessThan(2);
+      expect(layout.optionalAfter).toBe(true);
+      expect(layout.hero).toBeLessThan(290);
+      await page.locator('#requestClientName').fill('Ana Silva');
+      await page.locator('#requestEventDate').fill('2026-11-20');
+      await page.locator('#finalReviewGrid [data-review-step="recommendation"]').click();
+      await expect(page.locator('#personalizeOptions')).toHaveAttribute('open', '');
+      await expect(page.locator('#formatRecommendations')).toBeVisible();
+      await page.locator('#personalizeOptions > summary').click();
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await expect(page.locator('#personalizeTitle')).toContainText('optional');
+      await expect(page.locator('#formContactNav')).toHaveText('Contact');
+      await expect(page.locator('#requestClientName')).toHaveValue('Ana Silva');
+      await expect(page.locator('#requestEventDate')).toHaveValue('2026-11-20');
+      await expect(page.locator('#finalReviewGrid [data-review-step="profile"]')).not.toHaveClass(/is-required/);
+      await expectNoHorizontalOverflow(page);
+    }
     await expectNoBrowserErrors(errors);
   });
 });
