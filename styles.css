@@ -11705,10 +11705,11 @@ body[data-page="app"] .pipeline-card-bottom-row {
   .public-form-body .language-toggle { position: absolute; right: 16px; top: 16px; }
   .public-form-body #heroTitle { font-size: 1.45rem; }
   .public-form-body #heroSubtitle { font-size: 0.8rem; }
-  .public-form-body .public-form-trust { grid-column: 1 / -1; }
-  .public-form-body .public-form-panel { margin: 8px; padding: 12px; }
+  .public-form-body .public-form-trust { grid-column: 1 / -1; display: flex; max-width: none; }
+  .public-form-body .public-form-panel { margin: 8px; padding: 12px; width: auto; overflow: visible; }
   .public-form-body .public-form-intro { grid-template-columns: 1fr; gap: 6px; }
-  .public-form-body .public-form-intro h2 { font-size: 1.2rem; }
+  .public-form-body .public-form-intro h2 { font-size: 1.2rem; max-width: none; }
+  .public-form-body .public-form-intro p:not(.eyebrow) { max-width: none; }
   .public-form-body .public-form-shortcut a { padding: 7px 9px; font-size: 0.75rem; }
   .public-form-body #quickHumanLink { margin-left: 0; }
   .public-form-body .client-quote-form { grid-template-columns: minmax(0, 1fr); }
