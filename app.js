@@ -8495,7 +8495,7 @@ function loadQaFixtures() {
     status: row.status,
     responsavel_email: row.id === "qa-request-prioridade" ? null : QA_USER_EMAIL,
     proxima_acao: row.id === "qa-request-prioridade" ? "Responder lead" : "Retomar cliente",
-    proxima_acao_em: createQaTimestamp(1, 12, 0),
+    proxima_acao_em: createQaTimestamp(row.id === "qa-proposal-sem-resposta" ? -1 : 1, 12, 0),
   }));
   state.proposalViews = [{ id: "qa-view-1", proposta_id: proposalWaiting.id, created_at: createQaTimestamp(-1, 16, 0) }];
 }
@@ -8932,26 +8932,24 @@ function getWorkingProposals() {
   const grouped = new Map();
   state.proposals.forEach((proposal) => {
     const key = proposal.oportunidade_id || proposal.id;
-    const current = grouped.get(key);
-    if (!current) {
-      grouped.set(key, proposal);
-      return;
-    }
-    const proposalIsDraft = proposal.publication_status === "draft";
-    const currentIsDraft = current.publication_status === "draft";
-    if (proposalIsDraft && !currentIsDraft) {
-      grouped.set(key, proposal);
-      return;
-    }
-    if (proposalIsDraft === currentIsDraft) {
-      const proposalTime = new Date(proposal.updated_at || proposal.created_at || 0).getTime();
-      const currentTime = new Date(current.updated_at || current.created_at || 0).getTime();
-      if (proposalTime > currentTime) grouped.set(key, proposal);
-      return;
-    }
-    if (!currentIsDraft && proposal.is_current === true && current.is_current !== true) grouped.set(key, proposal);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(proposal);
   });
-  return [...grouped.values()];
+  return [...grouped.values()].map((versions) => {
+    const byRecentUpdate = (a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
+    const draft = versions.filter((row) => row.publication_status === "draft").sort(byRecentUpdate)[0];
+    const published = versions.filter((row) => row.publication_status !== "draft")
+      .sort((a, b) => Number(b.is_current === true) - Number(a.is_current === true) || byRecentUpdate(a, b))[0];
+    if (!draft) return published;
+    const response = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao;
+    const responseAt = published?.cliente_resposta_em || published?.snapshot?.clienteResposta?.registradoEm;
+    const responseNeedsAttention = published && ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(published.status)) && response && (
+      ["confirmar", "cancelar"].includes(response) ||
+      !responseAt || new Date(responseAt) > new Date(draft.created_at || draft.updated_at || 0)
+    );
+    // A response to the live version must remain visible while a draft is being prepared.
+    return responseNeedsAttention ? { ...published, pendingDraftId: draft.id, pendingDraftVersion: draft.versao } : draft;
+  });
 }
 
 function getOpportunityForItem(item) {
@@ -9050,6 +9048,8 @@ function getPipelineItems() {
       publicationStatus: proposal.publication_status || "sent",
       isDraft: proposal.publication_status === "draft",
       isCurrentVersion: proposal.is_current !== false,
+      pendingDraftId: proposal.pendingDraftId || "",
+      pendingDraftVersion: proposal.pendingDraftVersion || null,
       finalClient: getFinalClientFromSnapshot(snapshot),
       groupName: getGroupNameFromSnapshot(snapshot),
       clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
@@ -9637,6 +9637,7 @@ function getLeadAgeInfo(item) {
 
 function getProposalFollowUpInfo(item) {
   if (item.kind !== "proposal" || item.isDraft || item.clientResponse || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
+  if (getScheduledReturnInfo(item)) return null;
   const opportunity = getOpportunityForItem(item);
   const sent = item.sentAt || item.updatedAt || item.createdAt;
   const contact = opportunity?.ultimo_contato_em;
@@ -9654,6 +9655,13 @@ function getProposalFollowUpInfo(item) {
         ? "A proposta esfriou. Vale uma abordagem curta e objetiva."
         : "Cliente ainda não respondeu. Faça um toque leve.";
   return { label, level, actionLabel, note };
+}
+
+function getScheduledReturnInfo(item) {
+  if (item.kind !== "proposal" || item.isDraft || item.clientResponse || getReportStatus(item) !== "proposta_enviada") return null;
+  const plan = getTaskPlan(item);
+  if (!plan.due || !(new Date(plan.due).getTime() > Date.now())) return null;
+  return { label: "Retorno agendado", note: `Próximo contato em ${formatSavedAt(plan.due)}. ${plan.action}` };
 }
 
 function getResponseReminder(item) {
@@ -9711,6 +9719,8 @@ function getPipelinePrimaryAction(item) {
     };
   }
   if (status === "proposta_enviada") {
+    const scheduled = getScheduledReturnInfo(item);
+    if (scheduled) return { tone: "fresh", eyebrow: "Prazo combinado", label: scheduled.label, note: scheduled.note };
     if (item.clientResponse === "confirmar") {
       return { tone: "success", eyebrow: "Cliente aprovou", label: "Registrar sinal", note: "Enviar dados bancários e registrar pagamento." };
     }
@@ -9817,6 +9827,8 @@ function getSlaMeta(item) {
     };
   }
   if (item.kind === "proposal" && status === "proposta_enviada") {
+    const scheduled = getScheduledReturnInfo(item);
+    if (scheduled) return { label: scheduled.note, level: "fresh" };
     const opportunity = getOpportunityForItem(item);
     const sent = item.sentAt || item.updatedAt || item.createdAt;
     const contact = opportunity?.ultimo_contato_em;
@@ -10803,8 +10815,8 @@ function getActionTasks(items = getPipelineItems()) {
       ? task.priority + 12
       : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
         ? task.priority + 6 : task.priority;
-    const scheduledReturn = task.item.kind === "proposal" && !task.item.clientResponse && plan.due && new Date(plan.due).getTime() > Date.now() && getReportStatus(task.item) === "proposta_enviada";
-    return { ...task, ...(scheduledReturn ? { title: "Retorno agendado", note: `Próximo contato em ${formatSavedAt(plan.due)}. ${plan.action}` } : {}), plan, priority: (scheduledReturn ? 10 : basePriority) + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
+    const scheduledReturn = getActionTrack(task) === "Comercial" ? getScheduledReturnInfo(task.item) : null;
+    return { ...task, ...(scheduledReturn ? { title: scheduledReturn.label, note: scheduledReturn.note } : {}), plan, priority: (scheduledReturn ? 10 : basePriority) + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
   });
   if (state.workspaceMode === "sales") {
     rankedTasks = rankedTasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task)));
@@ -11550,7 +11562,7 @@ function renderPipelineCard(item) {
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
   const primaryActionButton = actionInsideNext ? `<span class="pipeline-next-action-button">${actionInsideNext}</span>` : "";
   const plan = getTaskPlan(item);
-  const hasPlannedAction = !needsOutcome && !getResponseReminder(item) && item.status !== "cancelado" && plan.action && plan.action !== "Definir próximo passo";
+  const hasPlannedAction = !needsOutcome && !getResponseReminder(item) && !getScheduledReturnInfo(item) && item.status !== "cancelado" && plan.action && plan.action !== "Definir próximo passo";
   const primaryActionLine = `
     <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}${primaryActionButton ? " has-action-button" : ""}">
       <strong>${escapeHtml(hasPlannedAction ? plan.action : primaryAction.label)}</strong>
@@ -11590,6 +11602,7 @@ function renderPipelineCard(item) {
       ${needsOutcome ? "" : reopenButton}
       ${needsOutcome ? "" : renderStatusSelect(item)}
       ${outcomeButton}
+      ${item.pendingDraftId ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(item.pendingDraftId)}">Continuar V${escapeHtml(item.pendingDraftVersion || "")}</button>` : ""}
       ${deleteTestButton}
       ${openButton}
     </span>

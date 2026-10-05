@@ -2,7 +2,7 @@
 
 CRM comercial e operacional da Embaixada Carioca para captar leads, montar e versionar propostas, registrar decisões e pagamentos, planejar o evento e acompanhar o pós-venda.
 
-## Estado atual — 04/10/2026
+## Estado atual — 05/10/2026
 
 - O painel abre em **Modo Vendas** e mantém financeiro, operação, agenda e relatórios na **Visão completa**.
 - Eventos passados saem do funil ativo e aguardam classificação humana; remarcações retornam ao acompanhamento.
@@ -10,6 +10,9 @@ CRM comercial e operacional da Embaixada Carioca para captar leads, montar e ver
 - Propostas preservam V1/V2/V3, podem ser duplicadas, comparadas e mostram ao cliente o que mudou.
 - Desconto acima de R$ 1.000 ou 10% do subtotal exige confirmação e e-mail do gestor antes do envio.
 - Relatórios medem primeira resposta, conversão, funil ponderado, recompra, produtos vendidos e motivos de perda.
+- Respostas na versão publicada têm prioridade sobre rascunhos ainda em preparo; o card mantém acesso à nova versão.
+- Retornos futuros respeitam o prazo no card, no SLA e no radar; conflitos de agenda não são silenciados.
+- Atualizações da proposta preservam o responsável escolhido no plano comercial. Oportunidades encerradas deixam de gerar prazos comerciais.
 
 ## Checklist de produção
 
@@ -20,14 +23,15 @@ As migrações são aditivas e devem ser executadas na ordem documentada, sem re
 3. `supabase/client_proposal_ux.sql`
 4. `supabase/phase1_completion_notice.sql`
 5. `supabase/client_experience_public.sql`
+6. `supabase/migrations/20261005233202_sales_funnel_completion.sql` (conclusão da auditoria: versões públicas, responsáveis e permissões internas)
 
-Valide com os arquivos `*_verify.sql`. O snapshot público restrito já foi validado operacionalmente; o trigger de lead parcial deve retornar sucesso em `supabase/phase1_completion_notice_verify.sql` antes da liberação.
+Valide com os arquivos `*_verify.sql`, incluindo `supabase/sales_funnel_completion_verify.sql` (regressões com rollback, sem envio). O snapshot público restrito já foi validado operacionalmente; o trigger de lead parcial deve retornar sucesso em `supabase/phase1_completion_notice_verify.sql` antes da liberação.
 
 Depois do SQL e do deploy:
 
 1. Publique preços/regras e modelos de comunicação com um vendedor autenticado.
 2. Confira os dados compartilhados em um segundo navegador.
-3. Teste OTP real em `/painel/`.
+3. Teste login real no endereço raiz do Sistema de Eventos. `/painel/` incorpora o **Bot**, que tem autenticação e validação próprias.
 4. Rode os dry-runs autenticados de e-mail e WhatsApp com destinatário controlado.
 5. Reprocesse e confirme a entrega do lead que estiver em `FALHA`.
 
@@ -51,7 +55,7 @@ O histórico fica compartilhado somente entre os e-mails liberados no schema:
 - `leorangel@gmail.com`
 - `eventos@embaixadacarioca.com.br`
 
-Se novos usuários entrarem na equipe, atualize a função `public.is_team_member()` em `supabase/schema.sql` e rode o SQL novamente no Supabase.
+Para alterar o acesso da equipe, prepare uma migração específica da autorização. Nunca reaplique `schema.sql` sobre a base existente.
 
 ## Formulário público para clientes
 
@@ -68,7 +72,7 @@ Fluxo recomendado:
 5. Clique em `Usar na proposta` para preencher os dados do cliente automaticamente.
 6. Revise, ajuste itens/preços e gere a proposta em PDF, e-mail ou WhatsApp.
 
-Importante: rode novamente `supabase/schema.sql` no SQL Editor para criar a tabela `solicitacoes_cotacao` e liberar apenas `insert` anônimo para clientes. Clientes não conseguem ler o histórico.
+Em produção, as tabelas e RPCs já estão instaladas. Clientes usam as RPCs de captura parcial e conclusão; não conseguem ler o histórico da equipe. Instalações novas seguem o schema inicial e depois as migrações, nessa ordem.
 
 Projeto configurado no app:
 

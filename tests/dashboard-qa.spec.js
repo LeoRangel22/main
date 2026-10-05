@@ -19,6 +19,7 @@ test.describe("Dashboard interno em modo QA", () => {
       const signal = getActionTasks([approved]);
       const proof = getActionTasks([{ ...approved, hasSignalProof: true }]);
       const opportunity = getOpportunityForItem(item);
+      opportunity.proxima_acao_em = new Date(Date.now() + 864e5).toISOString();
       const scheduled = getActionTasks([item])[0].title;
       opportunity.proxima_acao_em = "";
       opportunity.ultimo_contato_em = new Date().toISOString();
@@ -38,6 +39,63 @@ test.describe("Dashboard interno em modo QA", () => {
     expect(result.proof).toEqual(["Validar comprovante do sinal"]);
     expect(result.recent).toBeNull();
     expect(result.recentTask).toBe("Aguardar retorno do cliente");
+  });
+  test("retorno futuro mantém card, SLA e radar coerentes e não silencia conflitos de agenda", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    const result = await page.evaluate(() => {
+      const item = getPipelineItems().find((row) => row.id === "qa-proposal-sem-resposta");
+      getOpportunityForItem(item).proxima_acao_em = new Date(Date.now() + 864e5).toISOString();
+      const scheduled = { badge: getProposalFollowUpInfo(item), sla: getSlaMeta(item), primary: getPipelinePrimaryAction(item), card: renderPipelineCard(item) };
+      state.workspaceMode = "complete";
+      const conflict = { ...item, id: "qa-conflict", opportunityId: "", status: "confirmado" };
+      const tasks = getActionTasks([item, conflict]);
+      const answered = { ...item, clientResponse: "alteracao", clientMessage: "Ajustar convidados" };
+      return { scheduled, conflict: tasks.find((task) => task.track === "Agenda")?.title, response: getActionTasks([answered])[0].title };
+    });
+    expect(result.scheduled.badge).toBeNull();
+    expect(result.scheduled.sla.label).toContain("Próximo contato");
+    expect(result.scheduled.primary.label).toBe("Retorno agendado");
+    expect(result.scheduled.card).not.toContain("Sem retorno há");
+    expect(result.conflict).toBe("Conflito de agenda");
+    expect(result.response).toBe("Responder pedido de ajuste");
+  });
+  test("resposta na versão publicada tem prioridade sobre rascunho e preserva acesso à nova versão", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    const result = await page.evaluate(() => {
+      const published = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
+      published.is_current = true;
+      published.cliente_resposta = "alteracao";
+      published.cliente_resposta_em = new Date().toISOString();
+      const draft = { ...structuredClone(published), id: "qa-new-draft", versao: 2, is_current: false, publication_status: "draft", cliente_resposta: null, cliente_resposta_em: null, created_at: new Date(Date.now() - 3600000).toISOString() };
+      state.proposals.unshift(draft);
+      const item = getPipelineItems().find((row) => row.opportunityId === published.oportunidade_id);
+      const pending = { id: item.id, draft: item.pendingDraftId, task: getActionTasks([item])[0].title, count: getPipelineItems().filter((row) => row.opportunityId === item.opportunityId).length, card: renderPipelineCard(item) };
+      published.cliente_resposta_em = new Date(Date.now() - 7200000).toISOString();
+      const started = getWorkingProposals().find((row) => row.oportunidade_id === published.oportunidade_id).id;
+      published.cliente_resposta = "confirmar";
+      const approved = getWorkingProposals().find((row) => row.oportunidade_id === published.oportunidade_id).id;
+      published.cliente_resposta = "cancelar";
+      const cancelled = getWorkingProposals().find((row) => row.oportunidade_id === published.oportunidade_id).id;
+      return { pending, started, approved, cancelled };
+    });
+    expect(result.pending.id).toBe("qa-proposal-sem-resposta");
+    expect(result.pending.draft).toBe("qa-new-draft");
+    expect(result.pending.task).toBe("Responder pedido de ajuste");
+    expect(result.pending.count).toBe(1);
+    expect(result.pending.card).toContain('data-proposal-id="qa-new-draft"');
+    expect(result.started).toBe("qa-new-draft");
+    expect(result.approved).toBe("qa-proposal-sem-resposta");
+    expect(result.cancelled).toBe("qa-proposal-sem-resposta");
+  });
+  test("versão atual prevalece sobre edição posterior de versão histórica", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    const selected = await page.evaluate(() => {
+      const current = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
+      current.is_current = true;
+      state.proposals.unshift({ ...current, id: "qa-historical-newer-update", is_current: false, updated_at: new Date().toISOString() });
+      return getWorkingProposals().find((row) => row.oportunidade_id === current.oportunidade_id).id;
+    });
+    expect(selected).toBe("qa-proposal-sem-resposta");
   });
   test("primeira resposta é editável e só vira contato após registro explícito", async ({ page }) => {
     const errors = collectBrowserErrors(page);
