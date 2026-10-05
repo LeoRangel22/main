@@ -9636,13 +9636,18 @@ function getLeadAgeInfo(item) {
 }
 
 function getProposalFollowUpInfo(item) {
-  if (item.kind !== "proposal" || item.isDraft || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
-  const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
+  if (item.kind !== "proposal" || item.isDraft || item.clientResponse || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
+  const opportunity = getOpportunityForItem(item);
+  const sent = item.sentAt || item.updatedAt || item.createdAt;
+  const contact = opportunity?.ultimo_contato_em;
+  const since = contact && new Date(contact) > new Date(sent) ? contact : sent;
+  const hours = getHoursSince(since);
   if (hours < 24) return null;
+  const viewed = state.proposalViews.some((view) => view.proposta_id === item.id);
   const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : "warning";
   const label = `Sem retorno há ${hours}h`;
   const actionLabel = hours >= 72 ? "Retomar contato agora" : hours >= 48 ? "Retomar contato hoje" : "Checar retorno hoje";
-  const note =
+  const note = !viewed ? "Sem visualização registrada. Confirme se o cliente recebeu o link antes de reenviar." :
     hours >= 72
       ? "Reenvie o link ou ligue para destravar a decisão."
       : hours >= 48
@@ -9651,10 +9656,25 @@ function getProposalFollowUpInfo(item) {
   return { label, level, actionLabel, note };
 }
 
+function getResponseReminder(item) {
+  if (item.kind !== "proposal" || item.isDraft || !item.clientResponse || !["proposta_enviada", "negociacao"].includes(getReportStatus(item))) return null;
+  if (item.clientResponse === "confirmar") {
+    if (item.hasSignalProof) return { title: "Validar comprovante do sinal", note: "Comprovante recebido. Confira o banco antes de confirmar a reserva.", priority: 96, track: "Venda" };
+    const deadline = item.snapshot?.event?.signalDeadlineAt;
+    const overdue = deadline && new Date(deadline).getTime() < Date.now();
+    return { title: "Aprovação aguardando sinal", note: deadline ? `Sinal ${overdue ? "atrasado desde" : "até"} ${formatSavedAt(deadline)}. Orientar pagamento e acompanhar.` : "Cliente aprovou. Combine e registre o prazo do sinal.", priority: overdue ? 98 : 92, track: "Venda" };
+  }
+  if (item.clientResponse === "alteracao") return { title: "Responder pedido de ajuste", note: `Cliente pediu alteração: ${getClientChangeDetails(item)?.summary || item.clientMessage || "revisar solicitação e preparar nova versão"}.`, priority: 94, track: "Comercial" };
+  if (item.clientResponse === "cancelar") return { title: "Registrar desfecho solicitado", note: "Cliente pediu cancelamento. Registre o motivo informado e encerre o acompanhamento.", priority: 88, track: "Comercial" };
+  return { title: "Responder ao cliente", note: item.clientMessage || "Há uma resposta do cliente. Leia e defina o próximo passo.", priority: 94, track: "Comercial" };
+}
+
 function getPipelinePrimaryAction(item) {
   const status = getReportStatus(item);
   const age = getLeadAgeInfo(item);
   const followUp = getProposalFollowUpInfo(item);
+  const response = getResponseReminder(item);
+  if (response) return { tone: "warning", eyebrow: "Resposta recebida", label: response.title, note: response.note };
   if (item.kind === "proposal" && item.isDraft) {
     return {
       tone: "warning",
@@ -9784,6 +9804,8 @@ function getPipelineRiskAlerts(item) {
 
 function getSlaMeta(item) {
   const status = getReportStatus(item);
+  const response = getResponseReminder(item);
+  if (response) return { label: response.note, level: "warning" };
   if (item.kind === "request" && status === "lead_recebido") {
     if (item.firstReplySentAt) return { label: "Primeiro contato registrado · montar proposta", level: "success" };
     const hours = getHoursSince(item.createdAt);
@@ -9795,7 +9817,10 @@ function getSlaMeta(item) {
     };
   }
   if (item.kind === "proposal" && status === "proposta_enviada") {
-    const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
+    const opportunity = getOpportunityForItem(item);
+    const sent = item.sentAt || item.updatedAt || item.createdAt;
+    const contact = opportunity?.ultimo_contato_em;
+    const hours = getHoursSince(contact && new Date(contact) > new Date(sent) ? contact : sent);
     const nextLimit = hours < 24 ? "24h" : hours < 48 ? "48h" : hours < 72 ? "72h" : "estourado";
     const level = hours >= 72 ? "critical" : hours >= 48 ? "danger" : hours >= 24 ? "warning" : "fresh";
     return {
@@ -10616,6 +10641,12 @@ function getActionTasks(items = getPipelineItems()) {
       return;
     }
 
+    const response = getResponseReminder(item);
+    if (response) {
+      tasks.push({ ...base, ...response });
+      return;
+    }
+
     if (item.kind === "request" && status === "lead_recebido") {
       const age = getLeadAgeInfo(item);
       tasks.push({
@@ -10647,9 +10678,9 @@ function getActionTasks(items = getPipelineItems()) {
       const followUp = getProposalFollowUpInfo(item);
       tasks.push({
         ...base,
-        title: item.clientResponse === "confirmar" ? "Registrar sinal" : "Retomar proposta",
-        note: item.clientResponse === "confirmar" ? "Cliente aprovou pelo link. Falta sinal." : followUp?.note || `Sem resposta há ${hours || 0}h.`,
-        priority: item.clientResponse === "confirmar" ? 92 : hours >= 72 ? 90 : hours >= 48 ? 82 : hours >= 24 ? 66 : 38,
+        title: followUp ? "Retomar proposta" : "Aguardar retorno do cliente",
+        note: followUp?.note || "Contato recente. Acompanhe o prazo combinado antes de retomar.",
+        priority: followUp?.level === "critical" ? 90 : followUp?.level === "danger" ? 82 : followUp ? 66 : 20,
         track: item.clientResponse === "confirmar" ? "Venda" : "Comercial",
       });
     }
@@ -10772,7 +10803,8 @@ function getActionTasks(items = getPipelineItems()) {
       ? task.priority + 12
       : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
         ? task.priority + 6 : task.priority;
-    return { ...task, plan, priority: basePriority + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
+    const scheduledReturn = task.item.kind === "proposal" && !task.item.clientResponse && plan.due && new Date(plan.due).getTime() > Date.now() && getReportStatus(task.item) === "proposta_enviada";
+    return { ...task, ...(scheduledReturn ? { title: "Retorno agendado", note: `Próximo contato em ${formatSavedAt(plan.due)}. ${plan.action}` } : {}), plan, priority: (scheduledReturn ? 10 : basePriority) + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
   });
   if (state.workspaceMode === "sales") {
     rankedTasks = rankedTasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task)));
@@ -11518,7 +11550,7 @@ function renderPipelineCard(item) {
   const actionInsideNext = signalButton || (status === "confirmado" ? signalProofLink : "");
   const primaryActionButton = actionInsideNext ? `<span class="pipeline-next-action-button">${actionInsideNext}</span>` : "";
   const plan = getTaskPlan(item);
-  const hasPlannedAction = !needsOutcome && item.status !== "cancelado" && plan.action && plan.action !== "Definir próximo passo";
+  const hasPlannedAction = !needsOutcome && !getResponseReminder(item) && item.status !== "cancelado" && plan.action && plan.action !== "Definir próximo passo";
   const primaryActionLine = `
     <div class="pipeline-card-next-action is-${escapeHtml(primaryAction.tone)}${primaryActionButton ? " has-action-button" : ""}">
       <strong>${escapeHtml(hasPlannedAction ? plan.action : primaryAction.label)}</strong>
