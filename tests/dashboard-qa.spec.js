@@ -46,7 +46,7 @@ test.describe("Dashboard interno em modo QA", () => {
       const item = getPipelineItems().find((row) => row.id === "qa-proposal-sem-resposta");
       getOpportunityForItem(item).proxima_acao_em = new Date(Date.now() + 864e5).toISOString();
       const scheduled = { badge: getProposalFollowUpInfo(item), sla: getSlaMeta(item), primary: getPipelinePrimaryAction(item), card: renderPipelineCard(item) };
-      state.workspaceMode = "complete";
+      state.workspaceMode = "full";
       const conflict = { ...item, id: "qa-conflict", opportunityId: "", status: "confirmado" };
       const tasks = getActionTasks([item, conflict]);
       const answered = { ...item, clientResponse: "alteracao", clientMessage: "Ajustar convidados" };
@@ -214,6 +214,27 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator(".commercial-learning")).toContainText("Produtos mais vendidos");
     await expect(page.locator(".commercial-learning")).toContainText("Motivos de perda");
     await expectNoBrowserErrors(errors);
+  });
+
+  test("aprendizado não infla previsão com histórico e mede primeira resposta desde a entrada do lead", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    const metrics = await page.evaluate(() => {
+      const base = { kind: "proposal", isDraft: false, total: 1000, snapshot: {}, createdAt: "2026-10-01T12:00:00Z" };
+      state.opportunities.push({ id: "qa-metrics-opp", created_at: "2026-10-01T08:00:00Z" });
+      return getCommercialLearningMetrics([
+        { ...base, status: "proposta_enviada", stage: "proposta_enviada", date: createQaDate(7), opportunityId: "qa-metrics-opp", firstReplySentAt: "2026-10-01T10:00:00Z" },
+        { ...base, status: "negociacao", stage: "negociacao", date: "" },
+        { ...base, status: "proposta_enviada", stage: "desfecho_pendente", date: createQaDate(-2) },
+        { ...base, status: "confirmado", stage: "confirmado", date: createQaDate(7) },
+        { ...base, status: "cancelado", stage: "cancelado", cancelReason: "Preço" },
+        { ...base, status: "pos_venda", stage: "pos_venda", snapshot: { eventOutcome: { outcome: "realizado" } } },
+        { ...base, total: 0, status: "negociacao", stage: "negociacao", snapshot: { eventOutcome: { outcome: "remarcado" } } },
+      ]);
+    });
+    expect(metrics.weightedPipeline).toBe(1050);
+    expect(metrics.lossReasons).toEqual([["Preço", 1]]);
+    expect(metrics.averageResponseHours).toBe(2);
+    expect(metrics.responseSamples).toBe(1);
   });
 
   test("abre um lead pelo funil e leva a equipe direto para o editor", async ({ page }) => {
