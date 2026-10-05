@@ -380,6 +380,10 @@ async function sendZeptoEmail(record: LeadRecord) {
     : `Zoho-enczapikey ${normalizedToken}`
 
   const subject = getEmailSubject(record)
+  // A lead may leave only WhatsApp or an incomplete email. Keep the alert
+  // deliverable without passing an invalid address to the provider's reply_to.
+  const replyEmail = String(record.cliente_email || "").trim()
+  const validReplyEmail = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(replyEmail) && replyEmail.length <= 254
 
   const zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
     method: "POST",
@@ -404,10 +408,10 @@ async function sendZeptoEmail(record: LeadRecord) {
       subject,
       htmlbody: buildEmailHtml(record),
       textbody: buildEmailText(record),
-      reply_to: record.cliente_email
+      reply_to: validReplyEmail
         ? [
             {
-              address: record.cliente_email,
+              address: replyEmail,
               name: record.cliente_nome || "Cliente",
             },
           ]
