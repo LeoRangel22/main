@@ -9,7 +9,7 @@ CRM comercial e operacional da Embaixada Carioca para captar leads, montar e ver
 - O rascunho inteligente sugere pacote, adicionais, duração e mensagem, mas só é aplicado após aprovação humana.
 - Propostas preservam V1/V2/V3, podem ser duplicadas, comparadas e mostram ao cliente o que mudou.
 - Desconto acima de R$ 1.000 ou 10% do subtotal exige confirmação e e-mail do gestor antes do envio.
-- Relatórios medem primeira resposta, conversão, funil ponderado, recompra, produtos vendidos e motivos de perda.
+- Relatórios medem primeira resposta desde a entrada da oportunidade. A previsão ponderada inclui somente vendas em aberto futuras ou sem data; realizados, perdidos e eventos passados não inflam o valor. Motivos de perda usam apenas encerramentos de perda/cancelamento. Recompra e produtos vendidos preservam o histórico.
 - Respostas na versão publicada têm prioridade sobre rascunhos ainda em preparo; o card mantém acesso à nova versão.
 - Retornos futuros respeitam o prazo no card, no SLA e no radar; conflitos de agenda não são silenciados.
 - Atualizações da proposta preservam o responsável escolhido no plano comercial. Oportunidades encerradas deixam de gerar prazos comerciais.

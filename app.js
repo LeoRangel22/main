@@ -9457,7 +9457,7 @@ function getCommercialLearningMetrics(items = getPipelineItems()) {
   const sold = proposals.filter(isSoldReportItem);
   const responseHours = items
     .filter((item) => item.createdAt && item.firstReplySentAt)
-    .map((item) => (new Date(item.firstReplySentAt).getTime() - new Date(item.createdAt).getTime()) / 36e5)
+    .map((item) => (new Date(item.firstReplySentAt).getTime() - new Date(getOpportunityForItem(item)?.created_at || item.createdAt).getTime()) / 36e5)
     .filter((hours) => Number.isFinite(hours) && hours >= 0 && hours < 24 * 30);
   const averageResponseHours = responseHours.length
     ? responseHours.reduce((sum, value) => sum + value, 0) / responseHours.length
@@ -9473,12 +9473,19 @@ function getCommercialLearningMetrics(items = getPipelineItems()) {
     evento_proximo: 1,
     pos_venda: 1,
   };
-  const weightedPipeline = proposals.reduce(
+  const today = startOfDay(new Date());
+  const openProposals = proposals.filter((item) => {
+    if (!["lead_recebido", "proposta_pronta", "proposta_enviada", "negociacao"].includes(getReportStatus(item))) return false;
+    const date = item.eventDate || parseLocalIsoDate(item.date);
+    return !date || date >= today;
+  });
+  const weightedPipeline = openProposals.reduce(
     (sum, item) => sum + (Number(item.total) || 0) * (stageWeights[item.stage] ?? (isSoldReportItem(item) ? 1 : 0.2)),
     0,
   );
   const lossCounts = new Map();
   items.forEach((item) => {
+    if (!["cancelado", "perdido"].includes(item.status)) return;
     const reason = item.cancelReason || item.snapshot?.eventOutcome?.reason || item.snapshot?.eventOutcome?.outcome;
     if (!reason) return;
     lossCounts.set(reason, (lossCounts.get(reason) || 0) + 1);
@@ -9527,7 +9534,7 @@ function renderCommercialLearning(learning) {
       <div class="commercial-learning-kpis">
         <article><span>1ª resposta</span><strong>${escapeHtml(formatResponseTime(learning.averageResponseHours))}</strong><small>${learning.responseSamples} amostra(s)</small></article>
         <article><span>Conversão</span><strong>${learning.conversion}%</strong><small>propostas fechadas</small></article>
-        <article><span>Funil ponderado</span><strong>${escapeHtml(formatMoney(learning.weightedPipeline))}</strong><small>valor × chance da etapa</small></article>
+        <article><span>Funil ponderado</span><strong>${escapeHtml(formatMoney(learning.weightedPipeline))}</strong><small>vendas em aberto × peso da etapa</small></article>
         <article><span>Recompra</span><strong>${learning.repeatBuyers}</strong><small>clientes com 2+ eventos</small></article>
       </div>
       <div class="commercial-learning-breakdown">
