@@ -19,15 +19,18 @@ test.describe("Dashboard interno em modo QA", () => {
       const signal = getActionTasks([approved]);
       const proof = getActionTasks([{ ...approved, hasSignalProof: true }]);
       const opportunity = getOpportunityForItem(item);
+      const scheduled = getActionTasks([item])[0].title;
+      opportunity.proxima_acao_em = "";
       opportunity.ultimo_contato_em = new Date().toISOString();
       return {
-        original: Boolean(original), adjusted: adjusted.map((task) => task.title),
+        original: Boolean(original), scheduled, adjusted: adjusted.map((task) => task.title),
         responseBadge: getProposalFollowUpInfo(adjustment), sla: getSlaMeta(adjustment).label,
         signal: signal.map((task) => task.note), proof: proof.map((task) => task.title),
         recent: getProposalFollowUpInfo(item), recentTask: getActionTasks([item])[0].title,
       };
     });
     expect(result.original).toBe(true);
+    expect(result.scheduled).toBe("Retorno agendado");
     expect(result.adjusted).toEqual(["Responder pedido de ajuste"]);
     expect(result.responseBadge).toBeNull();
     expect(result.sla).not.toContain("Sem retorno");
