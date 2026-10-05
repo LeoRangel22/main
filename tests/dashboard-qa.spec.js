@@ -8,6 +8,37 @@ const {
 } = require("./support");
 
 test.describe("Dashboard interno em modo QA", () => {
+  test("retornos respeitam resposta, contato recente e comprovante sem confirmar reserva", async ({ page }) => {
+    await page.goto("/index.html?qa=1");
+    const result = await page.evaluate(() => {
+      const item = getPipelineItems().find((row) => row.id === "qa-proposal-sem-resposta");
+      const original = getProposalFollowUpInfo(item);
+      const adjustment = { ...item, clientResponse: "alteracao", clientMessage: "Trocar cardápio" };
+      const adjusted = getActionTasks([adjustment]);
+      const approved = { ...item, clientResponse: "confirmar", snapshot: { ...item.snapshot, event: { signalDeadlineAt: new Date(Date.now() - 3600000).toISOString() } } };
+      const signal = getActionTasks([approved]);
+      const proof = getActionTasks([{ ...approved, hasSignalProof: true }]);
+      const opportunity = getOpportunityForItem(item);
+      const scheduled = getActionTasks([item])[0].title;
+      opportunity.proxima_acao_em = "";
+      opportunity.ultimo_contato_em = new Date().toISOString();
+      return {
+        original: Boolean(original), scheduled, adjusted: adjusted.map((task) => task.title),
+        responseBadge: getProposalFollowUpInfo(adjustment), sla: getSlaMeta(adjustment).label,
+        signal: signal.map((task) => task.note), proof: proof.map((task) => task.title),
+        recent: getProposalFollowUpInfo(item), recentTask: getActionTasks([item])[0].title,
+      };
+    });
+    expect(result.original).toBe(true);
+    expect(result.scheduled).toBe("Retorno agendado");
+    expect(result.adjusted).toEqual(["Responder pedido de ajuste"]);
+    expect(result.responseBadge).toBeNull();
+    expect(result.sla).not.toContain("Sem retorno");
+    expect(result.signal[0]).toContain("atrasado");
+    expect(result.proof).toEqual(["Validar comprovante do sinal"]);
+    expect(result.recent).toBeNull();
+    expect(result.recentTask).toBe("Aguardar retorno do cliente");
+  });
   test("primeira resposta é editável e só vira contato após registro explícito", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
