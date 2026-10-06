@@ -73,6 +73,8 @@ test("analytics envia somente evento e propriedades permitidos sem PII ou URL", 
   assert.equal(requests[0].body.properties.value_bucket, "20k-40k");
   assert.equal(requests[0].body.properties.page, "proposta");
   assert.equal(requests[0].body.properties.$process_person_profile, false);
+  assert.equal(requests[0].body.properties.$session_id, requests[0].body.distinct_id);
+  assert.match(requests[0].body.properties.$session_id, /^events-session-/);
   assert.match(requests[0].body.properties.entity_hash, /^[a-f0-9]{24}$/);
   assert.equal(JSON.stringify(requests[0].body).includes("proposal-123"), false);
   assert.equal(JSON.stringify(requests[0].body).includes("cliente@example.com"), false);

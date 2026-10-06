@@ -218,12 +218,14 @@
       page: pageName(),
       analytics_version: CONFIG.version,
     });
+    const sessionId = getSessionId();
     const payload = {
       api_key: CONFIG.apiKey,
       event: eventName,
-      distinct_id: getSessionId(),
+      distinct_id: sessionId,
       properties: {
         ...safeProperties,
+        $session_id: sessionId,
         $process_person_profile: false,
       },
       timestamp: new Date().toISOString(),
