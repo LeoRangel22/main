@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Proposta não encontrada ou sem permissão." }, 404);
     }
 
-    const email = safeText(payload.email || proposal.cliente_email || proposal.snapshot?.client?.email);
+    const email = safeText(payload.email || proposal.cliente_email || proposal.snapshot?.client?.email).toLowerCase();
     if (!email || !email.includes("@")) {
       return jsonResponse({ ok: false, message: "E-mail do cliente inválido ou ausente." }, 400);
     }
@@ -360,7 +360,7 @@ Deno.serve(async (req) => {
     let claim;
     try { claim = await claimSend(supabase, proposal, payload, "email", email, payload.message || "Proposta: " + proposalUrl, subject); }
     catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
-    if (!claim.claimed) return jsonResponse(duplicateResult(claim), claim.send.status === "accepted" ? 200 : 409);
+    if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
     let zeptoResponse;
     try { zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
       method: "POST",
@@ -370,6 +370,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        client_reference: `EV:${claim.send.id}:${claim.send.attempts || 1}`,
         from: {
           address: fromEmail,
           name: fromName,

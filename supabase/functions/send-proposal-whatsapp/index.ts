@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
     let claim;
     try { claim = await claimSend(supabase, proposal, payload, "whatsapp", phone, message, payload.title || "Proposta comercial"); }
     catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
-    if (!claim.claimed) return jsonResponse(duplicateResult(claim), claim.send.status === "accepted" ? 200 : 409);
+    if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
     let zapiResponse;
     try { zapiResponse = await fetch(zapiUrl, {

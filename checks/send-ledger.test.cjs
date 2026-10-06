@@ -17,6 +17,7 @@ async function run(channel, scenario = {}) {
         return { data: { claimed: !scenario.duplicate, send: { id: 'send', status: scenario.duplicate || 'sending' } } };
       }
       if (name === 'finish_event_send') { calls.finish.push(body); return {}; }
+      if (name === 'reconcile_event_receipts') return {};
       throw new Error('Unexpected RPC: ' + name);
     }
   };
