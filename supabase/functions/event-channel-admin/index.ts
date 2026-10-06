@@ -35,6 +35,7 @@ Deno.serve(async (req: Request) => {
     const conflicts = fields.filter(key => me[key] && me[key] !== callback);
     if (payload.action === 'inspect-zapi') return respond(200, { ok: true, instanceId: instance, connected: me.connected === true, conflicts, message: conflicts.length ? 'Há callbacks de outro sistema. Ativação bloqueada para preservar o atendimento existente.' : 'Callbacks disponíveis para o Sistema de Eventos' });
     if (payload.approved !== true) return respond(409, { ok: false, message: 'Revise a instância e aprove a ativação' });
+    if (payload.instanceId !== instance) return respond(409, { ok: false, message: 'Verifique a instância e confirme o identificador antes de ativar' });
     if (conflicts.length || me.connected !== true) return respond(409, { ok: false, message: 'Instância desconectada ou usada por outro sistema. Não substituí os callbacks.' });
     const { error: enableError } = await caller.rpc('configure_event_channel', { target_provider: 'zapi', account_id: instance, enable_channel: true });
     if (enableError) throw new Error('Não foi possível ativar a recepção interna');
@@ -42,6 +43,6 @@ Deno.serve(async (req: Request) => {
     for (const route of ['update-webhook-received', 'update-webhook-message-status']) await providerFetch(base + '/' + route, { method: 'PUT', headers, body: JSON.stringify({ value: callback }) });
     const after = await providerFetch(base + '/me', { headers });
     if (fields.some(key => after[key] !== callback)) return respond(409, { ok: false, message: 'Configuração parcial: confira os callbacks no painel. Não há confirmação de entrega real.' });
-    return respond(200, { ok: true, message: 'Recebimento e retornos configurados. Aguardando teste real de mensagem e entrega.' });
+    return respond(200, { ok: true, instanceId: instance, activated: true, message: 'Recebimento e retornos configurados. Aguardando teste real de mensagem e entrega.' });
   } catch { return respond(502, { ok: false, message: 'Não foi possível concluir a consulta/configuração. Confira o provedor antes de repetir.' }); }
 });

@@ -36,12 +36,12 @@ test('Endpoint: mensagem autenticada chega ao ledger',async()=>{const r=await re
 test('Endpoint: indisponibilidade do banco pede retry ao provedor',async()=>assert.equal((await receiver({failWrite:true})).status,503));
 test('Endpoint: recebido de outra instância não escreve',async()=>{const r=await receiver({body:{...incoming,instanceId:'other'}});assert.equal(r.status,400);assert.equal(r.calls.length,0);});
 
-async function admin(action,{team=true,manager=true,conflict=false,approved=true}={}){
+async function admin(action,{team=true,manager=true,conflict=false,approved=true,instanceId='value'}={}){
  let handler,fetchCount=0;const rpcCalls=[];
  const client={auth:{getUser:async()=>({data:{user:{id:'user'}}})},rpc:async(name,args)=>{rpcCalls.push(name);if(name==='is_team_member')return{data:team};if(name==='is_super_admin')return{data:manager};if(name==='event_channel_worker_config')return{data:{secret:'key'}};return{};}};
  const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,createClient:()=>client,Deno:{env:{get:key=>key==='SUPABASE_URL'?'https://example.test':'value'},serve:fn=>handler=fn},fetch:async()=>{fetchCount++;return new Response(JSON.stringify({connected:true,receivedCallbackUrl:conflict?'https://bot.example.test/hook':'',messageStatusCallbackUrl:''}),{status:200});}});
  vm.runInContext(source('_shared/email-delivery.ts'),c);vm.runInContext(source('event-channel-admin/index.ts'),c);
- const res=await handler(new Request('https://example.test/admin',{method:'POST',body:JSON.stringify({action,approved})}));return{status:res.status,fetchCount,rpcCalls};
+ const res=await handler(new Request('https://example.test/admin',{method:'POST',body:JSON.stringify({action,approved,instanceId})}));return{status:res.status,fetchCount,rpcCalls};
 }
 test('Admin: usuário fora da equipe não consulta provedores',async()=>{const r=await admin('inspect-zapi',{team:false});assert.equal(r.status,403);assert.equal(r.fetchCount,0);});
 test('Admin: vendedor não configura callbacks',async()=>{const r=await admin('activate-zapi',{manager:false});assert.equal(r.status,403);assert.equal(r.fetchCount,0);});
@@ -59,3 +59,15 @@ async function emailLogs({configured=true,status='delivered',to='customer@exampl
 test('Entrega de e-mail: sem OAuth de leitura não presume estado',async()=>{const r=await emailLogs({configured:false});assert.equal(r.r.ok,false);assert.equal(r.fetches,0);});
 test('Entrega de e-mail: registro exato confirma destino e Message-ID',async()=>{const r=await emailLogs();assert.equal(r.ingest[0].events[0].signal,'delivered');assert.equal(r.ingest[0].events[0].provider_reference,'message@example.test');});
 for(const scenario of [{status:'opened'},{to:'other@example.test'},{duplicates:true}])test(`Entrega de e-mail: rejeita evidência insuficiente ${JSON.stringify(scenario)}`,async()=>assert.equal((await emailLogs(scenario)).ingest.length,0));
+
+test("Admin: revisão de outra instância não configura callbacks",async()=>{const r=await admin("activate-zapi",{instanceId:"other"});assert.equal(r.status,409);assert.equal(r.fetchCount,1);assert.equal(r.rpcCalls.includes("configure_event_channel"),false);});
+
+async function deliveryWorker(correctKey){
+ let handler,fetches=0;const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'private',ZAPI_INSTANCE_ID:'instance',ZAPI_TOKEN:'zapi-token-should-not-leak',ZAPI_CLIENT_TOKEN:'client-token-should-not-leak'};
+ const client={rpc:async()=>({data:{delivery_job_key:'job-key',secret:'callback-secret',enabled:false}})};
+ const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,TextEncoder,TextDecoder,Uint8Array,btoa,crypto:require('node:crypto').webcrypto,createClient:()=>client,Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},fetch:async()=>{fetches++;return new Response(JSON.stringify({connected:true,receivedCallbackUrl:'https://bot.example.test/hook?secret=hidden',messageStatusCallbackUrl:''}));}});
+ for(const f of ['_shared/channel-events.ts','_shared/email-delivery.ts','event-email-delivery/index.ts'])vm.runInContext(source(f),c);
+ const res=await handler(new Request('https://example.test/worker',{method:'POST',headers:{'x-event-job-key':correctKey?'job-key':'bad'},body:'{"action":"diagnose"}'}));return{status:res.status,body:await res.text(),fetches};
+}
+test('Diagnóstico interno: chave errada não acessa provedores',async()=>{const r=await deliveryWorker(false);assert.equal(r.status,401);assert.equal(r.fetches,0);});
+test('Diagnóstico interno: retorna conflito sem expor tokens ou URL completa',async()=>{const r=await deliveryWorker(true);assert.equal(r.status,200);assert.equal(r.fetches,1);assert.equal(JSON.parse(r.body).diagnostic.whatsapp.received.ours,false);assert.equal(r.body.includes('should-not-leak'),false);assert.equal(r.body.includes('hidden'),false);});
