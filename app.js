@@ -84,6 +84,38 @@ const sourceMomentOptions = [
   "Ainda estou avaliando",
 ];
 
+function getCommercialAnalyticsProperties(entity = {}) {
+  const analytics = window.EventAnalytics;
+  const snapshot = entity.snapshot || {};
+  const event = snapshot.event || snapshot.evento || {};
+  const qualification = snapshot.qualificacao || snapshot.sourceRequestSnapshot?.qualificacao || {};
+  const totals = snapshot.totals || {};
+  return {
+    surface: "admin",
+    language: event.clientLanguage || snapshot.client?.language || "pt",
+    status: entity.status || "unknown",
+    event_type: event.type || event.tipo || entity.tipo_evento || "unknown",
+    guests_bucket: analytics?.bucketGuests(entity.convidados || event.guests || event.convidados),
+    duration_bucket: analytics?.bucketDuration(entity.duracao || event.duration || event.duracao),
+    days_to_event_bucket: analytics?.bucketDaysToEvent(entity.data_evento || event.date || event.data),
+    value_bucket: analytics?.bucketCurrency(entity.total || totals.total),
+    proposal_version: Number(entity.versao || 1),
+    lead_source: qualification.origem || "unknown",
+    client_type: qualification.tipoCliente || snapshot.client?.clientType || "unknown",
+    budget_range: qualification.faixaInvestimento || "unknown",
+    has_upsell_options: Array.isArray(snapshot.publicOfferOptions) && snapshot.publicOfferOptions.some((option) => !option.base),
+  };
+}
+
+function captureEventAnalytics(eventName, entity = {}, properties = {}, options = {}) {
+  const entityId = options.entityId || entity.oportunidade_id || entity.id;
+  return window.EventAnalytics?.capture(
+    eventName,
+    { ...getCommercialAnalyticsProperties(entity), ...properties },
+    { ...options, entityId },
+  );
+}
+
 const operationalChecklistItems = [
   { id: "saldo_agendado", label: "Pagamento restante alinhado" },
   { id: "cardapio_confirmado", label: "Cardápio e bebidas confirmados" },
@@ -2826,7 +2858,10 @@ async function addManualContact(proposalId) {
     },
     [history],
   );
-  await updateProposalSnapshot(proposalId, snapshot, "Contato registrado no funil.");
+  const updated = await updateProposalSnapshot(proposalId, snapshot, "Contato registrado no funil.");
+  if (updated) {
+    captureEventAnalytics("client_contact_recorded", updated, { channel: channel.toLowerCase(), action: "manual_contact" });
+  }
 }
 
 async function addEventAttachment(proposalId) {
@@ -3406,6 +3441,12 @@ async function updateOperationalChecklist(checklistId, checked) {
     return;
   }
   upsertProposalState(data);
+  const analyticsProgress = getChecklistProgress(data.snapshot || {});
+  if (analyticsProgress.total > 0 && analyticsProgress.done === analyticsProgress.total) {
+    captureEventAnalytics("operational_checklist_completed", data, { operation_progress_bucket: "complete" }, {
+      dedupeKey: `operational-checklist-complete:${data.oportunidade_id || data.id}`,
+    });
+  }
   renderOperationalChecklist(data);
   renderCommercialTimeline(data);
   renderManualContactPanel(data);
@@ -10916,6 +10957,12 @@ function openActionPlanDialog(kind, id) {
       return;
     }
     state.opportunities = state.opportunities.map((row) => row.id === data.id ? data : row);
+    captureEventAnalytics("team_action_planned", item, {
+      action: form.elements.contact.checked ? "contact_and_next_action" : "next_action",
+      result: plan.overdue ? "overdue_resolved" : "planned",
+    }, {
+      entityId: item.opportunityId,
+    });
     dialog.close();
     renderPipeline();
     renderCommercialTimeline(getActiveProposal());
@@ -12200,6 +12247,28 @@ async function classifyPastEvent(kind, id) {
     }
   }
 
+  if (isRealized) {
+    captureEventAnalytics("event_won", data, { outcome: answer.outcome, previous_status: source.status || "unknown" }, {
+      entityId: item.opportunityId || data.id,
+      dedupeKey: `event-won:${item.opportunityId || data.id}`,
+    });
+  } else if (!isRescheduled) {
+    captureEventAnalytics("event_lost", data, {
+      outcome: answer.outcome,
+      previous_status: source.status || "unknown",
+      loss_reason_group: window.EventAnalytics?.lossReasonGroup(reason),
+    }, {
+      entityId: item.opportunityId || data.id,
+      dedupeKey: `event-lost:${item.opportunityId || data.id}`,
+    });
+  }
+  if (!isRescheduled) {
+    captureEventAnalytics("event_archived", data, { outcome: answer.outcome }, {
+      entityId: item.opportunityId || data.id,
+      dedupeKey: `event-archived:${item.opportunityId || data.id}`,
+    });
+  }
+
   renderHistory();
   renderPipeline();
   showToast(isRescheduled ? "Evento remarcado e devolvido ao funil." : "Desfecho registrado no histórico.");
@@ -12386,6 +12455,12 @@ async function cancelPipelineItem(kind, id) {
   }
 
   upsertProposalState(data);
+  captureEventAnalytics("event_lost", data, {
+    previous_status: proposal.status || "unknown",
+    loss_reason_group: window.EventAnalytics?.lossReasonGroup(reason),
+  }, {
+    dedupeKey: `event-lost:${data.oportunidade_id || data.id}`,
+  });
   renderHistory();
   renderPipeline();
   if (state.activeProposalId === id) {
@@ -12499,6 +12574,16 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   }
 
   upsertProposalState(data);
+  if (normalizedNext === "confirmado") {
+    captureEventAnalytics("event_won", data, { previous_status: proposal.status || "unknown" }, {
+      dedupeKey: `event-won:${data.oportunidade_id || data.id}`,
+    });
+  }
+  if (["planejamento", "evento_proximo"].includes(normalizedNext)) {
+    captureEventAnalytics("operational_handoff_started", data, { previous_status: proposal.status || "unknown" }, {
+      dedupeKey: `operational-handoff:${data.oportunidade_id || data.id}`,
+    });
+  }
   renderHistory();
   renderPipeline();
   if (state.activeProposalId === proposalId) {
@@ -13201,6 +13286,24 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
   state.activeOpportunityId = data.oportunidade_id || opportunityId;
   upsertProposalState(data);
+  if (data.publication_status !== "draft") {
+    captureEventAnalytics("proposal_generated", data, {
+      previous_status: previousStatus || "none",
+      result: needsNewVersion ? "new_version" : activeProposal ? "updated" : "created",
+    }, {
+      dedupeKey: `proposal-generated:${data.id}:${data.versao || 1}`,
+    });
+  }
+  if (normalizedNext === "confirmado") {
+    captureEventAnalytics("event_won", data, { previous_status: previousStatus || "unknown" }, {
+      dedupeKey: `event-won:${data.oportunidade_id || data.id}`,
+    });
+  }
+  if (["planejamento", "evento_proximo"].includes(normalizedNext)) {
+    captureEventAnalytics("operational_handoff_started", data, { previous_status: previousStatus || "unknown" }, {
+      dedupeKey: `operational-handoff:${data.oportunidade_id || data.id}`,
+    });
+  }
   const persistableQuoteRequestId = getPersistableQuoteRequestId();
   if (persistableQuoteRequestId) {
     await updateQuoteRequest(
@@ -13935,6 +14038,9 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
     return false;
   }
   upsertProposalState(data);
+  captureEventAnalytics("proposal_sent", data, { channel: manualChannel || "system" }, {
+    dedupeKey: `proposal-sent:${data.id}:${data.versao || 1}`,
+  });
   if (data.solicitacao_id) {
     const result = await state.supabase
       .from("solicitacoes_cotacao")
@@ -14162,6 +14268,9 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       status: "success",
       detail: data?.duplicate ? data.message : `Aceito pelo canal para ${phone}. Entrega não confirmada.`,
     });
+    captureEventAnalytics("proposal_sent", proposal, { channel: "whatsapp", result: data?.duplicate ? "duplicate" : "accepted" }, {
+      dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
+    });
     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "WhatsApp") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo WhatsApp; entrega não confirmada.");
     await loadCommercialInsights();
@@ -14250,6 +14359,9 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     updateIntegrationLog(logId, {
       status: "success",
       detail: data?.duplicate ? data.message : `Aceito pelo canal para ${destination}. Entrega não confirmada.`,
+    });
+    captureEventAnalytics("proposal_sent", proposal, { channel: "email", result: data?.duplicate ? "duplicate" : "accepted" }, {
+      dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
     });
     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "E-mail") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo e-mail; entrega não confirmada.");

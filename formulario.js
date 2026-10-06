@@ -161,6 +161,7 @@ const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")]
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
 const uiState = { language: loadLanguage() };
+const analyticsFormState = { started: false, submitted: false, lastStep: "eventDetails" };
 const stepOrder = ["moment", "profile", "eventDetails", "contact", "recommendation", "briefing"];
 
 const steps = {
@@ -171,6 +172,30 @@ const steps = {
   briefing: document.querySelector("#briefingStep"),
   contact: document.querySelector("#contactStep"),
 };
+
+function getLeadAnalyticsProperties(snapshot = null) {
+  const event = snapshot?.evento || {};
+  const qualification = snapshot?.qualificacao || {};
+  const analytics = window.EventAnalytics;
+  return {
+    surface: "public_form",
+    language: snapshot?.cliente?.idioma || uiState.language,
+    source: "formulario",
+    client_type: qualification.tipoCliente || canonicalClientTypeLabels[fields.clientType.value] || "unknown",
+    budget_range: qualification.faixaInvestimento || canonicalBudgetRangeLabels[fields.budgetRange.value] || "unknown",
+    lead_source: qualification.origem || canonicalLeadSourceLabels[fields.leadSource.value] || "unknown",
+    event_type: event.tipo || fields.eventType.value || "unknown",
+    guests_bucket: analytics?.bucketGuests(event.convidados || fields.guests.value),
+    duration_bucket: analytics?.bucketDuration(event.duracao || fields.duration.value),
+    days_to_event_bucket: analytics?.bucketDaysToEvent(event.data || fields.date.value),
+    date_flexibility: event.dataFlexivelStatus || canonicalFlexibilityLabels[fields.dateIsFlexible.value] || "unknown",
+    event_timing: event.faixaHorario || canonicalTimeRangeLabels[fields.timeRange.value] || "unknown",
+  };
+}
+
+function captureLeadAnalytics(eventName, properties = {}, options = {}) {
+  return window.EventAnalytics?.capture(eventName, { ...getLeadAnalyticsProperties(), ...properties }, options);
+}
 
 function applyConversionStepOrder() {
   const optional = document.querySelector("#personalizeOptions");
@@ -1940,6 +1965,13 @@ function applyReturningHistoryAsBase(item) {
   updateContactGuidance();
   renderFinalReview();
   schedulePartialCapture();
+  captureLeadAnalytics("returning_event_reused", {
+    source: "returning_client_history",
+    event_type: eventData.type || eventData.tipo || item.tipo_evento || "unknown",
+  }, {
+    entityId: item.opportunity_id || item.proposal_id || item.id,
+    dedupeKey: `returning-event-reused:${item.opportunity_id || item.proposal_id || item.id || "unknown"}`,
+  });
   const status = document.querySelector("#returningClientStatus");
   if (status) status.textContent = uiState.language === "en" ? "Previous event loaded. Confirm the new date and adjust only what changed." : "Evento anterior carregado. Confirme a nova data e ajuste apenas o que mudou.";
   scrollToStep("eventDetails", true);
@@ -2026,6 +2058,11 @@ async function submitRequest(event) {
   }
 
   resetCaptureIdentity();
+  analyticsFormState.submitted = true;
+  captureLeadAnalytics("lead_created", getLeadAnalyticsProperties(snapshot), {
+    entityId: referenceCode,
+    dedupeKey: `lead-created:${referenceCode}`,
+  });
   form.reset();
   fields.moment.value = "";
   fields.clientType.value = "";
@@ -2050,7 +2087,14 @@ document.querySelector("#formPersonalizeNav").addEventListener("click", () => {
 });
 form.addEventListener("focusin", (event) => {
   const name = Object.keys(steps).find((key) => steps[key].contains(event.target));
-  if (name) updateProgress(name);
+  if (name) {
+    analyticsFormState.lastStep = name;
+    updateProgress(name);
+  }
+  if (!analyticsFormState.started) {
+    analyticsFormState.started = true;
+    captureLeadAnalytics("lead_form_started", { last_step: name || "unknown" }, { dedupeKey: "lead-form-started" });
+  }
 });
 initReturningClientAccess();
 fillGuestOptions();
@@ -2153,4 +2197,10 @@ langButtons.forEach((button) =>
   }),
 );
 setLanguage(uiState.language);
+captureLeadAnalytics("lead_form_viewed", {}, { dedupeKey: `lead-form-viewed:${uiState.language}` });
+window.addEventListener("pagehide", () => {
+  if (analyticsFormState.started && !analyticsFormState.submitted) {
+    captureLeadAnalytics("lead_form_abandoned", { last_step: analyticsFormState.lastStep }, { dedupeKey: "lead-form-abandoned" });
+  }
+});
 form.addEventListener("submit", submitRequest);
