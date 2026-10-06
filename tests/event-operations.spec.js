@@ -64,3 +64,15 @@ test('pré-reserva exige capacidade e preserva etapa comercial',async({page})=>{
 test('primeira resposta em inglês pede dados faltantes sem inventar preços',async({page})=>{
   await inbox(page);const draft=await page.evaluate(()=>buildFirstReplyDraft({cliente_nome:'Ana',tipo_evento:'Cocktail',snapshot:{cliente:{idioma:'en'}}}));expect(draft).toContain('Hello, Ana');expect(draft).toContain('what time');expect(draft).not.toContain('Olá');expect(draft).not.toContain('R$');
 });
+test('inspeção de outra instância invalida a aprovação anterior',async({page})=>{
+  await page.goto('/index.html?qa=1');
+  const result=await page.evaluate(()=>{
+    const dialog=document.createElement('div');dialog.innerHTML='<input name="account" value="instancia-digitada"><input name="approved" type="checkbox" checked>';
+    applyInspectedChannelInstance(dialog,{instanceId:'instancia-inspecionada'});
+    const changed={account:dialog.querySelector('[name="account"]').value,approved:dialog.querySelector('[name="approved"]').checked};
+    dialog.querySelector('[name="approved"]').checked=true;
+    applyInspectedChannelInstance(dialog,{instanceId:'instancia-inspecionada'});
+    return{changed,unchangedApproved:dialog.querySelector('[name="approved"]').checked};
+  });
+  expect(result).toEqual({changed:{account:'instancia-inspecionada',approved:false},unchangedApproved:true});
+});

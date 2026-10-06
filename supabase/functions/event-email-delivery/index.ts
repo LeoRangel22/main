@@ -12,17 +12,20 @@ Deno.serve(async(req:Request)=>{
     if(!config||!sameSecret(req.headers.get('x-event-job-key')||'',config.delivery_job_key))return json(401,'Origem não autenticada');
     const payload=await req.json();
     if(payload.action==='diagnose'){
-      // Read-only service diagnostic for the authorized project administrator.
-      // Never returns API tokens, callback secrets or complete callback URLs.
-      const instance=Deno.env.get('ZAPI_INSTANCE_ID'),token=Deno.env.get('ZAPI_TOKEN'),clientToken=Deno.env.get('ZAPI_CLIENT_TOKEN')||Deno.env.get('CLIENT_TOKEN');
-      const status:any={emailLogsConfigured:['EVENT_ZOHO_CLIENT_ID','EVENT_ZOHO_CLIENT_SECRET','EVENT_ZOHO_REFRESH_TOKEN'].every(k=>Boolean(Deno.env.get(k))),replyToEmail:Deno.env.get('PROPOSAL_REPLY_TO_EMAIL')||'eventos@embaixadacarioca.com.br'};
-      if(instance&&token&&clientToken){
-        const me=await providerFetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/me`,{headers:{'Client-Token':clientToken}});
-        const {data:z}=await worker.rpc('event_channel_worker_config',{target_provider:'zapi'});
-        const own=`${Deno.env.get('SUPABASE_URL')}/functions/v1/event-channel-webhook?provider=zapi&key=${encodeURIComponent(z.secret)}`;
-        status.whatsapp={instanceId:instance,connected:me.connected===true,received:{present:Boolean(me.receivedCallbackUrl),ours:me.receivedCallbackUrl===own},receipts:{present:Boolean(me.messageStatusCallbackUrl),ours:me.messageStatusCallbackUrl===own}};
-      }else status.whatsapp={credentialsConfigured:false};
-      return new Response(JSON.stringify({ok:true,diagnostic:status}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+      try{
+        // This branch is strictly read-only: failures must never change delivery readiness.
+        // Never returns API tokens, callback secrets or complete callback URLs.
+        const instance=Deno.env.get('ZAPI_INSTANCE_ID'),token=Deno.env.get('ZAPI_TOKEN'),clientToken=Deno.env.get('ZAPI_CLIENT_TOKEN')||Deno.env.get('CLIENT_TOKEN');
+        const status:any={emailLogsConfigured:['EVENT_ZOHO_CLIENT_ID','EVENT_ZOHO_CLIENT_SECRET','EVENT_ZOHO_REFRESH_TOKEN'].every(k=>Boolean(Deno.env.get(k))),replyToEmail:Deno.env.get('PROPOSAL_REPLY_TO_EMAIL')||'eventos@embaixadacarioca.com.br'};
+        if(instance&&token&&clientToken){
+          const me=await providerFetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/me`,{headers:{'Client-Token':clientToken}});
+          const {data:z,error:zError}=await worker.rpc('event_channel_worker_config',{target_provider:'zapi'});
+          if(zError||!z?.secret)throw new Error('Configuração Z-API indisponível');
+          const own=`${Deno.env.get('SUPABASE_URL')}/functions/v1/event-channel-webhook?provider=zapi&key=${encodeURIComponent(z.secret)}`;
+          status.whatsapp={instanceId:instance,connected:me.connected===true,received:{present:Boolean(me.receivedCallbackUrl),ours:me.receivedCallbackUrl===own},receipts:{present:Boolean(me.messageStatusCallbackUrl),ours:me.messageStatusCallbackUrl===own}};
+        }else status.whatsapp={credentialsConfigured:false};
+        return new Response(JSON.stringify({ok:true,diagnostic:status}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+      }catch{return json(503,'Diagnóstico indisponível');}
     }
     if(!config.enabled||!config.delivery_sync_ready)return json(409,'Consulta automática ainda não ativada');
     const result=await syncEmailDeliveries(worker);

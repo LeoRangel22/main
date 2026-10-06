@@ -92,6 +92,12 @@ async function callOpsChannelAdmin(action,approved=false,instanceId=null){
   const r=await state.supabase.functions.invoke("event-channel-admin",{body:{action,approved,instanceId}});
   if(r.error||!r.data?.ok)throw new Error(r.data?.message||await getFunctionErrorMessage(r.error)||"Confira o canal.");return r.data;
 }
+function applyInspectedChannelInstance(dialog,result){
+  if(!result.instanceId)return;
+  const account=dialog.querySelector('[name="account"]'),approved=dialog.querySelector('[name="approved"]');
+  if(account.value!==result.instanceId)approved.checked=false;
+  account.value=result.instanceId;
+}
 async function showOpsChannelSetup(provider){
   if(QA_MODE){showToast("Configuração externa desativada no modo QA.");return;}
   const {data,error}=await state.supabase.rpc("get_event_channel_setup");if(error)throw new Error(error.message);
@@ -103,7 +109,7 @@ async function showOpsChannelSetup(provider){
   const bindCopy=(selector,name)=>d.querySelector(selector).onclick=async()=>{try{await navigator.clipboard.writeText(d.querySelector(`[name="${name}"]`).value);showToast("Copiado para configurar o provedor. Mantenha a chave protegida.");}catch{showToast("Não foi possível copiar.");}};
   bindCopy("[data-copy-channel-url]","endpoint");bindCopy("[data-copy-channel-key]","secret");
   d.querySelector('[name="account"]').oninput=()=>{d.querySelector('[name="approved"]').checked=false;};
-  for(const [selector,action] of [["[data-inspect-zapi]","inspect-zapi"],["[data-activate-zapi]","activate-zapi"]]){const b=d.querySelector(selector);if(b)b.onclick=async()=>{b.disabled=true;try{const approved=d.querySelector('[name="approved"]').checked;if(action==="activate-zapi"&&!approved)throw new Error("Confira e aprove a ativação.");const result=await callOpsChannelAdmin(action,approved,d.querySelector('[name="account"]').value.trim());d.querySelector("[data-channel-result]").textContent=result.message;if(result.instanceId)d.querySelector('[name="account"]').value=result.instanceId;if(result.activated)d.querySelector('[name="enabled"]').checked=true;await loadEventOperations();}catch(e){d.querySelector("[data-channel-result]").textContent=e.message;}finally{b.disabled=false;}};}
+  for(const [selector,action] of [["[data-inspect-zapi]","inspect-zapi"],["[data-activate-zapi]","activate-zapi"]]){const b=d.querySelector(selector);if(b)b.onclick=async()=>{b.disabled=true;try{const approved=d.querySelector('[name="approved"]').checked;if(action==="activate-zapi"&&!approved)throw new Error("Confira e aprove a ativação.");const result=await callOpsChannelAdmin(action,approved,d.querySelector('[name="account"]').value.trim());d.querySelector("[data-channel-result]").textContent=result.message;applyInspectedChannelInstance(d,result);if(result.activated)d.querySelector('[name="enabled"]').checked=true;await loadEventOperations();}catch(e){d.querySelector("[data-channel-result]").textContent=e.message;}finally{b.disabled=false;}};}
 }
 function renderOpsReservation(item) {
   const p=state.proposals.find((p)=>p.id===item.id),r=eventOps.reservations.find((r)=>r.opportunity_id===item.opportunityId);
