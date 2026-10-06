@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -8,6 +10,8 @@ const corsHeaders = {
 
 type SendPayload = {
   dryRun?: boolean;
+  approved?: boolean;
+  reviewedResponseAt?: string | null;
   proposalId?: string;
   email?: string;
   proposalUrl?: string;
@@ -308,6 +312,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Entre com o e-mail autorizado da equipe para enviar e-mail." }, 401);
     }
 
+    const { data: allowed } = await supabase.rpc("is_team_member");
+    if (allowed !== true) return jsonResponse({ ok: false, message: "Usuário sem acesso à equipe de Eventos." }, 403);
+
     const payload = (await req.json()) as SendPayload;
 
     if (payload.dryRun) {
@@ -349,7 +356,13 @@ Deno.serve(async (req) => {
 
     const firstName = safeText(proposal.cliente_nome || proposal.snapshot?.client?.name, "cliente").split(/\s+/)[0] || "cliente";
     const subject = payload.title || `Sua proposta de evento na Embaixada Carioca`;
-    const zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
+    const worker = createSendWorker();
+    let claim;
+    try { claim = await claimSend(supabase, proposal, payload, "email", email, payload.message || "Proposta: " + proposalUrl, subject); }
+    catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
+    if (!claim.claimed) return jsonResponse(duplicateResult(claim), claim.send.status === "accepted" ? 200 : 409);
+    let zeptoResponse;
+    try { zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -379,7 +392,11 @@ Deno.serve(async (req) => {
           },
         ],
       }),
-    });
+      signal: AbortSignal.timeout(25000),
+    }); } catch (_error) {
+      await finishSend(worker, claim.send.id, "uncertain", null, "Timeout. Conferir provedor antes de repetir.");
+      return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Resultado incerto. Confira o e-mail antes de repetir." }, 409);
+    }
 
     const rawBody = await zeptoResponse.text();
     let zeptoBody: unknown = rawBody;
@@ -390,6 +407,7 @@ Deno.serve(async (req) => {
     }
 
     if (!zeptoResponse.ok) {
+      await finishSend(worker, claim.send.id, zeptoResponse.status >= 500 ? "uncertain" : "failed", null, getZeptoErrorMessage(zeptoResponse.status));
       console.error("ZeptoMail proposal error:", zeptoResponse.status, zeptoBody);
       return jsonResponse(
         {
@@ -406,54 +424,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const sentAt = new Date().toISOString();
-    const snapshot = proposal.snapshot || {};
-    const historyEntry = {
-      id: `email-${Date.now()}`,
-      type: "email_envio",
-      title: "Proposta enviada por e-mail",
-      detail: `Enviada para ${email}.`,
-      at: sentAt,
-      actor: userData.user.email || "Equipe",
-      channel: "zeptomail",
-      email,
-      proposalUrl,
-    };
-
-    const commercialHistory = Array.isArray(snapshot.commercialHistory) ? snapshot.commercialHistory : [];
-    const emailSends = Array.isArray(snapshot.emailEnvios) ? snapshot.emailEnvios : [];
-    const nextSnapshot = {
-      ...snapshot,
-      ultimoEnvioEmailEm: sentAt,
-      commercialHistory: [historyEntry, ...commercialHistory].slice(0, 50),
-      emailEnvios: [
-        {
-          at: sentAt,
-          actor: userData.user.email || "Equipe",
-          email,
-          title: subject,
-          proposalUrl,
-        },
-        ...emailSends,
-      ].slice(0, 20),
-    };
-
-    const { error: updateError } = await supabase
-      .from("propostas")
-      .update({ snapshot: nextSnapshot })
-      .eq("id", proposal.id);
-
-    if (updateError) {
-      console.error("Falha ao registrar histórico de e-mail:", updateError);
-      return jsonResponse({
-        ok: true,
-        warning: "E-mail enviado, mas o histórico não foi atualizado.",
-        email,
-        zepto: zeptoBody,
-      });
-    }
-
-    return jsonResponse({ ok: true, email, zepto: zeptoBody });
+    const providerId = typeof zeptoBody === "object" && zeptoBody ? String((zeptoBody as any).request_id || "") || null : null;
+    await finishSend(worker, claim.send.id, "accepted", providerId);
+    return jsonResponse({ ok: true, email, sendId: claim.send.id, deliveryStatus: "accepted", message: "Aceito pelo ZeptoMail. Entrega não confirmada." });
   } catch (error) {
     console.error("send-proposal-email fatal:", error);
     return jsonResponse({ ok: false, message: "Erro interno ao enviar e-mail." }, 500);

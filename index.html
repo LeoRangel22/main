@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261005-admin-v187" />
+    <link rel="stylesheet" href="./styles.css?v=20261006-p0p1-v190" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -492,15 +492,15 @@
                 <div>
                   <span>Alçada comercial</span>
                   <strong id="commercialApprovalTitle">Aprovação do gestor necessária</strong>
-                  <p id="commercialApprovalDetail"></p>
+                  <p id="commercialApprovalDetail"></p><small>Salve a versão e solicite aprovação na Central comercial → Reservas. Informar um e-mail não autoriza o desconto.</small>
                 </div>
                 <label>
-                  Aprovado por
+                  Gestor a consultar
                   <input id="commercialApprovalBy" type="email" placeholder="gestor@empresa.com.br" />
                 </label>
                 <label class="commercial-approval-check">
                   <input id="commercialApprovalConfirmed" type="checkbox" />
-                  Confirmo que o gestor revisou valor e motivo.
+                  Revisei valor e motivo para solicitar aprovação.
                 </label>
               </section>
               <div class="availability-alert is-hidden" id="availabilityAlert"></div>
@@ -811,6 +811,7 @@
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="./app.js?v=20261005-metrics-v189"></script>
-  </body>
+  <script defer src="./app.js?v=20261006-p0p1-v190"></script>
+    <script defer src="./event-operations.js?v=20261006-p0p1-v190"></script>
+</body>
 </html>

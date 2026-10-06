@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -8,6 +10,8 @@ const corsHeaders = {
 
 type SendPayload = {
   dryRun?: boolean;
+  approved?: boolean;
+  reviewedResponseAt?: string | null;
   proposalId?: string;
   phone?: string;
   message?: string;
@@ -126,6 +130,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Entre com o e-mail autorizado da equipe para enviar WhatsApp." }, 401);
     }
 
+    const { data: allowed } = await supabase.rpc("is_team_member");
+    if (allowed !== true) return jsonResponse({ ok: false, message: "Usuário sem acesso à equipe de Eventos." }, 403);
+
     const payload = (await req.json()) as SendPayload;
 
     if (payload.dryRun) {
@@ -155,7 +162,7 @@ Deno.serve(async (req) => {
 
     const { data: proposal, error: proposalError } = await supabase
       .from("propostas")
-      .select("id, cliente_nome, cliente_whatsapp, snapshot, public_token")
+      .select("*")
       .eq("id", payload.proposalId)
       .single();
 
@@ -174,15 +181,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Mensagem de WhatsApp vazia." }, 400);
     }
 
+    const worker = createSendWorker();
+    let claim;
+    try { claim = await claimSend(supabase, proposal, payload, "whatsapp", phone, message, payload.title || "Proposta comercial"); }
+    catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
+    if (!claim.claimed) return jsonResponse(duplicateResult(claim), claim.send.status === "accepted" ? 200 : 409);
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/send-text`;
-    const zapiResponse = await fetch(zapiUrl, {
+    let zapiResponse;
+    try { zapiResponse = await fetch(zapiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(clientToken ? { "Client-Token": clientToken } : {}),
       },
       body: JSON.stringify({ phone, message }),
-    });
+      signal: AbortSignal.timeout(25000),
+    }); } catch (_error) {
+      await finishSend(worker, claim.send.id, "uncertain", null, "Timeout. Conferir provedor antes de repetir.");
+      return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Resultado incerto. Confira o WhatsApp antes de repetir." }, 409);
+    }
 
     const rawBody = await zapiResponse.text();
     let zapiBody: unknown = rawBody;
@@ -193,6 +210,7 @@ Deno.serve(async (req) => {
     }
 
     if (!zapiResponse.ok) {
+      await finishSend(worker, claim.send.id, zapiResponse.status >= 500 ? "uncertain" : "failed", null, getZapiErrorMessage(zapiResponse.status, ""));
       console.error("Z-API error:", zapiResponse.status, zapiBody);
       return jsonResponse(
         {
@@ -211,54 +229,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const sentAt = new Date().toISOString();
-    const historyEntry = {
-      id: `whatsapp-${Date.now()}`,
-      type: "whatsapp_envio",
-      title: "Proposta enviada por WhatsApp",
-      detail: `Enviada para ${phone}${payload.title ? ` · ${payload.title}` : ""}.`,
-      at: sentAt,
-      actor: userData.user.email || "Equipe",
-      channel: "zapi",
-      phone,
-      proposalUrl: payload.proposalUrl || null,
-      zapiStatus: zapiResponse.status,
-    };
-
-    const commercialHistory = Array.isArray(snapshot.commercialHistory) ? snapshot.commercialHistory : [];
-    const whatsappSends = Array.isArray(snapshot.whatsappEnvios) ? snapshot.whatsappEnvios : [];
-    const nextSnapshot = {
-      ...snapshot,
-      ultimoEnvioWhatsappEm: sentAt,
-      commercialHistory: [historyEntry, ...commercialHistory].slice(0, 50),
-      whatsappEnvios: [
-        {
-          at: sentAt,
-          actor: userData.user.email || "Equipe",
-          phone,
-          title: payload.title || "Proposta",
-          proposalUrl: payload.proposalUrl || null,
-        },
-        ...whatsappSends,
-      ].slice(0, 20),
-    };
-
-    const { error: updateError } = await supabase
-      .from("propostas")
-      .update({ snapshot: nextSnapshot })
-      .eq("id", proposal.id);
-
-    if (updateError) {
-      console.error("Falha ao registrar histórico WhatsApp:", updateError);
-      return jsonResponse({
-        ok: true,
-        warning: "Mensagem enviada, mas o histórico não foi atualizado.",
-        phone,
-        zapi: zapiBody,
-      });
-    }
-
-    return jsonResponse({ ok: true, phone, zapi: zapiBody });
+    const providerId = typeof zapiBody === "object" && zapiBody ? String((zapiBody as any).messageId || (zapiBody as any).zaapId || "") || null : null;
+    await finishSend(worker, claim.send.id, "accepted", providerId);
+    return jsonResponse({ ok: true, phone, sendId: claim.send.id, deliveryStatus: "accepted", message: "Aceito pela Z-API. Entrega e leitura não confirmadas." });
   } catch (error) {
     console.error("send-proposal-whatsapp fatal:", error);
     return jsonResponse({ ok: false, message: "Erro interno ao enviar WhatsApp." }, 500);

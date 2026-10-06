@@ -164,3 +164,19 @@ Atenção: confira a linha de validade do tarifário antes de cada temporada com
 - Configurações compartilhadas: preços, regras e modelos usam Supabase como fonte comum depois da primeira publicação autenticada.
 
 Propostas e PDFs antigos são imutáveis. Para refletir uma correção, duplique a versão, ajuste e publique uma nova.
+
+## Central comercial P0/P1
+
+O Sistema de Eventos opera de forma independente. A futura integração deve consultar informações do Bot; não há sincronização automática neste pacote.
+
+A central reúne pendências, conversas registradas, envios e reservas. Planejamento em lote não registra contato. Respostas externas podem ser registradas manualmente; recebimento automático e callbacks de entrega dependem de configuração futura. Copiar um rascunho também não registra envio.
+
+O gestor configura a capacidade simultânea autorizada em Central comercial → Reservas. Nenhum valor foi presumido. O responsável padrão vale para novas oportunidades; os registros antigos continuam sujeitos à triagem. Confirmações futuras exigem capacidade, disponibilidade e valor do sinal registrado. Pré-reservas têm validade máxima de 30 dias.
+
+Descontos acima de R$ 1.000 ou 10% do subtotal exigem aprovação do gestor autenticado da versão salva. Informar um e-mail na proposta não concede alçada. Alterações comerciais invalidam a aprovação.
+
+Envios exigem revisão humana e são deduplicados no servidor. Aceitação pelo provedor não comprova entrega. Timeout, HTTP 5xx ou resultado incerto não autorizam reenvio automático. Conferir o canal antes de qualquer nova tentativa. A homologação real exige login da equipe e destinatário de teste definido, sem envio para clientes durante os testes.
+
+As alternativas usam itens do catálogo e o mesmo cálculo de preços/taxas da proposta. Escolher uma alternativa solicita ajuste e nova versão, sem aprovar automaticamente outro preço.
+
+Validação: `npm test` executa testes locais dos handlers e os fluxos Playwright. As migrações e Edge Functions devem estar publicadas antes da interface.

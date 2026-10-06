@@ -4751,11 +4751,11 @@ function getProposalReviewItems() {
     {
       id: "commercial_approval",
       label: "Alçada comercial",
-      status: commercialApproval.approved ? "ok" : "error",
+      status: commercialApproval.approved ? "ok" : "warning",
       detail: commercialApproval.required
         ? commercialApproval.approved
-          ? `Desconto aprovado por ${commercialApproval.approvedBy}.`
-          : `Desconto de ${formatMoney(commercialApproval.discount)} exige confirmação e e-mail do gestor.`
+          ? `Alçada validada com login de ${commercialApproval.approvedBy}.`
+          : `Desconto de ${formatMoney(commercialApproval.discount)}: salve para revisão e peça aprovação do gestor na Central comercial. O envio fica bloqueado no servidor.`
         : "Ajuste dentro da alçada do vendedor.",
       target: "client",
     },
@@ -5004,6 +5004,10 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     validity: fields.validity.value.trim(),
     signalDeadline: fields.signalDeadlineHours.value,
     selectedIds: [...state.selectedIds].sort(),
+    prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
+    generalTerms: fields.generalTerms.value,
+    privatizationAdjustment: getPrivatizationAdjustment(),
+    publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     total: roundCurrency(totals.total),
     adjustment: roundCurrency(getManualAdjustment()),
     commercialApproval: {
@@ -6214,7 +6218,7 @@ function getManualAdjustmentLabel() {
 
 function getCommercialApprovalRequirement() {
   const adjustment = getManualAdjustment();
-  const discount = Math.max(0, -adjustment);
+  const discount = Math.max(0, -adjustment) + Math.max(0, -getPrivatizationAdjustment());
   const subtotal = Math.max(0, getSubtotal());
   const percent = subtotal > 0 ? discount / subtotal : 0;
   const required = discount > COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT || percent > COMMERCIAL_APPROVAL_PERCENT_LIMIT;
@@ -6230,10 +6234,11 @@ function getCommercialApprovalState() {
   const requirement = getCommercialApprovalRequirement();
   const approvedBy = fields.commercialApprovalBy?.value.trim() || "";
   const confirmed = Boolean(fields.commercialApprovalConfirmed?.checked);
+  const serverApproval = typeof getServerDiscountApproval === "function" ? getServerDiscountApproval() : null;
   return {
     ...requirement,
-    approved: !requirement.required || (confirmed && isLikelyEmailAddress(approvedBy)),
-    approvedBy,
+    approved: !requirement.required || Boolean(serverApproval),
+    approvedBy: serverApproval?.approved_email || approvedBy,
     confirmed,
   };
 }
@@ -6244,7 +6249,7 @@ function renderCommercialApprovalPanel() {
   nodes.commercialApprovalPanel.classList.toggle("is-hidden", !approval.required);
   const title = document.querySelector("#commercialApprovalTitle");
   const detail = document.querySelector("#commercialApprovalDetail");
-  if (title) title.textContent = approval.approved ? "Desconto aprovado pelo gestor" : "Aprovação do gestor necessária";
+  if (title) title.textContent = approval.approved ? "Alçada aprovada com login do gestor" : "Aprovação do gestor necessária";
   if (detail) {
     detail.textContent = `${formatMoney(approval.discount)} de desconto (${Math.round(approval.percent * 100)}%). A alçada é acionada acima de ${formatMoney(COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT)} ou 10% do subtotal.`;
   }
@@ -9643,6 +9648,7 @@ function getLeadAgeInfo(item) {
 }
 
 function getProposalFollowUpInfo(item) {
+  if (typeof getOpsIncoming === "function" && getOpsIncoming(item)) return null;
   if (item.kind !== "proposal" || item.isDraft || item.clientResponse || normalizeProposalStatus(item.status) !== "proposta_enviada") return null;
   if (getScheduledReturnInfo(item)) return null;
   const opportunity = getOpportunityForItem(item);
@@ -9665,6 +9671,7 @@ function getProposalFollowUpInfo(item) {
 }
 
 function getScheduledReturnInfo(item) {
+  if (typeof getOpsIncoming === "function" && getOpsIncoming(item)) return null;
   if (item.kind !== "proposal" || item.isDraft || item.clientResponse || getReportStatus(item) !== "proposta_enviada") return null;
   const plan = getTaskPlan(item);
   if (!plan.due || !(new Date(plan.due).getTime() > Date.now())) return null;
@@ -9672,6 +9679,8 @@ function getScheduledReturnInfo(item) {
 }
 
 function getResponseReminder(item) {
+  const incoming = typeof getOpsIncoming === "function" ? getOpsIncoming(item) : null;
+  if (incoming && ["lead_recebido","proposta_pronta","proposta_enviada","negociacao"].includes(item.status)) return { title: "Responder mensagem do cliente", note: incoming.body, priority: 99, track: "Venda" };
   if (item.kind !== "proposal" || item.isDraft || !item.clientResponse || !["proposta_enviada", "negociacao"].includes(getReportStatus(item))) return null;
   if (item.clientResponse === "confirmar") {
     if (item.hasSignalProof) return { title: "Validar comprovante do sinal", note: "Comprovante recebido. Confira o banco antes de confirmar a reserva.", priority: 96, track: "Venda" };
@@ -10495,6 +10504,10 @@ function isQuoteWorkspaceEffectivelyEmpty() {
 
 function getCurrentEditorSignature() {
   return JSON.stringify({
+    prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
+    generalTerms: fields.generalTerms.value,
+    privatizationAdjustment: getPrivatizationAdjustment(),
+    publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     activeProposalId: state.activeProposalId || "",
     activeQuoteRequestId: state.activeQuoteRequestId || "",
     client: fields.clientName?.value.trim() || "",
@@ -11609,6 +11622,7 @@ function renderPipelineCard(item) {
       ${needsOutcome ? "" : reopenButton}
       ${needsOutcome ? "" : renderStatusSelect(item)}
       ${outcomeButton}
+      ${item.opportunityId ? `<button class="secondary" type="button" data-open-conversation="${escapeHtml(item.opportunityId)}">Conversa</button>` : ""}
       ${item.pendingDraftId ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(item.pendingDraftId)}">Continuar V${escapeHtml(item.pendingDraftVersion || "")}</button>` : ""}
       ${deleteTestButton}
       ${openButton}
@@ -11722,6 +11736,8 @@ function renderPipelineStage(stage, items) {
 }
 
 function renderPipeline() {
+  if (typeof renderEventOperations === "function") renderEventOperations();
+  if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
   if (!nodes.pipelineBoard) {
     renderPipelineMetrics(getPipelineItems());
     return;
@@ -14099,6 +14115,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     return false;
   }
 
+  const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
   if (!skipConfirm) {
     const confirmed = await confirmClientSend({
       channel: "WhatsApp",
@@ -14127,6 +14144,8 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
       body: {
         proposalId: proposal.id,
+        approved: true,
+        reviewedResponseAt,
         phone,
         message: outboundMessage,
         proposalUrl,
@@ -14147,10 +14166,12 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
 
     updateIntegrationLog(logId, {
       status: "success",
-      detail: `Proposta enviada para ${phone}.`,
+      detail: data?.duplicate ? data.message : `Aceito pelo canal para ${phone}. Entrega não confirmada.`,
     });
-    const stageUpdated = await registerConfirmedProposalSend(proposal);
-    if (stageUpdated) showToast("Proposta enviada por WhatsApp e registrada no histórico.");
+    const stageUpdated = true;
+    if (stageUpdated) showToast(data.message || "Aceito pelo WhatsApp; entrega não confirmada.");
+    await loadCommercialInsights();
+    if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     return true;
   } catch (error) {
@@ -14182,6 +14203,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     return false;
   }
 
+  const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
   if (!skipConfirm) {
     const confirmed = await confirmClientSend({
       channel: "E-mail",
@@ -14211,6 +14233,8 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
       body: {
         proposalId: proposal.id,
+        approved: true,
+        reviewedResponseAt,
         email: destination,
         proposalUrl,
         title: emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca",
@@ -14231,10 +14255,12 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
 
     updateIntegrationLog(logId, {
       status: "success",
-      detail: `Proposta enviada para ${destination}.`,
+      detail: data?.duplicate ? data.message : `Aceito pelo canal para ${destination}. Entrega não confirmada.`,
     });
-    const stageUpdated = await registerConfirmedProposalSend(proposal);
-    if (stageUpdated) showToast("Proposta enviada por e-mail e registrada no histórico.");
+    const stageUpdated = true;
+    if (stageUpdated) showToast(data.message || "Aceito pelo e-mail; entrega não confirmada.");
+    await loadCommercialInsights();
+    if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     return true;
   } catch (error) {
@@ -15069,6 +15095,7 @@ function bindEvents() {
       renderSendReview();
       renderCalculation();
       renderProposal();
+      if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
     };
     field.addEventListener("input", refreshFormOutputs);
     field.addEventListener("change", refreshFormOutputs);
