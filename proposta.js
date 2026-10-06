@@ -429,6 +429,12 @@ async function copyPixKey(button) {
   }
 }
 
+function renderOfferComparison(snapshot) {
+  const options = Array.isArray(snapshot.publicOfferOptions) ? snapshot.publicOfferOptions.slice(0, 3) : [];
+  if (options.length < 2) return "";
+  return `<section class="public-offer-comparison"><h3>${tr("Compare sua experiência", "Compare your experience")}</h3><p>${tr("Escolher um complemento solicita uma nova versão para revisão.", "Choosing an extra requests a new version for review.")}</p><div>${options.map((o, i) => `<article><strong>${escapeHtml(o.base ? tr("Proposta atual", "Current proposal") : o.name)}</strong><p>${escapeHtml(o.base ? tr("Itens e condições desta versão.", "Items and terms in this version.") : o.description)}</p><b>${formatMoney(o.total)}</b>${!o.base ? `<button class="secondary" type="button" data-request-offer="${i}">${tr("Pedir esta opção", "Request this option")}</button>` : `<small>${tr("Itens desta proposta", "Items in this proposal")}</small>`}</article>`).join("")}</div></section>`;
+}
+
 function renderProposal(proposal) {
   currentProposal = proposal;
   const snapshot = proposal.snapshot || {};
@@ -518,6 +524,7 @@ function renderProposal(proposal) {
 
     <a class="public-proposal-jump" href="#decisionActions">${tr("Ver condições e responder", "Review terms and respond")}</a>
     ${renderVersionChanges(snapshot)}
+    ${renderOfferComparison(snapshot)}
     ${renderCommercialSummary(snapshot)}
 
     ${
@@ -751,7 +758,7 @@ async function loadProposal() {
 }
 
 async function recordProposalView() {
-  if (proposalViewRecorded || !token || !supabaseClient) return;
+  if (proposalViewRecorded || !token || !supabaseClient || document.visibilityState !== "visible" || /bot|crawler|spider|preview|facebookexternalhit|WhatsApp/i.test(navigator.userAgent || "")) return;
   proposalViewRecorded = true;
   try {
     await supabaseClient.rpc("record_public_proposal_view", {
@@ -765,6 +772,15 @@ async function recordProposalView() {
 }
 
 card.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-request-offer]");
+  if (option) {
+    const offer = currentProposal?.snapshot?.publicOfferOptions?.[Number(option.dataset.requestOffer)];
+    if (!offer || offer.base) return;
+    openResponseForm("alteracao");
+    const message = document.querySelector("#publicResponseMessage");
+    if (message) message.value = tr(`Gostaria de receber uma nova versão com ${offer.name}, conforme a opção apresentada (${formatMoney(offer.total)}).`, `Please send a new version with ${offer.name}, as shown in this option (${formatMoney(offer.total)}).`);
+    return;
+  }
   const laterProofButton = event.target.closest("[data-upload-proof]");
   if (laterProofButton) {
     const form = document.querySelector("#publicLaterProofForm");
@@ -843,3 +859,5 @@ document.querySelectorAll("[data-proposal-lang]").forEach((button) => button.add
 }));
 syncLanguage();
 loadProposal();
+
+document.addEventListener("visibilitychange", () => { if (currentProposal) recordProposalView(); });

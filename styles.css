@@ -12326,3 +12326,35 @@ body[data-page="app"] .pipeline-card-bottom-row {
   .first-reply-heading { flex-direction: column; }
   .first-reply-actions button { flex: 1 1 46%; }
 }
+/* Central comercial com controles confortáveis em telas pequenas. */
+.event-operations { margin:18px 0; border:1px solid #dbe5de; background:#fff; border-radius:16px; color:#173e2e; }
+.event-operations summary { cursor:pointer; padding:18px; display:flex; flex-wrap:wrap; gap:8px 20px; justify-content:space-between; }
+.event-operations summary span { font-size:.9rem; }
+.event-ops-content { padding:0 18px 18px; }
+.event-ops-content nav,.event-ops-toolbar,.event-ops-metrics { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
+.event-ops-content nav button[aria-pressed=true] { background:#174b35; color:white; }
+.event-ops-content label:not(.event-ops-row),.event-ops-dialog label,.event-offer-builder label { display:grid; gap:8px; margin:12px 0; }
+.event-ops-list { display:grid; gap:10px; max-height:480px; overflow:auto; margin:16px 0; }
+.event-ops-row { display:flex; align-items:center; gap:12px; border:1px solid #dce5df; border-radius:12px; padding:12px; min-width:0; }
+.event-ops-row span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.event-ops-row input[type=checkbox],.event-ops-check input[type=checkbox] { width:20px; height:20px; flex:0 0 20px; }
+.event-ops-row small,.event-ops-message small { display:block; margin-top:5px; color:#55655c; }
+.event-ops-dialog { width:min(680px,calc(100vw - 24px)); max-height:90vh; overflow:auto; border:0; border-radius:18px; padding:24px; box-sizing:border-box; }
+.event-ops-dialog::backdrop { background:rgba(15,35,24,.55); }
+.event-ops-dialog input:not([type=checkbox]),.event-ops-dialog textarea,.event-ops-dialog select,.event-ops-content select,.event-offer-builder select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #bccfc2; border-radius:9px; font:inherit; }
+.event-ops-check { display:flex!important; align-items:flex-start; }
+.event-ops-check[hidden] { display:none!important; }
+.event-ops-message { border-left:4px solid #d4a32b; border-radius:10px; padding:14px; margin:12px 0; background:#fffaf0; overflow-wrap:anywhere; }
+.event-ops-message.outbound { border-color:#2f7756; background:#f1f7f2; }
+.event-ops-message.internal { border-color:#98aaa0; background:#f5f7f6; }
+.event-ops-message p { white-space:pre-wrap; margin:10px 0; }
+.event-ops-error { color:#a33026; }
+.event-ops-content button,.event-ops-dialog button { min-height:44px; }
+.event-offer-builder { padding:16px; border:1px solid #dbe5de; border-radius:12px; margin:14px 0; }
+.event-offer-builder summary { cursor:pointer; font-weight:700; }
+.public-offer-comparison { margin:22px 0; padding:18px; background:#f2f7f1; border-radius:14px; }
+.public-offer-comparison>div { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:12px; }
+.public-offer-comparison article { padding:16px; background:white; border:1px solid #dbe5de; border-radius:12px; overflow-wrap:anywhere; }
+.public-offer-comparison b,.public-offer-comparison small { display:block; margin:12px 0; }
+.public-offer-comparison button { width:100%; min-height:44px; }
+@media(max-width:480px) { .event-ops-row { flex-wrap:wrap; } .event-ops-row span { flex-basis:calc(100% - 40px); } .event-ops-row button { margin-left:32px; } .event-ops-dialog { padding:18px; } }

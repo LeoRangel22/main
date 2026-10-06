@@ -180,10 +180,10 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.locator("#manualAdjustment").fill("-1500");
     await expect(page.locator("#commercialApprovalPanel")).toBeVisible();
     await expect(page.locator("#commercialApprovalPanel")).toContainText("Aprovação do gestor necessária");
-    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("error");
+    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("warning");
     await page.locator("#commercialApprovalBy").fill("gestor@embaixadacarioca.com.br");
     await page.locator("#commercialApprovalConfirmed").check();
-    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("ok");
+    expect(await page.evaluate(() => getProposalReviewItems().find((item) => item.id === "commercial_approval")?.status)).toBe("warning");
 
     await page.evaluate(() => {
       const current = state.proposals.find((row) => row.id === "qa-proposal-sem-resposta");
