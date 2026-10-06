@@ -46,6 +46,16 @@ async function openProposal(page, initial = proposal, query = "") {
 }
 
 test.describe("Decisão do cliente na proposta", () => {
+  test("alternativa solicita revisão sem aprovar novo preço", async ({ page }) => {
+    const fixture=structuredClone(proposal);
+    fixture.snapshot.publicOfferOptions=[{base:true,name:'Atual',total:2240},{base:false,name:'Workshop',description:'Experiência adicional',total:3360}];
+    await openProposal(page,fixture);
+    await expect(page.locator('.public-offer-comparison')).toContainText('Workshop');
+    await page.locator('[data-request-offer="1"]').click();
+    await expect(page.locator('#publicResponseMessage')).toHaveValue(/nova versão com Workshop/);
+    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal'))).toBe(false);
+    await expect(page.locator('.public-proposal-summary')).toContainText('2.240');
+  });
   test("investimento exibe a experiência contratada e oculta a linha quando não há valor", async ({ page }) => {
     await openProposal(page);
     await expect(page.locator(".public-proposal-totals")).not.toContainText(/Privatizaç|Área Dedicada|Experiência Exclusiva/);
