@@ -51,3 +51,16 @@ test('alternativas usam catálogo compatível e não alteram o carrinho',async({
   });
   expect(r.compatible).toBe(true);expect(r.ids).toEqual(r.before);expect(r.options).toHaveLength(2);expect(r.options[0].total).toBe(r.base);expect(r.options[1].total).toBeGreaterThan(r.base);
 });
+test('pré-reserva exige capacidade e preserva etapa comercial',async({page})=>{
+  await inbox(page);await page.locator('[data-ops-tab="reservations"]').click();
+  await page.locator('[data-ops-hold]').click();const d=page.locator('.event-ops-dialog');
+  await d.locator('[name="until"]').fill(await page.evaluate(()=>opsLocalTime(new Date(Date.now()+3600000))));
+  await d.getByRole('button',{name:'Verificar e pré-reservar'}).click();await expect(d.locator('[role="alert"]')).toContainText('Configure a capacidade');await d.getByRole('button',{name:'Voltar',exact:true}).click();
+  await page.locator('[data-ops-policy]').click();await page.locator('.event-ops-dialog [name="capacity"]').fill('120');await page.getByRole('button',{name:'Salvar regras',exact:true}).click();
+  const before=await page.evaluate(()=>state.proposals.find(p=>p.id==='qa-proposal-sem-resposta').status);
+  await page.locator('[data-ops-hold]').click();await page.locator('.event-ops-dialog [name="until"]').fill(await page.evaluate(()=>opsLocalTime(new Date(Date.now()+3600000))));await page.getByRole('button',{name:'Verificar e pré-reservar',exact:true}).click();
+  await expect(page.locator('#eventOperations')).toContainText('Pré-reserva até');expect(await page.evaluate(()=>state.proposals.find(p=>p.id==='qa-proposal-sem-resposta').status)).toBe(before);
+});
+test('primeira resposta em inglês pede dados faltantes sem inventar preços',async({page})=>{
+  await inbox(page);const draft=await page.evaluate(()=>buildFirstReplyDraft({cliente_nome:'Ana',tipo_evento:'Cocktail',snapshot:{cliente:{idioma:'en'}}}));expect(draft).toContain('Hello, Ana');expect(draft).toContain('what time');expect(draft).not.toContain('Olá');expect(draft).not.toContain('R$');
+});

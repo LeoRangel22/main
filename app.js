@@ -1803,21 +1803,15 @@ function renderProposalNextStep() {
 }
 
 function buildFirstReplyDraft(request) {
-  const name = String(request.cliente_nome || fields.clientName.value || "").trim().split(/\s+/)[0] || "olá";
-  const type = request.tipo_evento || fields.eventType.value || "seu evento";
-  const date = request.data_evento || fields.eventDate.value;
-  const guests = Number(request.convidados || 0);
-  const context = [date ? `para ${formatDateFromIso(date)}` : "", guests > 1 ? `para ${guests} pessoas` : ""].filter(Boolean).join(" ");
-  const missing = [
-    !date ? "qual data você tem em mente?" : "",
-    !request.horario_evento ? "qual seria o horário?" : "",
-    !guests ? "quantas pessoas participarão?" : "",
-  ].filter(Boolean);
-  return [
-    `Olá, ${name}! Recebemos seu pedido para ${type}${context ? ` ${context}` : ""} na Embaixada Carioca.`,
-    missing.length ? `Para preparar uma opção precisa, preciso confirmar: ${missing.slice(0, 2).join(" ")}` : "Vou conferir os detalhes e volto com uma proposta adequada ao seu grupo.",
-    "Se tiver alguma preferência ou necessidade especial, pode me contar por aqui.",
-  ].join("\n\n");
+  const en=request.snapshot?.cliente?.idioma === "en" || request.snapshot?.event?.clientLanguage === "en";
+  const tr=(pt,english)=>en?english:pt;
+  const name=String(request.cliente_nome || fields.clientName.value || "").trim().split(/\s+/)[0] || tr("cliente","there");
+  const type=request.tipo_evento || fields.eventType.value || tr("seu evento","your event");
+  const date=request.data_evento || fields.eventDate.value, guests=Number(request.convidados || 0);
+  const dateLabel=date?(en?new Intl.DateTimeFormat("en-US",{dateStyle:"medium"}).format(new Date(`${date}T12:00:00`)):formatDateFromIso(date)):"";
+  const context=[date?tr(`para ${dateLabel}`,`on ${dateLabel}`):"",guests>1?tr(`para ${guests} pessoas`,`for ${guests} guests`):""].filter(Boolean).join(" ");
+  const missing=[!date?tr("qual data você tem em mente?","which date are you considering?"):"",!request.horario_evento?tr("qual seria o horário?","what time would suit you?"):"",!guests?tr("quantas pessoas participarão?","how many guests will attend?"):""].filter(Boolean);
+  return [tr(`Olá, ${name}! Recebemos seu pedido para ${type}${context?` ${context}`:""} na Embaixada Carioca.`,`Hello, ${name}! We received your request for ${type}${context?` ${context}`:""} at Embaixada Carioca.`),missing.length?tr(`Para preparar uma opção precisa, preciso confirmar: ${missing.slice(0,2).join(" ")}`,`To prepare a suitable option, I need to confirm: ${missing.slice(0,2).join(" ")}`):tr("Vou conferir os detalhes e volto com uma proposta adequada ao seu grupo.","I will review the details and return with a proposal for your group."),tr("Se tiver alguma preferência ou necessidade especial, pode me contar por aqui.","Please let me know if you have any preferences or special requirements.")].join("\n\n");
 }
 
 function buildSmartDraftSuggestion(request) {
