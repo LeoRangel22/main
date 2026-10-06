@@ -61,3 +61,13 @@ test('Entrega de e-mail: registro exato confirma destino e Message-ID',async()=>
 for(const scenario of [{status:'opened'},{to:'other@example.test'},{duplicates:true}])test(`Entrega de e-mail: rejeita evidência insuficiente ${JSON.stringify(scenario)}`,async()=>assert.equal((await emailLogs(scenario)).ingest.length,0));
 
 test("Admin: revisão de outra instância não configura callbacks",async()=>{const r=await admin("activate-zapi",{instanceId:"other"});assert.equal(r.status,409);assert.equal(r.fetchCount,1);assert.equal(r.rpcCalls.includes("configure_event_channel"),false);});
+
+async function deliveryWorker(correctKey){
+ let handler,fetches=0;const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'private',ZAPI_INSTANCE_ID:'instance',ZAPI_TOKEN:'zapi-token-should-not-leak',ZAPI_CLIENT_TOKEN:'client-token-should-not-leak'};
+ const client={rpc:async()=>({data:{delivery_job_key:'job-key',secret:'callback-secret',enabled:false}})};
+ const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,TextEncoder,TextDecoder,Uint8Array,btoa,crypto:require('node:crypto').webcrypto,createClient:()=>client,Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},fetch:async()=>{fetches++;return new Response(JSON.stringify({connected:true,receivedCallbackUrl:'https://bot.example.test/hook?secret=hidden',messageStatusCallbackUrl:''}));}});
+ for(const f of ['_shared/channel-events.ts','_shared/email-delivery.ts','event-email-delivery/index.ts'])vm.runInContext(source(f),c);
+ const res=await handler(new Request('https://example.test/worker',{method:'POST',headers:{'x-event-job-key':correctKey?'job-key':'bad'},body:'{"action":"diagnose"}'}));return{status:res.status,body:await res.text(),fetches};
+}
+test('Diagnóstico interno: chave errada não acessa provedores',async()=>{const r=await deliveryWorker(false);assert.equal(r.status,401);assert.equal(r.fetches,0);});
+test('Diagnóstico interno: retorna conflito sem expor tokens ou URL completa',async()=>{const r=await deliveryWorker(true);assert.equal(r.status,200);assert.equal(r.fetches,1);assert.equal(JSON.parse(r.body).diagnostic.whatsapp.received.ours,false);assert.equal(r.body.includes('should-not-leak'),false);assert.equal(r.body.includes('hidden'),false);});
