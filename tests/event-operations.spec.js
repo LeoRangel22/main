@@ -41,3 +41,13 @@ test('edição do rascunho invalida aprovação e resposta nova impede ação an
   await d.getByRole('button',{name:'Executar ação revisada'}).click();await expect(d.locator('[role="alert"]')).toContainText('resposta mudou');
 });
 for(const width of [320,390,1440])test(`central comercial cabe em ${width}px`,async({page})=>{await page.setViewportSize({width,height:900});await inbox(page);await expectNoHorizontalOverflow(page);await page.locator('[data-ops-record]').click();await expectNoHorizontalOverflow(page);});
+test('alternativas usam catálogo compatível e não alteram o carrinho',async({page})=>{
+  await inbox(page);
+  await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"] .pipeline-open-button').click();
+  const r=await page.evaluate(()=>{
+    fields.eventType.value='Coquetel';state.selectedIds=new Set(['coquetel-caipirinha']);
+    const ids=[...state.selectedIds],base=getQuoteTotals().total,candidates=getEventOfferCandidates(),candidate=candidates.find(i=>i.id==='welcome-caipirinha')||candidates[0];
+    const options=buildEventOfferOptions([candidate.id]);return {ids:[...state.selectedIds],before:ids,base,options,compatible:candidates.every(i=>getAllowedCategoriesForEvent(getCurrentEventType()).includes(i.tipoEvento))};
+  });
+  expect(r.compatible).toBe(true);expect(r.ids).toEqual(r.before);expect(r.options).toHaveLength(2);expect(r.options[0].total).toBe(r.base);expect(r.options[1].total).toBeGreaterThan(r.base);
+});

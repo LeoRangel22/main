@@ -14168,7 +14168,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       status: "success",
       detail: data?.duplicate ? data.message : `Aceito pelo canal para ${phone}. Entrega não confirmada.`,
     });
-    const stageUpdated = true;
+    const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "WhatsApp") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo WhatsApp; entrega não confirmada.");
     await loadCommercialInsights();
     if (typeof loadEventOperations === "function") await loadEventOperations();
@@ -14257,7 +14257,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
       status: "success",
       detail: data?.duplicate ? data.message : `Aceito pelo canal para ${destination}. Entrega não confirmada.`,
     });
-    const stageUpdated = true;
+    const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "E-mail") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo e-mail; entrega não confirmada.");
     await loadCommercialInsights();
     if (typeof loadEventOperations === "function") await loadEventOperations();

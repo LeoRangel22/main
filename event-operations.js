@@ -22,7 +22,7 @@ async function loadEventOperations() {
         if(r.some((v)=>v.error))throw new Error("Não foi possível atualizar a central. Confira a conexão.");
         [eventOps.messages,eventOps.outbox,eventOps.reservations,eventOps.approvals]=r.slice(0,4).map((v)=>v.data||[]);eventOps.policy=r[4].data?.[0]||{};
       }
-      eventOps.loadedFor=user;eventOps.error="";
+      eventOps.loadedFor=user;eventOps.error="";renderCommercialApprovalPanel();
     } catch(e){eventOps.error=e.message;}
   })();
   try { await eventOps.loading; } finally { eventOps.loading=null;renderPipeline(); }
@@ -49,7 +49,7 @@ async function eventOpsRpc(name, body) {
 function opsMessageStatus(m) { return ({accepted:"Aceito pelo canal · entrega não confirmada",delivered:"Entrega confirmada",read:"Leitura informada pelo canal",manual_sent:"Envio manual confirmado pela equipe",failed:"Envio recusado",uncertain:"Resultado incerto · conferir o canal",sending:"Envio em andamento · não repetir"})[m.delivery_status||m.status]||""; }
 function renderEventOperations() {
   let root=document.querySelector("#eventOperations");
-  if(!root){root=document.createElement("section");root.id="eventOperations";root.className="event-operations";document.querySelector(".action-center")?.after(root);root.addEventListener("click",handleEventOpsClick);root.addEventListener("change",(e)=>{if(e.target.matches("[data-ops-selector]")){eventOps.opportunity=e.target.value;renderEventOperations();}});}
+  if(!root){root=document.createElement("section");root.id="eventOperations";root.className="event-operations";document.querySelector("#salesCommand")?.after(root);root.addEventListener("click",handleEventOpsClick);root.addEventListener("change",(e)=>{if(e.target.matches("[data-ops-selector]")){eventOps.opportunity=e.target.value;renderEventOperations();}});}
   root.hidden=!state.session;
   if(!state.session){Object.assign(eventOps,{messages:[],outbox:[],reservations:[],approvals:[],loadedFor:"",opportunity:""});eventOfferDrafts.clear();return;}
   if(!eventOps.loadedFor&&!eventOps.loading&&!eventOps.error)queueMicrotask(loadEventOperations);
@@ -122,9 +122,10 @@ async function handleEventOpsClick(e) {
   if(e.target.closest("[data-ops-discount]")&&item?.kind==="proposal")opsDialog("Aprovar alçada comercial",`<p>Versão V${item.version} salva de ${escapeHtml(item.name)}, total ${formatMoney(item.total)}. Alterações comerciais invalidam a aprovação.</p><label class="event-ops-check"><input type="checkbox" required/> Conferi os valores e aprovo com meu usuário de gestor.</label>`,"Aprovar esta versão",()=>eventOpsRpc("approve_event_discount",{target_proposal:item.id}));
 }
 function getEventOfferContext(){return JSON.stringify([fields.eventDate.value,fields.eventTime.value,getGuestCount(),getDuration(),getQuoteTotals(),getSelectedItems().map((i)=>[i.id,i.nome,i.descricao,i.calc])]);}
+function getEventOfferCandidates(){const categories=getAllowedCategoriesForEvent(getCurrentEventType());return state.prices.filter((i)=>i.active!==false&&!state.selectedIds.has(i.id)&&categories.includes(i.tipoEvento)&&Number.isFinite(calculateItem(i).total)&&calculateItem(i).total>0);}
 function buildEventOfferOptions(ids) {
   const selected=new Set(state.selectedIds),total=getQuoteTotals().total,options=[{name:"Proposta atual",description:"Itens e condições desta versão.",total,base:true}];
-  try{for(const id of ids.slice(0,2)){const item=state.prices.find((i)=>i.id===id&&i.active!==false);if(!item||selected.has(id))continue;state.selectedIds=new Set([...selected,id]);const next=getQuoteTotals().total;if(Number.isFinite(next)&&next>=total)options.push({name:item.nome,description:item.commercialSummary||item.descricao||"Complemento da experiência",total:next,base:false});}}finally{state.selectedIds=selected;}return options.length>1?options:[];
+  try{for(const id of ids.slice(0,2)){const item=getEventOfferCandidates().find((i)=>i.id===id);if(!item||selected.has(id))continue;state.selectedIds=new Set([...selected,id]);const next=getQuoteTotals().total;if(Number.isFinite(next)&&next>=total)options.push({name:item.nome,description:item.commercialSummary||item.descricao||"Complemento da experiência",total:next,base:false});}}finally{state.selectedIds=selected;}return options.length>1?options:[];
 }
 const baseGetProposalSnapshot=getProposalSnapshot;
 getProposalSnapshot=function(){const s=baseGetProposalSnapshot(),key=getActiveOpportunityId()||getSourceOverrideKey(),c=eventOfferDrafts.get(key)||getActiveProposal()?.snapshot?.offerConfiguration;if(c?.context===getEventOfferContext()){s.publicOfferOptions=buildEventOfferOptions(c.itemIds||[]);s.offerConfiguration=c;}return s;};
@@ -133,7 +134,7 @@ function getServerDiscountApproval(){if(!getActiveProposal()||hasUnsavedEditorCh
 function renderEventOfferBuilder(){
   let root=document.querySelector("#eventOfferBuilder");if(!root){root=document.createElement("section");root.id="eventOfferBuilder";root.className="event-offer-builder";document.querySelector("#smartDraftPanel")?.after(root);}root.hidden=!state.session||!getSelectedItems().length;if(root.hidden)return;
   const key=getActiveOpportunityId()||getSourceOverrideKey(),c=eventOfferDrafts.get(key)||getActiveProposal()?.snapshot?.offerConfiguration,options=c?.context===getEventOfferContext()?buildEventOfferOptions(c.itemIds):[],expanded=root.querySelector("details")?.open;
-  root.innerHTML=`<details ${expanded?"open":""}><summary>Alternativas para o cliente comparar</summary><p>Escolha até dois complementos pertinentes. Totais usam os preços e taxas desta proposta. A escolha solicita uma nova versão.</p><label>Complemento<select data-offer-item><option value="">Escolha um item do catálogo</option>${state.prices.filter((i)=>i.active!==false&&!state.selectedIds.has(i.id)).map((i)=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.nome)}</option>`).join("")}</select></label><button class="secondary" type="button" data-offer-add>Preparar comparação</button><button class="secondary" type="button" data-offer-clear>Remover alternativas</button>${options.map((o)=>`<p><strong>${escapeHtml(o.name)}</strong> · ${formatMoney(o.total)}</p>`).join("")}${options.length?"<small>Revise e publique uma nova versão para o cliente.</small>":""}</details>`;
+  root.innerHTML=`<details ${expanded?"open":""}><summary>Alternativas para o cliente comparar</summary><p>Escolha até dois complementos pertinentes. Totais usam os preços e taxas desta proposta. A escolha solicita uma nova versão.</p><label>Complemento<select data-offer-item><option value="">Escolha um item do catálogo</option>${getEventOfferCandidates().map((i)=>`<option value="${escapeHtml(i.id)}">${escapeHtml(i.nome)}</option>`).join("")}</select></label><button class="secondary" type="button" data-offer-add>Preparar comparação</button><button class="secondary" type="button" data-offer-clear>Remover alternativas</button>${options.map((o)=>`<p><strong>${escapeHtml(o.name)}</strong> · ${formatMoney(o.total)}</p>`).join("")}${options.length?"<small>Revise e publique uma nova versão para o cliente.</small>":""}</details>`;
   const change=(ids)=>{eventOfferDrafts.set(key,{context:getEventOfferContext(),itemIds:ids});state.forceNewVersionDraft=Boolean(getActiveProposal()&&getActiveProposal().publication_status!=="draft");state.sendReviewApprovedSignature="";state.sendReviewApproval=null;renderAll();renderEventOfferBuilder();};
   root.querySelector("[data-offer-add]").onclick=()=>{const id=root.querySelector("[data-offer-item]").value;if(!id){showToast("Escolha um complemento compatível.");return;}change([...new Set([...(c?.context===getEventOfferContext()?c.itemIds:[]),id])].slice(-2));};root.querySelector("[data-offer-clear]").onclick=()=>change([]);
 }
