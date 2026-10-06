@@ -180,3 +180,7 @@ Envios exigem revisão humana e são deduplicados no servidor. Aceitação pelo 
 As alternativas usam itens do catálogo e o mesmo cálculo de preços/taxas da proposta. Escolher uma alternativa solicita ajuste e nova versão, sem aprovar automaticamente outro preço.
 
 Validação: `npm test` executa testes locais dos handlers e os fluxos Playwright. As migrações e Edge Functions devem estar publicadas antes da interface.
+
+## Analytics de produto
+
+O funil comercial, o upselling, a autonomia do cliente e a passagem operacional são medidos no PostHog com eventos explícitos e sem PII. A taxonomia, as garantias de privacidade e o procedimento de validação em produção estão em [`docs/event-analytics.md`](docs/event-analytics.md).

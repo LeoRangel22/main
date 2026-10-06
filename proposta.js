@@ -37,6 +37,36 @@ const PROOF_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".he
 let currentProposal = null;
 let proposalViewRecorded = false;
 let selectedProof = null;
+let pendingUpsellOffer = null;
+
+function getProposalAnalyticsProperties(proposal = currentProposal) {
+  const analytics = window.EventAnalytics;
+  const snapshot = proposal?.snapshot || {};
+  const event = snapshot.event || {};
+  const totals = snapshot.totals || {};
+  const options = Array.isArray(snapshot.publicOfferOptions) ? snapshot.publicOfferOptions : [];
+  return {
+    surface: "public_proposal",
+    language,
+    status: proposal?.status || "unknown",
+    event_type: event.type || proposal?.tipo_evento || "unknown",
+    guests_bucket: analytics?.bucketGuests(proposal?.convidados || event.guests),
+    duration_bucket: analytics?.bucketDuration(proposal?.duracao || event.duration),
+    days_to_event_bucket: analytics?.bucketDaysToEvent(proposal?.data_evento || event.date),
+    value_bucket: analytics?.bucketCurrency(proposal?.total || totals.total),
+    proposal_version: Number(proposal?.versao || 1),
+    has_upsell_options: options.some((option) => !option.base),
+  };
+}
+
+function captureProposalAnalytics(eventName, properties = {}, options = {}) {
+  const entityId = options.entityId || currentProposal?.oportunidade_id || currentProposal?.id;
+  return window.EventAnalytics?.capture(
+    eventName,
+    { ...getProposalAnalyticsProperties(), ...properties },
+    { ...options, entityId },
+  );
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -422,6 +452,7 @@ async function copyPixKey(button) {
         button.textContent = original || tr("Copiar chave Pix", "Copy Pix key");
       }, 2200);
     }
+    captureProposalAnalytics("payment_instructions_used", { action: "copy_pix" });
     setMessage(tr("Chave Pix copiada só com números. Agora é só colar no app do banco.", "Pix key copied as digits. Paste it into your banking app."), "success");
   } catch (error) {
     console.warn("Falha ao copiar chave Pix.", error);
@@ -634,6 +665,7 @@ function openResponseForm(action) {
   const submitButton = document.querySelector("#publicSubmitResponse");
   if (!form || !actionInput || !message) return;
   actionInput.value = action;
+  captureProposalAnalytics("proposal_response_started", { response_type: action });
   form.hidden = false;
   if (paymentSlot) paymentSlot.hidden = action !== "confirmar";
   if (action !== "confirmar") {
@@ -702,6 +734,21 @@ async function submitPublicResponse(event) {
     return;
   }
 
+  captureProposalAnalytics("client_replied", { response_type: action }, {
+    dedupeKey: `client-replied:${currentProposal?.id || "proposal"}:${action}`,
+  });
+  if (action === "alteracao" && pendingUpsellOffer) {
+    captureProposalAnalytics("proposal_upsell_requested", {
+      offer_type: pendingUpsellOffer.id || "suggested_option",
+      upsell_value_bucket: window.EventAnalytics?.bucketCurrency(
+        Number(pendingUpsellOffer.total || 0) - Number(currentProposal?.total || currentProposal?.snapshot?.totals?.total || 0),
+      ),
+    }, {
+      dedupeKey: `upsell-requested:${currentProposal?.id || "proposal"}:${pendingUpsellOffer.id || "option"}`,
+    });
+  }
+  pendingUpsellOffer = null;
+
   if (action === "confirmar") {
     await loadProposal();
     setMessage(tr("Aprovação recebida. A equipe validará o sinal antes de confirmar a reserva.", "Approval received. Our team will verify the deposit before confirming the booking."), "success");
@@ -731,6 +778,9 @@ async function submitPublicProof(event) {
     setMessage(getPublicResponseErrorMessage(error), "error");
     return;
   }
+  captureProposalAnalytics("signal_proof_submitted", { result: "received" }, {
+    dedupeKey: `signal-proof:${currentProposal?.id || "proposal"}`,
+  });
   selectedProof = null;
   await loadProposal();
   setMessage(tr("Comprovante recebido. A equipe validará o pagamento.", "Receipt received. Our team will verify the payment."), "success");
@@ -754,6 +804,10 @@ async function loadProposal() {
     return;
   }
   renderProposal(data[0]);
+  captureProposalAnalytics("proposal_viewed", {}, {
+    entityId: data[0].oportunidade_id || data[0].id,
+    dedupeKey: `proposal-viewed:${data[0].id}:${data[0].versao || 1}`,
+  });
   recordProposalView();
 }
 
@@ -776,6 +830,13 @@ card.addEventListener("click", (event) => {
   if (option) {
     const offer = currentProposal?.snapshot?.publicOfferOptions?.[Number(option.dataset.requestOffer)];
     if (!offer || offer.base) return;
+    pendingUpsellOffer = offer;
+    captureProposalAnalytics("proposal_upsell_selected", {
+      offer_type: offer.id || "suggested_option",
+      upsell_value_bucket: window.EventAnalytics?.bucketCurrency(
+        Number(offer.total || 0) - Number(currentProposal?.total || currentProposal?.snapshot?.totals?.total || 0),
+      ),
+    });
     openResponseForm("alteracao");
     const message = document.querySelector("#publicResponseMessage");
     if (message) message.value = tr(`Gostaria de receber uma nova versão com ${offer.name}, conforme a opção apresentada (${formatMoney(offer.total)}).`, `Please send a new version with ${offer.name}, as shown in this option (${formatMoney(offer.total)}).`);
@@ -802,7 +863,12 @@ card.addEventListener("click", (event) => {
     return;
   }
   const actionButton = event.target.closest("[data-public-action]");
-  if (actionButton) openResponseForm(actionButton.dataset.publicAction);
+  if (actionButton) {
+    pendingUpsellOffer = null;
+    openResponseForm(actionButton.dataset.publicAction);
+  }
+  const helpLink = event.target.closest('a[href*="wa.me"]');
+  if (helpLink) captureProposalAnalytics("client_help_requested", { channel: "whatsapp", action: "proposal_help" });
   if (event.target.closest("#publicCancelResponse")) {
     const form = document.querySelector("#publicProposalResponseForm");
     if (form) form.hidden = true;
