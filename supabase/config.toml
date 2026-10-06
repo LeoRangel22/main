@@ -6,3 +6,13 @@ verify_jwt = true
 
 [functions.send-proposal-whatsapp]
 verify_jwt = true
+
+# Custom provider authentication in the handler, never an anonymous write API.
+[functions.event-channel-webhook]
+verify_jwt = false
+
+[functions.event-channel-admin]
+verify_jwt = true
+
+[functions.event-email-delivery]
+verify_jwt = false

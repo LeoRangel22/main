@@ -17,7 +17,11 @@ export function createSendWorker() {
 export async function finishSend(worker: any, id: string, status: "accepted" | "failed" | "uncertain", providerId: string | null = null, detail: string | null = null) {
   const { error } = await worker.rpc("finish_event_send", { send_id: id, send_status: status, external_message_id: providerId, error_detail: detail });
   if (error) throw new Error("O resultado não foi registrado. Confira o provedor antes de repetir o envio.");
+  // A receipt can arrive before the provider HTTP response. Reconcile after commit.
+  const { error: receiptError } = await worker.rpc("reconcile_event_receipts", { target_send: id });
+  if (receiptError) console.error("Conciliação de retorno pendente");
 }
 export function duplicateResult(claim: any) {
-  return { ok: claim.send.status === "accepted", duplicate: true, sendId: claim.send.id, deliveryStatus: claim.send.status, message: claim.send.status === "accepted" ? "Este conteúdo já foi aceito pelo canal. Nenhum novo envio foi feito." : "Envio em andamento ou incerto. Confira o canal antes de tentar novamente." };
+  const ok=claim.send.status === "accepted" || ["delivered","read"].includes(claim.send.delivery_status);
+  return { ok, duplicate: true, sendId: claim.send.id, deliveryStatus: claim.send.delivery_status || claim.send.status, message: ok ? "Este conteúdo já foi aceito ou entregue pelo canal. Nenhum novo envio foi feito." : "Envio em andamento ou incerto. Confira o canal antes de tentar novamente." };
 }

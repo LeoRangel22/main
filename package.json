@@ -5,7 +5,7 @@
   "description": "Sistema de eventos da Embaixada Carioca",
   "scripts": {
     "serve": "node scripts/static-server.cjs",
-    "test": "node --test checks/send-ledger.test.cjs && playwright test",
+    "test": "node --test checks/*.test.cjs && playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report"
