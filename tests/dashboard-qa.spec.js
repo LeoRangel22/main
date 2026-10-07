@@ -372,6 +372,13 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator('button[data-operational-doc="technical-no-finance"]')).toBeVisible();
     await expect(page.locator('button[data-operational-doc="technical-finance"]')).toBeVisible();
     await expect(page.locator('button[data-operational-doc="checklist"]')).toBeVisible();
+    await expect(page.locator(".handoff-task")).toHaveCount(8);
+    await expect(page.locator(".handoff-sector-grid")).toContainText("Cozinha");
+    await expect(page.locator(".handoff-sector-grid")).toContainText("Financeiro");
+    const firstTask = page.locator("input[data-handoff-task-id]").first();
+    await firstTask.check();
+    await expect(page.locator(".handoff-task.is-done")).toHaveCount(1);
+    await expect(page.locator(".handoff-task.is-done")).toContainText("ciência registrada");
 
     const operationalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal(), { showFinance: false }));
     expect(operationalHtml).toContain("Ficha operacional do evento");

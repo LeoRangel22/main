@@ -4,7 +4,7 @@
   const CONFIG = Object.freeze({
     apiKey: "phc_taiVfAm9ARoT8nHwVwzT8cioUYKfhyBVi8WkUoyUm7kM",
     endpoint: "https://us.i.posthog.com/i/v0/e/",
-    version: "2026-10-06-v1",
+    version: "2026-10-07-p1-v1",
   });
   const SESSION_KEY = "ec_event_analytics_session_v1";
   const OPT_OUT_KEY = "ec_event_analytics_opt_out_v1";
@@ -15,12 +15,14 @@
     "lead_form_abandoned",
     "lead_created",
     "returning_event_reused",
+    "client_portal_opened",
     "proposal_generated",
     "proposal_sent",
     "proposal_viewed",
     "proposal_response_started",
     "proposal_upsell_selected",
     "proposal_upsell_requested",
+    "assisted_offer_prepared",
     "client_replied",
     "payment_instructions_used",
     "signal_proof_submitted",
