@@ -341,6 +341,7 @@ create table event_private.public_response_requests(
   request_id uuid primary key,proposal_id uuid not null references public.propostas(id) on delete cascade,
   token_hash text not null,payload_hash text not null,result jsonb not null,created_at timestamptz not null default now()
 );
+create index public_response_requests_proposal_idx on event_private.public_response_requests(proposal_id);
 alter table event_private.public_response_requests enable row level security;
 revoke all on event_private.public_response_requests from public,anon,authenticated;
 create function public.respond_public_proposal_v2(

@@ -24,6 +24,9 @@ async function create(name) {
   return c;
 }
 async function checks(c) {
+  // Business configuration is deliberately absent from a fresh installation.
+  // Explicit fixture capacity, independent of production configuration.
+  await c.query('update public.event_commercial_policy set capacity=200 where id');
   for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity']) {
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -45,6 +48,22 @@ async function concurrent(c,name) {
     assert.equal(versions.filter(r=>r.status==='rejected'&&r.reason.code==='PT409').length,1);
     assert.equal(Number((await c.query('select count(*) from propostas where oportunidade_id=$1 and is_current',[opp])).rows[0].count),1);
     console.log('PASS concurrent save and version creation');
+    const publicOpp=(await c.query("insert into oportunidades(cliente_nome,status) values('Public concurrency','proposta_enviada') returning id")).rows[0].id;
+    const publicRow=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,snapshot) values($1,'Public concurrency','proposta_enviada','sent','{}') returning *",[publicOpp])).rows[0];
+    const requestId=require('node:crypto').randomUUID();
+    await Promise.all(writers.map(x=>x.query('set role anon')));
+    const duplicateResults=await Promise.all(writers.map(x=>x.query("select * from respond_public_proposal_v2($1,'alteracao',$2,$3,$4,null,null,null,'Revisar horario',null)",[publicRow.public_token,requestId,publicRow.id,publicRow.revision])));
+    assert.ok(duplicateResults.every(r=>r.rows[0].ok));
+    assert.equal(Number((await c.query('select count(*) from event_private.public_response_requests where request_id=$1',[requestId])).rows[0].count),1);
+    const publicUpdated=(await c.query('select * from propostas where id=$1',[publicRow.id])).rows[0];
+    await writers[0].query('set role authenticated');
+    const race=await Promise.allSettled([
+      writers[0].query('select * from save_event_proposal($1,$2,$3,null)',[publicUpdated.id,JSON.stringify({snapshot:{teamWriter:true}}),publicUpdated.revision]),
+      writers[1].query("select * from respond_public_proposal_v2($1,'alteracao',$2,$3,$4,null,null,null,'Outro horario',null)",[publicUpdated.public_token,require('node:crypto').randomUUID(),publicUpdated.id,publicUpdated.revision]),
+    ]);
+    assert.equal(race.filter(r=>r.status==='fulfilled').length,1);
+    assert.equal(race.filter(r=>r.status==='rejected'&&r.reason.code==='PT409').length,1);
+    console.log('PASS concurrent public retry and team/client race');
   } finally { await Promise.all(writers.map(x=>x.end())); }
 }
 (async()=>{

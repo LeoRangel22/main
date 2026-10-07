@@ -27,6 +27,10 @@ async function openProposal(page, initial = proposal, query = "") {
       if (name === "get_public_proposal") return { data: [structuredClone(window.__proposalFixture)], error: null };
       if (name === "record_public_proposal_view") return { data: [], error: null };
       if (name === "respond_public_proposal_v2") {
+        if (window.__responseFailure) {
+          const error = window.__responseFailure; window.__responseFailure = null;
+          return { data: null, error };
+        }
         const p = window.__proposalFixture;
         p.status = payload.action === "cancelar" ? "cancelado" : "negociacao";
         p.cliente_resposta = payload.action;
@@ -171,4 +175,29 @@ test.describe("Decisão do cliente na proposta", () => {
     await expect(page.locator(".public-version-changes")).toContainText("O que mudou nesta proposta");
     await expect(page.locator(".public-version-changes")).toContainText("30 → 40");
   });
+});
+
+
+test("resposta conserva a identidade na repetição e informa revisão exibida", async ({ page }) => {
+  await openProposal(page);
+  await page.evaluate(() => { window.__responseFailure = { message: "Failed to fetch" }; });
+  await page.getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.locator("#publicResponseMessage").fill("Revisar horário para 10h.");
+  await page.locator("#publicSubmitResponse").click();
+  await expect.poll(() => page.evaluate(() => window.__rpcCalls.filter(c=>c.name==='respond_public_proposal_v2').length)).toBe(1);
+  await page.locator("#publicSubmitResponse").click();
+  const calls = await page.evaluate(() => window.__rpcCalls.filter(c=>c.name==='respond_public_proposal_v2'));
+  expect(calls).toHaveLength(2);
+  expect(calls[0].payload.request_id).toBe(calls[1].payload.request_id);
+  expect(calls[0].payload.expected_proposal_id).toBe(proposal.id);
+  expect(calls[0].payload.expected_revision).toBe(1);
+});
+
+test("resposta com conflito exige revisar proposta atualizada", async ({ page }) => {
+  await openProposal(page);
+  await page.evaluate(() => { window.__responseFailure = { code: "PT409", message: "A proposta mudou" }; });
+  await page.getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.locator("#publicResponseMessage").fill("Revisar horário para 10h.");
+  await page.locator("#publicSubmitResponse").click();
+  await expect(page.locator("#publicProposalStatus")).toContainText(/Recarregue/);
 });

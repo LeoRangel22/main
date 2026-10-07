@@ -69,11 +69,9 @@ test.describe("Formulário público do cliente", () => {
 
   test("pedido em inglês preserva idioma e aceita apenas dados essenciais", async ({ page }) => {
     let payload;
-    await page.route("**/rest/v1/rpc/submit_public_quote_request**", (route) => route.fulfill({ status: 404, contentType: "application/json", body: '{"code":"42883"}' }));
-    await page.route("**/rest/v1/solicitacoes_cotacao**", (route) => {
-      const body = route.request().postDataJSON();
-      payload = Array.isArray(body) ? body[0] : body;
-      return route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
+    await page.route("**/rest/v1/rpc/submit_public_quote_request**", (route) => {
+      payload = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     });
     await page.goto("/formulario.html");
     await page.getByRole("button", { name: "EN", exact: true }).click();
@@ -86,7 +84,7 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#requestClientEmail").fill("alex@example.com");
     await page.locator("#submitClientQuoteBtn").click();
     await expect(page.locator("#clientFormStatus")).toContainText(/received|sent/i);
-    expect(payload?.snapshot?.cliente?.idioma).toBe("en");
+    expect(payload?.p_snapshot?.cliente?.idioma).toBe("en");
   });
 
   test("bloqueia envio incompleto com orientação clara", async ({ page }) => {
@@ -108,13 +106,8 @@ test.describe("Formulário público do cliente", () => {
     let payload;
 
     await page.route("**/rest/v1/rpc/submit_public_quote_request**", async (route) => {
-      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ code: "42883", message: "function not found" }) });
-    });
-
-    await page.route("**/rest/v1/solicitacoes_cotacao**", async (route) => {
-      const body = route.request().postDataJSON();
-      payload = Array.isArray(body) ? body[0] : body;
-      await route.fulfill({ status: 201, contentType: "application/json", body: "[]" });
+      payload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
     });
 
     await page.goto("/formulario.html");
@@ -124,11 +117,11 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#submitClientQuoteBtn").click();
 
     await expect(page.locator("#clientFormStatus")).toContainText(/Solicitação enviada|received/i);
-    expect(payload?.cliente_nome).toBe("Ana");
-    expect(payload?.cliente_email).toBe("ana@example.com");
-    expect(payload?.horario_evento).toBe("A definir");
-    expect(payload?.tipo_evento).toBe("Evento sob medida");
-    expect(payload?.snapshot?.cliente?.tipoCliente).toBe("Cliente a classificar");
+    expect(payload?.p_snapshot?.cliente?.nome).toBe("Ana");
+    expect(payload?.p_snapshot?.cliente?.email).toBe("ana@example.com");
+    expect(payload?.p_snapshot?.evento?.horario).toBe("");
+    expect(payload?.p_snapshot?.evento?.tipo).toBe("Evento sob medida");
+    expect(payload?.p_snapshot?.cliente?.tipoCliente).toBe("Cliente a classificar");
     await expectNoBrowserErrors(errors);
   });
 
@@ -241,4 +234,18 @@ test.describe("Formulário público do cliente", () => {
     }
     await expectNoBrowserErrors(errors);
   });
+});
+
+test('falha de RPC não tenta inserir diretamente na tabela pública',async({page})=>{
+  let directWrites=0;
+  await page.route('**/rest/v1/rpc/upsert_public_quote_draft**',route=>route.fulfill({status:404,contentType:'application/json',body:'{"code":"42883"}'}));
+  await page.route('**/rest/v1/rpc/submit_public_quote_request**',route=>route.fulfill({status:404,contentType:'application/json',body:'{"code":"42883","message":"function not found"}'}));
+  await page.route('**/rest/v1/solicitacoes_cotacao**',route=>{directWrites++;return route.fulfill({status:403,contentType:'application/json',body:'{}'});});
+  await page.goto('/formulario.html');
+  await page.locator('#requestEventDate').fill('2099-11-20');
+  await page.locator('#requestClientName').fill('Ana');
+  await page.locator('#requestClientEmail').fill('ana@example.test');
+  await page.locator('#submitClientQuoteBtn').click();
+  await expect(page.locator('#clientFormStatus')).toHaveAttribute('data-status','error');
+  expect(directWrites).toBe(0);
 });
