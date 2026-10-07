@@ -108,3 +108,24 @@ test("analytics agrupa volumes e motivos sem enviar valores exatos", () => {
   assert.equal(analytics.lossReasonGroup("Achou o orçamento caro"), "price");
   assert.equal(analytics.lossReasonGroup("Perdemos para concorrência"), "competitor");
 });
+
+test("venda assistida e portal usam telemetria agregada sem contexto pessoal", async () => {
+  const { analytics, requests } = loadAnalytics();
+  assert.equal(await analytics.capture("assisted_offer_prepared", {
+    surface: "admin",
+    offer_type: "three_tier",
+    upsell_value_bucket: analytics.bucketCurrency(7500),
+    result: "seller_approved",
+    client_name: "Cliente privado",
+  }), true);
+  assert.equal(await analytics.capture("client_portal_opened", {
+    surface: "public_form",
+    result: "history_found",
+    email: "cliente@example.com",
+  }), true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].body.properties.offer_type, "three_tier");
+  assert.equal(requests[0].body.properties.upsell_value_bucket, "below-10k");
+  assert.equal(JSON.stringify(requests).includes("Cliente privado"), false);
+  assert.equal(JSON.stringify(requests).includes("cliente@example.com"), false);
+});

@@ -463,7 +463,8 @@ async function copyPixKey(button) {
 function renderOfferComparison(snapshot) {
   const options = Array.isArray(snapshot.publicOfferOptions) ? snapshot.publicOfferOptions.slice(0, 3) : [];
   if (options.length < 2) return "";
-  return `<section class="public-offer-comparison"><h3>${tr("Compare sua experiência", "Compare your experience")}</h3><p>${tr("Escolher um complemento solicita uma nova versão para revisão.", "Choosing an extra requests a new version for review.")}</p><div>${options.map((o, i) => `<article><strong>${escapeHtml(o.base ? tr("Proposta atual", "Current proposal") : o.name)}</strong><p>${escapeHtml(o.base ? tr("Itens e condições desta versão.", "Items and terms in this version.") : o.description)}</p><b>${formatMoney(o.total)}</b>${!o.base ? `<button class="secondary" type="button" data-request-offer="${i}">${tr("Pedir esta opção", "Request this option")}</button>` : `<small>${tr("Itens desta proposta", "Items in this proposal")}</small>`}</article>`).join("")}</div></section>`;
+  const baseTotal = Number(options.find((option) => option.base)?.total || 0);
+  return `<section class="public-offer-comparison"><span class="public-offer-eyebrow">${tr("Experiências desenhadas para o seu evento", "Experiences designed for your event")}</span><h3>${tr("Escolha o nível que combina com o grupo", "Choose the level that fits your group")}</h3><p>${tr("A opção Recomendada equilibra experiência e investimento. Ao escolher outra opção, a equipe revisa disponibilidade e envia a versão final — nenhum valor é aprovado automaticamente.", "The Recommended option balances experience and investment. When you choose another option, our team reviews availability and sends the final version — no price is approved automatically.")}</p><div>${options.map((o, i) => {const name=o.name||(o.base?tr("Essencial","Essential"):tr("Experiência","Experience"));const delta=Math.max(0,Number(o.delta??Number(o.total||0)-baseTotal));return `<article class="public-offer-card is-${escapeHtml(o.tier||o.id||"option")}${o.recommended?" is-recommended":""}">${o.recommended?`<span class="public-offer-badge">${tr("Recomendada", "Recommended")}</span>`:""}<strong>${escapeHtml(name)}</strong><p>${escapeHtml(o.description||(o.base?tr("Itens e condições desta versão.", "Items and terms in this version."):""))}</p><b>${formatMoney(o.total)}</b>${delta>0?`<small>+ ${formatMoney(delta)} ${tr("sobre a proposta atual", "over the current proposal")}</small>`:"<small>"+tr("Proposta atual", "Current proposal")+"</small>"}${o.reason?`<em>${escapeHtml(o.reason)}</em>`:""}${!o.base?`<button class="${o.recommended?"primary":"secondary"}" type="button" data-request-offer="${i}">${tr("Quero esta experiência", "Choose this experience")}</button>`:`<span class="public-offer-current">${tr("Itens desta proposta", "Items in this proposal")}</span>`}</article>`;}).join("")}</div></section>`;
 }
 
 function renderProposal(proposal) {
@@ -839,7 +840,10 @@ card.addEventListener("click", (event) => {
     });
     openResponseForm("alteracao");
     const message = document.querySelector("#publicResponseMessage");
-    if (message) message.value = tr(`Gostaria de receber uma nova versão com ${offer.name}, conforme a opção apresentada (${formatMoney(offer.total)}).`, `Please send a new version with ${offer.name}, as shown in this option (${formatMoney(offer.total)}).`);
+    if (message) {
+      const offerDetail = offer.description ? `${offer.name} — ${offer.description}` : offer.name;
+      message.value = tr(`Gostaria de receber uma nova versão com ${offerDetail}, conforme a opção apresentada (${formatMoney(offer.total)}).`, `Please send a new version with the ${offerDetail} option, as presented (${formatMoney(offer.total)}).`);
+    }
     return;
   }
   const laterProofButton = event.target.closest("[data-upload-proof]");
