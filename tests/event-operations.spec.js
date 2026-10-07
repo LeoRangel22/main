@@ -90,3 +90,23 @@ test('inspeção de outra instância invalida a aprovação anterior',async({pag
   });
   expect(result).toEqual({changed:{account:'instancia-inspecionada',approved:false},unchangedApproved:true});
 });
+
+test('venda assistida encerra edição quando a proposta foi vendida e bloqueia ação antiga',async({page})=>{
+  await inbox(page);
+  await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"] .pipeline-open-button').click();
+  const result=await page.evaluate(()=>{
+    fields.eventType.value='Coquetel';fields.eventDate.value='2028-10-24';fields.eventTime.value='17:00';fields.eventDuration.value='3';fields.guestCount.value='60';state.selectedIds=new Set(['coquetel-caipirinha']);renderAll();
+    const p=getActiveProposal(),button=document.querySelector('[data-offer-auto]'),before=JSON.stringify(p.snapshot);
+    p.status='confirmado';button.click();renderEventOfferBuilder();
+    return {hidden:document.querySelector('#eventOfferBuilder').hidden,unchanged:before===JSON.stringify(p.snapshot),forced:state.forceNewVersionDraft,canEdit:canEditEventOffer()};
+  });
+  expect(result).toEqual({hidden:true,unchanged:true,forced:false,canEdit:false});
+});
+test('evento cancelado com sinal não exibe tarefas operacionais',async({page})=>{
+  await page.goto('/index.html?qa=1');
+  const result=await page.evaluate(()=>{
+    const p={status:'cancelado',snapshot:{pagamentoSinal:{valor:1000}}};
+    return {cancelled:shouldShowOperationalChecklist(p),sold:shouldShowOperationalChecklist({...p,status:'confirmado'})};
+  });
+  expect(result).toEqual({cancelled:false,sold:true});
+});
