@@ -3368,6 +3368,7 @@ function renderQuickReplies() {
 function shouldShowOperationalChecklist(proposal) {
   if (!proposal) return false;
   const status = normalizeProposalStatus(proposal.status);
+  if (["cancelado", "perdido", "pos_venda"].includes(status)) return false;
   return Boolean(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
 }
 
@@ -3481,6 +3482,7 @@ async function updateOperationalHandoffTask(taskId, checked) {
   try {
     await runRpc("update_event_handoff_task", {
       target_task: taskId,
+      target_source_version: getOperationalHandoffData(proposal).tasks.find((task) => task.id === taskId)?.source_version,
       task_status: checked ? "done" : "pending",
       task_owner_label: null,
       task_due_at: null,

@@ -66,6 +66,9 @@ begin
   where opportunity_id = fixture_opportunity_id;
   assert first_count = 8, 'Handoff deve criar oito tarefas setoriais';
 
+  update public.event_handoff_tasks set status = 'done', acknowledged_at = now(), completed_at = now()
+  where opportunity_id = fixture_opportunity_id;
+
   update public.propostas
   set convidados = 75,
       snapshot = jsonb_set(snapshot, '{event,notes}', '"Sem lactose e uma pessoa celíaca"'::jsonb)
@@ -92,11 +95,21 @@ begin
     where opportunity_id = fixture_opportunity_id
   ), 'Ressincronizacao nao pode duplicar tarefas';
 
+  assert (select count(*) = 8 from public.event_handoff_tasks
+    where opportunity_id = fixture_opportunity_id and status = 'pending'
+      and source_version = 2 and acknowledged_at is null and completed_at is null),
+    'Mudanca deve reabrir tarefas concluidas para ciencia da nova versao';
+
   select id into team_user from auth.users
   where lower(email) = 'eventos@embaixadacarioca.com.br'
   limit 1;
   if team_user is null then
-    select id into team_user from auth.users where lower(email) = 'leorangel@gmail.com' limit 1;
+    assert (select count(*) = 8 from public.event_handoff_tasks
+    where opportunity_id = fixture_opportunity_id and status = 'pending'
+      and source_version = 2 and acknowledged_at is null and completed_at is null),
+    'Mudanca deve reabrir tarefas concluidas para ciencia da nova versao';
+
+  select id into team_user from auth.users where lower(email) = 'leorangel@gmail.com' limit 1;
   end if;
   assert team_user is not null, 'Fixture requer um usuario real da equipe';
 
@@ -112,7 +125,7 @@ begin
   order by sort_order
   limit 1;
 
-  perform public.update_event_handoff_task(task_id, 'done', null, null, 'Conferido na regressao P1');
+  perform public.update_event_handoff_task(task_id, 'done', null, null, 'Conferido na regressao P1', 2);
   assert exists(
     select 1 from public.event_handoff_tasks
     where id = task_id and status = 'done' and acknowledged_at is not null and completed_by = team_user
@@ -126,13 +139,42 @@ begin
       assert sqlerrm like 'O handoff mudou.%', 'Ciencia deve falhar quando a versao visualizada ficou antiga';
   end;
 
+  begin
+    perform public.update_event_handoff_task(task_id, 'done', null, null, null, 1);
+    raise exception 'Tarefa antiga nao pode registrar ciencia';
+  exception when others then
+    assert sqlerrm like 'A tarefa mudou.%', 'Versao obsoleta da tarefa deve ser rejeitada';
+  end;
+  begin
+    perform public.acknowledge_event_handoff_changes(fixture_opportunity_id, null);
+    raise exception 'Versao ausente nao pode registrar ciencia';
+  exception when others then
+    assert sqlerrm like 'O handoff mudou.%', 'Ciencia deve exigir versao explicita';
+  end;
+
   perform public.acknowledge_event_handoff_changes(fixture_opportunity_id, 2);
+  assert (select status <> 'completed' from public.event_handoffs where opportunity_id = fixture_opportunity_id),
+    'Ciencia global nao substitui revisao das tarefas setoriais';
+
+  update public.propostas set status = 'cancelado' where id = fixture_proposal_id;
+  assert not exists(select 1 from public.active_event_handoffs where opportunity_id = fixture_opportunity_id),
+    'Cancelamento com sinal preservado deve sair da operacao';
+  assert not exists(select 1 from public.active_event_handoff_tasks where opportunity_id = fixture_opportunity_id),
+    'Tarefas de evento cancelado devem ficar ocultas';
+  assert exists(select 1 from public.event_handoffs where opportunity_id = fixture_opportunity_id),
+    'Historico do cancelamento deve ser preservado';
+  begin
+    perform public.update_event_handoff_task(task_id, 'done', null, null, null, 2);
+    raise exception 'Tarefa cancelada nao pode ser concluida';
+  exception when others then
+    assert sqlerrm like 'Tarefa operacional inativa.%', 'Cancelamento deve bloquear RPC de tarefa';
+  end;
   assert exists(
     select 1 from public.event_handoffs
     where opportunity_id = fixture_opportunity_id and not changes_pending
   ), 'Revisao explicita deve retirar somente o alerta de mudanca';
 
-  assert not has_function_privilege('anon', 'public.update_event_handoff_task(uuid,text,text,timestamptz,text)', 'execute'),
+  assert not has_function_privilege('anon', 'public.update_event_handoff_task(uuid,text,text,timestamptz,text,integer)', 'execute'),
     'Anon nao pode alterar tarefas operacionais';
   assert not has_function_privilege('anon', 'public.acknowledge_event_handoff_changes(uuid,integer)', 'execute'),
     'Anon nao pode reconhecer mudancas operacionais';
