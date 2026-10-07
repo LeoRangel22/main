@@ -51,6 +51,20 @@ test('alternativas usam catálogo compatível e não alteram o carrinho',async({
   });
   expect(r.compatible).toBe(true);expect(r.ids).toEqual(r.before);expect(r.options).toHaveLength(2);expect(r.options[0].total).toBe(r.base);expect(r.options[1].total).toBeGreaterThan(r.base);
 });
+test('venda assistida monta três níveis cumulativos e explicáveis',async({page})=>{
+  await inbox(page);
+  await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"] .pipeline-open-button').click();
+  const result=await page.evaluate(()=>{
+    fields.eventType.value='Coquetel';fields.eventDate.value='2028-10-24';fields.eventTime.value='17:00';fields.eventDuration.value='3';fields.guestCount.value='60';state.selectedIds=new Set(['coquetel-caipirinha']);
+    const before=[...state.selectedIds],options=buildEventOfferOptions(getSuggestedEventOfferIds());
+    return {before,after:[...state.selectedIds],names:options.map((item)=>item.name),totals:options.map((item)=>item.total),reasons:options.map((item)=>item.reason)};
+  });
+  expect(result.after).toEqual(result.before);
+  expect(result.names).toEqual(['Essencial','Recomendada','Premium']);
+  expect(result.totals[1]).toBeGreaterThan(result.totals[0]);
+  expect(result.totals[2]).toBeGreaterThanOrEqual(result.totals[1]);
+  expect(result.reasons[1].length).toBeGreaterThan(10);
+});
 test('pré-reserva exige capacidade e preserva etapa comercial',async({page})=>{
   await inbox(page);await page.locator('[data-ops-tab="reservations"]').click();
   await page.locator('[data-ops-hold]').click();const d=page.locator('.event-ops-dialog');

@@ -1827,6 +1827,34 @@ function getReturningStatusLabel(status) {
   return labels[status] || status || "Proposta";
 }
 
+function getReturningClientProgress(status) {
+  const stages = [
+    { id: "pedido", label: uiState.language === "en" ? "Request" : "Pedido" },
+    { id: "proposta", label: uiState.language === "en" ? "Proposal" : "Proposta" },
+    { id: "reserva", label: uiState.language === "en" ? "Booking" : "Reserva" },
+    { id: "operacao", label: uiState.language === "en" ? "Operation" : "Operação" },
+  ];
+  const index = ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(status)
+    ? (["planejamento", "evento_proximo", "pos_venda"].includes(status) ? 3 : 2)
+    : ["proposta_enviada", "negociacao"].includes(status) ? 1 : 0;
+  return { stages, index };
+}
+
+function getReturningClientNextStep(item) {
+  const isEn = uiState.language === "en";
+  const copy = {
+    proposta_enviada: isEn ? "Review the proposal and approve or request a change." : "Revise a proposta e aprove ou peça um ajuste.",
+    negociacao: isEn ? "The team is reviewing your requested changes." : "A equipe está tratando os ajustes solicitados.",
+    confirmado: isEn ? "Deposit received. The team will confirm the remaining details." : "Sinal recebido. A equipe confirmará os detalhes restantes.",
+    pagamento_final: isEn ? "Check the remaining payment with the events team." : "Alinhe o pagamento restante com a equipe de eventos.",
+    planejamento: isEn ? "Your event is in operational planning." : "Seu evento está em planejamento operacional.",
+    evento_proximo: isEn ? "Event approaching. Keep the day-of contact available." : "Evento próximo. Mantenha disponível o contato do dia.",
+    pos_venda: isEn ? "Event completed. You can reuse it as a starting point." : "Evento realizado. Você pode reutilizá-lo como ponto de partida.",
+    cancelado: isEn ? "This request is closed. Start a new event whenever you wish." : "Este pedido está encerrado. Inicie um novo evento quando quiser.",
+  };
+  return copy[item.status] || (isEn ? "The events team will guide the next step." : "A equipe de eventos orientará o próximo passo.");
+}
+
 function renderReturningClientHistory(rows = [], email = "") {
   const container = document.querySelector("#returningClientHistory");
   const status = document.querySelector("#returningClientStatus");
@@ -1839,25 +1867,39 @@ function renderReturningClientHistory(rows = [], email = "") {
     return;
   }
   const isEn = uiState.language === "en";
+  const activeCount = rows.filter((item) => !["pos_venda", "cancelado"].includes(item.status)).length;
+  const nextEvent = rows.filter((item) => item.data_evento && !["pos_venda", "cancelado"].includes(item.status)).sort((a, b) => String(a.data_evento).localeCompare(String(b.data_evento)))[0];
   container.innerHTML = `
-    <div class="returning-history-heading">
-      <span>${isEn ? "Your history" : "Seu histórico"}</span>
-      <strong>${rows.length} ${isEn ? "recent record(s)" : "registro(s) recente(s)"}</strong>
+    <div class="returning-history-heading client-portal-heading">
+      <div>
+        <span>${isEn ? "Secure client area" : "Área segura do cliente"}</span>
+        <strong>${isEn ? "Your events in one place" : "Seus eventos em um só lugar"}</strong>
+        <small>${activeCount} ${isEn ? "active" : "em andamento"}${nextEvent ? ` · ${isEn ? "Next" : "Próximo"}: ${escapeHtml(formatReviewDate(nextEvent.data_evento))}` : ""}</small>
+      </div>
+      <div class="client-portal-actions">
+        <button class="secondary" type="button" data-returning-new>${isEn ? "New event" : "Novo evento"}</button>
+        <button class="secondary" type="button" data-returning-signout>${isEn ? "Sign out" : "Sair com segurança"}</button>
+      </div>
     </div>
     <div class="returning-history-list">
       ${rows.map((item, index) => {
         const date = item.data_evento ? formatReviewDate(item.data_evento) : (isEn ? "Date to define" : "Data a definir");
         const open = ["proposta_enviada", "negociacao"].includes(item.status);
+        const progress = getReturningClientProgress(item.status);
         return `
-          <article class="returning-history-item">
-            <div>
+          <article class="returning-history-item client-portal-event-card">
+            <div class="client-portal-event-copy">
               <span>${escapeHtml(getReturningStatusLabel(item.status))}${item.versao ? ` · V${escapeHtml(item.versao)}` : ""}</span>
               <strong>${escapeHtml(item.tipo_evento || (isEn ? "Event" : "Evento"))}</strong>
               <small>${escapeHtml(date)} · ${escapeHtml(item.convidados || "")}${item.convidados ? " pax" : ""}${item.total ? ` · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.total))}` : ""}</small>
+              <div class="client-portal-progress" aria-label="${isEn ? "Event progress" : "Progresso do evento"}">
+                ${progress.stages.map((stage, stageIndex) => `<span class="${stageIndex <= progress.index ? "is-complete" : ""}${stageIndex === progress.index ? " is-current" : ""}"><i></i>${escapeHtml(stage.label)}</span>`).join("")}
+              </div>
+              <p class="client-portal-next-step"><b>${isEn ? "Next step" : "Próximo passo"}</b>${escapeHtml(getReturningClientNextStep(item))}</p>
             </div>
             <div class="returning-history-actions">
-              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${isEn ? "Resume proposal" : "Retomar proposta"}</button>` : ""}
-              <button class="secondary" type="button" data-returning-repeat="${index}">${isEn ? "Use as a base" : "Usar como base"}</button>
+              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${isEn ? "Open and continue" : "Abrir e continuar"}</button>` : ""}
+              <button class="secondary" type="button" data-returning-repeat="${index}">${isEn ? "Repeat this event" : "Repetir este evento"}</button>
             </div>
           </article>
         `;
@@ -1886,6 +1928,30 @@ async function loadReturningClientHistory() {
   const input = document.querySelector("#returningClientEmail");
   if (input) input.value = session.user.email;
   renderReturningClientHistory(data || [], session.user.email);
+  captureLeadAnalytics("client_portal_opened", {
+    result: data?.length ? "history_found" : "empty_history",
+  }, {
+    entityId: session.user.id,
+    dedupeKey: `client-portal-opened:${session.user.id}`,
+  });
+}
+
+async function signOutReturningClient() {
+  const client = getPublicSupabaseClient();
+  if (!client) return;
+  await client.auth.signOut({ scope: "local" });
+  returningClientHistory = [];
+  const container = document.querySelector("#returningClientHistory");
+  const status = document.querySelector("#returningClientStatus");
+  const input = document.querySelector("#returningClientEmail");
+  const access = document.querySelector("#returningClientAccess");
+  if (container) {
+    container.hidden = true;
+    container.innerHTML = "";
+  }
+  if (input) input.value = "";
+  if (access) access.open = false;
+  if (status) status.textContent = uiState.language === "en" ? "Secure access ended on this device." : "Acesso encerrado com segurança neste dispositivo.";
 }
 
 async function sendReturningClientOtp() {
@@ -2000,6 +2066,16 @@ function initReturningClientAccess() {
     }
   });
   document.querySelector("#returningClientHistory")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-returning-signout]")) {
+      signOutReturningClient();
+      return;
+    }
+    if (event.target.closest("[data-returning-new]")) {
+      const access = document.querySelector("#returningClientAccess");
+      if (access) access.open = false;
+      scrollToStep("eventDetails", true);
+      return;
+    }
     const repeat = event.target.closest("[data-returning-repeat]");
     if (repeat) {
       applyReturningHistoryAsBase(returningClientHistory[Number(repeat.dataset.returningRepeat)]);

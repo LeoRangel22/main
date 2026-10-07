@@ -56,6 +56,22 @@ test.describe("Decisão do cliente na proposta", () => {
     expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal'))).toBe(false);
     await expect(page.locator('.public-proposal-summary')).toContainText('2.240');
   });
+  test("comparação apresenta essencial, recomendada e premium sem aprovação automática", async ({ page }) => {
+    const fixture=structuredClone(proposal);
+    fixture.snapshot.publicOfferOptions=[
+      {id:'essential',tier:'essential',base:true,name:'Essencial',description:'Escopo atual',total:2240,delta:0},
+      {id:'recommended',tier:'recommended',recommended:true,base:false,name:'Recomendada',description:'Welcome Drink',reason:'Recepção mais fluida para o grupo.',total:2800,delta:560},
+      {id:'premium',tier:'premium',base:false,name:'Premium',description:'Welcome Drink + Workshop',reason:'Experiência completa e participativa.',total:3900,delta:1660},
+    ];
+    await openProposal(page,fixture);
+    const comparison=page.locator('.public-offer-comparison');
+    await expect(comparison.locator('.public-offer-card')).toHaveCount(3);
+    await expect(comparison.locator('.is-recommended')).toContainText('Recomendada');
+    await expect(comparison).toContainText('nenhum valor é aprovado automaticamente');
+    await comparison.locator('[data-request-offer="1"]').click();
+    await expect(page.locator('#publicResponseMessage')).toHaveValue(/Recomendada/);
+    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal'))).toBe(false);
+  });
   test("investimento exibe a experiência contratada e oculta a linha quando não há valor", async ({ page }) => {
     await openProposal(page);
     await expect(page.locator(".public-proposal-totals")).not.toContainText(/Privatizaç|Área Dedicada|Experiência Exclusiva/);

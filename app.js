@@ -3371,6 +3371,72 @@ function shouldShowOperationalChecklist(proposal) {
   return Boolean(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
 }
 
+function getOperationalHandoffData(proposal) {
+  const operations = window.EventOperationsState;
+  const opportunityId = proposal?.oportunidade_id;
+  if (!operations || !opportunityId) return { handoff: null, tasks: [], changes: [] };
+  if (QA_MODE && !operations.handoffs.some((item) => item.opportunity_id === opportunityId)) {
+    const due = proposal?.data_evento ? `${proposal.data_evento}T12:00:00Z` : null;
+    operations.handoffs.push({ opportunity_id: opportunityId, proposal_id: proposal.id, version: 1, status: "active", changes_pending: false });
+    [
+      ["eventos_briefing", "eventos", "Conferir briefing final e contato do dia", "Equipe de Eventos"],
+      ["financeiro_saldo", "financeiro", "Alinhar saldo e comprovantes", "Financeiro"],
+      ["cozinha_cardapio", "cozinha", "Validar cardápio, restrições e produção", "Cozinha"],
+      ["bar_bebidas", "bar", "Validar bebidas e mise en place do bar", "Bar"],
+      ["estoque_insumos", "estoque", "Separar insumos e extras contratados", "Estoque"],
+      ["salao_montagem", "salao", "Definir montagem, equipe e linha do tempo", "Salão"],
+      ["gerencia_infra", "gerencia", "Validar infraestrutura e obrigatórios", "Gerência"],
+      ["gerencia_go_no_go", "gerencia", "Fazer leitura final e liberar execução", "Gerência"],
+    ].forEach(([taskKey, sector, label, ownerLabel], index) => operations.handoffTasks.push({
+      id: `qa-handoff-${opportunityId}-${taskKey}`,
+      opportunity_id: opportunityId,
+      task_key: taskKey,
+      sector,
+      label,
+      details: "Tarefa gerada automaticamente a partir da proposta aprovada.",
+      status: "pending",
+      owner_label: ownerLabel,
+      due_at: due,
+      acknowledged_at: null,
+      sort_order: (index + 1) * 10,
+      source_version: 1,
+    }));
+  }
+  return {
+    handoff: operations.handoffs.find((item) => item.opportunity_id === opportunityId) || null,
+    tasks: operations.handoffTasks.filter((item) => item.opportunity_id === opportunityId).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)),
+    changes: operations.handoffChanges.filter((item) => item.opportunity_id === opportunityId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+  };
+}
+
+function getOperationalHandoffProgress(tasks = []) {
+  return { done: tasks.filter((task) => task.status === "done").length, total: tasks.length };
+}
+
+function formatOperationalTaskDue(value) {
+  if (!value) return "Prazo a definir";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Prazo a definir";
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function renderOperationalHandoffTasks(tasks = []) {
+  if (!tasks.length) return `<p class="handoff-loading">Preparando tarefas por setor a partir da proposta e do sinal.</p>`;
+  return `<div class="handoff-sector-grid">${tasks.map((task) => `
+    <article class="handoff-task is-${escapeHtml(task.status)}">
+      <label class="handoff-task-main">
+        <input type="checkbox" data-handoff-task-id="${escapeHtml(task.id)}" ${task.status === "done" ? "checked" : ""} />
+        <span>
+          <small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label)}</small>
+          <strong>${escapeHtml(task.label)}</strong>
+          <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
+        </span>
+      </label>
+      ${task.details || task.notes ? `<details><summary>Orientação e notas</summary>${task.details ? `<p>${escapeHtml(task.details)}</p>` : ""}${task.notes ? `<p>${escapeHtml(task.notes)}</p>` : ""}</details>` : ""}
+    </article>
+  `).join("")}</div>`;
+}
+
 function renderOperationalChecklist(proposal = getActiveProposal()) {
   if (!nodes.operationalChecklist) return;
   if (!shouldShowOperationalChecklist(proposal)) {
@@ -3379,35 +3445,78 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
     return;
   }
   const checklist = proposal.snapshot?.operationalChecklist || {};
-  const progress = getChecklistProgress(proposal.snapshot || {});
+  const handoffData = getOperationalHandoffData(proposal);
+  const progress = handoffData.tasks.length ? getOperationalHandoffProgress(handoffData.tasks) : getChecklistProgress(proposal.snapshot || {});
+  const latestChange = handoffData.changes.find((item) => !item.acknowledged_at) || handoffData.changes[0];
   nodes.operationalChecklist.classList.remove("is-hidden");
   nodes.operationalChecklist.innerHTML = `
     <div class="checklist-heading">
       <div>
         <span>Operação pós-sinal</span>
-        <p>Gere a ficha técnica e confira o checklist antes de acionar operação e compras.</p>
+        <p>Gere a ficha técnica, distribua responsabilidades e registre a ciência de cada setor.</p>
       </div>
-      <strong>${progress.done}/${progress.total} concluídos</strong>
+      <strong>${progress.done}/${progress.total} tarefas concluídas</strong>
     </div>
+    ${handoffData.handoff?.changes_pending ? `<div class="handoff-change-alert"><div><span>Mudança após o handoff · V${escapeHtml(handoffData.handoff.version)}</span><strong>${escapeHtml((latestChange?.changed_fields || ["Dados da proposta"]).join(" · "))}</strong><p>A operação não absorve esta alteração silenciosamente. Revise os setores afetados antes de dar ciência.</p></div><button class="primary" type="button" data-handoff-ack-changes>Revisei e dei ciência</button></div>` : ""}
     <div class="operational-doc-actions" aria-label="Documentos operacionais">
       <button class="primary" type="button" data-operational-doc="technical-no-finance">Ficha operacional</button>
       <button class="secondary" type="button" data-operational-doc="technical-finance">Ficha com financeiro</button>
       <button class="secondary" type="button" data-operational-doc="checklist">Checklist do evento</button>
       <button class="secondary" type="button" data-operational-doc="summary">Copiar resumo</button>
     </div>
-    <div class="checklist-items">
-      ${operationalChecklistItems
-        .map(
-          (item) => `
-            <label>
-              <input type="checkbox" data-checklist-id="${escapeHtml(item.id)}" ${checklist[item.id] ? "checked" : ""} />
-              ${escapeHtml(item.label)}
-            </label>
-          `,
-        )
-        .join("")}
-    </div>
+    ${renderOperationalHandoffTasks(handoffData.tasks)}
+    <details class="handoff-legacy-checklist">
+      <summary>Controles adicionais da proposta</summary>
+      <div class="checklist-items">
+        ${operationalChecklistItems.map((item) => `<label><input type="checkbox" data-checklist-id="${escapeHtml(item.id)}" ${checklist[item.id] ? "checked" : ""} />${escapeHtml(item.label)}</label>`).join("")}
+      </div>
+    </details>
   `;
+}
+
+async function updateOperationalHandoffTask(taskId, checked) {
+  const proposal = getActiveProposal();
+  const runRpc = window.runEventOperationsRpc;
+  if (!proposal || !runRpc || !state.session) return;
+  try {
+    await runRpc("update_event_handoff_task", {
+      target_task: taskId,
+      task_status: checked ? "done" : "pending",
+      task_owner_label: null,
+      task_due_at: null,
+      task_notes: null,
+    });
+    if (!QA_MODE && typeof loadEventOperations === "function") await loadEventOperations();
+    const data = getOperationalHandoffData(proposal);
+    const progress = getOperationalHandoffProgress(data.tasks);
+    if (progress.total > 0 && progress.done === progress.total && !data.handoff?.changes_pending) {
+      captureEventAnalytics("operational_checklist_completed", proposal, { operation_progress_bucket: "complete" }, {
+        dedupeKey: `operational-handoff-complete:${proposal.oportunidade_id || proposal.id}:v${data.handoff?.version || 1}`,
+      });
+    }
+    renderOperationalChecklist(proposal);
+    showToast(checked ? "Tarefa concluída e ciência registrada." : "Tarefa reaberta para revisão.");
+  } catch (error) {
+    console.warn("Falha ao atualizar tarefa operacional.", error);
+    renderOperationalChecklist(proposal);
+    showToast(error.message || "Não foi possível atualizar a tarefa.");
+  }
+}
+
+async function acknowledgeOperationalHandoffChanges() {
+  const proposal = getActiveProposal();
+  const runRpc = window.runEventOperationsRpc;
+  if (!proposal?.oportunidade_id || !runRpc || !state.session) return;
+  try {
+    const handoff = getOperationalHandoffData(proposal).handoff;
+    await runRpc("acknowledge_event_handoff_changes", { target_opportunity: proposal.oportunidade_id, target_version: handoff?.version });
+    if (!QA_MODE && typeof loadEventOperations === "function") await loadEventOperations();
+    renderOperationalChecklist(proposal);
+    showToast("Mudanças revisadas e ciência operacional registrada.");
+  } catch (error) {
+    console.warn("Falha ao registrar ciência do handoff.", error);
+    showToast(error.message || "Não foi possível registrar a ciência.");
+  }
 }
 
 async function updateOperationalChecklist(checklistId, checked) {
@@ -15684,11 +15793,20 @@ function bindEvents() {
     runQuickReply(button.dataset.quickReply, button.dataset.quickReplyChannel);
   });
   nodes.operationalChecklist?.addEventListener("change", (event) => {
+    const handoffTask = event.target.closest("input[data-handoff-task-id]");
+    if (handoffTask) {
+      updateOperationalHandoffTask(handoffTask.dataset.handoffTaskId, handoffTask.checked);
+      return;
+    }
     const checkbox = event.target.closest("input[data-checklist-id]");
     if (!checkbox) return;
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   nodes.operationalChecklist?.addEventListener("click", (event) => {
+    if (event.target.closest("button[data-handoff-ack-changes]")) {
+      acknowledgeOperationalHandoffChanges();
+      return;
+    }
     const button = event.target.closest("button[data-operational-doc]");
     if (!button) return;
     handleOperationalDocAction(button.dataset.operationalDoc);
