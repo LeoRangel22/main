@@ -183,3 +183,11 @@ Validação: `npm test` executa testes locais dos handlers e os fluxos Playwrigh
 ## Analytics de produto
 
 O funil comercial, o upselling, a autonomia do cliente e a passagem operacional são medidos no PostHog com eventos explícitos e sem PII. A taxonomia, as garantias de privacidade e o procedimento de validação em produção estão em [`docs/event-analytics.md`](docs/event-analytics.md).
+
+### Painel comercial: leitura eficiente e prioridades
+
+O painel usa resumos paginados de propostas, carrega detalhes completos para editar,
+reutiliza registros que não mudaram e mantém o histórico completo para relatórios.
+Funil e histórico têm páginas visuais de 20 registros, filtros de próximas ações e
+indicadores de resultados/desempenho. Regras comerciais, acesso aos dados e medição
+estão separados em módulos. Veja [docs/COMMERCIAL-COCKPIT.md](docs/COMMERCIAL-COCKPIT.md).

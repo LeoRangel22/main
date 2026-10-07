@@ -129,3 +129,13 @@ test("venda assistida e portal usam telemetria agregada sem contexto pessoal", a
   assert.equal(JSON.stringify(requests).includes("Cliente privado"), false);
   assert.equal(JSON.stringify(requests).includes("cliente@example.com"), false);
 });
+
+test('dashboard diagnostics accept aggregate measurements while excluding row details and PII', async () => {
+  const { analytics, requests } = loadAnalytics();
+  assert.equal(await analytics.capture('dashboard_loaded', { surface:'admin', duration_ms:123, payload_bytes:9876, request_count:2, changed_rows:1, sync_kind:'refresh', snapshot:{client:'PRIVATE'}, email:'private@example.test', reason_code:'read_failed' }),true);
+  const payload=JSON.parse(requests[0].options.body);
+  assert.equal(payload.properties.duration_ms,123);
+  assert.equal(payload.properties.request_count,2);
+  assert.ok(!JSON.stringify(payload).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(payload).includes('private@example.test'));
+});
