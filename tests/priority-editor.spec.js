@@ -20,3 +20,25 @@ test('atualização periódica preserva revisão da edição e impede sobrescrit
   expect(result.remoteMarker).toBe('preserve');
   expect(result.localName).toBe('Edição local');
 });
+
+test('cancelamento mantém a revisão anterior à janela de confirmação',async({page})=>{
+  await page.goto('/index.html?qa=1');
+  await page.evaluate(()=>{
+    const p=state.proposals.find(row=>row.id==='qa-proposal-sem-resposta');
+    p.revision=1;
+    window.__cancelAttempt=cancelPipelineItem('proposal',p.id);
+  });
+  const dialog=page.locator('.cancel-reason-dialog');
+  await expect(dialog).toBeVisible();
+  await page.evaluate(()=>{
+    const p=state.proposals.find(row=>row.id==='qa-proposal-sem-resposta');
+    upsertProposalState({...structuredClone(p),revision:2,status:'negociacao',snapshot:{...p.snapshot,remoteMarker:'preserve'}});
+  });
+  await dialog.getByRole('button',{name:'Registrar cancelamento',exact:true}).click();
+  const result=await page.evaluate(async()=>{
+    await window.__cancelAttempt;
+    const p=state.proposals.find(row=>row.id==='qa-proposal-sem-resposta');
+    return {status:p.status,revision:p.revision,marker:p.snapshot.remoteMarker};
+  });
+  expect(result).toEqual({status:'negociacao',revision:2,marker:'preserve'});
+});

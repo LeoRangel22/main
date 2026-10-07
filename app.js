@@ -12367,13 +12367,12 @@ async function classifyPastEvent(kind, id) {
     showToast(auth.message);
     return;
   }
-  const answer = await requestPastEventOutcome(item);
-  if (!answer) return;
-
   const source = kind === "proposal"
     ? state.proposals.find((row) => row.id === id)
     : state.quoteRequests.find((row) => row.id === id);
   if (!source) return;
+  const answer = await requestPastEventOutcome(item);
+  if (!answer) return;
   const config = pastEventOutcomes.find((outcome) => outcome.id === answer.outcome) || pastEventOutcomes[5];
   const recordedAt = new Date().toISOString();
   const actor = getCurrentTeamEmail();
@@ -12610,6 +12609,7 @@ async function reopenPipelineItem(kind, id, targetStatus = "") {
 
 async function cancelPipelineItem(kind, id) {
   if (!state.supabase || !state.session) return;
+  const proposal = kind === "proposal" ? state.proposals.find((item) => item.id === id) : null;
   const reason = await getCancelReason();
   if (!reason) {
     showToast("Cancelamento não registrado.");
@@ -12638,7 +12638,6 @@ async function cancelPipelineItem(kind, id) {
     return;
   }
 
-  const proposal = state.proposals.find((item) => item.id === id);
   if (!proposal) return;
   const snapshot = withCommercialHistoryEntries(
     { ...(proposal.snapshot || {}), cancelamento },
