@@ -57,7 +57,7 @@ async function refreshCommercialDashboard({ force = false } = {}) {
         eventOps.loadedFor = user; eventOps.error = '';
       }
       commercialRefreshError = '';
-      if (state.activeProposalId) await ensureFullProposal(state.activeProposalId);
+      if (state.activeProposalId) await ensureProposalJourneyDetails(state.activeProposalId);
       if (commercialStore !== store || state.session?.user?.id !== user) return;
       renderHistory(); renderPipeline();
       renderCommercialTimeline(getActiveProposal()); renderFirstReplyPanel();
@@ -81,7 +81,9 @@ async function ensureFullProposal(proposalId) {
   if (commercialDetailsLoading.has(proposalId)) return commercialDetailsLoading.get(proposalId);
   const client = state.supabase, user = state.session?.user?.id, store = commercialStore;
   const task = (async () => {
-    const { data, error } = await client.from('propostas').select('*').eq('id', proposalId).single();
+    let data, error;
+    try { ({ data, error } = await client.from('propostas').select('*').eq('id', proposalId).single()); }
+    catch (failure) { error = failure; }
     if (state.session?.user?.id !== user || state.supabase !== client || commercialStore !== store) return null;
     if (error || !data) { showToast('Não foi possível abrir os detalhes. Tente novamente antes de editar.'); return null; }
     upsertProposalState(data);
@@ -89,6 +91,13 @@ async function ensureFullProposal(proposalId) {
   })();
   commercialDetailsLoading.set(proposalId, task);
   try { return await task; } finally { if (commercialDetailsLoading.get(proposalId) === task) commercialDetailsLoading.delete(proposalId); }
+}
+async function ensureProposalJourneyDetails(proposalId) {
+  const proposal = await ensureFullProposal(proposalId);
+  if (!proposal) return null;
+  const versions = getProposalVersions(proposal).slice(0, 2);
+  const details = await Promise.all(versions.map(version => ensureFullProposal(version.id)));
+  return details.every(Boolean) ? state.proposals.find(row => row.id === proposalId) : null;
 }
 async function downloadDashboardProof(proposalId, type) {
   const proposal = await ensureFullProposal(proposalId);

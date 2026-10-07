@@ -55,7 +55,7 @@ test('summary writes are refused, full edits retain original revision when backg
   const p=state.proposals[0];const blocked=await persistEventProposal(p.id,{snapshot:p.snapshot},p);
   await safeOpenSavedProposal(p.id,'Revision regression');
   const revision=state.editorProposalBase.revision;
-  window.__cockpit.db.propostas[0].revision++;
+  window.__cockpit.db.propostas.find(row=>row.id===p.id).revision++;
   await refreshCommercialDashboard({force:true});
   return{code:blocked.error.code,opened:revision,editor:state.editorProposalBase.revision,current:state.proposals.find(r=>r.id===p.id).revision,complete:!state.proposals.find(r=>r.id===p.id)._dashboard_summary};
  });
@@ -95,6 +95,6 @@ test('new commercial measures and explained priorities work on mobile without ho
  await page.locator('.commercial-measures summary').click();
  await expect(page.locator('.commercial-measures')).toContainText('1 ganhos');
  await expect(page.locator('.commercial-measures')).toContainText('não comprova ganho de conversão');
- await expect(page.locator('.action-focus .action-priority-reasons')).toContainText('Por que agora:');
+ await expect(page.locator('#actionList .action-focus-card .action-priority-reasons')).toContainText('Por que agora:');
  await expectNoHorizontalOverflow(page);await expectNoBrowserErrors(errors);
 });

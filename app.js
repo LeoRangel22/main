@@ -7069,7 +7069,7 @@ async function applyPendingDashboardTarget() {
   if (state.pendingDashboardProposalId) {
     const proposal = state.proposals.find((item) => item.id === state.pendingDashboardProposalId);
     if (!proposal) return false;
-    if (!(await ensureFullProposal(proposal.id))) return false;
+    if (!(await ensureProposalJourneyDetails(proposal.id))) return false;
     openSavedProposal(proposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
@@ -7081,7 +7081,7 @@ async function applyPendingDashboardTarget() {
       item.snapshot?.activeQuoteRequestId === state.pendingDashboardLeadId,
   );
   if (linkedProposal) {
-    if (!(await ensureFullProposal(linkedProposal.id))) return false;
+    if (!(await ensureProposalJourneyDetails(linkedProposal.id))) return false;
     openSavedProposal(linkedProposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
@@ -10648,7 +10648,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = 
     return;
   }
   if (!(await confirmEditorSwitch())) return;
-  if (!(await ensureFullProposal(proposalId))) return;
+  if (!(await ensureProposalJourneyDetails(proposalId))) return;
   openSavedProposal(proposalId, sourceLabel);
   scheduleLoadedEditorJump(targetMode, "auto");
 }
@@ -10879,9 +10879,8 @@ function renderActionTasks(items = getPipelineItems()) {
           </div>
           ${topActionButton}
         </div>
-        <p>${escapeHtml(topTask.note)}</p>
+        <p class="action-priority-reasons" title="${escapeHtml((topTask.reasons || [topTask.note]).join(" "))}">Por que agora: ${escapeHtml((topTask.reasons || [topTask.note]).join(" "))}</p>
         ${renderTaskPlan(topTask)}
-        <p class="action-priority-reasons">Por que agora: ${escapeHtml((topTask.reasons || [topTask.note]).join(" "))}</p>
         <ol class="action-focus-steps">${topSteps}</ol>
       </div>
     </article>
