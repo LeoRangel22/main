@@ -78,17 +78,18 @@ revoke all on function event_private.dashboard_reply_hours(text,timestamptz) fro
 
 create function public.get_event_dashboard_manifest() returns jsonb
 language plpgsql stable security definer set search_path='' as $$
-declare kind text; relation regclass; descriptors jsonb; records jsonb='{}'::jsonb; views jsonb; summary jsonb;
+declare kind text; relation regclass; descriptors jsonb; records jsonb='{}'::jsonb; views jsonb; summary jsonb; identity_column text;
 begin
  perform event_private.require_team();
  for kind in select unnest(array['propostas','solicitacoes_cotacao','oportunidades','event_messages','event_outbox','event_reservations','event_commercial_policy','event_provider_events','active_event_handoffs','active_event_handoff_tasks','active_event_handoff_changes']) loop
   relation=event_private.dashboard_relation(kind);
+  identity_column=case when kind in ('event_reservations','active_event_handoffs') then 'opportunity_id' else 'id' end;
   if kind='propostas' then
    select coalesce(jsonb_agg(jsonb_build_object('id',id,'version',revision::text) order by id),'[]'::jsonb) into descriptors from public.propostas;
   elsif kind in ('solicitacoes_cotacao','oportunidades') then
    execute format('select coalesce(jsonb_agg(jsonb_build_object(''id'',id,''version'',updated_at::text) order by id),''[]''::jsonb) from %s',relation) into descriptors;
   else
-   execute format('select coalesce(jsonb_agg(jsonb_build_object(''id'',id,''version'',md5(to_jsonb(r)::text)) order by id),''[]''::jsonb) from %s r',relation) into descriptors;
+   execute format('select coalesce(jsonb_agg(jsonb_build_object(''id'',%1$I::text,''version'',md5(to_jsonb(r)::text)) order by %1$I),''[]''::jsonb) from %2$s r',identity_column,relation) into descriptors;
   end if;
   records=records||jsonb_build_object(kind,descriptors);
  end loop;
@@ -124,7 +125,7 @@ grant execute on function public.get_event_dashboard_manifest() to authenticated
 
 create function public.get_event_dashboard_rows(record_type text,record_ids text[]) returns jsonb
 language plpgsql stable security definer set search_path='' as $$
-declare relation regclass; result jsonb;
+declare relation regclass; result jsonb; identity_column text; id_type text;
 begin
  perform event_private.require_team();
  if record_ids is null or cardinality(record_ids) not between 1 and 80 then raise exception 'Informe entre 1 e 80 registros'; end if;
@@ -134,10 +135,12 @@ begin
   select coalesce(jsonb_agg(event_private.dashboard_proposal(p) order by id),'[]'::jsonb) into result from public.propostas p where id=any(record_ids::uuid[]);
  else
   relation=event_private.dashboard_relation(record_type);
+  identity_column=case when record_type in ('event_reservations','active_event_handoffs') then 'opportunity_id' else 'id' end;
+  id_type=case when record_type='active_event_handoff_changes' then 'bigint' else 'uuid' end;
   if record_type='event_commercial_policy' then
    execute format('select coalesce(jsonb_agg(to_jsonb(r) order by id),''[]''::jsonb) from %s r where id::text=any($1)',relation) into result using record_ids;
   else
-   execute format('select coalesce(jsonb_agg(to_jsonb(r) order by id),''[]''::jsonb) from %s r where id=any($1::uuid[])',relation) into result using record_ids;
+   execute format('select coalesce(jsonb_agg(to_jsonb(r)||jsonb_build_object(''id'',%1$I::text) order by %1$I),''[]''::jsonb) from %2$s r where %1$I=any($1::%3$s[])',identity_column,relation,id_type) into result using record_ids;
   end if;
  end if;
  return result;
