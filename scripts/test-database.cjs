@@ -71,10 +71,10 @@ async function concurrent(c,name) {
   let c;
   try {
     c=await create('events_test');
-    for(const f of migrationFiles.filter(f=>f!==priority)) await apply(c,`supabase/migrations/${f}`);
+    for(const f of migrationFiles.filter(f=>f<priority)) await apply(c,`supabase/migrations/${f}`);
     const legacy=(await c.query("insert into oportunidades(cliente_nome,status) values('Upgrade fixture','proposta_pronta') returning id")).rows[0];
     const preserved=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,snapshot) values($1,'Upgrade fixture','proposta_pronta','ready','{\"historyMarker\":\"preserve\"}') returning id,public_token",[legacy.id])).rows[0];
-    await apply(c,`supabase/migrations/${priority}`);
+    for(const f of migrationFiles.filter(f=>f>=priority)) await apply(c,`supabase/migrations/${f}`);
     const after=(await c.query('select id,public_token,revision,snapshot from propostas where id=$1',[preserved.id])).rows[0];
     assert.equal(after.public_token,preserved.public_token); assert.equal(after.snapshot.historyMarker,'preserve'); assert.equal(Number(after.revision),1);
     console.log('PASS upgrade preserves history and links');

@@ -2,7 +2,7 @@
 begin;
 do $$
 declare actor uuid; opp uuid; p public.propostas; saved public.propostas;
-  request_id uuid:=gen_random_uuid(); response record; duplicate record; blocked boolean;
+  request_id uuid:=gen_random_uuid(); response_revision bigint; response record; duplicate record; blocked boolean;
 begin
   select id into actor from auth.users where email='leorangel@gmail.com' limit 1;
   assert not has_table_privilege('anon','public.solicitacoes_cotacao','INSERT'), 'Anonymous capture must use RPC';
@@ -33,20 +33,21 @@ begin
   assert blocked,'Non-team account must be refused';
   reset role;
   select * into p from public.propostas where id=p.id;
+  response_revision:=p.revision;
   set local role anon;
   blocked:=false;
   begin insert into public.solicitacoes_cotacao(cliente_nome,cliente_email,snapshot) values('Bypass','bypass@example.test','{}');
   exception when insufficient_privilege then blocked:=true; end;
   assert blocked,'Anonymous direct insert must fail';
   blocked:=false;
-  begin perform public.respond_public_proposal_v2(p.public_token,'alteracao',gen_random_uuid(),p.id,p.revision-1,null,null,null,'Ajuste de data',null);
+  begin perform public.respond_public_proposal_v2(p.public_token,'alteracao',gen_random_uuid(),p.id,response_revision-1,null,null,null,'Ajuste de data',null);
   exception when sqlstate 'PT409' then blocked:=true; end;
   assert blocked,'Public response must refer to reviewed revision';
-  select * into response from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,p.revision,null,null,null,'Ajuste de data',null);
-  select * into duplicate from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,p.revision,null,null,null,'Ajuste de data',null);
+  select * into response from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,response_revision,null,null,null,'Ajuste de data',null);
+  select * into duplicate from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,response_revision,null,null,null,'Ajuste de data',null);
   assert response.ok and duplicate.ok and response.status=duplicate.status,'Retry must return saved outcome';
   blocked:=false;
-  begin perform public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,p.revision,null,null,null,'Outro ajuste',null);
+  begin perform public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,response_revision,null,null,null,'Outro ajuste',null);
   exception when others then blocked:=true; end;
   assert blocked,'Idempotency key cannot accept another payload';
   blocked:=false;
@@ -54,7 +55,21 @@ begin
   assert blocked,'Capture rejects non-object payload';
   reset role;
   assert (select count(*)=1 from event_private.public_response_requests r where r.proposal_id=p.id),'Duplicate response has only one receipt';
+  update public.propostas set public_token_revoked_at=now() where id=p.id;
+  set local role anon;
+  select * into duplicate from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,response_revision,null,null,null,'Ajuste de data',null);
+  assert duplicate.ok,'Committed receipt survives later link revocation';
+  blocked:=false;
+  begin perform public.respond_public_proposal_v2(p.public_token,'alteracao',gen_random_uuid(),p.id,response_revision,null,null,null,'Novo ajuste',null);
+  exception when others then blocked:=true; end;
+  assert blocked,'Revoked link still refuses a new response';
+  reset role;
+  update public.propostas set public_token_revoked_at=null where id=p.id;
   update public.propostas set public_token_expires_at=now()-interval '1 day' where id=p.id returning * into p;
+  set local role anon;
+  select * into duplicate from public.respond_public_proposal_v2(p.public_token,'alteracao',request_id,p.id,response_revision,null,null,null,'Ajuste de data',null);
+  assert duplicate.ok,'Committed receipt survives later link expiry';
+  reset role;
   perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','priority@example.test','role','authenticated')::text,true);
   set local role authenticated;
   assert public.refresh_my_proposal_link(p.id)<>p.public_token,'Expired owner link must rotate';
