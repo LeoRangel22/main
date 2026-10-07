@@ -6784,6 +6784,25 @@ function getLoadedEditorTarget(targetMode = "client") {
   if (targetMode === "review") {
     return nodes.sendReviewPanel || document.querySelector("#sendReviewPanel");
   }
+  if (targetMode === "first_reply") {
+    return nodes.firstReplyPanel && !nodes.firstReplyPanel.classList.contains("is-hidden")
+      ? nodes.firstReplyPanel
+      : nodes.loadedEditorBar;
+  }
+  if (targetMode === "finance") {
+    return nodes.proposalNextStep && !nodes.proposalNextStep.classList.contains("is-hidden")
+      ? nodes.proposalNextStep
+      : nodes.signalPaymentInfo && !nodes.signalPaymentInfo.classList.contains("is-hidden")
+        ? nodes.signalPaymentInfo
+        : nodes.loadedEditorBar;
+  }
+  if (targetMode === "handoff") {
+    return nodes.operationalChecklist && !nodes.operationalChecklist.classList.contains("is-hidden")
+      ? nodes.operationalChecklist
+      : nodes.proposalNextStep && !nodes.proposalNextStep.classList.contains("is-hidden")
+        ? nodes.proposalNextStep
+        : nodes.loadedEditorBar;
+  }
   return (
     (nodes.loadedEditorBar && !nodes.loadedEditorBar.classList.contains("is-hidden") ? nodes.loadedEditorBar : null) ||
     document.querySelector("#clientDataSection") ||
@@ -10649,7 +10668,7 @@ function getOpenSourceLabelForItem(item, fallback = "Funil") {
   return `${fallback}: ${getProposalStatusLabel(item.status)}`;
 }
 
-async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
+async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = "client") {
   if (!proposalId) {
     showToast("Não encontrei o código desta proposta. Atualize o funil e tente de novo.");
     return;
@@ -10660,10 +10679,10 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   openSavedProposal(proposalId, sourceLabel);
-  scheduleLoadedEditorJump("client", "auto");
+  scheduleLoadedEditorJump(targetMode, "auto");
 }
 
-async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
+async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "client") {
   if (!requestId) {
     showToast("Não encontrei o código deste lead. Atualize o funil e tente de novo.");
     return;
@@ -10674,7 +10693,7 @@ async function safeApplyQuoteRequest(requestId, sourceLabel = "") {
   }
   if (!(await confirmEditorSwitch())) return;
   await applyQuoteRequest(requestId, sourceLabel);
-  scheduleLoadedEditorJump("client", "auto");
+  scheduleLoadedEditorJump(targetMode, "auto");
 }
 
 function renderQuoteWorkspaceGuide() {
@@ -11001,6 +11020,53 @@ function getActionTaskSteps(task = {}) {
   return ["Abrir registro", "Revisar próximo passo", "Registrar ação no histórico"];
 }
 
+function getActionResolution(task = {}) {
+  const title = String(task.title || "").toLowerCase();
+  const track = getActionTrack(task);
+  if (task.item?.kind === "request" && !task.item.firstReplySentAt) {
+    return { target: "first_reply", label: "Abrir e responder" };
+  }
+  if (task.item?.clientResponse === "alteracao" || title.includes("pedido de ajuste")) {
+    return { target: "client_change", label: "Abrir ajuste" };
+  }
+  if (track === "Financeiro" || /sinal|pagamento|saldo|comprovante/.test(title)) {
+    return { target: "finance", label: "Abrir financeiro" };
+  }
+  if (track === "Operação" || /planejamento|checklist|48h/.test(title)) {
+    return { target: "handoff", label: "Abrir handoff" };
+  }
+  return { target: "client", label: "Abrir e resolver" };
+}
+
+function renderActionResolutionButton(task = {}, { compact = false } = {}) {
+  const item = task.item || {};
+  const resolution = getActionResolution(task);
+  return `<button
+    class="primary action-open-button"
+    type="button"
+    data-action-resolution="${escapeHtml(resolution.target)}"
+    data-action-kind="${escapeHtml(item.kind || "")}"
+    data-action-id="${escapeHtml(item.id || "")}">
+    ${escapeHtml(compact ? "Abrir" : resolution.label)}
+  </button>`;
+}
+
+async function resolveActionTask(button, sourceLabel = "Prioridade agora") {
+  if (!button) return;
+  const kind = button.dataset.actionKind;
+  const id = button.dataset.actionId;
+  const target = button.dataset.actionResolution || "client";
+  if (target === "client_change") {
+    showClientChangeDetails(kind, id);
+    return;
+  }
+  if (kind === "proposal") {
+    await safeOpenSavedProposal(id, sourceLabel, target);
+  } else if (kind === "request") {
+    await safeApplyQuoteRequest(id, sourceLabel, target);
+  }
+}
+
 function renderActionTasks(items = getPipelineItems()) {
   if (!nodes.actionList) return;
   const tasks = getActionTasks(items);
@@ -11016,10 +11082,7 @@ function renderActionTasks(items = getPipelineItems()) {
   }
   const topTask = tasks[0];
   const topItem = topTask.item;
-  const topActionButton =
-    topItem.kind === "proposal"
-      ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(topItem.id)}">Abrir e resolver</button>`
-      : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(topItem.id)}">Abrir e resolver</button>`;
+  const topActionButton = renderActionResolutionButton(topTask);
   const groupedCounts = tasks.reduce(
     (acc, task) => {
       const track = getActionTrack(task);
@@ -11042,15 +11105,19 @@ function renderActionTasks(items = getPipelineItems()) {
       data-action-id="${escapeHtml(topItem.id)}"
       aria-label="Abrir prioridade agora de ${escapeHtml(topItem.name || "Cliente")}"
     >
-      <div>
-        <span>Prioridade agora</span>
-        <strong>${escapeHtml(topTask.title)}</strong>
-        <small>${escapeHtml(topItem.name || "Cliente")} · ${escapeHtml(topTask.meta)}</small>
+      <div class="action-focus-main">
+        <div class="action-focus-title-row">
+          <div class="action-focus-title">
+            <span>Prioridade agora</span>
+            <strong>${escapeHtml(topTask.title)}</strong>
+            <small>${escapeHtml(topItem.name || "Cliente")} · ${escapeHtml(topTask.meta)}</small>
+          </div>
+          ${topActionButton}
+        </div>
         <p>${escapeHtml(topTask.note)}</p>
         ${renderTaskPlan(topTask)}
         <ol class="action-focus-steps">${topSteps}</ol>
       </div>
-      ${topActionButton}
     </article>
     <div class="action-track-summary">${groupedLine}</div>
     ${tasks.length > 1 ? `<details class="action-backlog"><summary><span>Outras ações no radar</span><strong>${tasks.length - 1}</strong></summary><div class="action-backlog-grid">` : ""}
@@ -11058,10 +11125,7 @@ function renderActionTasks(items = getPipelineItems()) {
     .slice(1)
     .map((task) => {
       const item = task.item;
-      const actionButton =
-        item.kind === "proposal"
-          ? `<button class="primary action-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}">Abrir</button>`
-          : `<button class="primary action-open-button" type="button" data-use-request="${escapeHtml(item.id)}">Abrir</button>`;
+      const actionButton = renderActionResolutionButton(task, { compact: true });
       const clientChangeBlock = item.clientResponse === "alteracao" ? renderClientResponseBlock(item) : "";
       return `
         <article
@@ -15474,6 +15538,11 @@ function bindEvents() {
     const changeButton = event.target.closest("[data-client-change-id]");
     if (changeButton) {
       showClientChangeDetails(changeButton.dataset.clientChangeKind, changeButton.dataset.clientChangeId);
+      return;
+    }
+    const resolutionButton = event.target.closest("button[data-action-resolution]");
+    if (resolutionButton) {
+      await resolveActionTask(resolutionButton, "Prioridade agora");
       return;
     }
     const proposalButton = event.target.closest("button[data-proposal-id]");
