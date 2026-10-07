@@ -113,3 +113,20 @@ test('evento cancelado com sinal não exibe tarefas operacionais',async({page})=
   });
   expect(result).toEqual({cancelled:false,sold:true});
 });
+
+for(const outcome of ['cancelado','realizado'])test(`evento aberto recolhe checklist imediatamente ao ser ${outcome}`,async({page})=>{
+  await page.goto('/index.html?qa=1');
+  await page.getByRole('button',{name:'Visão completa'}).click();
+  await page.locator('[data-pipeline-card-id="qa-proposal-sinal"]').click();
+  await expect(page.locator('#operationalChecklist')).toBeVisible();
+  if(outcome==='cancelado'){
+    await page.evaluate(()=>{getCancelReason=async()=> 'Teste de cancelamento';return cancelPipelineItem('proposal',state.activeProposalId);});
+  }else{
+    await page.evaluate(async()=>{
+      const p=getActiveProposal();p.data_evento='2020-01-01';p.snapshot.event.date='2020-01-01';
+      requestPastEventOutcome=async()=>({outcome:'realizado',detail:'Evento concluído'});
+      await classifyPastEvent('proposal',p.id);
+    });
+  }
+  await expect(page.locator('#operationalChecklist')).toBeHidden();
+});

@@ -12460,6 +12460,7 @@ async function classifyPastEvent(kind, id) {
 
   renderHistory();
   renderPipeline();
+  renderOperationalChecklist();
   showToast(isRescheduled ? "Evento remarcado e devolvido ao funil." : "Desfecho registrado no histórico.");
 }
 
@@ -12656,6 +12657,8 @@ async function cancelPipelineItem(kind, id) {
     renderCommercialTimeline(data);
     renderManualContactPanel(data);
     renderProposalNextStep();
+    renderOperationalChecklist(data);
+    if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
   }
   showToast("Cancelamento registrado.");
 }
