@@ -7,7 +7,7 @@ declare
   fixture_opportunity_id uuid;
   fixture_proposal_id uuid;
   draft_opportunity_id uuid;
-  task_id uuid;
+  fixture_task_id uuid;
   team_user uuid;
   first_count integer;
 begin
@@ -119,16 +119,16 @@ begin
     'role', 'authenticated'
   )::text, true);
 
-  select id into task_id
+  select id into fixture_task_id
   from public.event_handoff_tasks
   where opportunity_id = fixture_opportunity_id
   order by sort_order
   limit 1;
 
-  perform public.update_event_handoff_task(task_id, 'done', null, null, 'Conferido na regressao P1', 2);
+  perform public.update_event_handoff_task(fixture_task_id, 'done', null, null, 'Conferido na regressao P1', 2);
   assert exists(
     select 1 from public.event_handoff_tasks
-    where id = task_id and status = 'done' and acknowledged_at is not null and completed_by = team_user
+    where id = fixture_task_id and status = 'done' and acknowledged_at is not null and completed_by = team_user
   ), 'Conclusao deve registrar ciencia, horario e ator';
 
   begin
@@ -140,7 +140,7 @@ begin
   end;
 
   begin
-    perform public.update_event_handoff_task(task_id, 'done', null, null, null, 1);
+    perform public.update_event_handoff_task(fixture_task_id, 'done', null, null, null, 1);
     raise exception 'Tarefa antiga nao pode registrar ciencia';
   exception when others then
     assert sqlerrm like 'A tarefa mudou.%', 'Versao obsoleta da tarefa deve ser rejeitada';
@@ -156,6 +156,18 @@ begin
   assert (select status <> 'completed' from public.event_handoffs where opportunity_id = fixture_opportunity_id),
     'Ciencia global nao substitui revisao das tarefas setoriais';
 
+  update public.propostas set convidados = 76 where id = fixture_proposal_id;
+  assert exists(select 1 from public.event_handoff_task_history
+    where event_handoff_task_history.task_id = fixture_task_id and opportunity_id = fixture_opportunity_id
+      and source_version = 2 and reason = 'version_reopened'
+      and task_snapshot ->> 'status' = 'done'
+      and task_snapshot ->> 'acknowledged_by' = team_user::text
+      and task_snapshot ->> 'completed_by' = team_user::text
+      and task_snapshot ->> 'acknowledged_at' is not null
+      and task_snapshot ->> 'completed_at' is not null),
+    'Reabertura deve preservar ciencia e conclusao anteriores com ator e horarios';
+  perform public.acknowledge_event_handoff_changes(fixture_opportunity_id, 3);
+
   update public.propostas set status = 'cancelado' where id = fixture_proposal_id;
   assert not exists(select 1 from public.active_event_handoffs where opportunity_id = fixture_opportunity_id),
     'Cancelamento com sinal preservado deve sair da operacao';
@@ -164,7 +176,7 @@ begin
   assert exists(select 1 from public.event_handoffs where opportunity_id = fixture_opportunity_id),
     'Historico do cancelamento deve ser preservado';
   begin
-    perform public.update_event_handoff_task(task_id, 'done', null, null, null, 2);
+    perform public.update_event_handoff_task(fixture_task_id, 'done', null, null, null, 2);
     raise exception 'Tarefa cancelada nao pode ser concluida';
   exception when others then
     assert sqlerrm like 'Tarefa operacional inativa.%', 'Cancelamento deve bloquear RPC de tarefa';
@@ -174,6 +186,8 @@ begin
     where opportunity_id = fixture_opportunity_id and not changes_pending
   ), 'Revisao explicita deve retirar somente o alerta de mudanca';
 
+  assert not has_table_privilege('anon','public.event_handoff_task_history','select'), 'Anon nao pode acessar historico de ciencia';
+  assert not has_table_privilege('authenticated','public.event_handoff_task_history','update'), 'Equipe nao pode editar auditoria';
   assert not has_function_privilege('anon', 'public.update_event_handoff_task(uuid,text,text,timestamptz,text,integer)', 'execute'),
     'Anon nao pode alterar tarefas operacionais';
   assert not has_function_privilege('anon', 'public.acknowledge_event_handoff_changes(uuid,integer)', 'execute'),
