@@ -17,8 +17,9 @@ async function loadEventOperations() {
   eventOps.loading=(async()=>{
     try {
       if(!QA_MODE) {
-        const tables=["event_messages","event_outbox","event_reservations","event_discount_approvals","event_commercial_policy","event_provider_events","event_handoffs","event_handoff_tasks","event_handoff_changes"];
-        const r=await Promise.all(tables.map((t)=>t==="event_discount_approvals"?state.supabase.rpc("get_event_discount_approvals"):fetchAllRows(t,t==="event_reservations"||t==="event_commercial_policy"?"updated_at":"created_at")));
+        const tables=["event_messages","event_outbox","event_reservations","event_discount_approvals","event_commercial_policy","event_provider_events","active_event_handoffs","active_event_handoff_tasks","active_event_handoff_changes"];
+        const orderColumns={event_reservations:"updated_at",event_commercial_policy:"updated_at",active_event_handoffs:"updated_at",active_event_handoff_tasks:"updated_at"};
+        const r=await Promise.all(tables.map((t)=>t==="event_discount_approvals"?state.supabase.rpc("get_event_discount_approvals"):fetchAllRows(t,orderColumns[t]||"created_at")));
         if(state.session?.user?.id!==user)return;
         if(r.some((v)=>v.error))throw new Error("Não foi possível atualizar a central. Confira a conexão.");
         const health=await state.supabase.rpc("get_event_channel_health");
@@ -59,7 +60,7 @@ async function eventOpsRpc(name, body) {
     Object.assign(task,{status:body.task_status,owner_label:body.task_owner_label||task.owner_label,due_at:body.task_due_at||task.due_at,notes:body.task_notes??task.notes,acknowledged_at:task.acknowledged_at||at,acknowledged_by:task.acknowledged_by||state.session.user.id,completed_at:body.task_status==="done"?(task.completed_at||at):null,completed_by:body.task_status==="done"?(task.completed_by||state.session.user.id):null,updated_at:at});return task;
   }
   if(name==="acknowledge_event_handoff_changes"){
-    const handoff=eventOps.handoffs.find((item)=>item.opportunity_id===body.target_opportunity);if(!handoff)throw new Error("Handoff operacional não encontrado.");handoff.changes_pending=false;eventOps.handoffChanges.filter((item)=>item.opportunity_id===body.target_opportunity&&!item.acknowledged_at).forEach((item)=>Object.assign(item,{acknowledged_at:at,acknowledged_by:state.session.user.id}));return handoff;
+    const handoff=eventOps.handoffs.find((item)=>item.opportunity_id===body.target_opportunity);if(!handoff)throw new Error("Handoff operacional não encontrado.");if(Number(handoff.version)!==Number(body.target_version))throw new Error("O handoff mudou. Recarregue antes de registrar a ciência.");handoff.changes_pending=false;eventOps.handoffChanges.filter((item)=>item.opportunity_id===body.target_opportunity&&!item.acknowledged_at&&Number(item.handoff_version)<=Number(body.target_version)).forEach((item)=>Object.assign(item,{acknowledged_at:at,acknowledged_by:state.session.user.id}));return handoff;
   }
   throw new Error("Operação indisponível no modo QA");
 }

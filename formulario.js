@@ -1943,10 +1943,14 @@ async function signOutReturningClient() {
   returningClientHistory = [];
   const container = document.querySelector("#returningClientHistory");
   const status = document.querySelector("#returningClientStatus");
+  const input = document.querySelector("#returningClientEmail");
+  const access = document.querySelector("#returningClientAccess");
   if (container) {
     container.hidden = true;
     container.innerHTML = "";
   }
+  if (input) input.value = "";
+  if (access) access.open = false;
   if (status) status.textContent = uiState.language === "en" ? "Secure access ended on this device." : "Acesso encerrado com segurança neste dispositivo.";
 }
 

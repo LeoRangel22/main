@@ -3508,7 +3508,8 @@ async function acknowledgeOperationalHandoffChanges() {
   const runRpc = window.runEventOperationsRpc;
   if (!proposal?.oportunidade_id || !runRpc || !state.session) return;
   try {
-    await runRpc("acknowledge_event_handoff_changes", { target_opportunity: proposal.oportunidade_id });
+    const handoff = getOperationalHandoffData(proposal).handoff;
+    await runRpc("acknowledge_event_handoff_changes", { target_opportunity: proposal.oportunidade_id, target_version: handoff?.version });
     if (!QA_MODE && typeof loadEventOperations === "function") await loadEventOperations();
     renderOperationalChecklist(proposal);
     showToast("Mudanças revisadas e ciência operacional registrada.");

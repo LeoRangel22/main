@@ -6,10 +6,32 @@ do $$
 declare
   fixture_opportunity_id uuid;
   fixture_proposal_id uuid;
+  draft_opportunity_id uuid;
   task_id uuid;
   team_user uuid;
   first_count integer;
 begin
+  insert into public.oportunidades(
+    cliente_nome, cliente_email, data_evento, status
+  ) values (
+    'Fixture sem sinal', 'fixture-sem-sinal@example.test', current_date + 45, 'proposta_enviada'
+  ) returning id into draft_opportunity_id;
+
+  insert into public.propostas(
+    oportunidade_id, cliente_nome, cliente_email, tipo_evento, data_evento,
+    horario_evento, convidados, duracao, subtotal, taxa_servico, privatizacao,
+    total, status, publication_status, is_current, snapshot
+  ) values (
+    draft_opportunity_id, 'Fixture sem sinal', 'fixture-sem-sinal@example.test',
+    'Coquetel', current_date + 45, '18:00', 40, 3, 8000, 960, 0, 8960,
+    'proposta_enviada', 'sent', true,
+    jsonb_build_object('pagamentoSinal', null)
+  );
+
+  assert not exists(
+    select 1 from public.event_handoffs where opportunity_id = draft_opportunity_id
+  ), 'JSON null nao pode ser interpretado como sinal';
+
   insert into public.oportunidades(
     cliente_nome, cliente_email, data_evento, status
   ) values (
@@ -96,7 +118,15 @@ begin
     where id = task_id and status = 'done' and acknowledged_at is not null and completed_by = team_user
   ), 'Conclusao deve registrar ciencia, horario e ator';
 
-  perform public.acknowledge_event_handoff_changes(fixture_opportunity_id);
+  begin
+    perform public.acknowledge_event_handoff_changes(fixture_opportunity_id, 1);
+    raise exception 'Versao antiga nao pode registrar ciencia';
+  exception
+    when others then
+      assert sqlerrm like 'O handoff mudou.%', 'Ciencia deve falhar quando a versao visualizada ficou antiga';
+  end;
+
+  perform public.acknowledge_event_handoff_changes(fixture_opportunity_id, 2);
   assert exists(
     select 1 from public.event_handoffs
     where opportunity_id = fixture_opportunity_id and not changes_pending
@@ -104,8 +134,12 @@ begin
 
   assert not has_function_privilege('anon', 'public.update_event_handoff_task(uuid,text,text,timestamptz,text)', 'execute'),
     'Anon nao pode alterar tarefas operacionais';
-  assert not has_function_privilege('anon', 'public.acknowledge_event_handoff_changes(uuid)', 'execute'),
+  assert not has_function_privilege('anon', 'public.acknowledge_event_handoff_changes(uuid,integer)', 'execute'),
     'Anon nao pode reconhecer mudancas operacionais';
+  assert has_table_privilege('authenticated', 'public.active_event_handoffs', 'select'),
+    'Equipe autenticada deve ler somente handoffs elegiveis';
+  assert not has_table_privilege('anon', 'public.active_event_handoffs', 'select'),
+    'Anon nao pode consultar handoffs operacionais';
 end;
 $$;
 

@@ -197,6 +197,13 @@ test.describe("Formulário público do cliente", () => {
     await expect(page.locator(".client-portal-progress .is-current")).toHaveCount(2);
     await expect(page.getByRole("button", { name: "Repetir este evento" })).toHaveCount(2);
     await expectNoHorizontalOverflow(page);
+    await page.locator("#returningClientEmail").fill("cliente@example.com");
+    await page.evaluate(() => {
+      getPublicSupabaseClient = () => ({ auth: { signOut: async () => ({ error: null }) } });
+    });
+    await page.getByRole("button", { name: "Sair com segurança" }).click();
+    await expect(page.locator("#returningClientEmail")).toHaveValue("");
+    await expect(page.locator("#returningClientAccess")).not.toHaveAttribute("open", "");
     await expectNoBrowserErrors(errors);
   });
 

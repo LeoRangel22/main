@@ -75,6 +75,38 @@ create policy team_read on public.event_handoff_tasks
 create policy team_read on public.event_handoff_changes
   for select to authenticated using ((select public.is_team_member()));
 
+create view public.active_event_handoffs
+with (security_invoker = true)
+as
+select h.*
+from public.event_handoffs h
+join public.propostas p on p.id = h.proposal_id
+where coalesce(p.is_current, true)
+  and (
+    p.status in ('confirmado','pagamento_final','planejamento','evento_proximo')
+    or jsonb_typeof(p.snapshot -> 'pagamentoSinal') = 'object'
+  );
+
+revoke all on public.active_event_handoffs from public, anon, authenticated;
+grant select on public.active_event_handoffs to authenticated;
+
+create view public.active_event_handoff_tasks
+with (security_invoker = true)
+as
+select t.*
+from public.event_handoff_tasks t
+join public.active_event_handoffs h on h.opportunity_id = t.opportunity_id;
+
+create view public.active_event_handoff_changes
+with (security_invoker = true)
+as
+select c.*
+from public.event_handoff_changes c
+join public.active_event_handoffs h on h.opportunity_id = c.opportunity_id;
+
+revoke all on public.active_event_handoff_tasks, public.active_event_handoff_changes from public, anon, authenticated;
+grant select on public.active_event_handoff_tasks, public.active_event_handoff_changes to authenticated;
+
 create or replace function event_private.handoff_source_snapshot(p public.propostas)
 returns jsonb
 language sql
@@ -121,7 +153,7 @@ declare
 begin
   if p.oportunidade_id is null
      or not coalesce(p.is_current, true)
-     or not (p.status in ('confirmado','pagamento_final','planejamento','evento_proximo') or p.snapshot -> 'pagamentoSinal' is not null) then
+     or not (p.status in ('confirmado','pagamento_final','planejamento','evento_proximo') or jsonb_typeof(p.snapshot -> 'pagamentoSinal') = 'object') then
     return;
   end if;
 
@@ -291,7 +323,7 @@ begin
 end;
 $$;
 
-create or replace function public.acknowledge_event_handoff_changes(target_opportunity uuid)
+create or replace function public.acknowledge_event_handoff_changes(target_opportunity uuid, target_version integer)
 returns public.event_handoffs
 language plpgsql
 security definer
@@ -302,11 +334,24 @@ declare
 begin
   perform event_private.require_team();
 
+  select * into handoff
+  from public.event_handoffs
+  where opportunity_id = target_opportunity
+  for update;
+
+  if handoff.opportunity_id is null then
+    raise exception 'Handoff operacional nao encontrado.';
+  end if;
+  if handoff.version <> target_version then
+    raise exception 'O handoff mudou. Recarregue antes de registrar a ciencia.';
+  end if;
+
   update public.event_handoff_changes
   set acknowledged_at = coalesce(acknowledged_at, now()),
       acknowledged_by = coalesce(acknowledged_by, auth.uid())
   where opportunity_id = target_opportunity
-    and acknowledged_at is null;
+    and acknowledged_at is null
+    and handoff_version <= target_version;
 
   update public.event_handoffs h
   set changes_pending = false,
@@ -329,9 +374,9 @@ end;
 $$;
 
 revoke execute on function public.update_event_handoff_task(uuid, text, text, timestamptz, text) from public, anon;
-revoke execute on function public.acknowledge_event_handoff_changes(uuid) from public, anon;
+revoke execute on function public.acknowledge_event_handoff_changes(uuid, integer) from public, anon;
 grant execute on function public.update_event_handoff_task(uuid, text, text, timestamptz, text) to authenticated;
-grant execute on function public.acknowledge_event_handoff_changes(uuid) to authenticated;
+grant execute on function public.acknowledge_event_handoff_changes(uuid, integer) to authenticated;
 
 -- Backfill seguro e idempotente para vendas que ja chegaram ao pos-sinal.
 do $backfill$
@@ -343,7 +388,7 @@ begin
     from public.propostas p
     where coalesce(p.is_current, true)
       and p.oportunidade_id is not null
-      and (p.status in ('confirmado','pagamento_final','planejamento','evento_proximo') or p.snapshot -> 'pagamentoSinal' is not null)
+      and (p.status in ('confirmado','pagamento_final','planejamento','evento_proximo') or jsonb_typeof(p.snapshot -> 'pagamentoSinal') = 'object')
   loop
     perform event_private.sync_event_handoff(proposal_row);
   end loop;
