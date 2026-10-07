@@ -268,7 +268,22 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     await expect(page.locator("#actionList")).toContainText(/Prioridade agora/i);
 
-    const priorityButton = page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first();
+    const focusCard = page.locator("#actionList .action-focus-card");
+    const focusButton = focusCard.locator("button[data-action-resolution]");
+    await expect(focusButton).toBeVisible();
+    const focusGeometry = await focusCard.evaluate((card) => {
+      const cardBox = card.getBoundingClientRect();
+      const buttonBox = card.querySelector("button[data-action-resolution]").getBoundingClientRect();
+      return {
+        insideCard: buttonBox.top >= cardBox.top && buttonBox.right <= cardBox.right + 1,
+        nearTop: buttonBox.top - cardBox.top < 72,
+        inViewport: buttonBox.top >= 0 && buttonBox.bottom <= window.innerHeight,
+      };
+    });
+    expect(focusGeometry).toEqual({ insideCard: true, nearTop: true, inViewport: true });
+
+    const priorityTask = page.locator('#actionList [data-action-id="qa-request-prioridade"]');
+    const priorityButton = priorityTask.locator('button[data-action-resolution="first_reply"]');
     if (!(await priorityButton.isVisible())) {
       await page.locator("#actionList .action-backlog > summary").click();
     }
@@ -276,8 +291,20 @@ test.describe("Dashboard interno em modo QA", () => {
 
     await expect(page.locator("#loadedEditorBar")).toContainText(/Prioridade agora/i);
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
-    await expectScrolledNear(page, "#clientDataSection", 300);
-    await expectElementInViewport(page, "#loadedEditorBar", { bottom: 120 });
+    await expect(page.locator("#firstReplyPanel")).toBeVisible();
+    await expectScrolledNear(page, "#firstReplyPanel", 300);
+    await expectElementInViewport(page, "#firstReplyPanel", { bottom: 120 });
+
+    await page.locator("#salesCommand").scrollIntoViewIfNeeded();
+    const changeTask = page.locator('#actionList [data-action-id="qa-proposal-alteracao"]');
+    const changeButton = changeTask.locator('button[data-action-resolution="client_change"]');
+    if (!(await changeButton.isVisible())) {
+      const backlog = page.locator("#actionList .action-backlog");
+      if (!(await backlog.getAttribute("open"))) await backlog.locator("summary").first().click();
+    }
+    await changeButton.click();
+    await expect(page.locator(".client-change-dialog")).toBeVisible();
+    await expect(page.locator(".client-change-dialog")).toContainText(/alteração solicitada/i);
     await expectNoBrowserErrors(errors);
   });
 

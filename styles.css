@@ -1361,7 +1361,7 @@ textarea[aria-invalid="true"] {
 }
 
 .action-focus-card {
-  align-items: center;
+  align-items: stretch;
   background: linear-gradient(135deg, var(--verde-escuro), #245f49);
   border: 1px solid rgba(24, 58, 45, 0.18);
   border-radius: 8px;
@@ -1370,8 +1370,20 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 12px;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) minmax(128px, auto);
+  grid-template-columns: minmax(0, 1fr);
   padding: 14px 16px;
+}
+
+.action-focus-main,
+.action-focus-title {
+  min-width: 0;
+}
+
+.action-focus-title-row {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(128px, auto);
 }
 
 .action-focus-card span {
@@ -1419,6 +1431,7 @@ textarea[aria-invalid="true"] {
 }
 
 .action-focus-card .action-open-button {
+  align-self: start;
   background: var(--white) !important;
   border: 1px solid rgba(255, 255, 255, 0.82);
   box-shadow: 0 10px 20px rgba(10, 28, 21, 0.18);
@@ -11576,6 +11589,10 @@ body[data-page="app"] .pipeline-card-bottom-row {
   }
 
   .sales-command-grid .action-focus-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-command-grid .action-focus-title-row {
     grid-template-columns: 1fr;
   }
 
