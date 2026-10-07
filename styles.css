@@ -12451,9 +12451,11 @@ body[data-page="app"] .pipeline-card-value.is-empty {
 }
 
 body[data-page="app"] .pipeline-card-event-line {
+  display: block;
   font-size: 0.78rem !important;
   font-weight: 850 !important;
-  line-height: 1.25 !important;
+  line-height: 1.35 !important;
+  min-height: 17px;
 }
 
 .pipeline-card-event-summary .pipeline-card-offer {

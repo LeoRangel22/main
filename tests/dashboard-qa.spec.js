@@ -126,6 +126,7 @@ test.describe("Dashboard interno em modo QA", () => {
     await dialog.getByRole("button", { name: "Voltar" }).click();
     expect(await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-sem-resposta")?.status)).toBe("proposta_enviada");
 
+    await card.locator(".pipeline-card-details > summary").click();
     await card.locator('[data-cancel-id="qa-proposal-sem-resposta"]').click();
     await dialog.locator('[name="reason"]').selectOption("Teste / cadastro de teste");
     await dialog.getByRole("button", { name: "Registrar cancelamento" }).click();
@@ -267,7 +268,11 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     await expect(page.locator("#actionList")).toContainText(/Prioridade agora/i);
 
-    await page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first().click();
+    const priorityButton = page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first();
+    if (!(await priorityButton.isVisible())) {
+      await page.locator("#actionList .action-backlog > summary").click();
+    }
+    await priorityButton.click();
 
     await expect(page.locator("#loadedEditorBar")).toContainText(/Prioridade agora/i);
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
