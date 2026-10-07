@@ -1,6 +1,10 @@
 const {test,expect}=require('@playwright/test');
 const {collectBrowserErrors,expectNoBrowserErrors,expectNoHorizontalOverflow}=require('./support');
 async function mountDashboard(page) {
+  // Isolate startup authentication before injecting the production-reader fixture.
+  // Otherwise the real SDK can finish signing out after the fixture was mounted.
+  await page.route('**/vendor/supabase.js*', route => route.fulfill({contentType:'application/javascript',body:
+    'window.supabase={createClient:()=>({auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}})};'}));
   await page.goto('/index.html');
   await page.evaluate(async()=>{
     resetCommercialDashboard();loadQaFixtures();
@@ -23,7 +27,7 @@ async function mountDashboard(page) {
       from:table=>({select(){return this;},eq(_key,id){this.id=id;return this;},single(){window.__cockpit.detailReads++;return Promise.resolve({data:structuredClone(db[table].find(r=>r.id===this.id))});}}),
       auth:{getSession:async()=>({data:{session:state.session}})},
     };
-    eventOps.loadedFor='qa-user';updateAuthUI();await refreshCommercialDashboard({force:true});
+    eventOps.loadedFor='qa-user';updateAuthUI();await refreshCommercialDashboard({force:true});markEditorClean();
   });
 }
 test('production reader coalesces refresh, fetches only changed rows, and opens the complete editor',async({page})=>{
