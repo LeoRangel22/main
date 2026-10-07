@@ -163,7 +163,9 @@ test.describe("Formulário público do cliente", () => {
     const errors = collectBrowserErrors(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/formulario.html");
-    await page.evaluate(() => renderReturningClientHistory([
+    await page.evaluate(() => {
+      document.querySelector("#returningClientAccess").open = true;
+      renderReturningClientHistory([
       {
         proposal_id: "00000000-0000-4000-8000-000000000010",
         oportunidade_id: "00000000-0000-4000-8000-000000000011",
@@ -186,7 +188,8 @@ test.describe("Formulário público do cliente", () => {
         total: 15000,
         snapshot: { event: { type: "Almoço Carioca", guests: 40 } },
       },
-    ], "cliente@example.com"));
+      ], "cliente@example.com");
+    });
     await expect(page.locator("#returningClientHistory")).toContainText("Área segura do cliente");
     await expect(page.locator(".client-portal-event-card")).toHaveCount(2);
     await expect(page.locator(".client-portal-event-card").first()).toContainText("Abrir e continuar");
