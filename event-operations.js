@@ -234,7 +234,18 @@ function buildEventOfferOptions(ids) {
   return options.length>1?options:[];
 }
 const baseGetProposalSnapshot=getProposalSnapshot;
-getProposalSnapshot=function(){const s=baseGetProposalSnapshot(),key=getActiveOpportunityId()||getSourceOverrideKey(),c=eventOfferDrafts.get(key)||getActiveProposal()?.snapshot?.offerConfiguration;if(canEditEventOffer()&&c?.context===getEventOfferContext()){s.publicOfferOptions=buildEventOfferOptions(c.itemIds||[]);s.offerConfiguration=c;}return s;};
+getProposalSnapshot=function(){
+  const s=baseGetProposalSnapshot(),proposal=getActiveProposal();
+  if(!canEditEventOffer(proposal)){
+    for(const field of ["publicOfferOptions","offerConfiguration"]){
+      if(Object.hasOwn(proposal?.snapshot||{},field))s[field]=JSON.parse(JSON.stringify(proposal.snapshot[field]));
+    }
+    return s;
+  }
+  const key=getActiveOpportunityId()||getSourceOverrideKey(),c=eventOfferDrafts.get(key)||proposal?.snapshot?.offerConfiguration;
+  if(c?.context===getEventOfferContext()){s.publicOfferOptions=buildEventOfferOptions(c.itemIds||[]);s.offerConfiguration=c;}
+  return s;
+};
 function getEventOfferReviewSignature(){const key=getActiveOpportunityId()||getSourceOverrideKey();return JSON.stringify(eventOfferDrafts.get(key)||getActiveProposal()?.snapshot?.offerConfiguration||null);}
 function getServerDiscountApproval(){if(!getActiveProposal()||hasUnsavedEditorChanges())return null;return eventOps.approvals.find((a)=>a.proposal_id===state.activeProposalId&&a.valid)||null;}
 function canEditEventOffer(proposal=getActiveProposal()){

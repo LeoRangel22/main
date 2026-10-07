@@ -96,11 +96,14 @@ test('venda assistida encerra edição quando a proposta foi vendida e bloqueia 
   await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"] .pipeline-open-button').click();
   const result=await page.evaluate(()=>{
     fields.eventType.value='Coquetel';fields.eventDate.value='2028-10-24';fields.eventTime.value='17:00';fields.eventDuration.value='3';fields.guestCount.value='60';state.selectedIds=new Set(['coquetel-caipirinha']);renderAll();renderEventOfferBuilder();
-    const p=getActiveProposal(),button=document.querySelector('[data-offer-auto]'),before=JSON.stringify(p.snapshot);
+    const p=getActiveProposal(),button=document.querySelector('[data-offer-auto]');
+    p.snapshot.publicOfferOptions=[{id:'essential',total:8000},{id:'premium',total:12000}];p.snapshot.offerConfiguration={itemIds:['welcome-caipirinha'],approvedAt:'2026-10-06T12:00:00Z'};
+    const before=JSON.stringify(p.snapshot);
     p.status='confirmado';button.click();renderEventOfferBuilder();
-    return {hidden:document.querySelector('#eventOfferBuilder').hidden,unchanged:before===JSON.stringify(p.snapshot),forced:state.forceNewVersionDraft,canEdit:canEditEventOffer()};
+    const saved=getProposalSnapshot();
+    return {hidden:document.querySelector('#eventOfferBuilder').hidden,unchanged:before===JSON.stringify(p.snapshot),forced:state.forceNewVersionDraft,canEdit:canEditEventOffer(),preserved:JSON.stringify(saved.publicOfferOptions)===JSON.stringify(p.snapshot.publicOfferOptions)&&JSON.stringify(saved.offerConfiguration)===JSON.stringify(p.snapshot.offerConfiguration)};
   });
-  expect(result).toEqual({hidden:true,unchanged:true,forced:false,canEdit:false});
+  expect(result).toEqual({hidden:true,unchanged:true,forced:false,canEdit:false,preserved:true});
 });
 test('evento cancelado com sinal não exibe tarefas operacionais',async({page})=>{
   await page.goto('/index.html?qa=1');
