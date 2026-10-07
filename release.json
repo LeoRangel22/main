@@ -1,0 +1,25 @@
+{
+  "commit": "41168d3d3f79775c3a8ebaaebf95411bc3394a06",
+  "schemaHead": "20261007133234_priority_response_receipt_retry.sql",
+  "supabaseVersion": "2.57.4",
+  "assets": {
+    "index.html": "733da94c558ec245a23fc6bfbd51edc35d7889fc74914da8b816761bec7ff56b",
+    "clientes.html": "7d2d728d07e96fbced3304c2027bea62b2336fcb991440941626baac241a0691",
+    "comunicacao.html": "2dc567cc7f1038ba7eb39f449ff356675f06d32ebf0da5885ab805c86ff22801",
+    "valores.html": "c39e28163bdfd3af72b2a95d9238647529af1633488d0cced305754126e048bd",
+    "formulario.html": "2301861f1988d85cb32661d3bac980cd0a72a7bf0f4c1b7458177517e9106238",
+    "proposta.html": "28c8d17ac6e4fce2acf024b19bca0f50ec27797f4fe2f89a90ed4e1ffd8c90d6",
+    "styles.css": "c6adf7b79a7cf897903fd00652d403eb3d9a6a169bed870d35d1461dd89da34d",
+    "app.js": "42bfcf0444bdd44972f49cb8d008517779a0fb5b514b97d603b88fd66dc4b68b",
+    "event-operations.js": "9b9164b8678988da440b2af6f2a100b891c796d60acc6c28fd6c2c14ee3ce9af",
+    "analytics.js": "174fb5b1ab618c901e9b683fd1a21bc22fd55fd65dba3b24f78bcd452c23dd63",
+    "formulario.js": "d68b94f723a703e3ca8b11630c4f276c74a7f158b322351a465361133937cd63",
+    "proposta.js": "8bdf207a9e9df408433a1792f4a690b0cd685a581a7ff5147afb177fd49ecdd3",
+    "assets/logo-embaixada.svg": "6a584a9e21b731919d6b937988bbe04256fa662b065350567dc59fc8f979eb5d",
+    "assets/logo-reducao.svg": "c20fde237700f8e1a643252f17ec245f0bc9dad92cabcc84734b38ad7061edf4",
+    "assets/venue.jpg": "62033f27401c3b7b0cd8137d0ba178101b3553b73e1ea1ff76f73e9ca550632b",
+    "orcamento/index.html": "d45c3ab342757a631ada83876fd86328e2a2132b76bf09e9b5f2bc9ad2cd2c3a",
+    "painel/index.html": "a855f5b7972982cbb17dad53571ef3daaf791b28337995f2442bc00a6a07b4eb",
+    "vendor/supabase.js": "a8d48f03f5a02b3bbcff4ab4fd32f32bde8e811f64747953f130366cf0326d13"
+  }
+}
