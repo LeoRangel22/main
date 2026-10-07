@@ -4,7 +4,7 @@
   function validity(item,now=Date.now()) {
     if(item.kind!=='proposal'||item.isDraft||item.clientResponse||item.status!=='proposta_enviada'||(item.date&&item.date<today(new Date(now))))return null;
     const days=Number(String(item.snapshot?.event?.validity||'').match(/^\s*(\d+)\s*(?:dia|day)/i)?.[1]);
-    const issued=Date.parse(item.createdAt||item.sentAt||'');
+    const issued=Date.parse(item.sentAt||item.createdAt||'');
     const commercial=days>0&&Number.isFinite(issued)?issued+days*864e5:Infinity;
     const link=Date.parse(item.linkExpiresAt||'');
     const expires=Math.min(commercial,Number.isFinite(link)?link:Infinity);

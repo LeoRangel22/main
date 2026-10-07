@@ -39,3 +39,13 @@ Telemetria existente ampliada com `dashboard_loaded`, `dashboard_refresh_failed`
 `npm test` valida build, regras, leitura, telemetria e Chromium. `npm run test:db` inclui regressão `checks/commercial-cockpit.sql`, com permissões reais, resumo sem arquivos, rejeição de escrita de resumo e limites/whitelist. Instalação vazia, upgrade, concorrência e restauração continuam no CI. Fixtures de banco executam em transação com rollback.
 
 Aplicar somente a migração incremental de commercial cockpit no projeto de Eventos, verificar funções/grants e tamanhos agregados, depois publicar frontend aprovado no CI. Se o serviço de leitura faltar, mostrar erro e retry; não reabrir gravações antigas nem remover validação de revisão. Para reversão do frontend, a versão anterior continua compatível com o banco, pois a migração mantém APIs de gravação e dados comerciais existentes.
+
+## Medição contínua
+
+Os três gráficos operacionais estão no [painel comercial existente](https://us.posthog.com/project/649803/dashboard/2179050): leituras e falhas por dia; mediana e P90 da leitura; ações prioritárias abertas por motivo. Usam séries nativas de eventos, janela de 30 dias e fuso America/Sao_Paulo. Foram validados antes de salvar e aguardam amostras de uso real. A leitura exclui a renderização da interface. Não representam certificação de SLA nem comprovação de ganho de conversão.
+
+## Evidência da publicação
+
+Migração de produção: `20261007143741_commercial_cockpit.sql`. Na amostra integral de 182 propostas em 7/10/2026, o JSON textual completo somou 12.536.381 bytes; os resumos somaram 2.105.059 bytes, redução de 83,2%. É comparação de JSON antes da compressão, exclui manifesto e demais entidades; não representa redução equivalente no tempo de carregamento. Contagens após a migração: 182 propostas, 200 solicitações e 226 oportunidades.
+
+A comparação de versões busca os detalhes completos das duas versões mais recentes ao abrir o editor. Coleções preservam ordenação por criação mais recente. A telemetria distingue a primeira leitura, atualização manual e leitura automática; a validade comercial parte do envio, com criação como fallback apenas para registros antigos.

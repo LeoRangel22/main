@@ -11,11 +11,12 @@
     const check = () => { if (disposed || !isCurrent()) throw Object.assign(new Error('Sessão alterada; atualização descartada.'), { code: 'SESSION_CHANGED' }); };
     function invalidate() { invalid = true; generation++; }
     function dispose() { disposed = true; cache = {}; versions = {}; lastResult = null; }
-    async function sync({ force = false } = {}) {
+    async function sync({ force = false, source = 'refresh' } = {}) {
       check();
       if (pending) return pending;
       if (!force && !invalid && lastResult && now() - completedAt < 5000) return lastResult;
       const runGeneration = generation, initial = !lastResult;
+      const syncKind = initial ? 'initial' : (['manual','background','refresh'].includes(source) ? source : 'refresh');
       pending = (async () => {
         const started = now(); let requests = 0, bytes = 0, changed = 0, removed = 0;
         async function rpc(name, body) {
@@ -61,11 +62,11 @@
           }));
           check();
           cache = staged; versions = stagedVersions; completedAt = now(); invalid = generation !== runGeneration;
-          lastResult = { manifest, rows: Object.fromEntries(Object.entries(cache).map(([kind, rows]) => [kind, [...rows.values()].sort((a,b)=>String(a.id ?? a.proposal_id).localeCompare(String(b.id ?? b.proposal_id)))])), changed, removed };
-          try { onSample({ ok: true, duration_ms: now() - started, request_count: requests, payload_bytes: bytes, changed_rows: changed, removed_rows: removed, sync_kind: initial ? 'initial' : (force ? 'manual' : 'refresh') }); } catch (_) {}
+          lastResult = { manifest, rows: Object.fromEntries(Object.entries(cache).map(([kind, rows]) => [kind, [...rows.values()].sort((a,b)=>(Date.parse(b.created_at || b.updated_at || '') || 0)-(Date.parse(a.created_at || a.updated_at || '') || 0)||String(a.id ?? a.proposal_id).localeCompare(String(b.id ?? b.proposal_id)))])), changed, removed };
+          try { onSample({ ok: true, duration_ms: now() - started, request_count: requests, payload_bytes: bytes, changed_rows: changed, removed_rows: removed, sync_kind: syncKind }); } catch (_) {}
           return lastResult;
         } catch (error) {
-          try { onSample({ ok: false, duration_ms: now() - started, request_count: requests, payload_bytes: bytes, changed_rows: changed, reason_code: error.code === 'SESSION_CHANGED' ? 'session_changed' : 'read_failed' }); } catch (_) {}
+          try { onSample({ ok: false, duration_ms: now() - started, request_count: requests, payload_bytes: bytes, changed_rows: changed, sync_kind: syncKind, reason_code: error.code === 'SESSION_CHANGED' ? 'session_changed' : 'read_failed' }); } catch (_) {}
           throw error;
         }
       })();

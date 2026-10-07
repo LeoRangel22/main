@@ -98,3 +98,15 @@ test('new commercial measures and explained priorities work on mobile without ho
  await expect(page.locator('#actionList .action-focus-card .action-priority-reasons')).toContainText('Por que agora:');
  await expectNoHorizontalOverflow(page);await expectNoBrowserErrors(errors);
 });
+test('opening a proposal loads both recent versions for an accurate journey comparison',async({page})=>{
+ await mountDashboard(page);
+ const result=await page.evaluate(async()=>{
+  const current=window.__cockpit.db.propostas[0];current.versao=2;
+  const previous={...structuredClone(current),id:'journey-previous',versao:1,created_at:'2026-01-01T12:00:00Z'};
+  previous.snapshot.generalTerms='Previous complete conditions';window.__cockpit.db.propostas.push(previous);
+  await refreshCommercialDashboard({force:true});await safeOpenSavedProposal(current.id,'Version comparison');
+  const versions=getProposalVersions(state.proposals.find(row=>row.id===current.id)).slice(0,2);
+  return versions.map(row=>({version:row.versao,summary:!!row._dashboard_summary,terms:row.snapshot.generalTerms}));
+ });
+ expect(result).toEqual([{version:2,summary:false,terms:'Full conditions retained'},{version:1,summary:false,terms:'Previous complete conditions'}]);
+});

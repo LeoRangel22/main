@@ -15274,18 +15274,18 @@ function bindEvents() {
   document.querySelector("#recoverMagicLinkBtn")?.addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn")?.addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn")?.addEventListener("click", async () => {
-    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true, source: 'manual' });
     await loadProposalHistory();
     await loadCommercialInsights();
     renderPipeline();
   });
   document.querySelector("#refreshPipelineBtn")?.addEventListener("click", async () => {
-    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true, source: 'manual' });
     await loadProposalHistory();
     await loadQuoteRequests();
   });
   document.querySelector("#refreshReportsBtn")?.addEventListener("click", async () => {
-    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true, source: 'manual' });
     await loadProposalHistory();
     await loadQuoteRequests();
     renderDashboardReports(getPipelineItems());

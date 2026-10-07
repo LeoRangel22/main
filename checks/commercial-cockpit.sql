@@ -1,6 +1,6 @@
 begin;
 do $$
-declare actor uuid; o uuid; p public.propostas; m jsonb; page jsonb; compact jsonb; saved public.propostas;
+declare actor uuid; o uuid; p public.propostas; m jsonb; page jsonb; compact jsonb; saved public.propostas; kind text; descriptors jsonb; ids text[];
 begin
  select id into actor from auth.users where lower(email)='leorangel@gmail.com' limit 1;
  assert actor is not null,'Fixture team actor is required';
@@ -10,6 +10,13 @@ begin
  set local role authenticated;
  m=public.get_event_dashboard_manifest();
  assert m->>'version'='1','Manifest version';
+ for kind,descriptors in select key,value from jsonb_each(m->'records') loop
+  select array_agg(x->>'id') into ids from (select value x from jsonb_array_elements(descriptors) limit 80) d;
+  if cardinality(ids)>0 then
+   page=public.get_event_dashboard_rows(kind,ids);
+   assert jsonb_array_length(page)=cardinality(ids),kind||' page incomplete';
+  end if;
+ end loop;
  assert exists(select 1 from jsonb_array_elements(m->'records'->'propostas') d where d->>'id'=p.id::text and d->>'version'=p.revision::text),'Revision descriptor';
  assert (m->'summary'->>'open')::integer>=1,'Future commercial scope';
  page=public.get_event_dashboard_rows('propostas',array[p.id::text]);compact=page->0;

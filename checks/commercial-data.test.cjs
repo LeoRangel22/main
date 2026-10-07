@@ -61,3 +61,19 @@ test('rank explains ownership/due risk and respects scheduled follow-up while pr
   const tasks=[{item:{id:'a',scheduled:true},title:'Retomar',note:'Sem resposta',priority:90,track:'Comercial'},{item:{id:'b',overdue:true},title:'Responder pedido de ajuste',note:'Cliente pediu ajuste',priority:95,track:'Venda'}];
   const ranked=priorities.rank(tasks,context);assert.equal(ranked[0].item.id,'b');assert.ok(ranked[0].reasonCodes.includes('overdue'));assert.ok(ranked[0].reasons.includes('Ainda sem responsável.'));assert.equal(ranked[1].title,'Retorno agendado');
 });
+
+test('collections retain newest-first ordering and telemetry distinguishes automatic, manual and failed reads',async()=>{
+ const f=fixture(3),samples=[];f.rows[0].created_at='2026-10-01T12:00:00Z';f.rows[1].created_at='2026-10-07T12:00:00Z';f.rows[2].created_at='2026-10-05T12:00:00Z';
+ const store=createStore({client:f.client,onSample:s=>samples.push(s)});
+ assert.deepEqual((await store.sync()).rows.propostas.map(r=>r.id),['record-1','record-2','record-0']);
+ await store.sync({force:true,source:'background'});await store.sync({force:true,source:'manual'});
+ f.rows[0].revision++;f.fail=true;await assert.rejects(store.sync({force:true,source:'manual'}));
+ assert.deepEqual(samples.map(s=>s.sync_kind),['initial','background','manual','manual']);
+ const initial=[];await assert.rejects(createStore({client:f.client,onSample:s=>initial.push(s)}).sync());assert.equal(initial[0].sync_kind,'initial');
+});
+test('commercial validity starts at delivery even when the draft was created much earlier',()=>{
+ const now=Date.parse('2026-10-07T15:00:00Z');
+ const item={kind:'proposal',status:'proposta_enviada',date:'2026-10-20',createdAt:'2026-09-01T15:00:00Z',sentAt:'2026-10-06T15:00:00Z',snapshot:{event:{validity:'14 dias'}}};
+ assert.equal(priorities.validity(item,now),null);
+ assert.equal(priorities.validity({...item,sentAt:'2026-09-24T15:00:00Z'},now).reason,'validity_48h');
+});

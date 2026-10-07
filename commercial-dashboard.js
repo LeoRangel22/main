@@ -31,14 +31,14 @@ function getCommercialStore() {
   return commercialStore;
 }
 function invalidateCommercialDashboard() { commercialStore?.invalidate(); }
-async function refreshCommercialDashboard({ force = false } = {}) {
+async function refreshCommercialDashboard({ force = false, source = 'refresh' } = {}) {
   if (QA_MODE || !state.session || !state.supabase) { renderCommercialDiagnostics(); return; }
   if (commercialRefreshPending) return commercialRefreshPending;
   const store = getCommercialStore(), user = state.session.user.id;
   commercialLoading = true; renderCommercialDiagnostics();
   commercialRefreshPending = (async () => {
     try {
-      const result = await store.sync({ force });
+      const result = await store.sync({ force, source });
       if (commercialStore !== store || state.session?.user?.id !== user) return;
       const previous = new Map(state.proposals.filter(p => !p._dashboard_summary).map(p => [p.id,p]));
       state.proposals = result.rows.propostas.map(p => {
@@ -132,7 +132,7 @@ function captureCommercialPriority(task) {
 }
 document.addEventListener('click', async event => {
   const refresh = event.target.closest('[data-commercial-refresh]');
-  if (refresh) { await refreshCommercialDashboard({ force:true }); return; }
+  if (refresh) { await refreshCommercialDashboard({ force:true, source:'manual' }); return; }
   const more = event.target.closest('[data-stage-more]');
   if (more) { commercialStageLimits[more.dataset.stageMore] = (commercialStageLimits[more.dataset.stageMore] || 20) + 20; renderPipeline(); return; }
   if (event.target.closest('[data-history-more]')) { commercialHistoryLimit += 20; renderHistory(); return; }

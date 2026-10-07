@@ -164,7 +164,7 @@ async function handleEventOpsClick(e) {
   const channel=e.target.closest("[data-ops-channel]");if(channel){try{await showOpsChannelSetup(channel.dataset.opsChannel);}catch(err){showToast(err.message);}return;}
   if(e.target.closest("[data-ops-email-delivery]")){const b=e.target.closest("button");b.disabled=true;try{const r=await callOpsChannelAdmin("sync-email");showToast(r.message);await loadEventOperations();}catch(err){showToast(err.message);}finally{b.disabled=false;}return;}
   const tab=e.target.closest("[data-ops-tab]");if(tab){eventOps.tab=tab.dataset.opsTab;renderEventOperations();return;}
-  if(e.target.closest("[data-ops-refresh]")){if(QA_MODE){await loadEventOperations();}else await refreshCommercialDashboard({force:true});return;}
+  if(e.target.closest("[data-ops-refresh]")){if(QA_MODE){await loadEventOperations();}else await refreshCommercialDashboard({force:true,source:'manual'});return;}
   if(e.target.closest("[data-ops-all]")){const boxes=[...document.querySelectorAll("[data-ops-select]")],checked=!boxes.every((b)=>b.checked);boxes.forEach((b)=>b.checked=checked);return;}
   const open=e.target.closest("[data-ops-open]");if(open){eventOps.opportunity=open.dataset.opsOpen;eventOps.tab="inbox";renderEventOperations();return;}
   if(e.target.closest("[data-ops-bulk]")){showOpsPlan([...document.querySelectorAll("[data-ops-select]:checked")].map((i)=>i.value));return;}
@@ -263,7 +263,7 @@ renderEventOperations();renderEventOfferBuilder();
 let eventOpsRefreshing=false;
 async function refreshEventChannelInbox(){
   if(eventOpsRefreshing||QA_MODE||!state.session||document.hidden||document.querySelector("dialog[open]"))return;
-  eventOpsRefreshing=true;try{await refreshCommercialDashboard({force:true});}finally{eventOpsRefreshing=false;}
+  eventOpsRefreshing=true;try{await refreshCommercialDashboard({force:true,source:'background'});}finally{eventOpsRefreshing=false;}
 }
 setInterval(refreshEventChannelInbox,30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshEventChannelInbox();});
