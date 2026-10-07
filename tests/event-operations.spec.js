@@ -95,7 +95,7 @@ test('venda assistida encerra edição quando a proposta foi vendida e bloqueia 
   await inbox(page);
   await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"] .pipeline-open-button').click();
   const result=await page.evaluate(()=>{
-    fields.eventType.value='Coquetel';fields.eventDate.value='2028-10-24';fields.eventTime.value='17:00';fields.eventDuration.value='3';fields.guestCount.value='60';state.selectedIds=new Set(['coquetel-caipirinha']);renderAll();
+    fields.eventType.value='Coquetel';fields.eventDate.value='2028-10-24';fields.eventTime.value='17:00';fields.eventDuration.value='3';fields.guestCount.value='60';state.selectedIds=new Set(['coquetel-caipirinha']);renderAll();renderEventOfferBuilder();
     const p=getActiveProposal(),button=document.querySelector('[data-offer-auto]'),before=JSON.stringify(p.snapshot);
     p.status='confirmado';button.click();renderEventOfferBuilder();
     return {hidden:document.querySelector('#eventOfferBuilder').hidden,unchanged:before===JSON.stringify(p.snapshot),forced:state.forceNewVersionDraft,canEdit:canEditEventOffer()};
