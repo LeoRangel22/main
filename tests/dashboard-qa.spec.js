@@ -119,12 +119,14 @@ test.describe("Dashboard interno em modo QA", () => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
     const card = page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]');
+    await card.locator(".pipeline-card-details > summary").click();
     await card.locator('[data-cancel-id="qa-proposal-sem-resposta"]').click();
     const dialog = page.locator(".cancel-reason-dialog");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Voltar" }).click();
     expect(await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-sem-resposta")?.status)).toBe("proposta_enviada");
 
+    await card.locator(".pipeline-card-details > summary").click();
     await card.locator('[data-cancel-id="qa-proposal-sem-resposta"]').click();
     await dialog.locator('[name="reason"]').selectOption("Teste / cadastro de teste");
     await dialog.getByRole("button", { name: "Registrar cancelamento" }).click();
@@ -266,7 +268,11 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.goto("/index.html?qa=1");
     await expect(page.locator("#actionList")).toContainText(/Prioridade agora/i);
 
-    await page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first().click();
+    const priorityButton = page.locator('#actionList button[data-use-request="qa-request-prioridade"]').first();
+    if (!(await priorityButton.isVisible())) {
+      await page.locator("#actionList .action-backlog > summary").click();
+    }
+    await priorityButton.click();
 
     await expect(page.locator("#loadedEditorBar")).toContainText(/Prioridade agora/i);
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
@@ -566,6 +572,7 @@ test.describe("Dashboard interno em modo QA", () => {
       await expect(card.locator('.pipeline-card-event-line')).toContainText('25 pax');
       await expect(card.locator('.pipeline-card-value')).toBeVisible();
       await expect(card.locator('.pipeline-card-next-action')).toBeVisible();
+      await expect(card.locator('.pipeline-card-next-label')).toHaveText('Próxima ação');
       await expect(card.locator('.pipeline-card-details')).not.toHaveAttribute('open', '');
       await expect(card.locator('.pipeline-score-badge')).toBeHidden();
       const collapsed = await card.evaluate((node) => node.getBoundingClientRect().height);
@@ -576,18 +583,21 @@ test.describe("Dashboard interno em modo QA", () => {
         const badge = node.querySelector('.follow-up-badge').getBoundingClientRect();
         const details = node.querySelector('.pipeline-card-details > summary').getBoundingClientRect();
         const actions = node.querySelector('.pipeline-card-bottom-row').getBoundingClientRect();
+        const footer = node.querySelector('.pipeline-card-footer').getBoundingClientRect();
         return { nameHeight: name.height, badgeGap: badge.top - name.bottom, badgeLeft: badge.left - name.left,
-          footerCenterGap: Math.abs((details.top + details.bottom - actions.top - actions.bottom) / 2),
-          footerOverlap: details.right > actions.left };
+          footerStackGap: details.top - actions.bottom,
+          actionsFit: actions.left >= footer.left - 1 && actions.right <= footer.right + 1 };
       });
       expect(alignment.nameHeight).toBeLessThan(25);
       expect(alignment.badgeGap).toBeGreaterThanOrEqual(0);
       expect(alignment.badgeGap).toBeLessThan(9);
       expect(Math.abs(alignment.badgeLeft)).toBeLessThan(2);
-      expect(alignment.footerCenterGap).toBeLessThan(3);
-      expect(alignment.footerOverlap).toBe(false);
+      expect(alignment.footerStackGap).toBeGreaterThanOrEqual(0);
+      expect(alignment.footerStackGap).toBeLessThan(14);
+      expect(alignment.actionsFit).toBe(true);
       await card.locator('.pipeline-card-details > summary').click();
       await expect(card.locator('.pipeline-stage-chip')).toBeVisible();
+      await expect(card.locator('.pipeline-card-management-actions')).toBeVisible();
       await expect(card.locator('.pipeline-card-full-name')).toHaveText('Cliente: Anna Vieira - Abercrombie & Kent Brazil');
       await expect(card.locator('.pipeline-value-breakdown')).not.toContainText('Priv.');
       await expect(card.locator('.pipeline-card-final-client')).not.toContainText('Cliente final:');
