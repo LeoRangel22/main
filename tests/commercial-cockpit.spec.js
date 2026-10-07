@@ -110,3 +110,13 @@ test('opening a proposal loads both recent versions for an accurate journey comp
  });
  expect(result).toEqual([{version:2,summary:false,terms:'Full conditions retained'},{version:1,summary:false,terms:'Previous complete conditions'}]);
 });
+test('reviewed contact context becomes stale when proposal revision changes despite a compact summary',async({page})=>{
+ await mountDashboard(page);
+ const changed=await page.evaluate(()=>{
+  const item=getOpsItems().find(item=>state.proposals.some(row=>row.id===item.id));
+  const proposal=state.proposals.find(row=>row.id===item.id);
+  const before=getOpsContextSignature(item);proposal.revision++;
+  return proposal._dashboard_summary&&before!==getOpsContextSignature(item);
+ });
+ expect(changed).toBe(true);
+});
