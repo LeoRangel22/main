@@ -2,7 +2,7 @@
 
 CRM comercial e operacional da Embaixada Carioca para captar leads, montar e versionar propostas, registrar decisões e pagamentos, planejar o evento e acompanhar o pós-venda.
 
-## Estado atual — 05/10/2026
+## Estado atual — 07/10/2026
 
 - O painel abre em **Modo Vendas** e mantém financeiro, operação, agenda e relatórios na **Visão completa**.
 - Eventos passados saem do funil ativo e aguardam classificação humana; remarcações retornam ao acompanhamento.
@@ -38,12 +38,12 @@ Nunca use `service_role` no frontend e nunca trate comprovante como confirmaçã
 
 ## Como abrir
 
-Abra `index.html` no navegador.
+Execute `npm ci` e `npm run serve`; abra `http://127.0.0.1:8765`. O servidor usa o pacote público gerado em `dist/`.
 
 ## Supabase: login e histórico da equipe
 
 1. Crie um projeto no Supabase.
-2. Abra `supabase/schema.sql`, copie o conteúdo e rode no SQL Editor do Supabase.
+2. Somente para projeto vazio: execute o bootstrap na ordem de `supabase/bootstrap/manifest.json` e depois as migrações. Configure URL e chave pública do novo projeto no frontend antes do build. Nunca faça esse bootstrap no projeto de produção existente.
 3. Em `Authentication > Providers`, mantenha o login por e-mail habilitado.
 4. Em `Authentication > URL Configuration`, use `https://leorangel22.github.io/main/` como `Site URL`.
 5. Em `Redirect URLs`, deixe `https://leorangel22.github.io/main/` e `https://leorangel22.github.io/main/**`.

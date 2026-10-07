@@ -119,7 +119,7 @@ test.describe("Formulário público do cliente", () => {
     await expect(page.locator("#clientFormStatus")).toContainText(/Solicitação enviada|received/i);
     expect(payload?.p_snapshot?.cliente?.nome).toBe("Ana");
     expect(payload?.p_snapshot?.cliente?.email).toBe("ana@example.com");
-    expect(payload?.p_snapshot?.evento?.horario).toBe("");
+    expect(payload?.p_snapshot?.evento?.horario).toBe("A definir");
     expect(payload?.p_snapshot?.evento?.tipo).toBe("Evento sob medida");
     expect(payload?.p_snapshot?.cliente?.tipoCliente).toBe("Cliente a classificar");
     await expectNoBrowserErrors(errors);

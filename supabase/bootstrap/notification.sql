@@ -11,7 +11,7 @@ begin
   execute 'select decrypted_secret from vault.decrypted_secrets where name=$1 limit 1'
     into webhook_secret using 'event_lead_webhook_secret';
   if endpoint is null or webhook_secret is null then return new; end if;
-  perform net.http_post(url:=endpoint,headers:=jsonb_build_object('Content-Type','application/json','x-webhook-secret',webhook_secret),body:=jsonb_build_object('type',tg_op,'table',tg_table_name,'schema',tg_table_schema,'record',to_jsonb(new)));
+  perform net.http_post(url:=endpoint,headers:=jsonb_build_object('Content-Type','application/json','x-webhook-secret',webhook_secret),body:=jsonb_build_object('type','INSERT','table',tg_table_name,'schema',tg_table_schema,'record',to_jsonb(new)));
   return new;
 end $$;
 revoke all on function public.notify_new_lead_fn() from public,anon,authenticated;

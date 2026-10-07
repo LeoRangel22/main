@@ -9,7 +9,7 @@ test('atualização periódica preserva revisão da edição e impede sobrescrit
     document.querySelector('#clientName').value='Edição local';
     const refreshed={...structuredClone(p),revision:2,snapshot:{...p.snapshot,remoteMarker:'preserve'}};
     upsertProposalState(refreshed);
-    const saved=await saveCurrentProposal('rascunho');
+    const saved=await saveCurrentProposal('negociacao');
     return {saved,error:state.lastProposalSaveError,baseRevision:state.editorProposalBase.revision,
       remoteMarker:state.proposals.find(row=>row.id===p.id).snapshot.remoteMarker,
       localName:document.querySelector('#clientName').value};
