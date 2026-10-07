@@ -17,15 +17,9 @@ async function loadEventOperations() {
   eventOps.loading=(async()=>{
     try {
       if(!QA_MODE) {
-        const tables=["event_messages","event_outbox","event_reservations","event_discount_approvals","event_commercial_policy","event_provider_events","active_event_handoffs","active_event_handoff_tasks","active_event_handoff_changes"];
-        const orderColumns={event_reservations:"updated_at",event_commercial_policy:"updated_at",active_event_handoffs:"updated_at",active_event_handoff_tasks:"updated_at"};
-        const r=await Promise.all(tables.map((t)=>t==="event_discount_approvals"?state.supabase.rpc("get_event_discount_approvals"):fetchAllRows(t,orderColumns[t]||"created_at")));
+        await refreshCommercialDashboard();
         if(state.session?.user?.id!==user)return;
-        if(r.some((v)=>v.error))throw new Error("Não foi possível atualizar a central. Confira a conexão.");
-        const health=await state.supabase.rpc("get_event_channel_health");
-        if(state.session?.user?.id!==user)return;
-        if(health.error)throw new Error("Não foi possível consultar o estado dos canais.");
-        [eventOps.messages,eventOps.outbox,eventOps.reservations,eventOps.approvals]=r.slice(0,4).map((v)=>v.data||[]);eventOps.policy=r[4].data?.[0]||{};eventOps.providerEvents=r[5].data||[];eventOps.handoffs=r[6].data||[];eventOps.handoffTasks=r[7].data||[];eventOps.handoffChanges=r[8].data||[];eventOps.channelHealth=health.data||[];
+        if(commercialRefreshError)throw new Error(commercialRefreshError);
       }
       eventOps.loadedFor=user;eventOps.error="";renderCommercialApprovalPanel();renderOperationalChecklist();
     } catch(e){eventOps.error=e.message;}
@@ -34,7 +28,7 @@ async function loadEventOperations() {
 }
 async function eventOpsRpc(name, body) {
   const check=await ensureTeamSessionForWrite("atualizar a operação comercial");if(!check.ok)throw new Error(check.message);
-  if(!QA_MODE){const {data,error}=await state.supabase.rpc(name,body);if(error)throw new Error(error.message);return data;}
+  if(!QA_MODE){const {data,error}=await state.supabase.rpc(name,body);if(error)throw new Error(error.message);invalidateCommercialDashboard();return data;}
   const at=new Date().toISOString();
   if(name==="plan_event_opportunities"){let count=0;state.opportunities.forEach((o)=>{if(body.opportunity_ids.includes(o.id)){Object.assign(o,{responsavel_email:body.owner_email,proxima_acao:body.action_text,proxima_acao_em:body.due_at});count++;}});return count;}
   if(name==="record_event_message"){
@@ -141,7 +135,7 @@ function showOpsRecord(item) {
   const id=crypto.randomUUID();const d=opsDialog("Registrar interação",`<p>${escapeHtml(item.name)}. Este registro não envia mensagens.</p><label>Tipo<select name="direction"><option value="inbound">Mensagem recebida</option><option value="outbound">Contato já enviado pela equipe</option><option value="internal">Nota interna</option></select></label><label>Canal<select name="channel"><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option><option value="phone">Telefone</option><option value="note">Nota</option></select></label><label>Data e horário<input name="at" type="datetime-local" value="${opsLocalTime()}" required/></label><label>Mensagem / resumo<textarea name="body" rows="5" maxlength="6000" required></textarea></label><label class="event-ops-check" data-manual-confirm hidden><input name="sent" type="checkbox"/> Confirmo que este contato foi efetivamente realizado fora do sistema.</label>`,"Salvar registro",async(f)=>{if(f.elements.direction.value==="outbound"&&!f.elements.sent.checked)throw new Error("Confirme que o contato já foi realizado.");await eventOpsRpc("record_event_message",{target_opportunity:item.opportunityId,message_body:f.elements.body.value.trim(),message_channel:f.elements.channel.value,message_direction:f.elements.direction.value,message_at:new Date(f.elements.at.value).toISOString(),request_id:id});});
   d.querySelector('[name="direction"]').onchange=(e)=>{d.querySelector("[data-manual-confirm]").hidden=e.target.value!=="outbound";d.querySelector('[name="sent"]').checked=false;};
 }
-function getOpsContextSignature(item){const p=state.proposals.find((p)=>p.id===item.id);return JSON.stringify([item.id,item.status,item.date,item.time,item.guests,item.total,p?.snapshot?.event,p?.snapshot?.selectedItems,p?.snapshot?.totals,p?.snapshot?.generalTerms,p?.snapshot?.publicOfferOptions,getOpsIncoming(item)?.id,getOpportunityForItem(item)?.ultima_resposta_cliente_em,item.clientResponse,item.clientMessage]);}
+function getOpsContextSignature(item){const p=state.proposals.find((p)=>p.id===item.id);return JSON.stringify([item.id,p?.revision,item.status,item.date,item.time,item.guests,item.total,p?.snapshot?.event,p?.snapshot?.selectedItems,p?.snapshot?.totals,p?.snapshot?.generalTerms,p?.snapshot?.publicOfferOptions,getOpsIncoming(item)?.id,getOpportunityForItem(item)?.ultima_resposta_cliente_em,item.clientResponse,item.clientMessage]);}
 function buildOpsDraft(item) {
   const incoming=getOpsIncoming(item),p=state.proposals.find((p)=>p.id===item.id),request=state.quoteRequests.find((r)=>r.id===item.id),en=(p?.snapshot?.event?.clientLanguage||request?.snapshot?.cliente?.idioma)==="en",tr=(pt,enText)=>en?enText:pt,name=(item.name||"cliente").split(/\s+/)[0];
   const message=item.clientResponse==="confirmar"&&!incoming?tr(`Olá, ${name}! Recebemos sua aprovação. O próximo passo é o sinal indicado na proposta. A reserva depende de validação da disponibilidade e do pagamento.`,`Hello, ${name}! We received your approval. The next step is the deposit indicated in your proposal. Booking requires our team's availability and payment checks.`):incoming||item.clientResponse==="alteracao"?tr(`Olá, ${name}! Recebi sua mensagem e vou revisar os detalhes do seu evento para retornar com uma opção adequada.`,`Hello, ${name}! I received your message and will review the event details before returning with a suitable option.`):request?buildFirstReplyDraft(request):tr(`Olá, ${name}! Você conseguiu avaliar sua proposta de evento? Podemos revisar o formato e esclarecer as condições.`,`Hello, ${name}! Have you had a chance to review your event proposal? We can review the format and clarify the terms.`);
@@ -151,7 +145,7 @@ function showOpsDraft(item) {
   const draft=buildOpsDraft(item);if(draft.blocked){showToast("Evento fora da negociação. Consulte o histórico.");return;}if(draft.scheduled){showToast("Retorno já agendado. Ajuste o plano se precisar antecipar.");return;}
   const signature=getOpsContextSignature(item),id=crypto.randomUUID();
   const d=opsDialog("Revisar atendimento preparado",`<p>${escapeHtml(draft.reason)}</p><small>Confira fatos, canal e destinatário. O rascunho não altera preços nem promete reserva.</small><label>Canal<select name="channel"><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option></select></label><label>Destinatário<input name="destination" value="${escapeHtml(item.phone||item.email||"")}" required/></label><label>Mensagem<textarea name="body" rows="7" maxlength="6000" required>${escapeHtml(draft.message)}</textarea></label><label>Modo<select name="mode"><option value="copy">Copiar para envio manual</option><option value="manual">Registrar mensagem já enviada manualmente</option>${draft.proposal?'<option value="direct">Enviar pelo canal integrado</option>':""}</select></label><label class="event-ops-check"><input name="approved" type="checkbox" required/> Revisei mensagem, destinatário e canal e autorizo esta ação.</label><label class="event-ops-check" data-draft-sent hidden><input name="sent" type="checkbox"/> Confirmo que esta mensagem já foi enviada manualmente.</label>`,"Executar ação revisada",async(f)=>{
-    if(!QA_MODE){await loadCommercialInsights();await loadProposalHistory();await loadEventOperations();}
+    if(!QA_MODE){await refreshCommercialDashboard({force:true});}
     const current=getOpsItems().find((i)=>i.opportunityId===item.opportunityId);if(!current||signature!==getOpsContextSignature(current))throw new Error("O evento ou a resposta mudou. Feche e prepare novamente antes de aprovar.");
     const body=f.elements.body.value.trim(),channel=f.elements.channel.value,mode=f.elements.mode.value;
     if(mode==="copy"){await navigator.clipboard.writeText(body);showToast("Copiado. Contato só será registrado após envio confirmado.");return;}
@@ -170,7 +164,7 @@ async function handleEventOpsClick(e) {
   const channel=e.target.closest("[data-ops-channel]");if(channel){try{await showOpsChannelSetup(channel.dataset.opsChannel);}catch(err){showToast(err.message);}return;}
   if(e.target.closest("[data-ops-email-delivery]")){const b=e.target.closest("button");b.disabled=true;try{const r=await callOpsChannelAdmin("sync-email");showToast(r.message);await loadEventOperations();}catch(err){showToast(err.message);}finally{b.disabled=false;}return;}
   const tab=e.target.closest("[data-ops-tab]");if(tab){eventOps.tab=tab.dataset.opsTab;renderEventOperations();return;}
-  if(e.target.closest("[data-ops-refresh]")){await loadCommercialInsights();await loadProposalHistory();await loadEventOperations();return;}
+  if(e.target.closest("[data-ops-refresh]")){if(QA_MODE){await loadEventOperations();}else await refreshCommercialDashboard({force:true,source:'manual'});return;}
   if(e.target.closest("[data-ops-all]")){const boxes=[...document.querySelectorAll("[data-ops-select]")],checked=!boxes.every((b)=>b.checked);boxes.forEach((b)=>b.checked=checked);return;}
   const open=e.target.closest("[data-ops-open]");if(open){eventOps.opportunity=open.dataset.opsOpen;eventOps.tab="inbox";renderEventOperations();return;}
   if(e.target.closest("[data-ops-bulk]")){showOpsPlan([...document.querySelectorAll("[data-ops-select]:checked")].map((i)=>i.value));return;}
@@ -269,7 +263,7 @@ renderEventOperations();renderEventOfferBuilder();
 let eventOpsRefreshing=false;
 async function refreshEventChannelInbox(){
   if(eventOpsRefreshing||QA_MODE||!state.session||document.hidden||document.querySelector("dialog[open]"))return;
-  eventOpsRefreshing=true;try{await loadCommercialInsights();await loadProposalHistory();await loadEventOperations();}finally{eventOpsRefreshing=false;}
+  eventOpsRefreshing=true;try{await refreshCommercialDashboard({force:true,source:'background'});}finally{eventOpsRefreshing=false;}
 }
 setInterval(refreshEventChannelInbox,30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshEventChannelInbox();});
