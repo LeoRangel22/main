@@ -2505,7 +2505,7 @@ function renderProposalJourney(proposal) {
       <div class="proposal-journey-facts">
         <div><span>Link disponível</span><strong>${published ? escapeHtml(formatSavedAt(published.created_at)) : "Não gerado"}</strong></div>
         <div><span>Envio registrado</span><strong>${lastSend ? `${lastSend.type === "email_envio" ? "E-mail" : lastSend.type === "whatsapp_envio" ? "WhatsApp" : "Manual"} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
-        <div><span>Visualização do link</span><strong>${views.length ? `${views.length} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
+        <div><span>Visualização do link</span><strong>${views.length ? `${views.reduce((sum, view) => sum + Number(view.view_count || 1), 0)} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
         <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
       </div>
       <details class="proposal-version-list">
@@ -2694,12 +2694,14 @@ function renderEventAttachmentsPanel(proposal = getActiveProposal()) {
 
 async function persistEventProposal(proposalId, changes, source = null) {
   const existing = source || state.proposals.find((row) => row.id === proposalId);
+  if (changes.snapshot?._dashboard_summary || existing?._dashboard_summary) return { data: null, error: { code: "PT409", message: "Abra os detalhes completos antes de salvar; o resumo do painel não pode substituir a proposta." } };
   const result = await state.supabase.rpc("save_event_proposal", {
     p_proposal_id: proposalId || null,
     p_changes: changes,
     p_expected_revision: existing ? Number(existing.revision || 1) : null,
     p_source_proposal_id: !proposalId && existing ? existing.id : null,
   });
+  if (!result.error) invalidateCommercialDashboard();
   return { data: Array.isArray(result.data) ? result.data[0] || null : result.data, error: result.error };
 }
 
@@ -2722,6 +2724,7 @@ async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Re
 }
 
 async function addInternalComment(proposalId) {
+  if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   const text = document.querySelector("#internalCommentText")?.value?.trim() || "";
   if (!proposal || !text) {
@@ -7066,6 +7069,7 @@ async function applyPendingDashboardTarget() {
   if (state.pendingDashboardProposalId) {
     const proposal = state.proposals.find((item) => item.id === state.pendingDashboardProposalId);
     if (!proposal) return false;
+    if (!(await ensureFullProposal(proposal.id))) return false;
     openSavedProposal(proposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
@@ -7077,6 +7081,7 @@ async function applyPendingDashboardTarget() {
       item.snapshot?.activeQuoteRequestId === state.pendingDashboardLeadId,
   );
   if (linkedProposal) {
+    if (!(await ensureFullProposal(linkedProposal.id))) return false;
     openSavedProposal(linkedProposal.id, "Link direto");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
@@ -8966,8 +8971,10 @@ function renderHistory() {
     return;
   }
 
-  nodes.historyList.innerHTML = getWorkingProposals()
-    .slice(0, 100)
+  const historyRows = getCommercialHistoryRows();
+  const historyNav = `<nav class="commercial-history-nav" aria-label="Filtrar histórico">${[["all","Todos"],["future","Eventos futuros"],["past","Eventos passados"]].map(([id,label]) => `<button class="secondary" type="button" data-history-scope="${id}" aria-pressed="${commercialHistoryScope===id}">${label}</button>`).join("")}<small>${historyRows.length} propostas · ${Math.min(commercialHistoryLimit,historyRows.length)} exibidas</small></nav>`;
+  nodes.historyList.innerHTML = historyNav + historyRows
+    .slice(0, commercialHistoryLimit)
     .map((proposal) => {
       const dateLabel = proposal.data_evento ? formatDateFromIso(proposal.data_evento) : "Data a definir";
       const timeLabel = proposal.horario_evento ? String(proposal.horario_evento).slice(0, 5) : "Horário a definir";
@@ -8987,33 +8994,10 @@ function renderHistory() {
         </button>
       `;
     })
-    .join("");
+    .join("") + (historyRows.length > commercialHistoryLimit ? `<button type="button" class="secondary" data-history-more>Mostrar mais 20 propostas</button>` : "");
 }
 
-function normalizeRequestStatus(status) {
-  const legacy = {
-    novo: "lead_recebido",
-    rascunho_cliente: "lead_recebido",
-    em_cotacao: "lead_recebido",
-    analisado: "lead_recebido",
-    qualificado: "lead_recebido",
-    proposta_gerada: "proposta_enviada",
-  };
-  return legacy[status] || status || "lead_recebido";
-}
 
-function normalizeProposalStatus(status) {
-  const legacy = {
-    rascunho: "proposta_enviada",
-    qualificado: "proposta_enviada",
-    aguardando_sinal: "negociacao",
-    pronto: "planejamento",
-    pre_evento: "evento_proximo",
-    evento_hoje_amanha: "evento_proximo",
-    realizado: "pos_venda",
-  };
-  return legacy[status] || status || "proposta_enviada";
-}
 
 function getProposalStatusLabel(status) {
   const labels = {
@@ -9112,152 +9096,10 @@ function getGroupNameFromSnapshot(snapshot = {}) {
   );
 }
 
-function getWorkingProposals() {
-  const grouped = new Map();
-  state.proposals.forEach((proposal) => {
-    const key = proposal.oportunidade_id || proposal.id;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(proposal);
-  });
-  return [...grouped.values()].map((versions) => {
-    const byRecentUpdate = (a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
-    const draft = versions.filter((row) => row.publication_status === "draft").sort(byRecentUpdate)[0];
-    const published = versions.filter((row) => row.publication_status !== "draft")
-      .sort((a, b) => Number(b.is_current === true) - Number(a.is_current === true) || byRecentUpdate(a, b))[0];
-    if (!draft) return published;
-    const response = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao;
-    const responseAt = published?.cliente_resposta_em || published?.snapshot?.clienteResposta?.registradoEm;
-    const responseNeedsAttention = published && ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(published.status)) && response && (
-      ["confirmar", "cancelar"].includes(response) ||
-      !responseAt || new Date(responseAt) > new Date(draft.created_at || draft.updated_at || 0)
-    );
-    // A response to the live version must remain visible while a draft is being prepared.
-    return responseNeedsAttention ? { ...published, pendingDraftId: draft.id, pendingDraftVersion: draft.versao } : draft;
-  });
-}
 
-function getOpportunityForItem(item) {
-  return state.opportunities.find((row) => row.id === item?.opportunityId) || null;
-}
 
-function isPastEventNeedingOutcome({ status, date, snapshot } = {}) {
-  const normalized = status === "lead_recebido" ? "lead_recebido" : normalizeProposalStatus(status);
-  if (["cancelado", "pos_venda", "desfecho_pendente"].includes(normalized)) return false;
-  if (snapshot?.eventOutcome?.closedAt && snapshot?.eventOutcome?.outcome !== "remarcado") return false;
-  const eventDate = parseLocalIsoDate(date);
-  return Boolean(eventDate && eventDate < startOfDay(new Date()));
-}
 
-function getPipelineStageForItem(status, date, snapshot = {}) {
-  return isPastEventNeedingOutcome({ status, date, snapshot }) ? "desfecho_pendente" : getPipelineStage(status);
-}
 
-function getPipelineItems() {
-  const workingProposals = getWorkingProposals();
-  const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
-  const requestItems = state.quoteRequests
-    .filter((request) => !request.proposta_id && !linkedRequests.has(request.id))
-    .map((request) => {
-      const eventSnapshot = request.snapshot?.evento || {};
-      const qualification = request.snapshot?.qualificacao || {};
-      const status = normalizeRequestStatus(request.status);
-      return {
-        kind: "request",
-        id: request.id,
-        status,
-        stage: getPipelineStageForItem(status, request.data_evento || eventSnapshot.data || "", request.snapshot || {}),
-        name: request.cliente_nome || "Cliente",
-        email: request.cliente_email || request.snapshot?.cliente?.email || "",
-        phone: request.cliente_whatsapp || request.snapshot?.cliente?.whatsapp || "",
-        company: request.empresa || request.cliente_empresa || request.snapshot?.cliente?.empresa || "",
-        type: request.tipo_evento || eventSnapshot.tipo || "Evento",
-        date: request.data_evento || eventSnapshot.data || "",
-        time: request.horario_evento || eventSnapshot.horario || "",
-        guests: request.convidados || eventSnapshot.convidados || 1,
-        duration: Number(request.duracao || eventSnapshot.duracao || 1),
-        total: null,
-        createdAt: request.created_at,
-        updatedAt: request.updated_at || request.created_at,
-        reference: request.snapshot?.referencia || "",
-        snapshot: request.snapshot || {},
-        finalClient: getFinalClientFromSnapshot(request.snapshot || {}),
-        groupName: getGroupNameFromSnapshot(request.snapshot || {}),
-        clientType: getLeadSegment(request),
-        meta: [getLeadSegment(request), qualification.faixaInvestimento, qualification.origem].filter(Boolean),
-        cancelReason: request.snapshot?.cancelamento?.motivo || "",
-        captureStatus: request.capture_status || "complete",
-        lastFormStep: request.last_form_step || "",
-        opportunityId: request.oportunidade_id || "",
-        ownerEmail: getOpportunityForItem({ opportunityId: request.oportunidade_id })?.responsavel_email || "",
-        firstReplySentAt: getOpportunityForItem({ opportunityId: request.oportunidade_id })?.metadata?.first_reply_sent_at || "",
-        eventDate: parseLocalIsoDate(request.data_evento || eventSnapshot.data || ""),
-      };
-    });
-
-  const proposalItems = workingProposals.map((proposal) => {
-    const status = normalizeProposalStatus(proposal.status);
-    const snapshot = proposal.snapshot || {};
-    const paymentCoverage = getPaymentCoverage(proposal.total || snapshot.totals?.total || 0, snapshot.pagamentoSinal, snapshot.pagamentoRestante);
-    const publicResponseProof = proposal.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || null;
-    return {
-      kind: "proposal",
-      id: proposal.id,
-      status,
-      stage: getPipelineStageForItem(status, proposal.data_evento || "", snapshot),
-      name: proposal.cliente_nome || "Cliente",
-      email: proposal.cliente_email || snapshot.client?.email || snapshot.cliente?.email || "",
-      phone: proposal.cliente_whatsapp || snapshot.client?.phone || snapshot.cliente?.whatsapp || "",
-      company:
-        proposal.empresa ||
-        proposal.cliente_empresa ||
-        snapshot.client?.company ||
-        snapshot.cliente?.empresa ||
-        "",
-      type: proposal.tipo_evento || "Evento",
-      date: proposal.data_evento || "",
-      time: proposal.horario_evento || "",
-      guests: proposal.convidados || 1,
-      duration: Number(proposal.duracao || snapshot.event?.duration || 1),
-      total: proposal.total || 0,
-      privatizationAmount: proposal.privatizacao ?? snapshot.totals?.privatizationAmount ?? snapshot.totals?.privatization?.amount ?? 0,
-      createdAt: proposal.created_at,
-      updatedAt: proposal.updated_at || proposal.created_at,
-      sentAt: proposal.sent_at || "",
-      reference: snapshot.referencia || "",
-      snapshot,
-      opportunityId: proposal.oportunidade_id || "",
-      ownerEmail: getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.responsavel_email || proposal.responsavel_email || "",
-      firstReplySentAt: getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.metadata?.first_reply_sent_at || "",
-      version: Number(proposal.versao || 1),
-      publicationStatus: proposal.publication_status || "sent",
-      isDraft: proposal.publication_status === "draft",
-      isCurrentVersion: proposal.is_current !== false,
-      pendingDraftId: proposal.pendingDraftId || "",
-      pendingDraftVersion: proposal.pendingDraftVersion || null,
-      finalClient: getFinalClientFromSnapshot(snapshot),
-      groupName: getGroupNameFromSnapshot(snapshot),
-      clientType: snapshot.qualificacao?.tipoCliente || "Cliente direto",
-      hasSignalProof: Boolean(snapshot.pagamentoSinal?.comprovante?.nome || publicResponseProof?.nome),
-      signalProof: snapshot.pagamentoSinal?.comprovante || publicResponseProof,
-      hasRemainingPayment: Boolean(snapshot.pagamentoRestante),
-      hasRemainingProof: Boolean(snapshot.pagamentoRestante?.comprovante?.nome),
-      remainingProof: snapshot.pagamentoRestante?.comprovante || null,
-      hasPaymentComplete: paymentCoverage.isFullyPaid,
-      isSignalIntegral: paymentCoverage.isSignalIntegral,
-      paymentPaidTotal: paymentCoverage.paidTotal,
-      paymentRemainingDue: paymentCoverage.remainingDue,
-      clientResponse: proposal.cliente_resposta || snapshot.clienteResposta?.acao || "",
-      clientMessage: proposal.cliente_mensagem || snapshot.clienteResposta?.mensagem || "",
-      clientRequest: proposal.cliente_solicitacao || snapshot.clienteResposta || null,
-      clientResponseAt: proposal.cliente_resposta_em || snapshot.clienteResposta?.registradoEm || "",
-      meta: [snapshot.qualificacao?.tipoCliente, snapshot.qualificacao?.faixaInvestimento].filter(Boolean),
-      cancelReason: snapshot.cancelamento?.motivo || "",
-      eventDate: parseLocalIsoDate(proposal.data_evento || ""),
-    };
-  });
-
-  return [...requestItems, ...proposalItems].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-}
 
 function parseLocalIsoDate(value) {
   if (!value) return null;
@@ -10187,6 +10029,9 @@ function getPipelineQuickFilterDefinitions() {
   const today = startOfDay(new Date());
   const next7Days = addDays(today, 7);
   const definitions = [
+    { id:"overduePlan", label:"Prazo vencido", matches:item=>item.stage!=="desfecho_pendente"&&["lead_recebido","proposta_pronta","proposta_enviada","negociacao"].includes(item.status)&&getTaskPlan(item).overdue },
+    { id:"noPlan", label:"Sem próximo passo", matches:item=>item.stage!=="desfecho_pendente"&&["lead_recebido","proposta_pronta","proposta_enviada","negociacao"].includes(item.status)&&(!getOpportunityForItem(item)?.proxima_acao||!getTaskPlan(item).due) },
+    { id:"validityRisk", label:"Validade em risco", matches:item=>Boolean(CommercialPriority.validity(item)) },
     {
       id: "all",
       label: "Tudo",
@@ -10276,7 +10121,7 @@ function getPipelineQuickFilterDefinitions() {
     },
   ];
   if (state.workspaceMode === "sales") {
-    const salesFilters = new Set(["all", "lead_recebido", "proposta_enviada", "negociacao", "urgent", "highScore", "noProposal", "approved", "awaitingSignal", "agency", "company"]);
+    const salesFilters = new Set(["all", "lead_recebido", "proposta_enviada", "negociacao", "urgent", "highScore", "noProposal", "approved", "awaitingSignal", "agency", "company", "overduePlan", "noPlan", "validityRisk"]);
     return definitions.filter((filter) => salesFilters.has(filter.id));
   }
   return definitions;
@@ -10803,6 +10648,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = 
     return;
   }
   if (!(await confirmEditorSwitch())) return;
+  if (!(await ensureFullProposal(proposalId))) return;
   openSavedProposal(proposalId, sourceLabel);
   scheduleLoadedEditorJump(targetMode, "auto");
 }
@@ -10827,214 +10673,7 @@ function renderQuoteWorkspaceGuide() {
   nodes.quoteEmptyState.hidden = !shouldShow;
 }
 
-function getActionTasks(items = getPipelineItems()) {
-  const today = startOfDay(new Date());
-  const next48h = addDays(today, 2);
-  const tasks = [];
-  items.forEach((item) => {
-    const status = getReportStatus(item);
-    const hours = getHoursSince(item.sentAt || item.updatedAt || item.createdAt);
-    const eventDate = parseLocalIsoDate(item.date);
-    const base = {
-      item,
-      meta: `${item.date ? formatDateFromIso(item.date) : "Data a definir"} · ${item.time ? String(item.time).slice(0, 5) : "Horário a definir"} · ${item.guests || 0} pax`,
-      sla: getSlaMeta(item),
-    };
 
-    if (item.stage === "desfecho_pendente") {
-      tasks.push({
-        ...base,
-        title: "Classificar desfecho do evento",
-        note: "A data passou. Confirme o resultado para limpar o funil e alimentar o aprendizado comercial.",
-        priority: 64,
-        track: "Gestão",
-      });
-      return;
-    }
-
-    const response = getResponseReminder(item);
-    if (response) {
-      tasks.push({ ...base, ...response });
-      return;
-    }
-
-    if (item.kind === "request" && status === "lead_recebido") {
-      const age = getLeadAgeInfo(item);
-      tasks.push({
-        ...base,
-        title: item.firstReplySentAt ? "Montar proposta" : item.captureStatus === "partial" ? "Retomar lead incompleto" : "Responder lead",
-        note: item.firstReplySentAt ? "Contato inicial registrado. Prepare a proposta com o briefing." : item.captureStatus === "partial" ? "Cliente deixou contato antes de concluir o formulário." : age?.label || "Novo pedido recebido",
-        priority: item.firstReplySentAt ? 30 : age?.level === "critical" ? 100 : age?.level === "danger" ? 86 : age?.level === "warning" ? 68 : 42,
-        track: "Comercial",
-      });
-    }
-
-    if (item.kind === "proposal" && item.isDraft) {
-      tasks.push({
-        ...base,
-        title: "Finalizar nova versão",
-        note: "V" + (item.version || "") + " está em rascunho. A versão anterior continua disponível para o cliente até o novo envio.",
-        priority: 84,
-        track: "Comercial",
-      });
-    } else if (item.kind === "proposal" && status === "proposta_pronta") {
-      tasks.push({
-        ...base,
-        title: "Enviar proposta pronta",
-        note: "O link existe, mas nenhum canal confirmou o envio. Abra a proposta e envie ou registre o envio manual.",
-        priority: 88,
-        track: "Comercial",
-      });
-    } else if (item.kind === "proposal" && status === "proposta_enviada") {
-      const followUp = getProposalFollowUpInfo(item);
-      tasks.push({
-        ...base,
-        title: followUp ? "Retomar proposta" : "Aguardar retorno do cliente",
-        note: followUp?.note || "Contato recente. Acompanhe o prazo combinado antes de retomar.",
-        priority: followUp?.level === "critical" ? 90 : followUp?.level === "danger" ? 82 : followUp ? 66 : 20,
-        track: item.clientResponse === "confirmar" ? "Venda" : "Comercial",
-      });
-    }
-
-    if (item.kind === "proposal" && status === "negociacao") {
-      const changeDetails = item.clientResponse === "alteracao" ? getClientChangeDetails(item) : null;
-      tasks.push({
-        ...base,
-        title: "Avançar negociação",
-        note: changeDetails ? `Cliente pediu alteração: ${changeDetails.summary}` : "Ajuste comercial em andamento.",
-        priority: item.clientResponse === "alteracao" ? 74 : 50,
-        track: "Comercial",
-      });
-    }
-
-    if (item.kind === "proposal" && status === "confirmado") {
-      if (item.hasPaymentComplete) {
-        tasks.push({
-          ...base,
-          title: "Enviar para planejamento",
-          note: "Pagamento completo. Liberar a operação do evento.",
-          priority: 62,
-          track: "Operação",
-        });
-      } else {
-        tasks.push({
-          ...base,
-          title: "Cobrar pagamento restante",
-          note: `Sinal recebido. Falta registrar ${formatMoney(item.paymentRemainingDue || 0)}.`,
-          priority: 72,
-          track: "Financeiro",
-        });
-      }
-      if (!item.hasSignalProof) {
-        tasks.push({
-          ...base,
-          title: "Anexar comprovante do sinal",
-          note: "Venda confirmada sem comprovante no histórico.",
-          priority: 76,
-          track: "Financeiro",
-        });
-      }
-    }
-
-    if (item.kind === "proposal" && status === "pagamento_final") {
-      if (!item.hasPaymentComplete) {
-        tasks.push({
-          ...base,
-          title: "Registrar pagamento restante",
-          note: "Saldo final ainda não registrado.",
-          priority: 78,
-          track: "Financeiro",
-        });
-      } else if (!item.hasRemainingProof) {
-        tasks.push({
-          ...base,
-          title: "Anexar comprovante do saldo",
-          note: "Pagamento restante registrado sem comprovante.",
-          priority: 60,
-          track: "Financeiro",
-        });
-      }
-    }
-
-    if (item.kind === "proposal" && ["pagamento_final", "planejamento"].includes(status)) {
-      const progress = getChecklistProgress(item.snapshot || {});
-      if (progress.done < progress.total) {
-        tasks.push({
-          ...base,
-          title: "Concluir checklist operacional",
-          note: `${progress.done}/${progress.total} itens concluídos.`,
-          priority: status === "planejamento" ? 58 : 44,
-          track: "Operação",
-        });
-      }
-    }
-
-    if (item.kind === "proposal" && isSoldReportItem(item) && eventDate && eventDate >= today && eventDate <= next48h) {
-      tasks.push({
-        ...base,
-        title: "Revisar evento 48h",
-        note: "Confirmar detalhes finais antes da execução.",
-        priority: 88,
-        track: "Operação",
-      });
-    }
-  });
-
-  const scheduleItems = items.filter((item) => {
-    if (item.stage === "desfecho_pendente" || !item.date || !item.time || !isAvailabilityRelevantStatus(item.status)) return false;
-    return item.kind === "proposal" || item.kind === "request";
-  });
-  for (let index = 0; index < scheduleItems.length; index += 1) {
-    for (let nextIndex = index + 1; nextIndex < scheduleItems.length; nextIndex += 1) {
-      const first = scheduleItems[index];
-      const second = scheduleItems[nextIndex];
-      if (first.date !== second.date) continue;
-      const firstStart = timeToMinutes(String(first.time).slice(0, 5));
-      const secondStart = timeToMinutes(String(second.time).slice(0, 5));
-      if (firstStart === null || secondStart === null) continue;
-      const firstEnd = firstStart + (Number(first.duration) || 2) * 60;
-      const secondEnd = secondStart + (Number(second.duration) || 2) * 60;
-      if (!rangesOverlap(firstStart, firstEnd, secondStart, secondEnd)) continue;
-      const hasSoldConflict = operationStatuses.has(normalizeProposalStatus(first.status)) || operationStatuses.has(normalizeProposalStatus(second.status));
-      tasks.push({
-        item: first.kind === "proposal" ? first : second,
-        title: hasSoldConflict ? "Conflito de agenda" : "Checar disputa de agenda",
-        meta: `${formatDateFromIso(first.date)} · ${String(first.time).slice(0, 5)} · ${first.guests || 0} pax`,
-        note: `${first.name || "Cliente"} e ${second.name || "Cliente"} no mesmo horário.`,
-        priority: hasSoldConflict ? 96 : 64,
-        track: "Agenda",
-      });
-    }
-  }
-
-  const profile = getTeamProfile();
-  let rankedTasks = tasks.map((task) => {
-    const plan = getTaskPlan(task.item);
-    const basePriority = profile.canManageFinance && getActionTrack(task) === "Financeiro"
-      ? task.priority + 12
-      : profile.canManageCommercial && ["Comercial", "Venda"].includes(getActionTrack(task))
-        ? task.priority + 6 : task.priority;
-    const scheduledReturn = getActionTrack(task) === "Comercial" ? getScheduledReturnInfo(task.item) : null;
-    return { ...task, ...(scheduledReturn ? { title: scheduledReturn.label, note: scheduledReturn.note } : {}), plan, priority: (scheduledReturn ? 10 : basePriority) + (plan.overdue ? 24 : 0) + (!plan.owner ? 14 : 0) };
-  });
-  if (state.workspaceMode === "sales") {
-    rankedTasks = rankedTasks.filter((task) => ["Comercial", "Venda"].includes(getActionTrack(task)));
-  }
-  return rankedTasks.sort((a, b) => b.priority - a.priority).slice(0, 8);
-}
-
-function getTaskPlan(item) {
-  const opportunity = getOpportunityForItem(item);
-  const owner = opportunity ? opportunity.responsavel_email || "" : item.ownerEmail || "";
-  const due = opportunity?.proxima_acao_em || "";
-  const dueDate = due ? new Date(due) : null;
-  return {
-    owner,
-    action: opportunity?.proxima_acao || "Definir próximo passo",
-    due,
-    overdue: Boolean(dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()),
-  };
-}
 
 function renderTaskPlan(task) {
   const plan = task.plan || getTaskPlan(task.item);
@@ -11180,6 +10819,7 @@ async function resolveActionTask(button, sourceLabel = "Prioridade agora") {
   if (!button) return;
   const kind = button.dataset.actionKind;
   const id = button.dataset.actionId;
+  captureCommercialPriority(getActionTasks().find(task => task.item.kind === kind && task.item.id === id));
   const target = button.dataset.actionResolution || "client";
   if (target === "client_change") {
     showClientChangeDetails(kind, id);
@@ -11241,6 +10881,7 @@ function renderActionTasks(items = getPipelineItems()) {
         </div>
         <p>${escapeHtml(topTask.note)}</p>
         ${renderTaskPlan(topTask)}
+        <p class="action-priority-reasons">Por que agora: ${escapeHtml((topTask.reasons || [topTask.note]).join(" "))}</p>
         <ol class="action-focus-steps">${topSteps}</ol>
       </div>
     </article>
@@ -11271,6 +10912,7 @@ function renderActionTasks(items = getPipelineItems()) {
             ${task.sla ? `<small class="action-task-sla sla-${escapeHtml(task.sla.level)}">${escapeHtml(task.sla.label)}</small>` : ""}
             <p>${escapeHtml(task.note)}</p>
             ${renderTaskPlan(task)}
+            <small class="action-priority-reasons">${escapeHtml((task.reasons || []).slice(1).join(" "))}</small>
           </div>
           ${clientChangeBlock}
           <div class="action-task-footer">
@@ -11292,6 +10934,7 @@ async function openNextPriorityItem() {
     document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
+  captureCommercialPriority(task);
   const source = `Prioridade agora: ${task.title}`;
   if (task.item.kind === "proposal") {
     await safeOpenSavedProposal(task.item.id, source);
@@ -11798,11 +11441,15 @@ function renderPipelineCard(item) {
     : "";
   const clientResponseLine = renderClientResponseBlock(item);
   const signalProofLink =
-    item.hasSignalProof && item.signalProof?.dataUrl
+    item.hasSignalProof && !item.signalProof?.dataUrl
+      ? `<button class="pipeline-top-action pipeline-proof-download" type="button" data-load-proof="${escapeHtml(item.id)}" data-proof-type="signal">Comprovante</button>`
+      : item.hasSignalProof && item.signalProof?.dataUrl
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.signalProof.dataUrl)}" download="${escapeHtml(item.signalProof.nome || "comprovante-sinal")}">Comprovante</a>`
       : "";
   const remainingProofLink =
-    item.hasRemainingProof && item.remainingProof?.dataUrl
+    item.hasRemainingProof && !item.remainingProof?.dataUrl
+      ? `<button class="pipeline-top-action pipeline-proof-download" type="button" data-load-proof="${escapeHtml(item.id)}" data-proof-type="remaining">Comprovante restante</button>`
+      : item.hasRemainingProof && item.remainingProof?.dataUrl
       ? `<a class="pipeline-top-action pipeline-proof-download" href="${escapeHtml(item.remainingProof.dataUrl)}" download="${escapeHtml(item.remainingProof.nome || "comprovante-restante")}">Comprovante restante</a>`
       : "";
   const signalButton =
@@ -11951,6 +11598,8 @@ function renderPipelineEmptyState(stage) {
 
 function renderPipelineStage(stage, items) {
   const stageItems = items.filter((item) => item.stage === stage.id);
+  const limit = commercialStageLimits[stage.id] || 20;
+  const stageCards = stageItems.slice(0, limit).map(renderPipelineCard).join("") + (stageItems.length > limit ? `<button class="secondary stage-more" type="button" data-stage-more="${escapeHtml(stage.id)}">Mostrar mais 20 · ${stageItems.length - limit} restantes</button>` : "");
   if (stage.row === "archive") {
     return `
       <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)} pipeline-column-collapsible">
@@ -11960,7 +11609,7 @@ function renderPipelineStage(stage, items) {
             <strong>${stageItems.length}</strong>
           </summary>
           <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
-            ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : renderPipelineEmptyState(stage)}
+            ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
           </div>
         </details>
       </section>
@@ -11973,13 +11622,14 @@ function renderPipelineStage(stage, items) {
         <strong>${stageItems.length}</strong>
       </div>
       <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
-        ${stageItems.length ? stageItems.map(renderPipelineCard).join("") : renderPipelineEmptyState(stage)}
+        ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
       </div>
     </section>
   `;
 }
 
 function renderPipeline() {
+  renderCommercialDiagnostics();
   if (typeof renderEventOperations === "function") renderEventOperations();
   if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
   if (!nodes.pipelineBoard) {
@@ -12055,6 +11705,7 @@ async function fetchAllRows(table, orderColumn = "created_at", pageSize = 500) {
 }
 
 async function loadQuoteRequests() {
+  if (!QA_MODE && state.session) return refreshCommercialDashboard();
   if (!state.supabase || !state.session) {
     renderQuoteRequests();
     return;
@@ -12077,6 +11728,7 @@ async function loadQuoteRequests() {
 }
 
 async function loadCommercialInsights() {
+  if (!QA_MODE && state.session) return refreshCommercialDashboard();
   if (!state.supabase || !state.session) return;
   const [opportunities, views] = await Promise.all([
     fetchAllRows("oportunidades"),
@@ -12357,6 +12009,7 @@ function getPastEventOutcomeReason(outcome, detail = "") {
 }
 
 async function classifyPastEvent(kind, id) {
+  if (kind === "proposal" && !(await ensureFullProposal(id))) return;
   const item = findPipelineItem(kind, id);
   if (!item || item.stage !== "desfecho_pendente") {
     showToast("Este evento não está aguardando desfecho.");
@@ -12609,6 +12262,7 @@ async function reopenPipelineItem(kind, id, targetStatus = "") {
 
 async function cancelPipelineItem(kind, id) {
   if (!state.supabase || !state.session) return;
+  if (kind === "proposal" && !(await ensureFullProposal(id))) return;
   const proposal = kind === "proposal" ? state.proposals.find((item) => item.id === id) : null;
   const reason = await getCancelReason();
   if (!reason) {
@@ -12675,6 +12329,7 @@ async function cancelPipelineItem(kind, id) {
 
 async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   if (!state.supabase || !state.session) return;
+  if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
   const validation = canMoveProposalStatus(proposal.status, nextStatus);
@@ -12872,6 +12527,7 @@ async function initSupabase() {
     state.session = data.session;
 
     state.supabase.auth.onAuthStateChange((event, session) => {
+      if (state.session?.user?.id !== session?.user?.id) resetCommercialDashboard();
       state.session = session;
       if (session?.user?.email && !isTeamEmail(session.user.email)) {
         state.supabase.auth.signOut();
@@ -12885,6 +12541,7 @@ async function initSupabase() {
         loadQuoteRequests();
       }
       else if (!session) {
+        resetCommercialDashboard();
         state.proposals = [];
         state.quoteRequests = [];
         state.opportunities = [];
@@ -13191,6 +12848,7 @@ async function recoverMagicLinkSession() {
 
 async function logoutSupabase() {
   if (!state.supabase) return;
+  resetCommercialDashboard();
   await state.supabase.auth.signOut();
   state.session = null;
   state.proposals = [];
@@ -13539,6 +13197,7 @@ async function confirmCurrentEvent() {
 }
 
 async function loadProposalHistory() {
+  if (!QA_MODE && state.session) return refreshCommercialDashboard();
   if (!state.supabase || !state.session) {
     renderHistory();
     renderPipeline();
@@ -13644,6 +13303,7 @@ function applyProposalSnapshot(snapshot) {
 
 function openSavedProposal(proposalId, sourceLabel = "") {
   const proposal = state.proposals.find((item) => item.id === proposalId);
+  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return; }
   if (!proposal) return;
   state.activeProposalId = proposal.id;
   state.editorProposalBase = structuredClone(proposal);
@@ -15615,15 +15275,18 @@ function bindEvents() {
   document.querySelector("#recoverMagicLinkBtn")?.addEventListener("click", recoverMagicLinkSession);
   document.querySelector("#logoutBtn")?.addEventListener("click", logoutSupabase);
   document.querySelector("#refreshHistoryBtn")?.addEventListener("click", async () => {
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
     await loadProposalHistory();
     await loadCommercialInsights();
     renderPipeline();
   });
   document.querySelector("#refreshPipelineBtn")?.addEventListener("click", async () => {
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
     await loadProposalHistory();
     await loadQuoteRequests();
   });
   document.querySelector("#refreshReportsBtn")?.addEventListener("click", async () => {
+    if (!QA_MODE) return refreshCommercialDashboard({ force: true });
     await loadProposalHistory();
     await loadQuoteRequests();
     renderDashboardReports(getPipelineItems());

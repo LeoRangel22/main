@@ -4,12 +4,15 @@
   const CONFIG = Object.freeze({
     apiKey: "phc_taiVfAm9ARoT8nHwVwzT8cioUYKfhyBVi8WkUoyUm7kM",
     endpoint: "https://us.i.posthog.com/i/v0/e/",
-    version: "2026-10-07-p1-v1",
+    version: "2026-10-07-commercial-v1",
   });
   const SESSION_KEY = "ec_event_analytics_session_v1";
   const OPT_OUT_KEY = "ec_event_analytics_opt_out_v1";
   const DEDUPE_PREFIX = "ec_event_analytics_sent_v1:";
   const ALLOWED_EVENTS = new Set([
+    "dashboard_loaded",
+    "dashboard_refresh_failed",
+    "dashboard_priority_opened",
     "lead_form_viewed",
     "lead_form_started",
     "lead_form_abandoned",
@@ -37,6 +40,12 @@
     "client_contact_recorded",
   ]);
   const ALLOWED_PROPERTIES = new Set([
+    "duration_ms",
+    "payload_bytes",
+    "request_count",
+    "changed_rows",
+    "reason_code",
+    "sync_kind",
     "surface",
     "page",
     "language",

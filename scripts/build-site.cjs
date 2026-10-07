@@ -9,6 +9,7 @@ const dest=path.join(root,'dist');
 const publicFiles=[
   'index.html','clientes.html','comunicacao.html','valores.html','formulario.html','proposta.html',
   'styles.css','app.js','event-operations.js','analytics.js','formulario.js','proposta.js',
+  'event-data.js','event-performance.js','commercial-rules.js','commercial-dashboard.js',
   'assets/logo-embaixada.svg','assets/logo-reducao.svg','assets/venue.jpg',
   'orcamento/index.html','painel/index.html',
 ];
