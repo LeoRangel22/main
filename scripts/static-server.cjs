@@ -2,7 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const rootDir = path.resolve(__dirname, "..");
+const rootDir = path.resolve(__dirname, "../dist");
 const port = Number(process.env.PORT || 8765);
 
 const mimeTypes = {
@@ -22,7 +22,7 @@ function resolveRequestPath(urlPath) {
   const cleanPath = decodedPath === "/" ? "/index.html" : decodedPath;
   const absolutePath = path.normalize(path.join(rootDir, cleanPath));
 
-  if (!absolutePath.startsWith(rootDir)) {
+  if (absolutePath !== rootDir && !absolutePath.startsWith(rootDir + path.sep)) {
     return null;
   }
 

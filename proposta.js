@@ -345,6 +345,7 @@ function setMessage(message, type = "neutral") {
 }
 
 function getPublicResponseErrorMessage(error) {
+  if (error?.code === "PT409") return tr("A proposta foi atualizada. Recarregue a página e confira a nova versão antes de responder.", "The proposal has changed. Reload the page and review the new version before replying.");
   const raw = String(error?.message || error?.details || "").trim();
   if (/link expirado|nao encontrada|não encontrada/i.test(raw)) return tr("Este link expirou ou não está mais disponível. Fale com a equipe para receber uma proposta atualizada.", "This link has expired. Please ask our team for an updated proposal.");
   if (/nao aceita|não aceita|status|já enviado/i.test(raw)) return tr("Esta proposta não aceita mais respostas pelo link. Fale com a equipe.", "This proposal no longer accepts responses. Please contact our team.");
@@ -693,6 +694,8 @@ function openResponseForm(action) {
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+let responseAttempt = null;
+
 async function submitPublicResponse(event) {
   event.preventDefault();
   const action = document.querySelector("#publicProposalAction")?.value || "";
@@ -720,10 +723,17 @@ async function submitPublicResponse(event) {
     requested_guests: requestedGuests,
     message,
     payment_proof: action === "confirmar" ? selectedProof : null,
+    expected_proposal_id: currentProposal?.id,
+    expected_revision: Number(currentProposal?.snapshot?.publicRevision),
   };
+  const signature = JSON.stringify(payload);
+  if (!responseAttempt || responseAttempt.signature !== signature) {
+    responseAttempt = { signature, id: crypto.randomUUID() };
+  }
+  payload.request_id = responseAttempt.id;
   let data, error;
   try {
-    ({ data, error } = await supabaseClient.rpc("respond_public_proposal", payload));
+    ({ data, error } = await supabaseClient.rpc("respond_public_proposal_v2", payload));
   } catch (requestError) {
     error = requestError;
   }

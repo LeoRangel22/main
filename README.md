@@ -16,16 +16,15 @@ CRM comercial e operacional da Embaixada Carioca para captar leads, montar e ver
 
 ## Checklist de produção
 
-As migrações são aditivas e devem ser executadas na ordem documentada, sem reaplicar `schema.sql` sobre uma base existente:
+A instalação vazia segue `supabase/bootstrap/manifest.json`, depois os arquivos em
+`supabase/migrations/` em ordem. Produção recebe somente migrações ainda não
+registradas; nunca reaplique `schema.sql` ou o bootstrap à base existente.
 
-1. `supabase/phase1_commercial_ux.sql`
-2. `supabase/seller_fast_response.sql`
-3. `supabase/client_proposal_ux.sql`
-4. `supabase/phase1_completion_notice.sql`
-5. `supabase/client_experience_public.sql`
-6. `supabase/migrations/20261005233202_sales_funnel_completion.sql` (conclusão da auditoria: versões públicas, responsáveis e permissões internas)
+O pacote de prioridade máxima e os procedimentos de validação e recuperação estão
+em [docs/PRIORITY-RELEASE.md](docs/PRIORITY-RELEASE.md). `npm run build` cria o pacote
+público `dist/`. O deploy depende dos testes de interface e dos testes PostgreSQL,
+incluindo concorrência, atualização com histórico e pg_dump/pg_restore.
 
-Valide com os arquivos `*_verify.sql`, incluindo `supabase/sales_funnel_completion_verify.sql` (regressões com rollback, sem envio). O snapshot público restrito já foi validado operacionalmente; o trigger de lead parcial deve retornar sucesso em `supabase/phase1_completion_notice_verify.sql` antes da liberação.
 
 Depois do SQL e do deploy:
 

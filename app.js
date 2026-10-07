@@ -684,6 +684,7 @@ const state = {
   opportunities: [],
   proposalViews: [],
   activeProposalId: "",
+  editorProposalBase: null,
   activeQuoteRequestId: "",
   activeOpportunityId: "",
   activeEditorContext: null,
@@ -2691,17 +2692,23 @@ function renderEventAttachmentsPanel(proposal = getActiveProposal()) {
   `;
 }
 
-async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Registro atualizado.") {
+async function persistEventProposal(proposalId, changes, source = null) {
+  const existing = source || state.proposals.find((row) => row.id === proposalId);
+  const result = await state.supabase.rpc("save_event_proposal", {
+    p_proposal_id: proposalId || null,
+    p_changes: changes,
+    p_expected_revision: existing ? Number(existing.revision || 1) : null,
+    p_source_proposal_id: !proposalId && existing ? existing.id : null,
+  });
+  return { data: Array.isArray(result.data) ? result.data[0] || null : result.data, error: result.error };
+}
+
+async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Registro atualizado.", source = null) {
   if (!state.supabase || !state.session || !proposalId) return null;
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .update({ snapshot })
-    .eq("id", proposalId)
-    .select("*")
-    .single();
+  const { data, error } = await persistEventProposal(proposalId, { snapshot }, source);
   if (error) {
     console.warn("Falha ao atualizar snapshot da proposta.", error);
-    showToast("Não foi possível salvar este registro.");
+    showToast(error?.code === "PT409" ? getSupabaseSaveErrorMessage(error) : "Não foi possível salvar este registro.");
     return null;
   }
   upsertProposalState(data);
@@ -2736,7 +2743,7 @@ async function addInternalComment(proposalId) {
     },
     [history],
   );
-  await updateProposalSnapshot(proposalId, snapshot, "Comentário interno registrado.");
+  await updateProposalSnapshot(proposalId, snapshot, "Comentário interno registrado.", proposal);
 }
 
 function renderManualContactPanel(proposal = getActiveProposal()) {
@@ -2858,7 +2865,7 @@ async function addManualContact(proposalId) {
     },
     [history],
   );
-  const updated = await updateProposalSnapshot(proposalId, snapshot, "Contato registrado no funil.");
+  const updated = await updateProposalSnapshot(proposalId, snapshot, "Contato registrado no funil.", proposal);
   if (updated) {
     captureEventAnalytics("client_contact_recorded", updated, { channel: channel.toLowerCase(), action: "manual_contact" });
   }
@@ -2889,7 +2896,7 @@ async function addEventAttachment(proposalId) {
       },
       [createCommercialHistoryEntry("anexo", `${type} anexado`, attachment.nome)],
     );
-    await updateProposalSnapshot(proposalId, snapshot, "Anexo registrado no evento.");
+    await updateProposalSnapshot(proposalId, snapshot, "Anexo registrado no evento.", proposal);
   } catch (error) {
     showToast(error.message || "Não foi possível anexar o arquivo.");
   }
@@ -3539,15 +3546,10 @@ async function updateOperationalChecklist(checklistId, checked) {
       `${checklistItem?.label || "Item"}: ${checked ? "concluído" : "reaberto"}.`,
     ),
   ]);
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .update({ snapshot: snapshotWithHistory })
-    .eq("id", proposal.id)
-    .select("*")
-    .single();
+  const { data, error } = await persistEventProposal(proposal.id, { snapshot: snapshotWithHistory }, proposal);
   if (error) {
     console.warn("Falha ao atualizar checklist operacional.", error);
-    showToast("Não foi possível salvar o checklist.");
+    showToast(error?.code === "PT409" ? getSupabaseSaveErrorMessage(error) : "Não foi possível salvar o checklist.");
     renderOperationalChecklist(proposal);
     return;
   }
@@ -8424,6 +8426,18 @@ function createQaSupabaseClient() {
   return {
     __qa: true,
     from,
+    rpc: async (name, args) => {
+      if (name !== "save_event_proposal") return { data: null, error: { message: `Unexpected QA RPC ${name}` } };
+      const sourceId = args.p_proposal_id || args.p_source_proposal_id;
+      const source = state.proposals.find((row) => row.id === sourceId);
+      if (sourceId && (!source || Number(source.revision || 1) !== args.p_expected_revision)) {
+        return { data: null, error: { code: "PT409", message: "A proposta mudou" } };
+      }
+      const query = { action: args.p_proposal_id ? "update" : "insert",
+        payload: { ...args.p_changes, revision: args.p_proposal_id ? Number(source.revision || 1) + 1 : 1 },
+        filters: args.p_proposal_id ? [{ column: "id", value: args.p_proposal_id }] : [] };
+      return runQuery("propostas", query);
+    },
     auth: {
       getSession: async () => ({ data: { session: state.session }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
@@ -12408,10 +12422,12 @@ async function classifyPastEvent(kind, id) {
     snapshot: nextSnapshot,
     ...(isRescheduled ? { data_evento: answer.newDate } : {}),
   };
-  const { data, error } = await state.supabase.from(table).update(changes).eq("id", id).select("*").single();
+  const { data, error } = kind === "proposal"
+    ? await persistEventProposal(id, changes, source)
+    : await state.supabase.from(table).update(changes).eq("id", id).select("*").single();
   if (error || !data) {
     console.warn("Falha ao salvar desfecho do evento.", error);
-    showToast("Não foi possível salvar o desfecho. Atualize e tente novamente.");
+    showToast(error?.code === "PT409" ? getSupabaseSaveErrorMessage(error) : "Não foi possível salvar o desfecho. Atualize e tente novamente.");
     return;
   }
 
@@ -12631,16 +12647,11 @@ async function cancelPipelineItem(kind, id) {
       createCommercialHistoryEntry("auditoria", "Cancelamento auditado", `Motivo: ${reason}`, { actor: cancelamento.canceladoPor }),
     ],
   );
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .update({ status: "cancelado", snapshot })
-    .eq("id", id)
-    .select("*")
-    .single();
+  const { data, error } = await persistEventProposal(id, { status: "cancelado", snapshot }, proposal);
 
   if (error) {
     console.warn("Falha ao cancelar proposta.", error);
-    showToast("Não foi possível cancelar.");
+    showToast(error?.code === "PT409" ? getSupabaseSaveErrorMessage(error) : "Não foi possível cancelar.");
     return;
   }
 
@@ -12751,16 +12762,11 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
   );
   const changes = { status: nextStatus, snapshot };
 
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .update(changes)
-    .eq("id", proposalId)
-    .select("*")
-    .single();
+  const { data, error } = await persistEventProposal(proposalId, changes, proposal);
 
   if (error) {
     console.warn("Falha ao atualizar status da proposta.", error);
-    showToast("Não foi possível mudar a etapa.");
+    showToast(error?.code === "PT409" ? getSupabaseSaveErrorMessage(error) : "Não foi possível mudar a etapa.");
     renderPipeline();
     return;
   }
@@ -13227,7 +13233,9 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
 
   const snapshot = getProposalSnapshot();
   const sourceKeyBeforeSave = getSourceOverrideKey();
-  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase
+    : state.proposals.find((item) => item.id === state.activeProposalId);
   const nextStatus = status || activeProposal?.status || "proposta_pronta";
   const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
   if (!opportunityId) {
@@ -13417,7 +13425,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     };
   }
 
-  let query;
+  let save;
   if (activeIsDraft && persistableProposalId) {
     const draftRow = {
       ...row,
@@ -13425,7 +13433,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       publication_status: options.forSharing ? "ready" : "draft",
       ...(options.forSharing ? { sent_at: null } : {}),
     };
-    query = state.supabase.from("propostas").update(draftRow).eq("id", persistableProposalId);
+    save = persistEventProposal(persistableProposalId, draftRow, activeProposal);
   } else if (needsNewVersion) {
     const versionRow = {
       ...row,
@@ -13434,11 +13442,11 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       publication_status: options.forSharing ? "ready" : "draft",
       ...(options.forSharing ? { sent_at: null } : {}),
     };
-    query = state.supabase.from("propostas").insert(versionRow);
+    save = persistEventProposal(null, versionRow, activeProposal);
   } else if (persistableProposalId) {
-    query = state.supabase.from("propostas").update(row).eq("id", persistableProposalId);
+    save = persistEventProposal(persistableProposalId, row, activeProposal);
   } else {
-    query = state.supabase.from("propostas").insert({
+    save = persistEventProposal(null, {
       ...row,
       oportunidade_id: opportunityId,
       is_current: true,
@@ -13446,7 +13454,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       sent_at: normalizedNext === "proposta_pronta" ? null : new Date().toISOString(),
     });
   }
-  const { data, error } = await query.select("*").single();
+  const { data, error } = await save;
 
   if (error) {
     console.warn("Falha ao salvar proposta.", {
@@ -13465,6 +13473,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
 
   state.activeProposalId = data.id;
+  state.editorProposalBase = structuredClone(data);
   state.forceNewVersionDraft = false;
   const newSourceKey = `proposal:${data.id}`;
   if (sourceKeyBeforeSave && sourceKeyBeforeSave !== newSourceKey) {
@@ -13638,6 +13647,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
   state.activeProposalId = proposal.id;
+  state.editorProposalBase = structuredClone(proposal);
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
   state.activeOpportunityId = proposal.oportunidade_id || "";
   state.manualSourceKey = "";
@@ -14055,6 +14065,9 @@ function showToast(message) {
 function getSupabaseSaveErrorMessage(error, context = {}) {
   const raw = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(" ");
   const text = raw.toLowerCase();
+  if (error?.code === "PT409" || text.includes("proposta mudou") || text.includes("origem mudou")) {
+    return "A proposta mudou em outra sessão. Atualize antes de salvar; suas alterações não foram aplicadas.";
+  }
   const email = normalizeEmail(context.email || getCurrentTeamEmail());
   if (text.includes("invalid input syntax for type uuid") || text.includes("22p02")) {
     return "Não foi possível salvar: havia um identificador interno inválido. Atualize a página e tente novamente.";
@@ -14186,7 +14199,7 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   // Leia a versão mais recente antes de gravar o prazo e o histórico manual.
   const { data: currentRow, error: readError } = await state.supabase
     .from("propostas")
-    .select("snapshot")
+    .select("*")
     .eq("id", proposal.id)
     .single();
   if (manualChannel && (readError || !currentRow?.snapshot)) {
@@ -14212,18 +14225,14 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
         [createCommercialHistoryEntry("envio", "Envio manual registrado", `Canal: ${manualChannel}. Confirmado pela equipe.`)],
       )
     : snapshotWithDeadline;
-  const { data, error } = await state.supabase
-    .from("propostas")
-    .update({
-      status: "proposta_enviada",
-      publication_status: "sent",
-      sent_at: sentAt,
-      ...(updatedSnapshot ? { snapshot: updatedSnapshot } : {}),
-    })
-    .eq("id", proposal.id)
-    .eq("status", "proposta_pronta")
-    .select("*")
-    .single();
+  if (readError || !currentRow || currentRow.status !== "proposta_pronta") {
+    if (currentRow) upsertProposalState(currentRow);
+    return !readError && currentRow?.status === "proposta_enviada";
+  }
+  const { data, error } = await persistEventProposal(proposal.id, {
+    status: "proposta_enviada", publication_status: "sent", sent_at: sentAt,
+    ...(updatedSnapshot ? { snapshot: updatedSnapshot } : {}),
+  }, currentRow);
   if (error || !data) {
     console.warn("Mensagem enviada; falha ao avançar o funil.", error);
     showToast("Mensagem enviada, mas a etapa não foi atualizada. Atualize o funil e confira o histórico.");

@@ -4,13 +4,18 @@
   "private": true,
   "description": "Sistema de eventos da Embaixada Carioca",
   "scripts": {
-    "serve": "node scripts/static-server.cjs",
-    "test": "node --test checks/*.test.cjs && playwright test",
+    "serve": "npm run build && node scripts/static-server.cjs",
+    "test": "npm run build && node --test checks/*.test.cjs && playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "build": "node scripts/build-site.cjs",
+    "test:db": "node scripts/test-database.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1"
+    "@playwright/test": "1.59.1",
+    "@supabase/supabase-js": "2.57.4",
+    "esbuild": "0.28.2",
+    "pg": "8.23.1"
   }
 }
