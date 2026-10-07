@@ -2109,14 +2109,11 @@ async function submitRequest(event) {
 
   try {
     const client = getPublicSupabaseClient();
-    let { error } = await client.rpc("submit_public_quote_request", {
+    const { error } = await client.rpc("submit_public_quote_request", {
       p_capture_token: getCaptureToken(),
       p_snapshot: snapshot,
     });
 
-    if (error && /function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
-      ({ error } = await client.from("solicitacoes_cotacao").insert(getPayload(snapshot)));
-    }
 
     if (error) {
       console.warn("Falha ao enviar solicitacao.", error);

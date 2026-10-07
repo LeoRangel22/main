@@ -1,0 +1,10 @@
+[
+  "supabase/schema.sql",
+  "supabase/phase1_commercial_ux.sql",
+  "supabase/seller_fast_response.sql",
+  "supabase/client_proposal_ux.sql",
+  "supabase/bootstrap/notification.sql",
+  "supabase/phase1_completion_notice.sql",
+  "supabase/client_experience_public.sql",
+  "supabase/bootstrap/finalize_event_system.sql"
+]

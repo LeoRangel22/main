@@ -9,6 +9,7 @@ const proposal = {
   taxa_servico: 240, privatizacao: 0, total: 2240,
   status: "proposta_enviada", cliente_resposta: null, cliente_solicitacao: null,
   snapshot: {
+    publicRevision: 1,
     event: { type: "Coffee Break", validity: "14 dias", signalDeadlineHours: 48, clientLanguage: "pt" },
     totals: { total: 2240, serviceFee: 240 },
     selectedItems: [{ nome: "Coffee Break Carioca", descricao: "Café e quitutes.", calc: { total: 2000, detail: "30 convidados" } }],
@@ -25,7 +26,11 @@ async function openProposal(page, initial = proposal, query = "") {
       window.__rpcCalls.push({ name, payload });
       if (name === "get_public_proposal") return { data: [structuredClone(window.__proposalFixture)], error: null };
       if (name === "record_public_proposal_view") return { data: [], error: null };
-      if (name === "respond_public_proposal") {
+      if (name === "respond_public_proposal_v2") {
+        if (window.__responseFailure) {
+          const error = window.__responseFailure; window.__responseFailure = null;
+          return { data: null, error };
+        }
         const p = window.__proposalFixture;
         p.status = payload.action === "cancelar" ? "cancelado" : "negociacao";
         p.cliente_resposta = payload.action;
@@ -40,7 +45,7 @@ async function openProposal(page, initial = proposal, query = "") {
       return { data: null, error: { message: `Unexpected RPC ${name}` } };
     } }) };
   }, structuredClone(initial));
-  await page.route("**/*supabase-js@2*", (route) => route.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+  await page.route("**/vendor/supabase.js", (route) => route.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
   await page.goto(`/proposta.html?p=${token}${query}`);
   await expect(page.locator(".public-proposal-summary")).toBeVisible();
 }
@@ -53,7 +58,7 @@ test.describe("Decisão do cliente na proposta", () => {
     await expect(page.locator('.public-offer-comparison')).toContainText('Workshop');
     await page.locator('[data-request-offer="1"]').click();
     await expect(page.locator('#publicResponseMessage')).toHaveValue(/nova versão com Workshop/);
-    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal'))).toBe(false);
+    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal_v2'))).toBe(false);
     await expect(page.locator('.public-proposal-summary')).toContainText('2.240');
   });
   test("comparação apresenta essencial, recomendada e premium sem aprovação automática", async ({ page }) => {
@@ -70,7 +75,7 @@ test.describe("Decisão do cliente na proposta", () => {
     await expect(comparison).toContainText('nenhum valor é aprovado automaticamente');
     await comparison.locator('[data-request-offer="1"]').click();
     await expect(page.locator('#publicResponseMessage')).toHaveValue(/Recomendada/);
-    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal'))).toBe(false);
+    expect(await page.evaluate(()=>window.__rpcCalls.some(c=>c.name==='respond_public_proposal_v2'))).toBe(false);
   });
   test("investimento exibe a experiência contratada e oculta a linha quando não há valor", async ({ page }) => {
     await openProposal(page);
@@ -135,7 +140,7 @@ test.describe("Decisão do cliente na proposta", () => {
     await page.locator("#publicLaterProofForm").getByRole("button", { name: "Enviar comprovante" }).click();
     await expect(page.locator(".public-proof-summary")).toContainText("comprovante.pdf");
     const calls = await page.evaluate(() => window.__rpcCalls.map(({ name }) => name));
-    expect(calls.filter((name) => name === "respond_public_proposal")).toHaveLength(1);
+    expect(calls.filter((name) => name === "respond_public_proposal_v2")).toHaveLength(1);
     expect(calls.filter((name) => name === "submit_public_signal_proof")).toHaveLength(1);
     await expectNoBrowserErrors(errors);
   });
@@ -170,4 +175,29 @@ test.describe("Decisão do cliente na proposta", () => {
     await expect(page.locator(".public-version-changes")).toContainText("O que mudou nesta proposta");
     await expect(page.locator(".public-version-changes")).toContainText("30 → 40");
   });
+});
+
+
+test("resposta conserva a identidade na repetição e informa revisão exibida", async ({ page }) => {
+  await openProposal(page);
+  await page.evaluate(() => { window.__responseFailure = { message: "Failed to fetch" }; });
+  await page.getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.locator("#publicResponseMessage").fill("Revisar horário para 10h.");
+  await page.locator("#publicSubmitResponse").click();
+  await expect.poll(() => page.evaluate(() => window.__rpcCalls.filter(c=>c.name==='respond_public_proposal_v2').length)).toBe(1);
+  await page.locator("#publicSubmitResponse").click();
+  const calls = await page.evaluate(() => window.__rpcCalls.filter(c=>c.name==='respond_public_proposal_v2'));
+  expect(calls).toHaveLength(2);
+  expect(calls[0].payload.request_id).toBe(calls[1].payload.request_id);
+  expect(calls[0].payload.expected_proposal_id).toBe(proposal.id);
+  expect(calls[0].payload.expected_revision).toBe(1);
+});
+
+test("resposta com conflito exige revisar proposta atualizada", async ({ page }) => {
+  await openProposal(page);
+  await page.evaluate(() => { window.__responseFailure = { code: "PT409", message: "A proposta mudou" }; });
+  await page.getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.locator("#publicResponseMessage").fill("Revisar horário para 10h.");
+  await page.locator("#publicSubmitResponse").click();
+  await expect(page.locator("#publicProposalStatus")).toContainText(/Recarregue/);
 });

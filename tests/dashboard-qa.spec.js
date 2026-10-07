@@ -178,6 +178,7 @@ test.describe("Dashboard interno em modo QA", () => {
     const errors = collectBrowserErrors(page);
     await page.goto("/index.html?qa=1");
     await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]').getByRole("button", { name: /Reenviar|Abrir/i }).click();
+    await expect(page.locator("#clientName")).toHaveValue("Bruna Marcelle");
 
     await page.locator("#manualAdjustment").fill("-1500");
     await expect(page.locator("#commercialApprovalPanel")).toBeVisible();

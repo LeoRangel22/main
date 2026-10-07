@@ -2,7 +2,7 @@
 
 CRM comercial e operacional da Embaixada Carioca para captar leads, montar e versionar propostas, registrar decisões e pagamentos, planejar o evento e acompanhar o pós-venda.
 
-## Estado atual — 05/10/2026
+## Estado atual — 07/10/2026
 
 - O painel abre em **Modo Vendas** e mantém financeiro, operação, agenda e relatórios na **Visão completa**.
 - Eventos passados saem do funil ativo e aguardam classificação humana; remarcações retornam ao acompanhamento.
@@ -16,16 +16,15 @@ CRM comercial e operacional da Embaixada Carioca para captar leads, montar e ver
 
 ## Checklist de produção
 
-As migrações são aditivas e devem ser executadas na ordem documentada, sem reaplicar `schema.sql` sobre uma base existente:
+A instalação vazia segue `supabase/bootstrap/manifest.json`, depois os arquivos em
+`supabase/migrations/` em ordem. Produção recebe somente migrações ainda não
+registradas; nunca reaplique `schema.sql` ou o bootstrap à base existente.
 
-1. `supabase/phase1_commercial_ux.sql`
-2. `supabase/seller_fast_response.sql`
-3. `supabase/client_proposal_ux.sql`
-4. `supabase/phase1_completion_notice.sql`
-5. `supabase/client_experience_public.sql`
-6. `supabase/migrations/20261005233202_sales_funnel_completion.sql` (conclusão da auditoria: versões públicas, responsáveis e permissões internas)
+O pacote de prioridade máxima e os procedimentos de validação e recuperação estão
+em [docs/PRIORITY-RELEASE.md](docs/PRIORITY-RELEASE.md). `npm run build` cria o pacote
+público `dist/`. O deploy depende dos testes de interface e dos testes PostgreSQL,
+incluindo concorrência, atualização com histórico e pg_dump/pg_restore.
 
-Valide com os arquivos `*_verify.sql`, incluindo `supabase/sales_funnel_completion_verify.sql` (regressões com rollback, sem envio). O snapshot público restrito já foi validado operacionalmente; o trigger de lead parcial deve retornar sucesso em `supabase/phase1_completion_notice_verify.sql` antes da liberação.
 
 Depois do SQL e do deploy:
 
@@ -39,12 +38,12 @@ Nunca use `service_role` no frontend e nunca trate comprovante como confirmaçã
 
 ## Como abrir
 
-Abra `index.html` no navegador.
+Execute `npm ci` e `npm run serve`; abra `http://127.0.0.1:8765`. O servidor usa o pacote público gerado em `dist/`.
 
 ## Supabase: login e histórico da equipe
 
 1. Crie um projeto no Supabase.
-2. Abra `supabase/schema.sql`, copie o conteúdo e rode no SQL Editor do Supabase.
+2. Somente para projeto vazio: execute o bootstrap na ordem de `supabase/bootstrap/manifest.json` e depois as migrações. Configure URL e chave pública do novo projeto no frontend antes do build. Nunca faça esse bootstrap no projeto de produção existente.
 3. Em `Authentication > Providers`, mantenha o login por e-mail habilitado.
 4. Em `Authentication > URL Configuration`, use `https://leorangel22.github.io/main/` como `Site URL`.
 5. Em `Redirect URLs`, deixe `https://leorangel22.github.io/main/` e `https://leorangel22.github.io/main/**`.
