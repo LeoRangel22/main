@@ -77,3 +77,16 @@ test('commercial validity starts at delivery even when the draft was created muc
  assert.equal(priorities.validity(item,now),null);
  assert.equal(priorities.validity({...item,sentAt:'2026-09-24T15:00:00Z'},now).reason,'validity_48h');
 });
+test('a failed page drains pending workers before retry and never exceeds four concurrent pages',async()=>{
+ let active=0,peak=0,started=0,failed=false,release;
+ const gate=new Promise(r=>{release=r;});const descriptors=Array.from({length:500},(_,i)=>({id:String(i),version:'1'}));
+ const client={rpc:async(name,body)=>{
+  if(name==='get_event_dashboard_manifest')return{data:{version:1,records:{propostas:descriptors}}};
+  active++;peak=Math.max(peak,active);const batch=++started;
+  try{if(batch===1&&!failed){failed=true;return{error:{code:'NETWORK'}};}await gate;return{data:body.record_ids.map(id=>({id}))};}finally{active--;}
+ }};
+ const store=createStore({client});const first=store.sync();await new Promise(r=>setImmediate(r));
+ const same=store.sync({force:true});assert.equal(started,4);assert.equal(active,3);
+ release();await assert.rejects(first);await assert.rejects(same);assert.equal(active,0);assert.equal(started,4);
+ assert.equal((await store.sync({force:true})).rows.propostas.length,500);assert.ok(peak<=4);
+});

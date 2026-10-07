@@ -120,3 +120,12 @@ test('reviewed contact context becomes stale when proposal revision changes desp
  });
  expect(changed).toBe(true);
 });
+test('replacing the client for the same user renews the cache and keeps the dashboard usable',async({page})=>{
+ await mountDashboard(page);
+ const result=await page.evaluate(async()=>{
+  const old=getCommercialStore();state.supabase={...state.supabase};
+  await refreshCommercialDashboard({force:true});
+  return{renewed:getCommercialStore()!==old,rows:state.proposals.length,error:commercialRefreshError};
+ });
+ expect(result.renewed).toBe(true);expect(result.rows).toBeGreaterThan(0);expect(result.error).toBe('');
+});

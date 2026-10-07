@@ -56,10 +56,11 @@
               });
             }
           }
-          let cursor = 0;
+          let cursor = 0, pageFailure = null;
           await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, async () => {
-            while (cursor < jobs.length) { const job = jobs[cursor++]; await job(); }
+            while (!pageFailure && cursor < jobs.length) { const job = jobs[cursor++]; try { await job(); } catch (error) { pageFailure ||= error; } }
           }));
+          if (pageFailure) throw pageFailure;
           check();
           cache = staged; versions = stagedVersions; completedAt = now(); invalid = generation !== runGeneration;
           lastResult = { manifest, rows: Object.fromEntries(Object.entries(cache).map(([kind, rows]) => [kind, [...rows.values()].sort((a,b)=>(Date.parse(b.created_at || b.updated_at || '') || 0)-(Date.parse(a.created_at || a.updated_at || '') || 0)||String(a.id ?? a.proposal_id).localeCompare(String(b.id ?? b.proposal_id)))])), changed, removed };

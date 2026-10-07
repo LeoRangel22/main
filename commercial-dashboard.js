@@ -1,6 +1,7 @@
 /* Dashboard orchestration/UI; data access and business rules are separate modules. */
 let commercialStore = null;
 let commercialIdentity = '';
+let commercialClient = null;
 let commercialMonitor = null;
 let commercialSummary = null;
 let commercialRefreshError = '';
@@ -12,7 +13,7 @@ let commercialHistoryScope = 'all';
 const commercialDetailsLoading = new Map();
 
 function resetCommercialDashboard() {
-  commercialStore?.dispose(); commercialStore = null; commercialIdentity = '';
+  commercialStore?.dispose(); commercialStore = null; commercialIdentity = ''; commercialClient = null;
   commercialMonitor = null; commercialSummary = null; commercialRefreshError = '';
   commercialRefreshPending = null; commercialDetailsLoading.clear();
   commercialLoading = false; commercialStageLimits = {}; commercialHistoryLimit = 20;
@@ -20,11 +21,11 @@ function resetCommercialDashboard() {
 function getCommercialStore() {
   const user = state.session?.user?.id;
   if (!user || !state.supabase) return null;
-  if (!commercialStore || commercialIdentity !== user) {
+  if (!commercialStore || commercialIdentity !== user || commercialClient !== state.supabase) {
     resetCommercialDashboard(); commercialIdentity = user;
     const monitor = EventPerformance.createMonitor({ capture: (event, properties) => window.EventAnalytics?.capture(event, properties) });
     commercialMonitor = monitor;
-    const client = state.supabase;
+    const client = state.supabase; commercialClient = client;
     const createdStore = EventData.createStore({ client, isCurrent: () => state.session?.user?.id === user && state.supabase === client, onSample: sample => { if (commercialStore === createdStore) monitor.record(sample); } });
     commercialStore = createdStore;
   }
