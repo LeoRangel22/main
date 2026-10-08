@@ -16,3 +16,7 @@ verify_jwt = true
 
 [functions.event-email-delivery]
 verify_jwt = false
+
+# Internal cron worker with its own x-event-job-key authentication.
+[functions.event-bot-bridge]
+verify_jwt = false
