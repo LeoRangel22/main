@@ -14,8 +14,8 @@ Deno.serve(async(req:Request)=>{
     const payload=await req.json();diagnose=payload.action==='diagnose';
     const base=Deno.env.get('EVENT_BOT_BRIDGE_URL')||'',secret=Deno.env.get('EVENT_BOT_BRIDGE_SECRET')||'';
     const current=Number(config.cursor||0);
-    const url=botBridgeUrl(base,secret,diagnose?{probe:1,tenant:'embaixada_urca'}:{cursor:current,limit:100,tenant:'embaixada_urca'});
-    const result=normalizeBotBridgeResult(await fetchBotBridge(url),current);
+    const url=botBridgeUrl(base);
+    const result=normalizeBotBridgeResult(await fetchBotBridge(url,secret,diagnose?{probe:1,tenant:'embaixada_urca'}:{cursor:current,limit:100,tenant:'embaixada_urca'}),current);
     if(diagnose)return json(200,{ok:true,diagnostic:{configured:true,account:result.account,reachable:true}});
     if(config.enabled!==true||config.channel_enabled!==true)return json(409,{ok:false,message:'Ponte ainda não ativada'});
     if(result.events.length){
