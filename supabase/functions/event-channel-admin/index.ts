@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
     if (!['inspect-zapi', 'activate-zapi', 'inspect-bot-bridge', 'activate-bot-bridge'].includes(payload.action)) return respond(400, { ok: false, message: 'Ação desconhecida' });
     if (payload.action === 'inspect-bot-bridge' || payload.action === 'activate-bot-bridge') {
       const bridgeUrl=Deno.env.get('EVENT_BOT_BRIDGE_URL')||'',bridgeSecret=Deno.env.get('EVENT_BOT_BRIDGE_SECRET')||'';
-      const bridge=normalizeBotBridgeResult(await fetchBotBridge(botBridgeUrl(bridgeUrl,bridgeSecret,{probe:1,tenant:'embaixada_urca'})),0);
+      const bridge=normalizeBotBridgeResult(await fetchBotBridge(botBridgeUrl(bridgeUrl),bridgeSecret,{probe:1,tenant:'embaixada_urca'}),0);
       if(payload.action==='inspect-bot-bridge')return respond(200,{ok:true,instanceId:bridge.account,connected:true,message:'Ponte do Bot autenticada. Nenhum callback foi alterado.'});
       if(payload.approved!==true)return respond(409,{ok:false,message:'Revise a ponte e aprove a ativação'});
       if(payload.instanceId!==bridge.account)return respond(409,{ok:false,message:'Verifique novamente a ponte antes de ativar'});
