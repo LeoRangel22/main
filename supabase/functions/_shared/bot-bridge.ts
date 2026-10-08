@@ -14,18 +14,15 @@ function occurredAt(value: unknown) {
   return date.toISOString();
 }
 
-export function botBridgeUrl(base:string,secret:string,params:Record<string,string|number>) {
+export function botBridgeUrl(base:string) {
   const url=new URL(base);
-  if(url.protocol!=='https:'||url.hostname!=='script.google.com'||!url.pathname.startsWith('/macros/s/'))throw new Error('Origem da ponte inválida');
-  if(secret.length<32)throw new Error('Segredo da ponte ausente');
-  url.searchParams.set('events_bridge','1');
-  url.searchParams.set('s',secret);
-  for(const [key,value] of Object.entries(params))url.searchParams.set(key,String(value));
+  if(url.protocol!=='https:'||url.hostname!=='script.google.com'||!url.pathname.startsWith('/macros/s/')||url.username||url.password||url.search||url.hash)throw new Error('Origem da ponte inválida');
   return url.toString();
 }
 
-export async function fetchBotBridge(url:string) {
-  const res=await fetch(url,{signal:AbortSignal.timeout(15000),redirect:'follow'});
+export async function fetchBotBridge(url:string,secret:string,params:Record<string,string|number>) {
+  if(secret.length<32)throw new Error('Segredo da ponte ausente');
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({events_bridge:1,s:secret,...params}),signal:AbortSignal.timeout(15000),redirect:'follow'});
   if(!res.ok)throw new Error('Ponte do Bot recusou a consulta');
   const finalHost=new URL(res.url||url).hostname;
   if(!['script.google.com','script.googleusercontent.com'].includes(finalHost))throw new Error('Redirecionamento da ponte inválido');
