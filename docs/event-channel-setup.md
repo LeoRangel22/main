@@ -53,6 +53,7 @@ Primeiro execute **Verificar ponte do Bot**; a resposta precisa identificar a co
 histórico de mensagens de clientes armazenado antes da aprovação. O worker consulta
 novos eventos a cada minuto, ingere o lote de forma idempotente e só depois avança
 o cursor. Falhas preservam o cursor; o diagnóstico é estritamente somente leitura.
+O segredo é enviado no corpo POST autenticado, nunca em parâmetros da URL.
 
 Para interromper, desabilite o canal na Central e defina
 `EVENTS_BRIDGE_ENABLED=false` no Bot. Isso não muda os callbacks. O ledger fica
