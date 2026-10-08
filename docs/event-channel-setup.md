@@ -18,18 +18,46 @@ Nenhum canal é apresentado como homologado apenas porque o código foi publicad
 1. Abra **Configurar WhatsApp → Verificar instância**. A função usa as credenciais
    de envio existentes no servidor; não devolve tokens da conta/instância.
 2. Confira a instância e marque a aprovação antes de **Ativar callbacks disponíveis**.
+   O salvamento genérico não habilita WhatsApp; a ativação precisa passar por uma
+   das inspeções verificadas abaixo.
 3. Ativação altera somente `receivedCallbackUrl` e `messageStatusCallbackUrl`.
    Reconsulta `/me` para verificar as duas URLs. Não muda auto-read, demais callbacks
    ou o Bot. Uma configuração parcial exige conferir o painel antes de repetir.
-4. Se qualquer uma das duas URLs já aponta para outro sistema, a ativação é bloqueada.
-   Se for o Bot, preservar a configuração e definir instância própria de Eventos.
-   Uma ponte com o Bot não pertence a este pacote e depende de decisão separada.
+4. Se qualquer uma das duas URLs já aponta para outro sistema, a ativação direta é
+   bloqueada. Não substitua os callbacks do Bot nem de qualquer outro sistema.
 5. As mensagens recebidas verificam chave da URL e instância igual àquela usada
    no envio. Mensagens próprias, grupos, newsletters, edições, status replies e
    mensagens aguardando decodificação são ignoradas.
 6. `SENT` significa aceito; `RECEIVED` significa entregue; `READ` informa leitura.
    `READ_BY_ME` não é leitura do cliente. Os retornos são vinculados por ID do
    provedor e destinatário exato, nunca apenas por telefone.
+
+#### Ponte de leitura do Bot
+
+Quando os dois callbacks pertencem ao Bot, use **Verificar ponte do Bot** e
+**Ativar ponte sem trocar callbacks**. O Bot continua sendo o único dono dos
+callbacks e mantém um ledger normalizado; o Sistema de Eventos apenas consulta
+esse ledger. A ponte não envia mensagens, não altera auto-read e não escreve na
+configuração Z-API.
+
+A implantação exige dois secrets Supabase que nunca vão ao frontend ou ao Git:
+
+- `EVENT_BOT_BRIDGE_URL`: URL HTTPS publicada do Apps Script, exatamente sob
+  `script.google.com/macros/s/`;
+- `EVENT_BOT_BRIDGE_SECRET`: segredo exclusivo da ponte, com ao menos 32 caracteres.
+
+No projeto do Bot, configure o mesmo valor em `EVENTS_BRIDGE_SECRET` e só então
+defina `EVENTS_BRIDGE_ENABLED=true`. Não reutilize o segredo do webhook Z-API.
+Primeiro execute **Verificar ponte do Bot**; a resposta precisa identificar a conta
+`bot:embaixada_urca`. A ativação começa no cursor atual, portanto não importa o
+histórico de mensagens de clientes armazenado antes da aprovação. O worker consulta
+novos eventos a cada minuto, ingere o lote de forma idempotente e só depois avança
+o cursor. Falhas preservam o cursor; o diagnóstico é estritamente somente leitura.
+
+Para interromper, desabilite o canal na Central e defina
+`EVENTS_BRIDGE_ENABLED=false` no Bot. Isso não muda os callbacks. O ledger fica
+limitado a 20.000 linhas; capacidade esgotada interrompe novas cópias sem afetar o
+atendimento principal do Bot e requer manutenção explícita.
 
 ### ZeptoMail / Zoho CPaaS
 
