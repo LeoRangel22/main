@@ -3270,10 +3270,21 @@ async function runQuickReply(replyId, channel) {
       showToast("E-mail já está sendo preparado.");
       return;
     }
+    if (needsLink) {
+      share = await ensureProposalForSharing();
+      proposalUrl = share?.url || "";
+      if (!proposalUrl) return;
+    }
+    const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
+    if (!payload) return;
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
       title: preset.title,
+      message: payload.message,
+      subject: payload.subject,
+      proposalUrl,
+      proposal: share?.saved,
       action: "abrir o e-mail pronto para envio",
     });
     if (!confirmed) {
@@ -3287,13 +3298,6 @@ async function runQuickReply(replyId, channel) {
       });
       return;
     }
-    if (needsLink) {
-      share = await ensureProposalForSharing();
-      proposalUrl = share?.url || "";
-      if (!proposalUrl) return;
-    }
-    const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
-    if (!payload) return;
     state.sendLocks.email = true;
     const subject = encodeURIComponent(payload.subject);
     const body = encodeURIComponent(payload.message);
@@ -3313,31 +3317,12 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "whatsapp") {
-    const phone = fields.clientPhone.value.trim() || context.phone || "";
-    const confirmed = await confirmClientSend({
-      channel: "WhatsApp",
-      destination: phone,
-      title: preset.title,
-      action: "enviar agora pela Z-API e registrar no histórico",
-    });
-    if (!confirmed) {
-      showToast("Envio por WhatsApp cancelado.");
-      return;
-    }
-    if (needsLink) {
-      share = await ensureProposalForSharing();
-      if (!share?.saved || !share?.url) return;
-    }
-    proposalUrl = share?.url || "";
+    share = await ensureProposalForSharing();
+    if (!share?.saved || !share?.url) return;
+    proposalUrl = share.url;
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "whatsapp");
     if (!payload) return;
-    await sendProposalWhatsAppViaZapi({
-      proposal: share.saved,
-      proposalUrl: share.url,
-      message: payload.message,
-      title: payload.title,
-      skipConfirm: true,
-    });
+    await sendProposalWhatsAppViaZapi({ proposal: share.saved, proposalUrl, message: payload.message, title: payload.title });
   }
 }
 
@@ -3443,6 +3428,7 @@ function renderOperationalHandoffTasks(tasks = []) {
           <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
         </span>
       </label>
+      ${!task.acknowledged_at ? `<button class="secondary" type="button" data-handoff-task-ack="${escapeHtml(task.id)}">Revisei e dei ciência desta tarefa</button>` : ""}
       ${task.details || task.notes ? `<details><summary>Orientação e notas</summary>${task.details ? `<p>${escapeHtml(task.details)}</p>` : ""}${task.notes ? `<p>${escapeHtml(task.notes)}</p>` : ""}</details>` : ""}
     </article>
   `).join("")}</div>`;
@@ -3485,7 +3471,7 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
   `;
 }
 
-async function updateOperationalHandoffTask(taskId, checked) {
+async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = false) {
   const proposal = getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal || !runRpc || !state.session) return;
@@ -3493,7 +3479,7 @@ async function updateOperationalHandoffTask(taskId, checked) {
     await runRpc("update_event_handoff_task", {
       target_task: taskId,
       target_source_version: getOperationalHandoffData(proposal).tasks.find((task) => task.id === taskId)?.source_version,
-      task_status: checked ? "done" : "pending",
+      task_status: acknowledgeOnly ? getOperationalHandoffData(proposal).tasks.find((task) => task.id === taskId)?.status : checked ? "done" : "pending",
       task_owner_label: null,
       task_due_at: null,
       task_notes: null,
@@ -3507,7 +3493,7 @@ async function updateOperationalHandoffTask(taskId, checked) {
       });
     }
     renderOperationalChecklist(proposal);
-    showToast(checked ? "Tarefa concluída e ciência registrada." : "Tarefa reaberta para revisão.");
+    showToast(acknowledgeOnly ? "Ciência registrada; a tarefa continua pendente de execução." : checked ? "Tarefa concluída e ciência registrada." : "Tarefa reaberta para revisão.");
   } catch (error) {
     console.warn("Falha ao atualizar tarefa operacional.", error);
     renderOperationalChecklist(proposal);
@@ -10229,11 +10215,11 @@ function getItemSearchText(item) {
 function getClientRegistry(items = getPipelineItems()) {
   const registry = new Map();
   items.forEach((item) => {
-    const emailKey = normalizeSearchValue(item.email);
-    const phoneKey = String(item.phone || "").replace(/\D/g, "");
-    const companyKey = normalizeSearchValue(item.company);
-    const nameKey = normalizeSearchValue(item.name);
-    const key = emailKey || phoneKey || companyKey || nameKey || item.id;
+    const emailKey = isLikelyEmailAddress(String(item.email || "").trim()) ? String(item.email).trim().toLowerCase() : "";
+    const phoneDigits = String(item.phone || "").replace(/\D/g, "");
+    const phoneKey = /^\d{10,15}$/.test(phoneDigits) ? phoneDigits : "";
+    // Names and companies are display fields, never identity anchors.
+    const key = emailKey ? `email:${emailKey}` : phoneKey ? `phone:${phoneKey.length === 11 ? `55${phoneKey}` : phoneKey}` : `event:${item.opportunityId || item.id}`;
     const current = registry.get(key) || {
       key,
       name: item.name || "Cliente",
@@ -13964,7 +13950,8 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return renderCommunicationTemplateText(template.whatsappBody, context, proposalUrl);
 }
 
-function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar" }) {
+function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", proposalUrl = "", proposal = null }) {
+  const signature = getSendReviewSignature();
   const clientName = fields.clientName.value.trim() || "cliente";
   const eventType = getCurrentEventType();
   const eventDate = fields.eventDate.value || getEventDateLabel();
@@ -13998,6 +13985,9 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
     `Pax: ${getGuestCount()} · Total: ${formatMoney(totals.total)} · Confiança: ${confidence.score}%`,
     title ? `Mensagem: ${title}` : "",
+    proposal ? `Proposta V${proposal.versao || 1} · revisão ${proposal.revision || 1}` : "",
+    subject ? `Assunto: ${subject}` : "",
+    proposalUrl ? `Link que será enviado: ${proposalUrl}` : "",
     `Automação futura: ${automation.label} - ${automation.note}`,
     "",
     "Obrigatórios:",
@@ -14023,14 +14013,18 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
       <h2 id="sendConfirmTitle">Revisar ${escapeHtml(channel)} antes de enviar</h2>
       <p class="send-confirm-details">${escapeHtml(details)}</p>
+      <label>Mensagem completa<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
+      <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
       <div class="send-confirm-actions">
-        <button type="submit" value="cancel" class="secondary" autofocus>Cancelar</button>
+        <button type="submit" value="cancel" formnovalidate class="secondary" autofocus>Cancelar</button>
         <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
       </div>
     </form>`;
     document.body.append(dialog);
     dialog.addEventListener("close", () => {
-      resolve(dialog.returnValue === "confirm");
+      const unchanged = signature === getSendReviewSignature();
+      if (dialog.returnValue === "confirm" && !unchanged) showToast("Os dados mudaram. Revise a mensagem novamente antes de enviar.");
+      resolve(dialog.returnValue === "confirm" && unchanged && Boolean(message.trim()));
       dialog.remove();
     }, { once: true });
     dialog.showModal();
@@ -14057,7 +14051,7 @@ async function getFunctionErrorMessage(error) {
   return error.message || "";
 }
 
-async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial", skipConfirm = false }) {
+async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
     return false;
@@ -14074,12 +14068,14 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     return false;
   }
 
+  const outboundMessage = appendBotWhatsAppNotice(message || buildProposalWhatsAppMessage(proposalUrl));
   const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
-  if (!skipConfirm) {
+  {
     const confirmed = await confirmClientSend({
       channel: "WhatsApp",
       destination: phone,
       title,
+      message: outboundMessage, proposalUrl, proposal,
       action: "enviar agora pela Z-API e registrar no histórico",
     });
     if (!confirmed) {
@@ -14099,12 +14095,12 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   });
   try {
     showToast("Enviando proposta por WhatsApp...");
-    const outboundMessage = appendBotWhatsAppNotice(message || buildProposalWhatsAppMessage(proposalUrl));
     const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
       body: {
         proposalId: proposal.id,
         approved: true,
         reviewedResponseAt,
+        reviewedRevision: proposal.revision,
         phone,
         message: outboundMessage,
         proposalUrl,
@@ -14148,7 +14144,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 }
 
-async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title = "Proposta comercial", skipConfirm = false }) {
+async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title = "Proposta comercial" }) {
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar e-mail direto.");
     return false;
@@ -14165,16 +14161,21 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     return false;
   }
 
+  const emailTemplate = getCommunicationTemplate("proposta");
+  const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
+  const emailSubject = emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
   const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
-  if (!skipConfirm) {
+  {
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination,
       title,
+      message: emailMessage, subject: emailSubject, proposalUrl, proposal,
       action: "enviar agora pelo ZeptoMail e registrar no histórico",
     });
     if (!confirmed) {
       showToast("Envio por e-mail cancelado.");
+      createIntegrationLog({channel:"email",status:"canceled",title,detail:"A equipe cancelou o envio após revisar a mensagem.",target:destination});
       return false;
     }
   }
@@ -14190,16 +14191,15 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
   });
   try {
     showToast("Enviando proposta por e-mail...");
-    const emailTemplate = getCommunicationTemplate("proposta");
-    const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
     const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
       body: {
         proposalId: proposal.id,
         approved: true,
         reviewedResponseAt,
+        reviewedRevision: proposal.revision,
         email: destination,
         proposalUrl,
-        title: emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca",
+        title: emailSubject,
         message: emailMessage,
       },
     });
@@ -14253,23 +14253,6 @@ async function openEmail() {
     return;
   }
   if (!ensureProposalReadyForSending()) return;
-  const confirmed = await confirmClientSend({
-    channel: "E-mail",
-    destination: email,
-    title: "Proposta comercial",
-    action: "enviar agora pelo ZeptoMail e registrar no histórico",
-  });
-  if (!confirmed) {
-    showToast("Envio por e-mail cancelado.");
-    createIntegrationLog({
-      channel: "email",
-      status: "canceled",
-      title: "Proposta comercial",
-      detail: "A equipe cancelou o envio de e-mail antes de confirmar.",
-      target: email,
-    });
-    return;
-  }
   const share = await ensureProposalForSharing();
   if (!share?.saved || !share?.url) {
     const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
@@ -14288,7 +14271,6 @@ async function openEmail() {
     proposalUrl: share.url,
     email,
     title: "Proposta comercial",
-    skipConfirm: true,
   });
 }
 
@@ -14404,16 +14386,6 @@ async function runServiceCockpitAction(action, button = null) {
 async function openWhatsApp() {
   if (!ensureProposalReadyForSending()) return;
   const phone = fields.clientPhone.value.trim();
-  const confirmed = await confirmClientSend({
-    channel: "WhatsApp",
-    destination: phone,
-    title: "Proposta comercial",
-    action: "enviar agora pela Z-API e registrar no histórico",
-  });
-  if (!confirmed) {
-    showToast("Envio por WhatsApp cancelado.");
-    return;
-  }
   const share = await ensureProposalForSharing();
   if (!share?.saved || !share?.url) return;
   await sendProposalWhatsAppViaZapi({
@@ -14421,7 +14393,6 @@ async function openWhatsApp() {
     proposalUrl: share.url,
     message: buildProposalWhatsAppMessage(share.url),
     title: "Proposta comercial",
-    skipConfirm: true,
   });
 }
 
@@ -15478,6 +15449,9 @@ function bindEvents() {
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   nodes.operationalChecklist?.addEventListener("click", (event) => {
+    const handoffAck = event.target.closest("button[data-handoff-task-ack]");
+    if (handoffAck) { updateOperationalHandoffTask(handoffAck.dataset.handoffTaskAck, false, true); return; }
+
     if (event.target.closest("button[data-handoff-ack-changes]")) {
       acknowledgeOperationalHandoffChanges();
       return;

@@ -12881,3 +12881,5 @@ body[data-page="app"] .pipeline-card-bottom-row {
 .stage-more { width:100%; white-space:normal; }
 .action-priority-reasons { font-size:.82rem; color:#665f54; margin:8px 0; line-height:1.5; }
 @media (max-width:600px) { .commercial-status { align-items:flex-start; flex-wrap:wrap; } .commercial-measures-grid { grid-template-columns:1fr; } .commercial-diagnostics { padding:12px; } }
+
+.send-confirm-message { width: 100%; box-sizing: border-box; white-space: pre-wrap; min-height: 180px; max-height: 40vh; resize: vertical; }

@@ -1,6 +1,6 @@
 {
-  "commit": "43e65e4ab4b29d325849c1b2d96410c3baadf817",
-  "schemaHead": "20261008113000_event_bot_pull_bridge.sql",
+  "commit": "2869b6f238834e01c7181540725b26e36d1deb80",
+  "schemaHead": "20261010085838_event_bridge_operational_completion.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "index.html": "60629bc9751635ad4c792af644a4538c486fdd0fde9c8bafbe6adc9f136d6b1a",
@@ -9,9 +9,9 @@
     "valores.html": "a9d1d100cc90a3bbfe11ec4e367c21fb976ae6eb9c707340ad20cb49ec4fd904",
     "formulario.html": "2301861f1988d85cb32661d3bac980cd0a72a7bf0f4c1b7458177517e9106238",
     "proposta.html": "28c8d17ac6e4fce2acf024b19bca0f50ec27797f4fe2f89a90ed4e1ffd8c90d6",
-    "styles.css": "d848f8f9ba25d24319498e97ad7ae78400c3431914cdc2054b80ffd66d7d0ba3",
-    "app.js": "0bd10b1d5e6eb7df9c5a2d3eca82f8302134a1a75e0dafe0ad434da31a641d4c",
-    "event-operations.js": "aa36090ce013f2bfc879d71812bd7e391f2f3f412c28bf4fa2cf12259fd3eae8",
+    "styles.css": "2933387e856f68e3ede2f7014b009fc718a1d6a1ba0ab1ce886a1251cca53fc0",
+    "app.js": "a2dd75b6da220bdf9518701f83dc7ca2a7ad54b462443def7ad86c781a848fc4",
+    "event-operations.js": "0d8c17d6957327c4dd62cb3a804e122dbfa64e1ac7279284950663526a917248",
     "analytics.js": "3cd5b818322a3026e6dc15e62a3d16fc657aa499e8dd1cf6d6ca58c15af0dd07",
     "formulario.js": "d68b94f723a703e3ca8b11630c4f276c74a7f158b322351a465361133937cd63",
     "proposta.js": "8bdf207a9e9df408433a1792f4a690b0cd685a581a7ff5147afb177fd49ecdd3",
