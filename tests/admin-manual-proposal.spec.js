@@ -428,6 +428,8 @@ test.describe("Proposta manual no admin", () => {
     const confirmation = page.locator(".send-confirm-dialog");
     await expect(confirmation).toContainText("Canal: WhatsApp");
     await expect(confirmation).toContainText(/Destino: \+55 219 96060 692/);
+    await expect(confirmation.locator(".send-confirm-message")).not.toHaveValue("");
+    await confirmation.locator('input[type="checkbox"]').check();
     await confirmation.getByRole("button", { name: "Confirmar envio" }).click();
     await expect(confirmation).toHaveCount(0);
     await expect(page.locator("#integrationLogList")).toContainText(/WhatsApp/i);
@@ -499,6 +501,8 @@ test.describe("Proposta manual no admin", () => {
 
     await channelActions.locator('button[data-send-review-action="email"]').click();
     await expect(confirmation).toContainText("leorangel@gmail.com");
+    await expect(confirmation.locator(".send-confirm-message")).not.toHaveValue("");
+    await confirmation.locator('input[type="checkbox"]').check();
     await confirmation.getByRole("button", { name: "Confirmar envio" }).click();
     await expect(confirmation).toHaveCount(0);
     await expect(page.locator("#integrationLogList")).toContainText(/E-mail/i);

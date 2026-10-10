@@ -20,9 +20,18 @@ export function botBridgeUrl(base:string) {
   return url.toString();
 }
 
-export async function fetchBotBridge(url:string,secret:string,params:Record<string,string|number>) {
+export function verifyBotCallbacks(me:any, bridgeUrl:string) {
+  const expected=new URL(botBridgeUrl(bridgeUrl));
+  if(me.connected!==true)throw new Error('Instância desconectada');
+  for(const field of ['receivedCallbackUrl','messageStatusCallbackUrl']) {
+    const callback=new URL(String(me[field]||''));
+    if(callback.origin!==expected.origin||callback.pathname!==expected.pathname||callback.username||callback.password||callback.hash)throw new Error('Os dois callbacks precisam pertencer ao Bot verificado');
+  }
+}
+
+export async function fetchBotBridge(url:string,secret:string,params:Record<string,string|number>, timeoutMs=15000) {
   if(secret.length<32)throw new Error('Segredo da ponte ausente');
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({events_bridge:1,s:secret,...params}),signal:AbortSignal.timeout(15000),redirect:'follow'});
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({events_bridge:1,s:secret,...params}),signal:AbortSignal.timeout(Math.max(1,Math.min(15000,timeoutMs))),redirect:'follow'});
   if(!res.ok)throw new Error('Ponte do Bot recusou a consulta');
   const finalHost=new URL(res.url||url).hostname;
   if(!['script.google.com','script.googleusercontent.com'].includes(finalHost))throw new Error('Redirecionamento da ponte inválido');

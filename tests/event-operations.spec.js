@@ -130,3 +130,30 @@ for(const outcome of ['cancelado','realizado'])test(`evento aberto recolhe check
   }
   await expect(page.locator('#operationalChecklist')).toBeHidden();
 });
+
+test('fila diária inclui confirmados próximos e preserva planos e contatos',async({page})=>{
+  await inbox(page);
+  const result=await page.evaluate(()=>{
+    const before=JSON.stringify(state.opportunities),items=getOpsWorkItems();
+    return {ids:items.map(i=>i.id),after:JSON.stringify(state.opportunities),before};
+  });
+  expect(result.ids).toContain('qa-proposal-sinal');expect(result.after).toBe(result.before);
+  await page.locator('[data-ops-tab="pending"]').click();await expect(page.locator('#eventOperations')).toContainText('comercial e operação');
+  await page.locator('[data-ops-tab="closure"]').click();await expect(page.locator('#eventOperations')).toContainText('desfecho confirmado');
+});
+test('ficha de cliente não mistura homônimos ou contatos diferentes da mesma empresa',async({page})=>{
+  await inbox(page);
+  const lengths=await page.evaluate(()=>{
+    const base={kind:'request',name:'Maria Silva',company:'Empresa X',status:'lead_recebido'};
+    const rows=[{...base,id:'a',opportunityId:'oa',email:'a@example.test'},{...base,id:'b',opportunityId:'ob',email:'b@example.test'},{...base,id:'c',opportunityId:'oc'},{...base,id:'d',opportunityId:'od'}];
+    return {separate:getClientRegistry(rows).length,same:getClientRegistry([{...base,id:'e',email:' A@example.test '},{...base,id:'f',email:'a@example.test'}]).length,phone:getClientRegistry([{...base,id:'g',phone:'(21) 99999-1111'},{...base,id:'h',phone:'+55 21 99999-1111'}]).length};
+  });
+  expect(lengths).toEqual({separate:4,same:1,phone:1});
+});
+test('aprovação final mostra corpo e invalida mudança de dados durante revisão',async({page})=>{
+  await inbox(page);
+  await page.evaluate(()=>{window.qaReviewResult=null;confirmClientSend({channel:'E-mail',destination:'review@example.test',subject:'Assunto exato',message:'Mensagem completa revisada\nLinha final',proposalUrl:'https://example.test/proposta'}).then(result=>window.qaReviewResult=result);});
+  const d=page.locator('.send-confirm-dialog');await expect(d.locator('.send-confirm-message')).toHaveValue('Mensagem completa revisada\nLinha final');await expect(d).toContainText('Assunto exato');
+  await d.locator('input[type="checkbox"]').check();await page.evaluate(()=>fields.clientEmail.value='changed@example.test');await d.getByRole('button',{name:'Confirmar envio'}).click();
+  await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
+});

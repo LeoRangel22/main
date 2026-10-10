@@ -6,13 +6,13 @@ const { stripTypeScriptTypes } = require('node:module');
 
 async function run(channel, scenario = {}) {
   const calls = { fetch: 0, begin: [], finish: [] };
-  const proposal = { id: 'proposal', public_token: 'token', cliente_nome: 'Cliente', snapshot: {} };
+  const proposal = { id: 'proposal', revision: 3, public_token: 'token', cliente_nome: 'Cliente', snapshot: {} };
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: 'user' } } }) },
     from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: proposal }) }) }) }),
     rpc: async (name, body) => {
       if (name === 'is_team_member') return { data: scenario.outsider !== true };
-      if (name === 'begin_event_send') {
+      if (name === 'begin_event_send_reviewed') {
         calls.begin.push(body);
         return { data: { claimed: !scenario.duplicate, send: { id: 'send', status: scenario.duplicate || 'sending' } } };
       }
@@ -32,7 +32,7 @@ async function run(channel, scenario = {}) {
     const source = fs.readFileSync(`${__dirname}/../supabase/functions/${file}`, 'utf8').replace(/^import .*;\s*$/gm, '').replace(/^export /gm, '');
     vm.runInContext(stripTypeScriptTypes(source), context);
   }
-  const payload = { proposalId: 'proposal', approved: true, reviewedResponseAt: '2026-10-06T00:00:00Z', email: 'client@example.test', phone: '21999999999', proposalUrl: 'https://leorangel22.github.io/main/proposta.html?p=token', message: 'Mensagem revisada pela equipe', ...scenario.payload };
+  const payload = { proposalId: 'proposal', approved: true, reviewedRevision: 3, reviewedResponseAt: '2026-10-06T00:00:00Z', email: 'client@example.test', phone: '21999999999', proposalUrl: 'https://leorangel22.github.io/main/proposta.html?p=token', message: 'Mensagem revisada pela equipe', ...scenario.payload };
   const response = await handler(new Request('https://example.test/send', { method: 'POST', headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
   return { status: response.status, body: await response.json(), calls };
 }
@@ -49,7 +49,7 @@ for (const channel of ['email', 'whatsapp']) {
   for (const http of [400, 503]) test(`${channel}: HTTP ${http} distingue recusa de incerteza`, async () => {
     const r = await run(channel, { http }); assert.equal(r.status, 502); assert.equal(r.calls.finish[0].send_status, http === 400 ? 'failed' : 'uncertain');
   });
-  for (const payload of [{ approved: false }, { proposalUrl: 'https://leorangel22.github.io/main/proposta.html?p=outro' }]) test(`${channel}: aprovação e versão são obrigatórias ${JSON.stringify(payload)}`, async () => {
+  for (const payload of [{ approved: false }, { reviewedRevision: 2 }, { reviewedRevision: null }, { proposalUrl: 'https://leorangel22.github.io/main/proposta.html?p=outro' }]) test(`${channel}: aprovação e versão são obrigatórias ${JSON.stringify(payload)}`, async () => {
     const r = await run(channel, { payload }); assert.equal(r.status, 409); assert.equal(r.calls.fetch, 0); assert.equal(r.calls.begin.length, 0);
   });
   test(`${channel}: usuário externo não acessa dry-run`, async () => {

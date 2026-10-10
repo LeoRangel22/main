@@ -2,10 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export async function claimSend(supabase: any, proposal: any, payload: any, channel: string, destination: string, body: string, title: string) {
   if (payload.approved !== true) throw new Error("Revise e aprove conteúdo e destinatário antes do envio.");
+  if (!Number.isSafeInteger(payload.reviewedRevision) || payload.reviewedRevision !== Number(proposal.revision)) throw new Error("A proposta mudou. Revise a versão atual antes de enviar.");
   const url = new URL(String(payload.proposalUrl || ""));
   if (url.origin !== "https://leorangel22.github.io" || url.pathname !== "/main/proposta.html" || url.searchParams.get("p") !== proposal.public_token) throw new Error("O link precisa corresponder à versão aprovada.");
   if (proposal.public_token_revoked_at || (proposal.public_token_expires_at && new Date(proposal.public_token_expires_at).getTime() < Date.now())) throw new Error("Renove o link público antes de enviar.");
-  const { data, error } = await supabase.rpc("begin_event_send", { target_proposal: proposal.id, send_channel: channel, send_destination: destination, send_body: body, send_title: title, reviewed_response_at: payload.reviewedResponseAt || null });
+  const { data, error } = await supabase.rpc("begin_event_send_reviewed", { target_proposal: proposal.id, reviewed_revision: payload.reviewedRevision, send_channel: channel, send_destination: destination, send_body: body, send_title: title, reviewed_response_at: payload.reviewedResponseAt || null });
   if (error) throw new Error(error.message || "Não foi possível registrar a aprovação.");
   return data;
 }
