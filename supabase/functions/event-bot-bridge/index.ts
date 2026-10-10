@@ -14,6 +14,7 @@ Deno.serve(async(req:Request)=>{
     const payload=await req.json();diagnose=payload.action==='diagnose';
     if(!diagnose&&(config.enabled!==true||config.channel_enabled!==true))return json(409,{ok:false,message:'Ponte ainda não ativada'});
     const base=Deno.env.get('EVENT_BOT_BRIDGE_URL')||'',secret=Deno.env.get('EVENT_BOT_BRIDGE_SECRET')||'';
+    if(diagnose&&(!base||secret.length<32))return json(409,{ok:false,message:'Configuração da ponte pendente',diagnostic:{configured:false,urlConfigured:Boolean(base),secretConfigured:secret.length>=32}});
     let current=Number(config.cursor||0);
     const url=botBridgeUrl(base);
     if(diagnose){

@@ -14016,7 +14016,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
       <label>Mensagem completa<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
       <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
       <div class="send-confirm-actions">
-        <button type="submit" value="cancel" class="secondary" autofocus>Cancelar</button>
+        <button type="submit" value="cancel" formnovalidate class="secondary" autofocus>Cancelar</button>
         <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
       </div>
     </form>`;
@@ -15439,8 +15439,6 @@ function bindEvents() {
     runQuickReply(button.dataset.quickReply, button.dataset.quickReplyChannel);
   });
   nodes.operationalChecklist?.addEventListener("change", (event) => {
-    const handoffAck = event.target.closest("button[data-handoff-task-ack]");
-    if (handoffAck) { updateOperationalHandoffTask(handoffAck.dataset.handoffTaskAck, false, true); return; }
     const handoffTask = event.target.closest("input[data-handoff-task-id]");
     if (handoffTask) {
       updateOperationalHandoffTask(handoffTask.dataset.handoffTaskId, handoffTask.checked);
@@ -15451,6 +15449,9 @@ function bindEvents() {
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   nodes.operationalChecklist?.addEventListener("click", (event) => {
+    const handoffAck = event.target.closest("button[data-handoff-task-ack]");
+    if (handoffAck) { updateOperationalHandoffTask(handoffAck.dataset.handoffTaskAck, false, true); return; }
+
     if (event.target.closest("button[data-handoff-ack-changes]")) {
       acknowledgeOperationalHandoffChanges();
       return;

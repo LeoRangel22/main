@@ -157,3 +157,15 @@ test('aprovação final mostra corpo e invalida mudança de dados durante revis�
   await d.locator('input[type="checkbox"]').check();await page.evaluate(()=>fields.clientEmail.value='changed@example.test');await d.getByRole('button',{name:'Confirmar envio'}).click();
   await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
 });
+
+test('cancelar revisão não exige declarar aprovação',async({page})=>{
+  await inbox(page);await page.evaluate(()=>{window.qaReviewResult=null;confirmClientSend({channel:'WhatsApp',destination:'5521000000011',message:'Teste sem envio'}).then(r=>window.qaReviewResult=r);});
+  const d=page.locator('.send-confirm-dialog');await expect(d.locator('input[type="checkbox"]')).not.toBeChecked();await d.getByRole('button',{name:'Cancelar'}).click();await expect(d).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
+});
+test('dar ciência da tarefa preserva status pendente e não registra conclusão',async({page})=>{
+  await page.goto('/index.html?qa=1');await page.getByRole('button',{name:'Visão completa'}).click();await page.locator('[data-pipeline-card-id="qa-proposal-sinal"]').click();
+  await page.evaluate(()=>{const p=getActiveProposal();eventOps.handoffTasks.push({id:'qa-ack-task',opportunity_id:p.oportunidade_id,source_version:1,status:'pending',sector:'Operação',owner_label:'Equipe de teste',label:'Revisar montagem',acknowledged_at:null,completed_at:null});renderOperationalChecklist(p);});
+  await page.locator('[data-handoff-task-ack="qa-ack-task"]').click();
+  await expect.poll(()=>page.evaluate(()=>eventOps.handoffTasks.find(t=>t.id==='qa-ack-task')?.acknowledged_at)).not.toBeNull();
+  const task=await page.evaluate(()=>eventOps.handoffTasks.find(t=>t.id==='qa-ack-task'));expect(task.status).toBe('pending');expect(task.completed_at).toBeNull();
+});

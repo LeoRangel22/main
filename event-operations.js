@@ -6,7 +6,7 @@ function getOpsItems() { const seen = new Set(); return getPipelineItems().filte
 function getOpsOpenItems() { const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); return getOpsItems().filter((i) => ["lead_recebido", "proposta_pronta", "proposta_enviada", "negociacao"].includes(i.status) && (!i.date || i.date >= today)); }
 function getOpsWorkItems() {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-  const active = getOpsItems().filter(i => i.stage !== "desfecho_pendente" && !["cancelado", "pos_venda"].includes(i.status) && (!i.date || i.date >= today));
+  const active = getOpsItems().filter(i => i.stage !== "desfecho_pendente" && ["lead_recebido", "proposta_pronta", "proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(i.status) && (!i.date || i.date >= today));
   const tasks = getActionTasks(active);
   const rank = i => {
     const response = getOpsIncoming(i) || (i.clientResponse && ["confirmar", "alteracao", "cancelar"].includes(i.clientResponse));
