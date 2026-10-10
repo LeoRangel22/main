@@ -130,3 +130,42 @@ for(const outcome of ['cancelado','realizado'])test(`evento aberto recolhe check
   }
   await expect(page.locator('#operationalChecklist')).toBeHidden();
 });
+
+test('fila diária inclui confirmados próximos e preserva planos e contatos',async({page})=>{
+  await inbox(page);
+  const result=await page.evaluate(()=>{
+    const before=JSON.stringify(state.opportunities),items=getOpsWorkItems();
+    return {ids:items.map(i=>i.id),after:JSON.stringify(state.opportunities),before};
+  });
+  expect(result.ids).toContain('qa-proposal-sinal');expect(result.after).toBe(result.before);
+  await page.locator('[data-ops-tab="pending"]').click();await expect(page.locator('#eventOperations')).toContainText('comercial e operação');
+  await page.locator('[data-ops-tab="closure"]').click();await expect(page.locator('#eventOperations')).toContainText('desfecho confirmado');
+});
+test('ficha de cliente não mistura homônimos ou contatos diferentes da mesma empresa',async({page})=>{
+  await inbox(page);
+  const lengths=await page.evaluate(()=>{
+    const base={kind:'request',name:'Maria Silva',company:'Empresa X',status:'lead_recebido'};
+    const rows=[{...base,id:'a',opportunityId:'oa',email:'a@example.test'},{...base,id:'b',opportunityId:'ob',email:'b@example.test'},{...base,id:'c',opportunityId:'oc'},{...base,id:'d',opportunityId:'od'}];
+    return {separate:getClientRegistry(rows).length,same:getClientRegistry([{...base,id:'e',email:' A@example.test '},{...base,id:'f',email:'a@example.test'}]).length,phone:getClientRegistry([{...base,id:'g',phone:'(21) 99999-1111'},{...base,id:'h',phone:'+55 21 99999-1111'}]).length};
+  });
+  expect(lengths).toEqual({separate:4,same:1,phone:1});
+});
+test('aprovação final mostra corpo e invalida mudança de dados durante revisão',async({page})=>{
+  await inbox(page);
+  await page.evaluate(()=>{window.qaReviewResult=null;confirmClientSend({channel:'E-mail',destination:'review@example.test',subject:'Assunto exato',message:'Mensagem completa revisada\nLinha final',proposalUrl:'https://example.test/proposta'}).then(result=>window.qaReviewResult=result);});
+  const d=page.locator('.send-confirm-dialog');await expect(d.locator('.send-confirm-message')).toHaveValue('Mensagem completa revisada\nLinha final');await expect(d).toContainText('Assunto exato');
+  await d.locator('input[type="checkbox"]').check();await page.evaluate(()=>fields.clientEmail.value='changed@example.test');await d.getByRole('button',{name:'Confirmar envio'}).click();
+  await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
+});
+
+test('cancelar revisão não exige declarar aprovação',async({page})=>{
+  await inbox(page);await page.evaluate(()=>{window.qaReviewResult=null;confirmClientSend({channel:'WhatsApp',destination:'5521000000011',message:'Teste sem envio'}).then(r=>window.qaReviewResult=r);});
+  const d=page.locator('.send-confirm-dialog');await expect(d.locator('input[type="checkbox"]')).not.toBeChecked();await d.getByRole('button',{name:'Cancelar'}).click();await expect(d).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
+});
+test('dar ciência da tarefa preserva status pendente e não registra conclusão',async({page})=>{
+  await page.goto('/index.html?qa=1');await page.getByRole('button',{name:'Visão completa'}).click();await page.locator('[data-pipeline-card-id="qa-proposal-sinal"]').click();
+  await page.evaluate(()=>{const p=getActiveProposal();eventOps.handoffTasks.push({id:'qa-ack-task',opportunity_id:p.oportunidade_id,source_version:1,status:'pending',sector:'Operação',owner_label:'Equipe de teste',label:'Revisar montagem',acknowledged_at:null,completed_at:null});renderOperationalChecklist(p);});
+  await page.locator('[data-handoff-task-ack="qa-ack-task"]').click();
+  await expect.poll(()=>page.evaluate(()=>eventOps.handoffTasks.find(t=>t.id==='qa-ack-task')?.acknowledged_at)).not.toBeNull();
+  const task=await page.evaluate(()=>eventOps.handoffTasks.find(t=>t.id==='qa-ack-task'));expect(task.status).toBe('pending');expect(task.completed_at).toBeNull();
+});
