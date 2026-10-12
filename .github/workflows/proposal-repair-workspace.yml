@@ -73,4 +73,5 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            scripts/proposal-repair.patch
           retention-days: 1
