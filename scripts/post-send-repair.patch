@@ -1,0 +1,312 @@
+diff --git a/app.js b/app.js
+index ba099c2..0911115 100644
+--- a/app.js
++++ b/app.js
+@@ -14136,6 +14136,83 @@ async function getFunctionErrorMessage(error) {
+   return error.message || "";
+ }
+ 
++// Only an observed, content-preserving send revision may advance the editor base.
++// Dashboard refreshes and unrelated writes must retain optimistic concurrency.
++function proposalSendContent(value) {
++  if (Array.isArray(value)) return value.map(proposalSendContent);
++  if (value && typeof value === "object") return Object.fromEntries(
++    Object.keys(value).sort().map(key => [key, proposalSendContent(value[key])]),
++  );
++  return value;
++}
++
++function isOwnProposalSendRevision(before, after) {
++  if (!before?.id || after?.id !== before.id || !before.snapshot || !after.snapshot ||
++      before._dashboard_summary || after._dashboard_summary ||
++      before.snapshot._dashboard_summary || after.snapshot._dashboard_summary) return false;
++  const previous = Number(before.revision), current = Number(after.revision);
++  if (!Number.isSafeInteger(previous) || previous < 1 || !Number.isSafeInteger(current) ||
++      (current !== previous && current !== previous + 1)) return false;
++  const same = (a, b) => JSON.stringify(proposalSendContent(a)) === JSON.stringify(proposalSendContent(b));
++  if (after.publication_status !== "sent" || !after.sent_at) return false;
++  // A duplicate already accepted by the provider does not create a new revision.
++  if (current === previous) return same(before, after);
++  if (after.status !== (before.status === "proposta_pronta" ? "proposta_enviada" : before.status)) return false;
++  if (before.sent_at && before.sent_at !== after.sent_at) return false;
++  const previousDeadline = before.snapshot.event?.signalDeadlineAt;
++  if (previousDeadline && previousDeadline !== after.snapshot.event?.signalDeadlineAt) return false;
++  const comparable = row => {
++    const copy = structuredClone(row);
++    for (const key of ["revision", "updated_at", "publication_status", "sent_at", "status"]) delete copy[key];
++    // The stage trigger assigns a follow-up only when ready becomes sent.
++    if (before.status === "proposta_pronta") {
++      delete copy.proxima_acao; delete copy.proxima_acao_em;
++    }
++    if (copy.snapshot.event) delete copy.snapshot.event.signalDeadlineAt;
++    return copy;
++  };
++  return same(comparable(before), comparable(after));
++}
++
++function captureProposalSendEditor(proposal) {
++  return {
++    proposal: structuredClone(proposal),
++    client: state.supabase,
++    userId: state.session?.user?.id,
++    base: state.editorProposalBase,
++    editorIdentity: JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]),
++  };
++}
++
++async function reconcileProposalEditorAfterSend(context) {
++  const unchangedEditor = () => Boolean(context.userId) &&
++    state.session?.user?.id === context.userId && state.supabase === context.client &&
++    state.editorProposalBase === context.base && state.activeProposalId === context.proposal.id &&
++    context.editorIdentity === JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]);
++  if (!unchangedEditor()) return "changed";
++  if (context.base?.id !== context.proposal.id ||
++      Number(context.base.revision) !== Number(context.proposal.revision)) return "conflict";
++  let result;
++  try {
++    result = await context.client.from("propostas").select("*").eq("id", context.proposal.id).single();
++  } catch (_error) { return "unavailable"; }
++  if (!unchangedEditor()) return "changed";
++  if (result.error || !result.data) return "unavailable";
++  if (!isOwnProposalSendRevision(context.proposal, result.data)) return "conflict";
++  // Do not reapply the snapshot or mark the editor clean: typing during the send
++  // remains local and dirty, while the next save uses the acknowledged revision.
++  state.editorProposalBase = structuredClone(result.data);
++  upsertProposalState(result.data);
++  renderLoadedEditorBar();
++  return "reconciled";
++}
++
++function warnUnreconciledProposalSend(result) {
++  if (result === "conflict" || result === "unavailable") showToast(
++    "Envio aceito; entrega não confirmada. Suas alterações locais foram preservadas, mas a revisão do editor não pôde ser conciliada. Confira o histórico antes de salvar ou reenviar.",
++  );
++}
++
+ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+   if (!state.supabase || !state.session) {
+     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
+@@ -14180,6 +14257,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
+   });
+   try {
+     showToast("Enviando proposta por WhatsApp...");
++    const sendEditor = captureProposalSendEditor(proposal);
+     const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
+       body: {
+         proposalId: proposal.id,
+@@ -14211,11 +14289,13 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
+     captureEventAnalytics("proposal_sent", proposal, { channel: "whatsapp", result: data?.duplicate ? "duplicate" : "accepted" }, {
+       dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
+     });
++    const editorResult = await reconcileProposalEditorAfterSend(sendEditor);
+     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "WhatsApp") : true;
+     if (stageUpdated) showToast(data.message || "Aceito pelo WhatsApp; entrega não confirmada.");
+     await loadCommercialInsights();
+     if (typeof loadEventOperations === "function") await loadEventOperations();
+     await loadProposalHistory();
++    warnUnreconciledProposalSend(editorResult);
+     return true;
+   } catch (error) {
+     updateIntegrationLog(logId, {
+@@ -14292,6 +14372,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
+   });
+   try {
+     showToast("Enviando proposta por e-mail...");
++    const sendEditor = captureProposalSendEditor(proposal);
+     const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
+       body: {
+         proposalId: proposal.id,
+@@ -14324,11 +14405,13 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
+     captureEventAnalytics("proposal_sent", proposal, { channel: "email", result: data?.duplicate ? "duplicate" : "accepted" }, {
+       dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
+     });
++    const editorResult = await reconcileProposalEditorAfterSend(sendEditor);
+     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "E-mail") : true;
+     if (stageUpdated) showToast(data.message || "Aceito pelo e-mail; entrega não confirmada.");
+     await loadCommercialInsights();
+     if (typeof loadEventOperations === "function") await loadEventOperations();
+     await loadProposalHistory();
++    warnUnreconciledProposalSend(editorResult);
+     return true;
+   } catch (error) {
+     updateIntegrationLog(logId, {
+diff --git a/checks/post-send-editor.test.cjs b/checks/post-send-editor.test.cjs
+new file mode 100644
+index 0000000..9c297db
+--- /dev/null
++++ b/checks/post-send-editor.test.cjs
+@@ -0,0 +1,72 @@
++const {test}=require('node:test');
++const assert=require('node:assert/strict');
++const fs=require('node:fs');
++const vm=require('node:vm');
++const source=fs.readFileSync(`${__dirname}/../app.js`,'utf8');
++const helpers=source.slice(source.indexOf('function proposalSendContent('),source.indexOf('async function sendProposalWhatsAppViaZapi('));
++function fixture(){
++  const before={id:'test',revision:2,status:'proposta_pronta',publication_status:'ready',sent_at:null,
++    updated_at:'before',proxima_acao:'Enviar proposta',proxima_acao_em:'before',
++    snapshot:{event:{notes:'approved',signalDeadlineAt:null},totals:{total:100},prices:[{id:1,price:100}]}};
++  const after=structuredClone(before);
++  Object.assign(after,{revision:3,status:'proposta_enviada',publication_status:'sent',sent_at:'sent',updated_at:'after',proxima_acao:'Retomar cliente',proxima_acao_em:'after'});
++  after.snapshot.event.signalDeadlineAt='deadline';
++  return {before,after};
++}
++function setup(){
++  const {before,after}=fixture();
++  const state={activeProposalId:'test',activeQuoteRequestId:'quote',manualSourceKey:'',editorProposalBase:structuredClone(before),session:{user:{id:'user'}}};
++  const context=vm.createContext({structuredClone,state,upsertProposalState:row=>context.saved=row,renderLoadedEditorBar:()=>{},showToast:()=>{}});
++  state.supabase={from:()=>({select:()=>({eq:()=>({single:async()=>({data:after,error:null})})})})};
++  vm.runInContext(helpers,context);
++  return {before,after,state,context};
++}
++test('own send reconciles observed revision without mutating reviewed content',async()=>{
++  const {before,after,state,context:c}=setup(); const old=JSON.stringify(before);
++  const result=await c.reconcileProposalEditorAfterSend(c.captureProposalSendEditor(before));
++  assert.equal(result,'reconciled');assert.equal(state.editorProposalBase.revision,3);assert.equal(JSON.stringify(before),old);
++  assert.deepEqual(state.editorProposalBase,after);assert.notEqual(state.editorProposalBase,after);
++});
++for(const [name,mutate] of [
++  ['revision jump',p=>p.revision++],['same revision but changed data',p=>p.revision=2],
++  ['changed notes',p=>p.snapshot.event.notes='another editor'],['changed price',p=>p.snapshot.prices[0].price=200],
++  ['client response',p=>p.snapshot.clienteResposta={acao:'alteracao'}],['payment',p=>p.snapshot.pagamentoSinal={valor:100}],
++  ['wrong proposal',p=>p.id='other'],['summary',p=>p._dashboard_summary=true],
++  ['wrong stage',p=>p.status='confirmado'],['missing row',p=>p.snapshot=null],
++]) test(`concurrent or incomplete ${name} never advances base`,async()=>{
++  const {before,after,state,context:c}=setup();const base=state.editorProposalBase;mutate(after);
++  assert.equal(await c.reconcileProposalEditorAfterSend(c.captureProposalSendEditor(before)),'conflict');
++  assert.equal(state.editorProposalBase,base);
++});
++for(const [name,mutate] of [
++  ['user',s=>s.session.user.id='other'],['logout',s=>s.session=null],['client',s=>s.supabase={}],
++  ['event',s=>s.activeProposalId='other'],['reopened editor',s=>s.editorProposalBase=structuredClone(s.editorProposalBase)],
++  ['source',s=>s.manualSourceKey='new'],
++])test(`switching ${name} during read cannot affect the current editor`,async()=>{
++  const {before,after,state,context:c}=setup();
++  state.supabase.from=()=>({select:()=>({eq:()=>({single:async()=>{mutate(state);return {data:after};}})})});
++  const call=c.captureProposalSendEditor(before);
++  assert.equal(await c.reconcileProposalEditorAfterSend(call),'changed');assert.equal(c.saved,undefined);
++});
++test('read failure preserves old revision instead of fabricating a new one',async()=>{
++  const {before,state,context:c}=setup();state.supabase.from=()=>{throw Error('offline');};
++  const base=state.editorProposalBase;
++  assert.equal(await c.reconcileProposalEditorAfterSend(c.captureProposalSendEditor(before)),'unavailable');assert.equal(state.editorProposalBase,base);
++});
++test('accepted duplicate with identical revision is safe, changed duplicate is not',()=>{
++  const {after,context:c}=setup();assert.equal(c.isOwnProposalSendRevision(after,structuredClone(after)),true);
++  const changed=structuredClone(after);changed.snapshot.event.notes='concurrent';assert.equal(c.isOwnProposalSendRevision(after,changed),false);
++});
++test('JSON key order does not simulate a concurrent write',()=>{
++  const {before,after,context:c}=setup();after.snapshot={prices:after.snapshot.prices,totals:after.snapshot.totals,event:after.snapshot.event};
++  assert.equal(c.isOwnProposalSendRevision(before,after),true);
++});
++test('both reviewed provider sends reconcile, without weakening server revision checks',()=>{
++  for(const name of ['sendProposalWhatsAppViaZapi','sendProposalEmailViaZepto']){
++    const body=source.slice(source.indexOf(`async function ${name}(`));
++    const fn=body.slice(0,body.indexOf('\nasync function ',1));
++    assert.match(fn,/captureProposalSendEditor\(proposal\)/);assert.match(fn,/await reconcileProposalEditorAfterSend\(sendEditor\)/);
++    assert.match(fn,/reviewedRevision:/);assert.match(fn,/await confirmClientSend/);
++  }
++  assert.match(source,/p_expected_revision: existing \? Number\(existing.revision/);
++});
+diff --git a/tests/post-send-editor.spec.js b/tests/post-send-editor.spec.js
+new file mode 100644
+index 0000000..3d46ed0
+--- /dev/null
++++ b/tests/post-send-editor.spec.js
+@@ -0,0 +1,96 @@
++const {test,expect}=require('@playwright/test');
++
++async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
++  await page.goto('/index.html?qa=1');
++  await page.evaluate(async ({channel,concurrent,readFailure})=>{
++    const proposal=state.proposals.find(p=>p.id==='qa-proposal-sem-resposta');
++    proposal.id='00000000-0000-4000-8000-000000000651';
++    Object.assign(proposal,{revision:1,status:'negociacao',publication_status:'draft',is_current:false,sent_at:null});
++    proposal.snapshot.event.signalDeadlineAt=null;
++    openSavedProposal(proposal.id);
++    fields.notes.value='Antes do envio';
++    const saved=await saveCurrentProposal('negociacao');
++    if(!saved)throw Error(state.lastProposalSaveError);
++    window.beforeSend=structuredClone(saved);
++    window.realSave=state.supabase.rpc.bind(state.supabase);
++    state.supabase.rpc=async(name,args)=>{
++      if(name==='save_event_proposal')window.postSendWrite=structuredClone(args);
++      return window.realSave(name,args);
++    };
++    const from=state.supabase.from.bind(state.supabase);
++    state.supabase.from=(table)=>{
++      const query=from(table);
++      if(table==='propostas'&&readFailure)query.single=async()=>({data:null,error:{message:'offline'}});
++      return query;
++    };
++    state.supabase.functions.invoke=async(name,{body})=>{
++      if(body.preview)return {data:{ok:true,mode:'preview',reviewedRevision:saved.revision,contentHash:'reviewed',html:'<p>Proposta de teste</p>',text:'Proposta de teste',subject:'Teste',sender:'eventos@example.test'}};
++      window.sentBody=structuredClone(body);
++      await new Promise(resolve=>window.finishProvider=resolve);
++      const row=structuredClone(saved);
++      row.revision=Number(saved.revision)+1;
++      row.publication_status='sent';row.sent_at='2026-10-12T20:00:00Z';row.updated_at=row.sent_at;
++      row.snapshot.event.signalDeadlineAt='2026-10-14T20:00:00Z';
++      if(concurrent){row.revision++;row.snapshot.event.notes='Alteração de outra pessoa';}
++      upsertProposalState(row);
++      return {data:{ok:true,message:'Aceito; entrega não confirmada.'}};
++    };
++    const options={proposal:saved,proposalUrl:'https://example.test/proposta',email:'test@example.test',message:'Proposta de teste'};
++    window.attempt=channel==='email'?sendProposalEmailViaZepto(options):sendProposalWhatsAppViaZapi(options);
++  },{channel,concurrent,readFailure});
++  const dialog=page.locator('.send-confirm-dialog');
++  await dialog.locator('input[type=checkbox]').check();
++  await dialog.getByRole('button',{name:'Confirmar envio',exact:true}).click();
++  await expect.poll(()=>page.evaluate(()=>Boolean(window.finishProvider))).toBe(true);
++}
++
++for(const channel of ['whatsapp','email'])test(`${channel}: salvar, enviar, continuar digitando e salvar preserva revisão e texto`,async({page})=>{
++  await prepare(page,channel);
++  await page.locator('#notes').fill('Digitado durante o envio');
++  const accepted=await page.evaluate(async()=>{
++    window.finishProvider();await window.attempt;
++    return {revision:state.editorProposalBase.revision,before:window.beforeSend.revision,
++      dirty:hasUnsavedEditorChanges(),text:fields.notes.value};
++  });
++  expect(accepted.revision).toBe(accepted.before+1);expect(accepted.dirty).toBe(true);expect(accepted.text).toBe('Digitado durante o envio');
++  await expect(page.locator('#loadedEditorBar')).toContainText('Não salvo');
++  const saved=await page.evaluate(async()=>{
++    const result=await saveCurrentProposal('negociacao');
++    return {ok:Boolean(result),error:state.lastProposalSaveError,text:result?.snapshot.event.notes,
++      expected:window.postSendWrite?.p_expected_revision,dirty:hasUnsavedEditorChanges()};
++  });
++  expect(saved.ok,saved.error).toBe(true);expect(saved.expected).toBe(accepted.revision);
++  expect(saved.text).toBe('Digitado durante o envio');expect(saved.dirty).toBe(false);
++});
++
++test('alteração concorrente continua bloqueada e não apaga a digitação local',async({page})=>{
++  await prepare(page,'whatsapp',{concurrent:true});await page.locator('#notes').fill('Minha edição local');
++  const result=await page.evaluate(async()=>{
++    window.finishProvider();await window.attempt;
++    const revision=state.editorProposalBase.revision;
++    const saved=await saveCurrentProposal('negociacao');
++    return {saved,revision,before:window.beforeSend.revision,text:fields.notes.value,dirty:hasUnsavedEditorChanges(),error:state.lastProposalSaveError};
++  });
++  expect(result.revision).toBe(result.before);expect(result.saved).toBeNull();
++  expect(result.text).toBe('Minha edição local');expect(result.dirty).toBe(true);expect(result.error).toBeTruthy();
++});
++
++test('troca de evento durante envio não altera a base do outro editor',async({page})=>{
++  await prepare(page,'whatsapp');
++  const result=await page.evaluate(async()=>{
++    const other=state.proposals.find(p=>p.id!==window.beforeSend.id);
++    openSavedProposal(other.id);const base=state.editorProposalBase;
++    window.finishProvider();await window.attempt;
++    return {same:state.editorProposalBase===base,active:state.activeProposalId,expected:other.id};
++  });
++  expect(result.same).toBe(true);expect(result.active).toBe(result.expected);
++});
++
++test('leitura indisponível após aceitação não inventa revisão nem descarta texto',async({page})=>{
++  await prepare(page,'whatsapp',{readFailure:true});await page.locator('#notes').fill('Preservar sem leitura');
++  const result=await page.evaluate(async()=>{
++    window.finishProvider();await window.attempt;
++    return {revision:state.editorProposalBase.revision,before:window.beforeSend.revision,text:fields.notes.value,dirty:hasUnsavedEditorChanges()};
++  });
++  expect(result.revision).toBe(result.before);expect(result.text).toBe('Preservar sem leitura');expect(result.dirty).toBe(true);
++});
