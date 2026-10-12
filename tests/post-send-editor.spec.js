@@ -9,8 +9,9 @@ async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
     proposal.snapshot.event.signalDeadlineAt=null;
     openSavedProposal(proposal.id);
     fields.notes.value='Antes do envio';
-    const saved=await saveCurrentProposal('negociacao');
+    const saved=await saveCurrentProposal('negociacao',null,{forSharing:true});
     if(!saved)throw Error(state.lastProposalSaveError);
+    if(saved.publication_status!=='ready'||saved.status!=='proposta_pronta')throw Error('Expected reviewed publication lifecycle');
     window.beforeSend=structuredClone(saved);
     window.realSave=state.supabase.rpc.bind(state.supabase);
     state.supabase.rpc=async(name,args)=>{
@@ -29,6 +30,7 @@ async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
       await new Promise(resolve=>window.finishProvider=resolve);
       const row=structuredClone(saved);
       row.revision=Number(saved.revision)+1;
+      row.status='proposta_enviada';
       row.publication_status='sent';row.sent_at='2026-10-12T20:00:00Z';row.updated_at=row.sent_at;
       row.snapshot.event.signalDeadlineAt='2026-10-14T20:00:00Z';
       if(concurrent){row.revision++;row.snapshot.event.notes='Alteração de outra pessoa';}
@@ -56,11 +58,14 @@ for(const channel of ['whatsapp','email'])test(`${channel}: salvar, enviar, cont
   await expect(page.locator('#loadedEditorBar')).toContainText('Não salvo');
   const saved=await page.evaluate(async()=>{
     const result=await saveCurrentProposal('negociacao');
+    const published=state.proposals.find(p=>p.id===window.beforeSend.id);
     return {ok:Boolean(result),error:state.lastProposalSaveError,text:result?.snapshot.event.notes,
-      expected:window.postSendWrite?.p_expected_revision,dirty:hasUnsavedEditorChanges()};
+      expected:window.postSendWrite?.p_expected_revision,dirty:hasUnsavedEditorChanges(),
+      newDraft:result?.id!==window.beforeSend.id&&result?.publication_status==='draft',publishedText:published?.snapshot.event.notes};
   });
   expect(saved.ok,saved.error).toBe(true);expect(saved.expected).toBe(accepted.revision);
   expect(saved.text).toBe('Digitado durante o envio');expect(saved.dirty).toBe(false);
+  expect(saved.newDraft).toBe(true);expect(saved.publishedText).toBe('Antes do envio');
 });
 
 test('alteração concorrente continua bloqueada e não apaga a digitação local',async({page})=>{
