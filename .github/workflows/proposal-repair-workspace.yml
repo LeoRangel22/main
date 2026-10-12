@@ -25,7 +25,7 @@ jobs:
           POSTGRES_PASSWORD: event-test-only
         ports: [5432:5432]
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -53,7 +53,8 @@ jobs:
           git apply --check /tmp/proposal-repair.diff
           git apply --index /tmp/proposal-repair.diff
           python3 scripts/proposal-repair-followup.py
-          git add app.js
+          git add app.js tests/
+          git diff --cached --check
           if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
             echo 'Patch attempts to change a protected workspace path'; exit 1
           fi
