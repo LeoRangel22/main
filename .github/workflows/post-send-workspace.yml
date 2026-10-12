@@ -1,0 +1,57 @@
+name: P0 post-send workspace
+on:
+  push:
+    branches: ['fix/post-send-editor-20261012']
+    paths: ['.github/workflows/post-send-workspace.yml', 'scripts/post-send-repair.patch']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    if: github.ref == 'refs/heads/fix/post-send-editor-20261012'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply scoped patch when present
+        if: hashFiles('scripts/post-send-repair.patch') != ''
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/post-send-editor-20261012'
+          git apply --check scripts/post-send-repair.patch
+          git apply --index scripts/post-send-repair.patch
+          git diff --cached --name-only | while read -r file; do
+            case "$file" in app.js|checks/post-send-editor.test.cjs|tests/post-send-editor.spec.js) ;; *) echo "Unexpected path: $file"; exit 1;; esac
+          done
+          npm ci
+          npm run build
+          node --test checks/*.test.cjs
+          npx playwright install --with-deps chromium
+          npx playwright test
+          npm run test:db
+          bash scripts/restore-test.sh
+          git rm scripts/post-send-repair.patch .github/workflows/post-send-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: reconcile own send revisions without overwriting concurrent edits'
+          git push origin HEAD:refs/heads/fix/post-send-editor-20261012
+      - name: Export exact source for local verification
+        if: always()
+        run: |
+          git archive --format=tar.gz -o /tmp/post-send-source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/post-send-head.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: post-send-workspace
+          path: |
+            /tmp/post-send-source.tar.gz
+            /tmp/post-send-head.txt
+            playwright-report
+            test-results
+          retention-days: 2
