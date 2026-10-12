@@ -3,14 +3,15 @@ on:
   workflow_run:
     workflows: [Test and Deploy GitHub Pages]
     types: [completed]
+    branches: [main]
 permissions:
   contents: read
-concurrency:
-  group: events-public-verification
-  cancel-in-progress: false
 jobs:
   verify:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push'
+    concurrency:
+      group: events-public-verification
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
