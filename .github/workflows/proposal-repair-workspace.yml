@@ -8,43 +8,23 @@ on:
 permissions:
   contents: read
 jobs:
-  snapshot:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/proposal-persistence-review-20261012'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-      - name: Prepare offline verification workspace
-        if: hashFiles('scripts/proposal-repair.patch') == ''
-        run: |
-          npm ci
-          git archive --format=tar.gz -o /tmp/event-source.tar.gz HEAD
-          tar -czf /tmp/event-deps.tar.gz node_modules
-          npx --yes supabase@2.39.2 migration new --help
-          npx --yes supabase@2.39.2 migration new proposal_review_integrity
-          tar -czf /tmp/proposal-migration.tar.gz supabase/migrations/*_proposal_review_integrity.sql
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: hashFiles('scripts/proposal-repair.patch') == ''
-        with:
-          name: event-source-workspace
-          path: |
-            /tmp/event-source.tar.gz
-            /tmp/event-deps.tar.gz
-            /tmp/proposal-migration.tar.gz
-          retention-days: 1
   repair:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/proposal-persistence-review-20261012'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -53,22 +33,44 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply reviewed patch to isolated feature branch only
+      - name: Decode and inspect versioned repair transport
+        if: hashFiles('scripts/proposal-repair.patch') != ''
+        run: |
+          set -euo pipefail
+          python3 -c "import pathlib,base64,gzip; pathlib.Path('/tmp/proposal-repair.diff').write_bytes(gzip.decompress(base64.b64decode(pathlib.Path('scripts/proposal-repair.patch').read_bytes())))"
+          git apply --check /tmp/proposal-repair.diff
+          git apply --index /tmp/proposal-repair.diff
+          if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
+            echo 'Patch attempts to change a protected workspace path'; exit 1
+          fi
+          git diff --cached --stat
+      - name: Verify application and browser regressions
+        if: hashFiles('scripts/proposal-repair.patch') != ''
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm test
+      - name: Verify fresh, upgrade, permissions and concurrency
+        if: hashFiles('scripts/proposal-repair.patch') != ''
+        run: npm run test:db
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+      - name: Commit verified repair to feature branch only
         if: hashFiles('scripts/proposal-repair.patch') != ''
         env:
           TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           test "$TARGET_BRANCH" = 'fix/proposal-persistence-review-20261012'
-          git apply --check scripts/proposal-repair.patch
-          git apply --index scripts/proposal-repair.patch
-          if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
-            echo 'Patch attempts to change a protected workspace path'; exit 1
-          fi
-          npm ci
-          npm run build
-          node --test checks/*.test.cjs
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: preserve proposal writes and bind email delivery to exact reviewed content'
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: proposal-repair-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 1
