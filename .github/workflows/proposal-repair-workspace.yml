@@ -17,10 +17,58 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Archive tracked source only
-        run: git archive --format=tar.gz -o /tmp/event-source.tar.gz HEAD
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Prepare offline verification workspace
+        if: hashFiles('scripts/proposal-repair.patch') == ''
+        run: |
+          npm ci
+          git archive --format=tar.gz -o /tmp/event-source.tar.gz HEAD
+          tar -czf /tmp/event-deps.tar.gz node_modules
+          npx --yes supabase@2.39.2 migration new --help
+          npx --yes supabase@2.39.2 migration new proposal_review_integrity
+          tar -czf /tmp/proposal-migration.tar.gz supabase/migrations/*_proposal_review_integrity.sql
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: hashFiles('scripts/proposal-repair.patch') == ''
         with:
           name: event-source-workspace
-          path: /tmp/event-source.tar.gz
+          path: |
+            /tmp/event-source.tar.gz
+            /tmp/event-deps.tar.gz
+            /tmp/proposal-migration.tar.gz
           retention-days: 1
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/proposal-persistence-review-20261012'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply reviewed patch to isolated feature branch only
+        if: hashFiles('scripts/proposal-repair.patch') != ''
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_BRANCH" = 'fix/proposal-persistence-review-20261012'
+          git apply --check scripts/proposal-repair.patch
+          git apply --index scripts/proposal-repair.patch
+          if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
+            echo 'Patch attempts to change a protected workspace path'; exit 1
+          fi
+          npm ci
+          npm run build
+          node --test checks/*.test.cjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: preserve proposal writes and bind email delivery to exact reviewed content'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
