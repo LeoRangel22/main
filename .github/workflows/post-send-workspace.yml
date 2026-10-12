@@ -5,6 +5,9 @@ on:
     paths: ['.github/workflows/post-send-workspace.yml', 'scripts/post-send-repair.patch']
 permissions:
   contents: read
+concurrency:
+  group: post-send-repair-workspace
+  cancel-in-progress: true
 jobs:
   workspace:
     if: github.ref == 'refs/heads/fix/post-send-editor-20261012'
@@ -12,6 +15,17 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -20,6 +34,9 @@ jobs:
           cache: npm
       - name: Apply scoped patch when present
         if: hashFiles('scripts/post-send-repair.patch') != ''
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/fix/post-send-editor-20261012'
@@ -32,7 +49,7 @@ jobs:
           npm run build
           node --test checks/*.test.cjs
           npx playwright install --with-deps chromium
-          npx playwright test
+          npx playwright test --workers=2
           npm run test:db
           bash scripts/restore-test.sh
           git rm scripts/post-send-repair.patch .github/workflows/post-send-workspace.yml
