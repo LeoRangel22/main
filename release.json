@@ -1,5 +1,5 @@
 {
-  "commit": "4acacdad70161b28d96a729c08c47010c357062e",
+  "commit": "a9079ee6d82d8401ef482b0048c95e67e41fd1eb",
   "schemaHead": "20261012160537_proposal_review_integrity.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
@@ -10,7 +10,7 @@
     "formulario.html": "2301861f1988d85cb32661d3bac980cd0a72a7bf0f4c1b7458177517e9106238",
     "proposta.html": "28c8d17ac6e4fce2acf024b19bca0f50ec27797f4fe2f89a90ed4e1ffd8c90d6",
     "styles.css": "2933387e856f68e3ede2f7014b009fc718a1d6a1ba0ab1ce886a1251cca53fc0",
-    "app.js": "5df08fd479a5c53a151dbd62ae45ba8bf0987e261552dee1290b29ed06a6f9df",
+    "app.js": "c9d8a7d7c3e948dc34e6b63077bbe1837fc62ccdc9eff49be12709bc0ec16fb2",
     "event-operations.js": "0d8c17d6957327c4dd62cb3a804e122dbfa64e1ac7279284950663526a917248",
     "analytics.js": "3cd5b818322a3026e6dc15e62a3d16fc657aa499e8dd1cf6d6ca58c15af0dd07",
     "formulario.js": "d68b94f723a703e3ca8b11630c4f276c74a7f158b322351a465361133937cd63",

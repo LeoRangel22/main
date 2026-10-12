@@ -14136,6 +14136,83 @@ async function getFunctionErrorMessage(error) {
   return error.message || "";
 }
 
+// Only an observed, content-preserving send revision may advance the editor base.
+// Dashboard refreshes and unrelated writes must retain optimistic concurrency.
+function proposalSendContent(value) {
+  if (Array.isArray(value)) return value.map(proposalSendContent);
+  if (value && typeof value === "object") return Object.fromEntries(
+    Object.keys(value).sort().map(key => [key, proposalSendContent(value[key])]),
+  );
+  return value;
+}
+
+function isOwnProposalSendRevision(before, after) {
+  if (!before?.id || after?.id !== before.id || !before.snapshot || !after.snapshot ||
+      before._dashboard_summary || after._dashboard_summary ||
+      before.snapshot._dashboard_summary || after.snapshot._dashboard_summary) return false;
+  const previous = Number(before.revision), current = Number(after.revision);
+  if (!Number.isSafeInteger(previous) || previous < 1 || !Number.isSafeInteger(current) ||
+      (current !== previous && current !== previous + 1)) return false;
+  const same = (a, b) => JSON.stringify(proposalSendContent(a)) === JSON.stringify(proposalSendContent(b));
+  if (after.publication_status !== "sent" || !after.sent_at) return false;
+  // A duplicate already accepted by the provider does not create a new revision.
+  if (current === previous) return same(before, after);
+  if (after.status !== (before.status === "proposta_pronta" ? "proposta_enviada" : before.status)) return false;
+  if (before.sent_at && before.sent_at !== after.sent_at) return false;
+  const previousDeadline = before.snapshot.event?.signalDeadlineAt;
+  if (previousDeadline && previousDeadline !== after.snapshot.event?.signalDeadlineAt) return false;
+  const comparable = row => {
+    const copy = structuredClone(row);
+    for (const key of ["revision", "updated_at", "publication_status", "sent_at", "status"]) delete copy[key];
+    // The stage trigger assigns a follow-up only when ready becomes sent.
+    if (before.status === "proposta_pronta") {
+      delete copy.proxima_acao; delete copy.proxima_acao_em;
+    }
+    if (copy.snapshot.event) delete copy.snapshot.event.signalDeadlineAt;
+    return copy;
+  };
+  return same(comparable(before), comparable(after));
+}
+
+function captureProposalSendEditor(proposal) {
+  return {
+    proposal: structuredClone(proposal),
+    client: state.supabase,
+    userId: state.session?.user?.id,
+    base: state.editorProposalBase,
+    editorIdentity: JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]),
+  };
+}
+
+async function reconcileProposalEditorAfterSend(context) {
+  const unchangedEditor = () => Boolean(context.userId) &&
+    state.session?.user?.id === context.userId && state.supabase === context.client &&
+    state.editorProposalBase === context.base && state.activeProposalId === context.proposal.id &&
+    context.editorIdentity === JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]);
+  if (!unchangedEditor()) return "changed";
+  if (context.base?.id !== context.proposal.id ||
+      Number(context.base.revision) !== Number(context.proposal.revision)) return "conflict";
+  let result;
+  try {
+    result = await context.client.from("propostas").select("*").eq("id", context.proposal.id).single();
+  } catch (_error) { return "unavailable"; }
+  if (!unchangedEditor()) return "changed";
+  if (result.error || !result.data) return "unavailable";
+  if (!isOwnProposalSendRevision(context.proposal, result.data)) return "conflict";
+  // Do not reapply the snapshot or mark the editor clean: typing during the send
+  // remains local and dirty, while the next save uses the acknowledged revision.
+  state.editorProposalBase = structuredClone(result.data);
+  upsertProposalState(result.data);
+  renderLoadedEditorBar();
+  return "reconciled";
+}
+
+function warnUnreconciledProposalSend(result) {
+  if (result === "conflict" || result === "unavailable") showToast(
+    "Envio aceito; entrega não confirmada. Suas alterações locais foram preservadas, mas a revisão do editor não pôde ser conciliada. Confira o histórico antes de salvar ou reenviar.",
+  );
+}
+
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
@@ -14180,6 +14257,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   });
   try {
     showToast("Enviando proposta por WhatsApp...");
+    const sendEditor = captureProposalSendEditor(proposal);
     const { data, error } = await state.supabase.functions.invoke("send-proposal-whatsapp", {
       body: {
         proposalId: proposal.id,
@@ -14211,11 +14289,13 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     captureEventAnalytics("proposal_sent", proposal, { channel: "whatsapp", result: data?.duplicate ? "duplicate" : "accepted" }, {
       dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
     });
+    const editorResult = await reconcileProposalEditorAfterSend(sendEditor);
     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "WhatsApp") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo WhatsApp; entrega não confirmada.");
     await loadCommercialInsights();
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
+    warnUnreconciledProposalSend(editorResult);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
@@ -14292,6 +14372,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
   });
   try {
     showToast("Enviando proposta por e-mail...");
+    const sendEditor = captureProposalSendEditor(proposal);
     const { data, error } = await state.supabase.functions.invoke("send-proposal-email", {
       body: {
         proposalId: proposal.id,
@@ -14324,11 +14405,13 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     captureEventAnalytics("proposal_sent", proposal, { channel: "email", result: data?.duplicate ? "duplicate" : "accepted" }, {
       dedupeKey: `proposal-sent:${proposal.id}:${proposal.versao || 1}`,
     });
+    const editorResult = await reconcileProposalEditorAfterSend(sendEditor);
     const stageUpdated = QA_MODE ? await registerConfirmedProposalSend(proposal, "E-mail") : true;
     if (stageUpdated) showToast(data.message || "Aceito pelo e-mail; entrega não confirmada.");
     await loadCommercialInsights();
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
+    warnUnreconciledProposalSend(editorResult);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
