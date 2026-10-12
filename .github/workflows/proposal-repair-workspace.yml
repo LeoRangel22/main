@@ -37,7 +37,15 @@ jobs:
         if: hashFiles('scripts/proposal-repair.patch') != ''
         run: |
           set -euo pipefail
-          python3 -c "import pathlib,base64,gzip; pathlib.Path('/tmp/proposal-repair.diff').write_bytes(gzip.decompress(base64.b64decode(pathlib.Path('scripts/proposal-repair.patch').read_bytes())))"
+          python3 - <<'PY'
+          import pathlib,base64,gzip,hashlib
+          s=pathlib.Path('scripts/proposal-repair.patch').read_text().strip()
+          for i,j,v in reversed([[162,162,'93gt'],[641,641,'BtP'],[3724,3725,''],[4228,4228,'+']]):
+              s=s[:i]+v+s[j:]
+          data=gzip.decompress(base64.b64decode(s))
+          assert hashlib.sha256(data).hexdigest()=='ac8970b5a46955c60f4747cb40f8ca602e3c49191cc1547e289c246e05473b6b'
+          pathlib.Path('/tmp/proposal-repair.diff').write_bytes(data)
+          PY
           git apply --check /tmp/proposal-repair.diff
           git apply --index /tmp/proposal-repair.diff
           if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
