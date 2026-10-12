@@ -5,8 +5,12 @@ on:
     paths:
       - '.github/workflows/proposal-repair-workspace.yml'
       - 'scripts/proposal-repair.patch'
+      - 'scripts/proposal-repair-followup.py'
 permissions:
   contents: read
+concurrency:
+  group: proposal-repair-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   repair:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/proposal-persistence-review-20261012'
@@ -48,6 +52,8 @@ jobs:
           PY
           git apply --check /tmp/proposal-repair.diff
           git apply --index /tmp/proposal-repair.diff
+          python3 scripts/proposal-repair-followup.py
+          git add app.js
           if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then
             echo 'Patch attempts to change a protected workspace path'; exit 1
           fi
