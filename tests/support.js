@@ -1,11 +1,12 @@
 const { expect } = require("@playwright/test");
 
-function collectBrowserErrors(page) {
+function collectBrowserErrors(page, { sandboxedPreview = false } = {}) {
   const errors = [];
 
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     const text = message.text();
+    if (sandboxedPreview && /^Blocked script execution in 'about:(?:blank|srcdoc)' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/.test(text)) return;
     if (/favicon|cdn\.jsdelivr|Failed to load resource/i.test(text)) return;
     errors.push(text);
   });

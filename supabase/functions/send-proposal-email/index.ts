@@ -10,6 +10,9 @@ const corsHeaders = {
 
 type SendPayload = {
   dryRun?: boolean;
+  preview?: boolean;
+  reviewedRevision?: number;
+  reviewedContentHash?: string;
   approved?: boolean;
   reviewedResponseAt?: string | null;
   proposalId?: string;
@@ -252,7 +255,15 @@ function buildProposalEmailText(proposal: any, proposalUrl: string, customMessag
     `${t("Horário", "Time")}: ${formatTime(proposal?.horario_evento || snapshot?.event?.time, en)}`,
     `${t("Convidados", "Guests")}: ${proposal?.convidados || snapshot?.event?.guests || t("A definir", "TBC")}`,
     `${t("Total estimado", "Estimated total")}: ${total}`,
+    `${t("Duração", "Duration")}: ${formatDuration(proposal?.duracao || snapshot?.event?.duration, en)}`,
     `${getSignalDeadlineLabel(snapshot, en)}.`,
+    "",
+    t("Itens da proposta:", "Proposal items:"),
+    ...(Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems.map((item: any) => [
+      safeText(item?.name || item?.nome, "Item"),
+      safeText(item?.description || item?.descricao),
+      formatMoney(item?.calc?.total ?? item?.total ?? 0),
+    ].filter(Boolean).join(" — ")) : []),
     "",
     t("Abra sua proposta pelo link abaixo:", "Open your proposal at the link below:"),
     proposalUrl,
@@ -262,8 +273,27 @@ function buildProposalEmailText(proposal: any, proposalUrl: string, customMessag
     t("A data e o horário ficam reservados após validação da equipe e confirmação do sinal.", "The date is reserved after our team verifies the deposit."),
     t("Você também pode responder este e-mail para falar com a equipe.", "You can also reply to this email to reach our team."),
     "",
+    "eventos@embaixadacarioca.com.br | https://wa.me/5521971426007",
     "Equipe de Eventos | Embaixada Carioca",
   ].join("\n");
+}
+
+// The preview and delivery use this same object. Changes in content, destination,
+// sender, reply-to, URL or proposal revision require a new human review.
+async function prepareReviewedEmail(proposal: any, payload: SendPayload, email: string, sender: { address: string; name: string }, replyTo: string) {
+  const proposalUrl = safeText(payload.proposalUrl);
+  const content = {
+    proposalId: proposal.id,
+    reviewedRevision: Number(proposal.revision),
+    email,
+    subject: safeText(payload.title, "Sua proposta de evento na Embaixada Carioca"),
+    html: buildProposalEmailHtml(proposal, proposalUrl, payload.message),
+    text: buildProposalEmailText(proposal, proposalUrl, payload.message),
+    sender,
+    replyTo,
+  };
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(content)));
+  return { ...content, contentHash: Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("") };
 }
 
 Deno.serve(async (req) => {
@@ -354,11 +384,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, message: "Link público da proposta não informado." }, 400);
     }
 
+    if (!Number.isSafeInteger(payload.reviewedRevision) || Number(proposal.revision) !== payload.reviewedRevision) {
+      return jsonResponse({ ok: false, message: "A proposta mudou. Atualize e revise a versão atual antes de preparar o e-mail." }, 409);
+    }
+    if ((payload.message != null && typeof payload.message !== "string") || (payload.title != null && typeof payload.title !== "string")) {
+      return jsonResponse({ ok: false, message: "Mensagem ou assunto inválido." }, 400);
+    }
+    const emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, Deno.env.get("PROPOSAL_REPLY_TO_EMAIL") || "eventos@embaixadacarioca.com.br");
+    if (emailContent.text.length > 12000) return jsonResponse({ ok: false, message: "O e-mail completo excede 12.000 caracteres. Reduza a mensagem antes de revisar." }, 400);
+    if (payload.preview === true) {
+      return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash });
+    }
+    if (payload.reviewedContentHash !== emailContent.contentHash) {
+      return jsonResponse({ ok: false, message: "O conteúdo do e-mail mudou ou não foi revisado. Abra a prévia completa e aprove novamente." }, 409);
+    }
     const firstName = safeText(proposal.cliente_nome || proposal.snapshot?.client?.name, "cliente").split(/\s+/)[0] || "cliente";
-    const subject = payload.title || `Sua proposta de evento na Embaixada Carioca`;
+    const subject = emailContent.subject;
     const worker = createSendWorker();
     let claim;
-    try { claim = await claimSend(supabase, proposal, payload, "email", email, payload.message || "Proposta: " + proposalUrl, subject); }
+    try { claim = await claimSend(supabase, proposal, payload, "email", email, emailContent.text, subject); }
     catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
     if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
     let zeptoResponse;
@@ -371,10 +415,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         client_reference: `EV:${claim.send.id}:${claim.send.attempts || 1}`,
-        from: {
-          address: fromEmail,
-          name: fromName,
-        },
+        from: emailContent.sender,
         to: [
           {
             email_address: {
@@ -384,11 +425,11 @@ Deno.serve(async (req) => {
           },
         ],
         subject,
-        htmlbody: buildProposalEmailHtml(proposal, proposalUrl, payload.message),
-        textbody: buildProposalEmailText(proposal, proposalUrl, payload.message),
+        htmlbody: emailContent.html,
+        textbody: emailContent.text,
         reply_to: [
           {
-            address: Deno.env.get("PROPOSAL_REPLY_TO_EMAIL") || "eventos@embaixadacarioca.com.br",
+            address: emailContent.replyTo,
             name: "Eventos Embaixada Carioca",
           },
         ],
