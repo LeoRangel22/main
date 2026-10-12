@@ -450,7 +450,7 @@ test.describe("Proposta manual no admin", () => {
   });
 
   test("proposta manual aprovada pede confirmacao e envia e-mail em QA", async ({ page }) => {
-    const errors = collectBrowserErrors(page);
+    const errors = collectBrowserErrors(page, { sandboxedPreview: true });
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();

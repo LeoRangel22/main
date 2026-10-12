@@ -2695,14 +2695,25 @@ function renderEventAttachmentsPanel(proposal = getActiveProposal()) {
 async function persistEventProposal(proposalId, changes, source = null) {
   const existing = source || state.proposals.find((row) => row.id === proposalId);
   if (changes.snapshot?._dashboard_summary || existing?._dashboard_summary) return { data: null, error: { code: "PT409", message: "Abra os detalhes completos antes de salvar; o resumo do painel não pode substituir a proposta." } };
-  const result = await state.supabase.rpc("save_event_proposal", {
-    p_proposal_id: proposalId || null,
-    p_changes: changes,
-    p_expected_revision: existing ? Number(existing.revision || 1) : null,
-    p_source_proposal_id: !proposalId && existing ? existing.id : null,
-  });
-  if (!result.error) invalidateCommercialDashboard();
-  return { data: Array.isArray(result.data) ? result.data[0] || null : result.data, error: result.error };
+  let result;
+  try {
+    result = await state.supabase.rpc("save_event_proposal", {
+      p_proposal_id: proposalId || null,
+      p_changes: structuredClone(changes),
+      p_expected_revision: existing ? Number(existing.revision || 1) : null,
+      p_source_proposal_id: !proposalId && existing ? existing.id : null,
+    });
+  } catch (_error) {
+    return { data: null, error: { code: "SAVE_UNCONFIRMED", message: "Não foi possível confirmar a gravação. Suas alterações continuam no editor. Confira o histórico antes de tentar novamente." } };
+  }
+  if (result.error) return { data: null, error: result.error };
+  const data = Array.isArray(result.data) ? result.data.length === 1 ? result.data[0] : null : result.data;
+  // A successful HTTP response with no saved row is not proof of persistence.
+  if (!data?.id || (proposalId && data.id !== proposalId) || !Number.isSafeInteger(Number(data.revision)) || Number(data.revision) < 1 || !data.snapshot || data.snapshot._dashboard_summary) {
+    return { data: null, error: { code: "SAVE_UNCONFIRMED", message: "O banco não confirmou a proposta gravada. Suas alterações continuam no editor. Atualize o histórico para conferir antes de repetir." } };
+  }
+  invalidateCommercialDashboard();
+  return { data, error: null };
 }
 
 async function updateProposalSnapshot(proposalId, snapshot, successMessage = "Registro atualizado.", source = null) {
@@ -6983,7 +6994,13 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
     window.setTimeout(() => node.classList.remove("is-loaded-focus"), 1700);
   });
   scheduleLoadedEditorJump(jumpMode, "auto");
-  window.setTimeout(() => fields.clientName?.focus?.({ preventScroll: true }), 350);
+  const focusTargetAtLoad = document.activeElement;
+  window.setTimeout(() => {
+    // Never move typing to the client's name after the user chose another field.
+    if (document.activeElement === focusTargetAtLoad || document.activeElement === document.body) {
+      fields.clientName?.focus?.({ preventScroll: true });
+    }
+  }, 350);
   showToast(message);
 }
 
@@ -8316,7 +8333,7 @@ function createQaSupabaseClient() {
     if (query.action === "insert") {
       const payload = Array.isArray(query.payload) ? query.payload : [query.payload];
       data = payload.map((row) => ({
-        id: row.id || `qa-${table}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: row.id || (table === "propostas" ? crypto.randomUUID() : `qa-${table}-${Date.now()}-${Math.random().toString(16).slice(2)}`),
         ...(table === "propostas" ? { public_token: row.public_token || `qa-token-${Date.now()}-${Math.random().toString(16).slice(2)}` } : {}),
         created_at: row.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -8437,10 +8454,15 @@ function createQaSupabaseClient() {
       setSession: async () => ({ data: { session: state.session }, error: null }),
     },
     functions: {
-      invoke: async (name, options = {}) => ({
-        data: { ok: true, qa: true, name, body: options.body || null, message: "Simulado no modo QA." },
-        error: null,
-      }),
+      invoke: async (name, options = {}) => {
+        if (name === "send-proposal-email" && options.body?.preview) {
+          const body = options.body;
+          const proposal = state.proposals.find((row) => row.id === body.proposalId);
+          const text = [body.message, proposal?.cliente_nome, ...(proposal?.snapshot?.selectedItems || []).map((item) => item.nome)].filter(Boolean).join("\n");
+          return { data: { ok: true, qa: true, mode: "preview", html: `<p>${escapeHtml(text)}</p>`, text, subject: body.title, sender: "QA — sem envio", contentHash: "qa-reviewed-content", reviewedRevision: body.reviewedRevision }, error: null };
+        }
+        return { data: { ok: true, qa: true, name, body: options.body || null, message: "Simulado no modo QA." }, error: null };
+      },
     },
   };
 }
@@ -10603,6 +10625,10 @@ function renderLoadedEditorBar() {
 }
 
 async function confirmEditorSwitch() {
+  if (state.proposalSaveInProgress) {
+    showToast("A proposta está sendo gravada. Aguarde a confirmação antes de trocar de evento.");
+    return false;
+  }
   if (!hasUnsavedEditorChanges()) return true;
   const saveFirst = window.confirm(
     "Você alterou esta proposta.\n\nOK: salvar antes de abrir outro lead.\nCancelar: abrir outro lead sem salvar estas alterações.",
@@ -10615,7 +10641,10 @@ async function confirmEditorSwitch() {
   if (!saved) {
     return window.confirm("Não consegui salvar automaticamente. Abrir outro lead mesmo assim e descartar as alterações locais?");
   }
-  markEditorClean(getEditorContextFromCurrent("proposal", "Salva antes de trocar"));
+  if (hasUnsavedEditorChanges()) {
+    showToast("Há alterações feitas durante a gravação. Salve essas alterações antes de trocar de evento.");
+    return false;
+  }
   return true;
 }
 
@@ -12865,6 +12894,18 @@ function upsertProposalState(proposal) {
 }
 
 async function saveCurrentProposal(status, signalInfo = null, options = {}) {
+  if (state.proposalSaveInProgress) {
+    showToast("Já existe uma gravação em andamento. Nenhuma proposta duplicada foi criada.");
+    return null;
+  }
+  state.proposalSaveInProgress = true;
+  const saveButton = document.querySelector("#saveProposalBtn");
+  const wasDisabled = Boolean(saveButton?.disabled);
+  if (saveButton) { saveButton.disabled = true; saveButton.setAttribute("aria-busy", "true"); }
+  const editorIdentity = () => JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]);
+  const initialEditorIdentity = editorIdentity();
+  let committedProposal = null;
+  try {
   state.lastProposalSaveError = "";
   const sessionCheck = await ensureTeamSessionForWrite("salvar a proposta");
   if (!sessionCheck.ok) {
@@ -12873,7 +12914,13 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   }
 
-  const snapshot = getProposalSnapshot();
+  if (editorIdentity() !== initialEditorIdentity) {
+    showToast("O evento aberto mudou. Revise o editor antes de salvar.");
+    return null;
+  }
+  // Freeze nested prices, options and selected items before the first write.
+  const snapshot = structuredClone(getProposalSnapshot());
+  const savedEditorSignature = JSON.parse(getCurrentEditorSignature());
   const sourceKeyBeforeSave = getSourceOverrideKey();
   const activeProposal = state.editorProposalBase?.id === state.activeProposalId
     ? state.editorProposalBase
@@ -12883,6 +12930,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (!opportunityId) {
     state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
     showToast(state.lastProposalSaveError);
+    return null;
+  }
+  if (editorIdentity() !== initialEditorIdentity) {
+    showToast("O evento aberto mudou. Nenhuma proposta foi gravada neste editor.");
     return null;
   }
   const normalizedNext = normalizeProposalStatus(nextStatus);
@@ -13114,6 +13165,12 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   }
 
+  committedProposal = data;
+  if (editorIdentity() !== initialEditorIdentity) {
+    upsertProposalState(data);
+    showToast("A proposta anterior foi gravada, mas outro evento está aberto. Revise antes de enviar.");
+    return null;
+  }
   state.activeProposalId = data.id;
   state.editorProposalBase = structuredClone(data);
   state.forceNewVersionDraft = false;
@@ -13166,8 +13223,15 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   renderInternalNotesPanel(data);
   renderEventAttachmentsPanel(data);
   renderProposalNextStep();
-  markEditorClean(getEditorContextFromCurrent("proposal", `Funil: ${getProposalStatusLabel(data.status)}`));
-  if (data.publication_status === "draft") {
+  // Only the captured payload was saved. Do not certify later typing as saved.
+  savedEditorSignature.activeProposalId = data.id;
+  state.activeEditorContext = getEditorContextFromCurrent("proposal", `Funil: ${getProposalStatusLabel(data.status)}`);
+  state.loadedEditorSignature = JSON.stringify(savedEditorSignature);
+  state.pendingOpenSourceLabel = "";
+  renderLoadedEditorBar();
+  if (hasUnsavedEditorChanges()) {
+    showToast("Proposta gravada. As alterações feitas durante a gravação ainda não estão salvas.");
+  } else if (data.publication_status === "draft") {
     showToast("Nova versão V" + (data.versao || "") + " salva como rascunho. O cliente continua vendo a versão anterior até o envio.");
   } else if (needsNewVersion || (activeIsDraft && options.forSharing)) {
     showToast("Versão V" + (data.versao || "") + " pronta. Confira o envio ao cliente.");
@@ -13175,6 +13239,17 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast(nextStatus === "confirmado" ? "Evento confirmado com sinal pago." : "Proposta salva no funil.");
   }
   return data;
+  } catch (error) {
+    console.warn("Falha ao concluir a gravação da proposta.", error);
+    state.lastProposalSaveError = committedProposal
+      ? "A proposta foi gravada, mas a tela não terminou de atualizar. Confira o histórico antes de repetir."
+      : "Não foi possível confirmar a gravação. Suas alterações continuam no editor. Confira o histórico antes de tentar novamente.";
+    showToast(state.lastProposalSaveError);
+    return null;
+  } finally {
+    state.proposalSaveInProgress = false;
+    if (saveButton) { saveButton.disabled = wasDisabled; saveButton.removeAttribute("aria-busy"); }
+  }
 }
 
 async function confirmCurrentEvent() {
@@ -13707,6 +13782,7 @@ function showToast(message) {
 }
 
 function getSupabaseSaveErrorMessage(error, context = {}) {
+  if (error?.code === "SAVE_UNCONFIRMED") return error.message || "Não foi possível confirmar a gravação. Confira o histórico antes de repetir.";
   const raw = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(" ");
   const text = raw.toLowerCase();
   if (error?.code === "PT409" || text.includes("proposta mudou") || text.includes("origem mudou")) {
@@ -13825,6 +13901,11 @@ async function ensureProposalForSharing() {
   const saved = await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
+    return null;
+  }
+  if (hasUnsavedEditorChanges()) {
+    state.lastProposalShareError = "Há alterações posteriores à gravação. Salve e revise a versão atual antes de enviar.";
+    showToast(state.lastProposalShareError);
     return null;
   }
   const url = getPublicProposalUrl(saved);
@@ -13950,7 +14031,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return renderCommunicationTemplateText(template.whatsappBody, context, proposalUrl);
 }
 
-function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", proposalUrl = "", proposal = null }) {
+function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", html = "", sender = "", proposalUrl = "", proposal = null }) {
   const signature = getSendReviewSignature();
   const clientName = fields.clientName.value.trim() || "cliente";
   const eventType = getCurrentEventType();
@@ -13981,6 +14062,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     `Cliente: ${clientName}`,
     `Canal: ${channel}`,
     destination ? `Destino: ${destination}` : "",
+    sender ? `Remetente: ${sender}` : "",
     eventType ? `Evento: ${eventType}` : "",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
     `Pax: ${getGuestCount()} · Total: ${formatMoney(totals.total)} · Confiança: ${confidence.score}%`,
@@ -14013,7 +14095,8 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
       <h2 id="sendConfirmTitle">Revisar ${escapeHtml(channel)} antes de enviar</h2>
       <p class="send-confirm-details">${escapeHtml(details)}</p>
-      <label>Mensagem completa<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
+      ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
+      <label>${html ? "Versão completa em texto" : "Mensagem completa"}<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
       <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
       <div class="send-confirm-actions">
         <button type="submit" value="cancel" formnovalidate class="secondary" autofocus>Cancelar</button>
@@ -14021,6 +14104,8 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
       </div>
     </form>`;
     document.body.append(dialog);
+    const emailFrame = dialog.querySelector(".send-confirm-email");
+    if (emailFrame) emailFrame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">' + html;
     dialog.addEventListener("close", () => {
       const unchanged = signature === getSendReviewSignature();
       if (dialog.returnValue === "confirm" && !unchanged) showToast("Os dados mudaram. Revise a mensagem novamente antes de enviar.");
@@ -14161,16 +14246,32 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
     return false;
   }
 
+  state.sendLocks.email = true;
+  try {
   const emailTemplate = getCommunicationTemplate("proposta");
   const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
   const emailSubject = emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
   const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
+  const previewSignature = getSendReviewSignature();
+  const previewResult = await state.supabase.functions.invoke("send-proposal-email", {
+    body: { preview: true, proposalId: proposal.id, reviewedRevision: Number(proposal.revision), email: destination, proposalUrl, title: emailSubject, message: emailMessage },
+  });
+  const emailPreview = previewResult.data;
+  if (previewResult.error || !emailPreview?.ok || emailPreview.mode !== "preview" || !emailPreview.html || !emailPreview.text || !emailPreview.contentHash || Number(emailPreview.reviewedRevision) !== Number(proposal.revision)) {
+    showToast(emailPreview?.message || await getFunctionErrorMessage(previewResult.error) || "Não foi possível preparar a prévia completa. Nenhum e-mail foi enviado.");
+    return false;
+  }
+  if (previewSignature !== getSendReviewSignature()) {
+    showToast("Os dados mudaram durante a prévia. Revise a proposta antes de enviar.");
+    return false;
+  }
   {
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination,
       title,
-      message: emailMessage, subject: emailSubject, proposalUrl, proposal,
+      message: emailPreview.text, html: emailPreview.html, sender: emailPreview.sender,
+      subject: emailPreview.subject, proposalUrl, proposal,
       action: "enviar agora pelo ZeptoMail e registrar no histórico",
     });
     if (!confirmed) {
@@ -14196,7 +14297,8 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
         proposalId: proposal.id,
         approved: true,
         reviewedResponseAt,
-        reviewedRevision: proposal.revision,
+        reviewedRevision: Number(proposal.revision),
+        reviewedContentHash: emailPreview.contentHash,
         email: destination,
         proposalUrl,
         title: emailSubject,
@@ -14234,6 +14336,12 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title =
       detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar e-mail.",
     });
     showToast("Não foi possível enviar o e-mail. Confira a conexão e tente novamente.");
+    return false;
+  } finally {
+    state.sendLocks.email = false;
+  }
+  } catch (error) {
+    showToast(await getFunctionErrorMessage(error) || "Não foi possível preparar o e-mail. Nenhum envio foi iniciado.");
     return false;
   } finally {
     state.sendLocks.email = false;
