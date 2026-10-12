@@ -49,23 +49,29 @@ async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
 for(const channel of ['whatsapp','email'])test(`${channel}: salvar, enviar, continuar digitando e salvar preserva revisão e texto`,async({page})=>{
   await prepare(page,channel);
   await page.locator('#notes').fill('Digitado durante o envio');
+  // Internal notes alone do not create a client-visible version. Change guests
+  // as well to exercise the real published-version/new-draft policy.
+  const nextGuests=await page.evaluate(()=>Number(window.beforeSend.snapshot.event.guests)+1);
+  await page.locator('#guestCount').fill(String(nextGuests));
   const accepted=await page.evaluate(async()=>{
     window.finishProvider();await window.attempt;
     return {revision:state.editorProposalBase.revision,before:window.beforeSend.revision,
-      dirty:hasUnsavedEditorChanges(),text:fields.notes.value};
+      dirty:hasUnsavedEditorChanges(),text:fields.notes.value,guests:getGuestCount()};
   });
   expect(accepted.revision).toBe(accepted.before+1);expect(accepted.dirty).toBe(true);expect(accepted.text).toBe('Digitado durante o envio');
+  expect(accepted.guests).toBe(nextGuests);
   await expect(page.locator('#loadedEditorBar')).toContainText('Não salvo');
   const saved=await page.evaluate(async()=>{
     const result=await saveCurrentProposal('negociacao');
     const published=state.proposals.find(p=>p.id===window.beforeSend.id);
     return {ok:Boolean(result),error:state.lastProposalSaveError,text:result?.snapshot.event.notes,
-      expected:window.postSendWrite?.p_expected_revision,dirty:hasUnsavedEditorChanges(),
-      newDraft:result?.id!==window.beforeSend.id&&result?.publication_status==='draft',publishedText:published?.snapshot.event.notes};
+      expected:window.postSendWrite?.p_expected_revision,dirty:hasUnsavedEditorChanges(),guests:result?.snapshot.event.guests,
+      newDraft:result?.id!==window.beforeSend.id&&result?.publication_status==='draft',
+      publishedText:published?.snapshot.event.notes,publishedGuests:published?.snapshot.event.guests};
   });
   expect(saved.ok,saved.error).toBe(true);expect(saved.expected).toBe(accepted.revision);
-  expect(saved.text).toBe('Digitado durante o envio');expect(saved.dirty).toBe(false);
-  expect(saved.newDraft).toBe(true);expect(saved.publishedText).toBe('Antes do envio');
+  expect(saved.text).toBe('Digitado durante o envio');expect(saved.dirty).toBe(false);expect(saved.guests).toBe(nextGuests);
+  expect(saved.newDraft).toBe(true);expect(saved.publishedText).toBe('Antes do envio');expect(saved.publishedGuests).toBe(nextGuests-1);
 });
 
 test('alteração concorrente continua bloqueada e não apaga a digitação local',async({page})=>{
