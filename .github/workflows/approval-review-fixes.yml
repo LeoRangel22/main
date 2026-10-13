@@ -2,7 +2,7 @@ name: Approval review fixes
 on:
   push:
     branches: ['feat/remote-proposal-approval-20261013']
-    paths: ['scripts/approval-review-fixes.patch']
+    paths: ['scripts/approval-review-fixes.patch','.github/workflows/approval-review-fixes.yml']
 permissions:
   contents: read
 jobs:
@@ -45,7 +45,7 @@ jobs:
           test -n "$migration"
           cat scripts/approval-review-migration.sql > "$migration"
           git add "$migration"
-          git rm scripts/approval-review-migration.sql
+          git rm -f scripts/approval-review-migration.sql
           npm ci
           npm run build
           node --test checks/*.test.cjs
