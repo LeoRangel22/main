@@ -5,6 +5,7 @@ async function setup(page,options={}){
  await page.addInitScript(({aid,options})=>{
   window.approvalCalls=[];let listener=()=>{};
   const a={id:aid,proposal_id:aid,revision:3,review_hash:'exact-review',status:'pending',can_decide:!options.seller,expired:!!options.expired,stale:!!options.stale,expires_at:'2099-11-18T10:00:00Z',approver_email:'manager@example.test',notifications:[{channel:'whatsapp',status:'accepted'},{channel:'email',status:'failed'}],proposal_snapshot:{versao:1,cliente_nome:'Cliente de teste <script>alert(1)</script>',tipo_evento:'Coffee Break',data_evento:'2099-11-18',horario_evento:'10:00:00',convidados:20,duracao:2,total:1120,subtotal:1000,taxa_servico:120,privatizacao:0,snapshot:{event:{signalDeadlineHours:48,notes:'Observações preservadas'},totals:{},selectedItems:[{name:'Café e frutas',description:'Descrição completa',calc:{total:1000}}],generalTerms:'Condições aprovadas',paymentTerms:'50% de sinal'}},content:{channel:'email',destination:'client@example.test',sender:'sender@example.test',title:'Assunto exato',body:'Mensagem exata que será enviada',html:'<p>Resumo completo</p><script>parent.window.executed=true</script>'},send_id:null};
+  if(options.sendStatus){a.status='approved';a.send_id='send';a.send={status:options.sendStatus};}
   let user=options.unauthenticated?null:{id:'manager',email:'manager@example.test'};
   window.approvalMock={
    auth:{getUser:async()=>({data:{user}}),onAuthStateChange:fn=>{listener=fn;return {data:{subscription:{unsubscribe(){}}}}},signInWithPassword:async()=>({data:{}}),signOut:async()=>{user=null;listener('SIGNED_OUT');return {};}},
@@ -30,4 +31,12 @@ test('aprovação remota: equipe solicita revisão sem alterar estado comercial 
   return {ok,captured,status:proposal.status,before:status};
  });
  expect(result.ok).toBe(true);expect(result.captured.name).toBe('event-proposal-approval');expect(result.captured.body.action).toBe('request');expect(result.status).toBe(result.before);await expect(page.locator('#remoteApprovalResult')).toContainText('Aguardando aprovação');
+});
+
+for(const sendStatus of ['failed','sending','uncertain','accepted'])test(`aprovação remota: tentativa após ${sendStatus} depende de confirmação`,async({page})=>{
+ await setup(page,{sendStatus});const b=page.getByRole('button',{name:'Repetir envio recusado',exact:true});
+ if(sendStatus!=='failed'){await expect(b).toHaveCount(0);return;}
+ await expect(b).toBeVisible();await b.click();expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(0);
+ await page.locator('#confirmed').check();await b.click();await expect(page.locator('#notice')).toContainText('envio aceito');
+ expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(1);
 });

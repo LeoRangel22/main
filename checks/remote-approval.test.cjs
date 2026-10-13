@@ -57,3 +57,9 @@ test('approval: repeated approval cannot dispatch an existing send',async()=>{co
 test('approval: sender timeout returns warning without repeating customer send',async()=>{const f=setup({sendTimeout:true});const r=await f.request({action:'approve',id:aid,confirmed:true,reviewHash:'reviewed-hash'});assert.equal(r.status,200);assert.match(r.body.warning,/Timeout/);assert.equal(f.calls.fetch.length,1);});
 test('approval: stale proposal is refused before preparing notifications',async()=>{const f=setup();const r=await f.request({...requestPayload,reviewedRevision:1});assert.equal(r.status,409);assert.equal(f.calls.fetch.length,0);});
 test('approval: shared delivery ledger selects remote approval gate when supplied',()=>{const source=fs.readFileSync(`${__dirname}/../supabase/functions/_shared/send-ledger.ts`,'utf8');assert.match(source,/begin_event_approved_send/);assert.match(source,/content_hash: payload.reviewedContentHash/);assert.match(source,/target_approval: payload.approvalId/);});
+
+for (const outcome of ['failed','sending','uncertain','accepted']) test(`approval: explicit retry with stored ${outcome} outcome`,async()=>{
+ const f=setup({duplicate:true});f.a.status='approved';f.a.send={status:outcome};
+ const r=await f.request({action:'approve',id:aid,confirmed:true,reviewHash:'reviewed-hash'});
+ assert.equal(r.status,200);assert.equal(f.calls.fetch.length,outcome==='failed'?1:0);
+});

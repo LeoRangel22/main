@@ -13898,9 +13898,15 @@ async function ensureProposalForSharing({ forApproval = false } = {}) {
   if (!forApproval && !(await remoteProposalMayShare())) return null;
   state.lastProposalShareError = "";
   if (!ensureProposalReadyForSending()) return null;
-  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase : state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
-  const saved = await saveCurrentProposal(status, null, { forSharing: true });
+  // A repeated clean request must keep the same approval identity and revision.
+  const reuseReady = !QA_MODE && !hasUnsavedEditorChanges() && activeProposal?.is_current &&
+    !activeProposal._dashboard_summary && ["ready", "sent"].includes(activeProposal.publication_status) &&
+    activeProposal.public_token && !activeProposal.public_token_revoked_at &&
+    Date.parse(activeProposal.public_token_expires_at) > Date.now();
+  const saved = reuseReady ? structuredClone(activeProposal) : await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
     return null;
@@ -14217,7 +14223,9 @@ function warnUnreconciledProposalSend(result) {
 }
 
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
-  if (!QA_MODE) return requestRemoteProposalApproval("whatsapp", { proposal, proposalUrl, message, title });
+  const approvalEnabled = await remoteProposalApprovalEnabled();
+  if (approvalEnabled === null) return false;
+  if (approvalEnabled) return requestRemoteProposalApproval("whatsapp", { proposal, proposalUrl, message, title });
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
     return false;
@@ -14314,7 +14322,9 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
 }
 
 async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial" }) {
-  if (!QA_MODE) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
+  const approvalEnabled = await remoteProposalApprovalEnabled();
+  if (approvalEnabled === null) return false;
+  if (approvalEnabled) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar e-mail direto.");
     return false;

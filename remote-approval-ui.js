@@ -1,4 +1,17 @@
 /* Authenticated internal approval bridge. Never stores credentials or approves from a link. */
+// Only a verified disabled policy restores legacy sending. Read failures fail closed.
+async function remoteProposalApprovalEnabled() {
+  if (QA_MODE) return false;
+  const client=state.supabase, userId=state.session?.user?.id;
+  if (!client || !userId) { showToast('Entre com sua conta da equipe.'); return null; }
+  try {
+    const {data,error}=await client.rpc('event_approval_policy');
+    if(error || typeof data?.enabled!=='boolean' || state.supabase!==client || state.session?.user?.id!==userId) throw Error('Não foi possível conferir a política de aprovação. Nenhum envio autorizado.');
+    const labels=data.enabled?{whatsappBtn:'Solicitar aprovação · WhatsApp',emailBtn:'Solicitar aprovação · e-mail'}:{whatsappBtn:'Enviar por WhatsApp',emailBtn:'Enviar por e-mail'};
+    for(const [id,label] of Object.entries(labels)){const el=document.getElementById(id);if(el)el.textContent=label;}
+    return data.enabled;
+  } catch(error) { showToast(error.message || 'Não foi possível conferir a liberação.'); return null; }
+}
 async function requestRemoteProposalApproval(channel, options) {
   if (!state.supabase || !state.session) { showToast('Entre com sua conta da equipe.'); return false; }
   if (state.sendLocks[channel]) { showToast('A solicitação já está sendo preparada.'); return false; }
@@ -32,13 +45,23 @@ async function requestRemoteProposalApproval(channel, options) {
   finally { state.sendLocks[channel]=false; }
 }
 async function remoteProposalMayShare() {
-  if(QA_MODE) return true;
-  if(!state.session || !state.supabase || hasUnsavedEditorChanges()) { showToast('Salve e solicite a aprovação antes de compartilhar.'); return false; }
+  const enabled=await remoteProposalApprovalEnabled();
+  if(enabled===null) return false;
+  if(!enabled) return true;
+  if(hasUnsavedEditorChanges()) { showToast('Salve e solicite a aprovação antes de compartilhar.'); return false; }
+  const client=state.supabase,userId=state.session?.user?.id,base=state.editorProposalBase;
   const p=getActiveProposal();
-  if(!p?.id) { showToast('Salve e solicite a aprovação do gestor.'); return false; }
+  if(!p?.id || !base || base.id!==p.id) { showToast('Abra a proposta completa antes de compartilhar.'); return false; }
+  const unchanged=()=>state.supabase===client && state.session?.user?.id===userId && state.activeProposalId===p.id && state.editorProposalBase===base && !hasUnsavedEditorChanges();
   try {
-    const {data,error}=await state.supabase.rpc('event_proposal_can_share',{target_proposal:p.id,expected_revision:Number(p.revision)});
-    if(error || data!==true) throw Error('A versão ainda não está liberada. Use Solicitar aprovação.');
+    const read=await client.from('propostas').select('*').eq('id',p.id).single();
+    if(read.error || !read.data || !unchanged()) throw Error('Não foi possível atualizar a revisão. Suas alterações foram preservadas.');
+    const latest=read.data;
+    if(Number(latest.revision)!==Number(base.revision) && !isOwnProposalSendRevision(base,latest)) throw Error('A proposta mudou. Reabra e confira a versão atual antes de compartilhar.');
+    const {data,error}=await client.rpc('event_proposal_can_share',{target_proposal:latest.id,expected_revision:Number(latest.revision)});
+    if(error || data!==true || !unchanged()) throw Error('A versão ainda não está liberada. Use Solicitar aprovação.');
+    // A manager send changes delivery metadata only; never replace local input.
+    state.editorProposalBase=structuredClone(latest);upsertProposalState(latest);renderLoadedEditorBar();
     return true;
   } catch(error) { showToast(error.message || 'Não foi possível verificar a liberação. Compartilhamento bloqueado.'); return false; }
 }

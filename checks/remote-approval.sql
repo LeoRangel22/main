@@ -51,6 +51,18 @@ begin
  assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Double click does not send twice';
  assert event_proposal_can_share(p.id,p.revision);
  reset role;
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'failed',null,'Definitive fixture rejection');
+ set local role authenticated;
+ claim:=begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null);
+ assert (claim->>'claimed')::boolean and (claim#>>'{send,attempts}')::integer=2,'Definitive rejection can be explicitly retried';
+ assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Retry double click still cannot duplicate';
+ reset role;
+ -- Uncertainty cannot be retried; then restore the synthetic attempt for acceptance checks.
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'uncertain',null,'Fixture timeout');
+ set local role authenticated;
+ assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Uncertain sends cannot retry';
+ reset role;
+ update event_outbox set status='sending' where id=(claim#>>'{send,id}')::uuid;
  perform finish_event_send((claim#>>'{send,id}')::uuid,'accepted','fixture-provider');
  select * into p from propostas where id=p.id;
  assert event_private.remote_proposal_is_public(p),'Acceptance update keeps approved content public';

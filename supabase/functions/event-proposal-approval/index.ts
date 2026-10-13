@@ -102,7 +102,7 @@ Deno.serve(async (req: Request) => {
     if (["approve","changes_requested","rejected"].includes(input.action)) {
       const a = await rpc(client,"event_decide_proposal_approval",{target_approval:input.id,decision:input.action,reviewed_hash:input.reviewHash,confirmed:input.confirmed === true,decision_reason:text(input.reason)});
       let warning = "";
-      if (input.action === "approve" && !a.send_id) {
+      if (input.action === "approve" && (!a.send_id || a.send?.status === "failed")) {
         const c = a.content;
         try {
           await invoke(url,key,authorization,`send-proposal-${c.channel === "email" ? "email" : "whatsapp"}`,{approvalId:a.id,proposalId:a.proposal_id,approved:true,reviewedRevision:Number(a.revision),reviewedResponseAt:c.reviewedResponseAt,email:c.destination,phone:c.destination,proposalUrl:c.proposalUrl,title:c.title,message:c.message,reviewedContentHash:c.contentHash});
