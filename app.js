@@ -3272,9 +3272,9 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "email") {
-    const email = context.email;
-    if (!email) {
-      showToast("Preencha o e-mail do cliente para abrir a mensagem.");
+    const email = String(context.email || "").trim();
+    if (!isLikelyEmailAddress(email)) {
+      showToast("Preencha um e-mail válido do cliente antes de abrir a mensagem.");
       return;
     }
     if (state.sendLocks.email) {

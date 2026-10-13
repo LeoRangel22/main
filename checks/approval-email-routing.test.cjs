@@ -4,13 +4,14 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const source=fs.readFileSync(`${__dirname}/../app.js`,'utf8');
 const body=source.slice(source.indexOf('async function runQuickReply('),source.indexOf('function renderQuickReplies('));
-function setup(enabled,confirmed=true){
+function setup(enabled,confirmed=true,email='fixture@example.test'){
   const calls={sent:[],reviews:[],logs:[]},location={href:''};
   const payload={id:'followup',title:'Retorno',subject:'Assunto de acompanhamento',message:'Mensagem exata de acompanhamento sem proposta inicial'};
   const context=vm.createContext({QA_MODE:false,encodeURIComponent,state:{sendLocks:{email:false}},window:{location,setTimeout:()=>{}},
-    getQuickReplyContext:()=>({email:'fixture@example.test',status:'negociacao'}),
+    getQuickReplyContext:()=>({email,status:'negociacao'}),
     getQuickReplyPresets:()=>[{...payload,needsLink:true}],getQuickReplyPayload:()=>payload,
     ensureProposalForSharing:async()=>({saved:{id:'fixture'},url:'https://example.test/proposta'}),
+    isLikelyEmailAddress:value=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value),
     remoteProposalApprovalEnabled:async()=>enabled,
     sendProposalEmailViaZepto:async p=>{calls.sent.push(p);return true;},
     confirmClientSend:async p=>{calls.reviews.push(p);return confirmed;},
@@ -34,4 +35,11 @@ test('unknown approval policy fails closed',async()=>{
 });
 test('cancelled contingency review never opens or sends email',async()=>{
   const f=setup(false,false);await f.run();assert.equal(f.calls.sent.length,0);assert.equal(f.location.href,'');assert.equal(f.calls.logs[0].status,'canceled');
+});
+
+for(const email of ['foo','bad@','x@y',''])test(`invalid contingency email is rejected: ${email||'empty'}`,async()=>{
+  const f=setup(false,true,email);await f.run();assert.equal(f.calls.sent.length,0);assert.equal(f.calls.reviews.length,0);assert.equal(f.location.href,'');assert.equal(f.calls.logs.length,0);
+});
+test('contingency trims a valid destination before reviewing and opening',async()=>{
+  const f=setup(false,true,'  fixture@example.test  ');await f.run();assert.equal(f.calls.reviews[0].destination,'fixture@example.test');assert.equal(new URL(f.location.href).pathname,'fixture%40example.test');
 });
