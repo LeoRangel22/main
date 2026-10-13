@@ -74,6 +74,18 @@ begin
  values(opp,'Approval fixture','fixture@example.test','Coffee Break','2099-11-18','10:00',21,2,1000,120,0,1120,'proposta_pronta','ready',true,p.snapshot) returning * into other;
  assert (select id=p.id from get_public_proposal(p.public_token)),'Old customer link stays on approved content';
  assert not exists(select 1 from get_public_proposal(other.public_token)),'New link is not public';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','fixture@example.test','role','authenticated')::text,true);
+ set local role authenticated;
+ assert exists(select 1 from get_my_event_history() h where h.proposal_id=p.id),'Customer history preserves last approved version';
+ assert not exists(select 1 from get_my_event_history() h where h.proposal_id=other.id),'Customer history hides unapproved replacement';
+ assert (select count(*)=1 from get_my_event_history() h where h.oportunidade_id=opp),'Customer history does not duplicate an opportunity';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','unrelated@example.test','role','authenticated')::text,true);
+ set local role authenticated;
+ assert not exists(select 1 from get_my_event_history()),'Unrelated customer cannot read approved history';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+
  c:=c||jsonb_build_object('proposalUrl','https://leorangel22.github.io/main/proposta.html?p='||other.public_token);
  select * into a from event_create_proposal_approval(other.id,other.revision,seller,c);
  set local role authenticated;
