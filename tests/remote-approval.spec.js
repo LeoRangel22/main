@@ -9,7 +9,7 @@ async function setup(page,options={}){
   let user=options.unauthenticated?null:{id:'manager',email:'manager@example.test'};
   window.approvalMock={
    auth:{getUser:async()=>({data:{user}}),onAuthStateChange:fn=>{listener=fn;return {data:{subscription:{unsubscribe(){}}}}},signInWithPassword:async()=>({data:{}}),signOut:async()=>{user=null;listener('SIGNED_OUT');return {};}},
-   rpc:async()=>({data:{enabled:true,is_approver:!options.seller}}),
+   rpc:async(name)=>({data:name==='get_event_approval_watch_health'?{enabled:true,last_success_at:new Date().toISOString(),alerts:[]}:{enabled:true,is_approver:!options.seller}}),
    functions:{invoke:async(name,{body})=>{window.approvalCalls.push(body);if(body.action==='approve'){await new Promise(r=>setTimeout(r,100));a.status='approved';a.send_id='send';a.send={status:'accepted'};}if(['changes_requested','rejected'].includes(body.action)){a.status=body.action;a.reason=body.reason;}return {data:{ok:true,approval:structuredClone(a)}};}}
   };
  },{aid,options});
@@ -39,4 +39,10 @@ for(const sendStatus of ['failed','sending','uncertain','accepted'])test(`aprova
  await expect(b).toBeVisible();await b.click();expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(0);
  await page.locator('#confirmed').check();await b.click();await expect(page.locator('#notice')).toContainText('envio aceito');
  expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(1);
+});
+
+
+test('monitor banner is authenticated, shows health, and logout removes it',async({page})=>{
+ await setup(page);await expect(page.locator('#watchStatus')).toContainText('Monitor de aprovações ativo');
+ await page.locator('#logout').click();await expect(page.locator('#watchStatus')).toBeEmpty();
 });

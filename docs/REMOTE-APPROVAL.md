@@ -36,3 +36,15 @@ Os destinatários reais não pertencem ao repositório público. O recurso reuti
 `scripts/verify-public-release.cjs` verifica o commit e os arquivos reais publicados, login interno e móvel, ausência de decisões sem login e recusa de POST anônimo na função de aprovação. Essas verificações não alteram propostas nem disparam mensagens.
 
 Uma suíte automatizada aprovada não comprova que o telefone/e-mail do gestor recebeu um aviso real. Essa evidência depende da primeira solicitação autenticada e da conferência dos resultados nos canais. A configuração e publicação não disparam retroativamente pedidos para todas as propostas existentes.
+
+
+## Fechamento e alertas — 13/10/2026
+O conteúdo determinístico da solicitação agora possui identidade separada da decisão. Pedidos vivos iguais são reaproveitados; expirados ou decisões terminais recebem um sucessor com revisão comercial preservada, nova validade e histórico de vínculo. Despachos aceitos/em andamento/incertos nunca são renovados para gerar repetição. Uma decisão anterior não aprova seu sucessor.
+
+As páginas internas e públicas alteradas usam a identificação `20261013-approval-closure` para invalidar os arquivos antigos no cache. O envio de resposta rápida com aprovação desativada preserva texto e assunto selecionados.
+
+`event-approval-monitor` usa uma credencial de tarefa privada, verificada por RPC exclusiva do serviço. Não depende do navegador ou deste chat. O agendamento de cinco minutos é instalado desativado e só é habilitado após a função e a publicação serem conferidas. Não altera aprovações, propostas, pagamentos, callbacks ou o registro de envio ao cliente.
+
+Detecção: avisos pendentes/em andamento por dez minutos, avisos recusados/incertos, solicitações aguardando decisão por duas horas, solicitações expiradas e decisões aprovadas sem despacho confirmado. Os alertas são enviados ao gestor nos dois destinos privados das 08h30 às 21h de Brasília. Fora desse horário, a detecção continua e a fila é revalidada antes do envio. Cada solicitação/motivo/canal tem uma identidade única; alertas aceitos/em andamento/incertos não se repetem. Somente alertas definitivamente recusados são tentados novamente, no máximo três tentativas, com intervalo mínimo de uma hora. Os avisos originais de aprovação e os envios ao cliente não são repetidos pelo monitor.
+
+O painel autenticado mostra a última execução e o histórico de alertas. Falha de leitura do monitor não impede revisar uma proposta. Aceitação do alerta pelo provedor não comprova sua entrega. O teste real de transporte (`probeId` UUID), restrito à credencial privada, usa somente os destinos configurados do gestor, não cria proposta e não registra aprovação. Repetir o mesmo identificador não envia novamente; outro teste é limitado a um por hora. A primeira decisão real do gestor continua sendo uma validação separada.

@@ -38,7 +38,8 @@ function setup(s={}){
    return new Response(JSON.stringify({messageId:'provider',request_id:'provider'}),{status:s.http||200});
  }});
  const source=fs.readFileSync(`${__dirname}/../supabase/functions/event-proposal-approval/index.ts`,'utf8').replace(/^import .*;\s*$/gm,'');
- vm.runInContext(stripTypeScriptTypes(source),context);
+ const transport=fs.readFileSync(`${__dirname}/../supabase/functions/_shared/approval-notifications.ts`,'utf8').replace(/^export /gm,'');
+ vm.runInContext(stripTypeScriptTypes(transport+'\n'+source),context);
  const request=async(body,method='POST')=>{const response=await handler(new Request('https://project.example.test/approval',{method,headers:{Authorization:'Bearer fixture','Content-Type':'application/json'},...(method==='POST'?{body:JSON.stringify(body)}:{})}));return {status:response.status,body:await response.json()};};
  return {calls,a,p,c,request,context};
 }

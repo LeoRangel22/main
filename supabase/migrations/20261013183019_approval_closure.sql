@@ -114,9 +114,9 @@ begin
    reason:=null;
    if a.status='pending' then
     if a.expires_at<=now() then reason:='approval_expired';
-    elsif exists(select 1 from public.event_approval_notifications n where n.approval_id=a.id and n.status='failed') then reason:='notification_failed';
-    elsif exists(select 1 from public.event_approval_notifications n where n.approval_id=a.id and
-      (n.status='uncertain' or (n.status in ('pending','sending') and n.updated_at<=now()-interval '10 minutes'))) then reason:='notification_stalled';
+    elsif exists(select 1 from public.event_approval_notifications notice_row where notice_row.approval_id=a.id and notice_row.status='failed') then reason:='notification_failed';
+    elsif exists(select 1 from public.event_approval_notifications notice_row where notice_row.approval_id=a.id and
+      (notice_row.status='uncertain' or (notice_row.status in ('pending','sending') and notice_row.updated_at<=now()-interval '10 minutes'))) then reason:='notification_stalled';
     elsif a.created_at<=now()-interval '2 hours' then reason:='approval_waiting';
     end if;
    elsif (a.send_id is null and a.decided_at<=now()-interval '5 minutes') or a.send_status in ('failed','uncertain') or
