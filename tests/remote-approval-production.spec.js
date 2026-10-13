@@ -4,6 +4,8 @@ async function mount(page){
   await page.goto('/index.html');
   await page.evaluate(()=>{
     resetCommercialDashboard();loadQaFixtures();
+    state.session={user:{id:'qa-user',email:'leorangel@gmail.com'}};
+    state.supabase=createQaSupabaseClient();
     const p=state.proposals.find(x=>x.id==='qa-proposal-sem-resposta');
     openSavedProposal(p.id);window.approvalProductionCalls=[];
     state.supabase.functions.invoke=async(name,{body})=>{
