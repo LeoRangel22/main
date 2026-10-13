@@ -6,7 +6,10 @@ export async function claimSend(supabase: any, proposal: any, payload: any, chan
   const url = new URL(String(payload.proposalUrl || ""));
   if (url.origin !== "https://leorangel22.github.io" || url.pathname !== "/main/proposta.html" || url.searchParams.get("p") !== proposal.public_token) throw new Error("O link precisa corresponder à versão aprovada.");
   if (proposal.public_token_revoked_at || (proposal.public_token_expires_at && new Date(proposal.public_token_expires_at).getTime() < Date.now())) throw new Error("Renove o link público antes de enviar.");
-  const { data, error } = await supabase.rpc("begin_event_send_reviewed", { target_proposal: proposal.id, reviewed_revision: payload.reviewedRevision, send_channel: channel, send_destination: destination, send_body: body, send_title: title, reviewed_response_at: payload.reviewedResponseAt || null });
+  const args = { reviewed_revision: payload.reviewedRevision, send_channel: channel, send_destination: destination, send_body: body, send_title: title, reviewed_response_at: payload.reviewedResponseAt || null };
+  const { data, error } = payload.approvalId
+    ? await supabase.rpc("begin_event_approved_send", { ...args, target_approval: payload.approvalId, content_hash: payload.reviewedContentHash || null })
+    : await supabase.rpc("begin_event_send_reviewed", { ...args, target_proposal: proposal.id });
   if (error) throw new Error(error.message || "Não foi possível registrar a aprovação.");
   return data;
 }

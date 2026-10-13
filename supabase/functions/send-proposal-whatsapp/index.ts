@@ -9,6 +9,7 @@ const corsHeaders = {
 };
 
 type SendPayload = {
+  approvalId?: string;
   dryRun?: boolean;
   approved?: boolean;
   reviewedResponseAt?: string | null;

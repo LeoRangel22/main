@@ -20,3 +20,6 @@ verify_jwt = false
 # Internal cron worker with its own x-event-job-key authentication.
 [functions.event-bot-bridge]
 verify_jwt = false
+
+[functions.event-proposal-approval]
+verify_jwt = true
