@@ -14344,8 +14344,11 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
   state.sendLocks.email = true;
   try {
   const emailTemplate = getCommunicationTemplate("proposta");
-  const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
-  const emailSubject = emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
+  // Preserve the chosen quick reply when remote approval is disabled.
+  const emailMessage = typeof message === "string" ? message
+    : renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
+  const emailSubject = typeof subject === "string" && subject.trim() ? subject
+    : emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
   const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
   const previewSignature = getSendReviewSignature();
   const previewResult = await state.supabase.functions.invoke("send-proposal-email", {

@@ -102,3 +102,24 @@ test('production approved sharing reconciles remote send metadata but not concur
   return {allowed,revision,expected,conflict,finalRevision:state.editorProposalBase.revision};
  });expect(result.allowed).toBe(true);expect(result.revision).toBe(4);expect(result.expected).toBe(4);expect(result.conflict).toBe(false);expect(result.finalRevision).toBe(4);
 });
+
+test('production disabled approval preserves selected quick-reply subject and text in preview and dispatch',async({page})=>{
+  await mount(page);
+  const result=await page.evaluate(async()=>{
+    const proposal=getActiveProposal();let capturedReview;
+    state.supabase.rpc=async()=>({data:{enabled:false}});
+    confirmClientSend=async review=>{capturedReview=review;return true;};
+    state.supabase.functions.invoke=async(name,{body})=>{
+      window.approvalProductionCalls.push({name,body});
+      if(body.preview)return {data:{ok:true,mode:'preview',html:'<p>Selected follow-up</p>',text:body.message,subject:body.title,sender:'Fixture',contentHash:'reviewed',reviewedRevision:body.reviewedRevision}};
+      return {data:{ok:true,message:'Accepted fixture'}};
+    };
+    loadCommercialInsights=async()=>{};loadEventOperations=async()=>{};loadProposalHistory=async()=>{};
+    reconcileProposalEditorAfterSend=async()=> 'reconciled';
+    const ok=await sendProposalEmailViaZepto({proposal,proposalUrl:getPublicProposalUrl(proposal),email:'fixture@example.test',message:'Retorno escolhido sobre o pagamento',subject:'Assunto específico de acompanhamento',title:'Acompanhamento'});
+    return {ok,calls:window.approvalProductionCalls,review:capturedReview};
+  });
+  expect(result.ok).toBe(true);expect(result.calls).toHaveLength(2);
+  for(const call of result.calls){expect(call.body.message).toBe('Retorno escolhido sobre o pagamento');expect(call.body.title).toBe('Assunto específico de acompanhamento');}
+  expect(result.review.message).toBe('Retorno escolhido sobre o pagamento');expect(result.review.subject).toBe('Assunto específico de acompanhamento');
+});
