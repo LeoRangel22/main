@@ -2,7 +2,7 @@ name: Approval review fixes
 on:
   push:
     branches: ['feat/remote-proposal-approval-20261013']
-    paths: ['scripts/approval-review-fixes.patch','.github/workflows/approval-review-fixes.yml']
+    paths: ['scripts/approval-review-fixes.patch','.github/workflows/approval-review-fixes.yml','tests/remote-approval-production.spec.js']
 permissions:
   contents: read
 jobs:
