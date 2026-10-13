@@ -39,7 +39,8 @@ jobs:
           test "$GITHUB_REF" = 'refs/heads/feat/remote-proposal-approval-20261013'
           python3 - <<'PY'
           import pathlib,base64,gzip,hashlib
-          data=gzip.decompress(base64.b64decode(pathlib.Path('scripts/remote-approval.patch').read_text()))
+          encoded=pathlib.Path('scripts/remote-approval-part1.data').read_text()+pathlib.Path('scripts/remote-approval.patch').read_text()
+          data=gzip.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(data).hexdigest()=='3d6d669445337a660878399074602ff21051af16183214b14f596019b1975b33'
           pathlib.Path('/tmp/remote-approval.diff').write_bytes(data)
           PY
@@ -54,7 +55,7 @@ jobs:
           bash scripts/restore-test.sh
           npx playwright install --with-deps chromium
           npx playwright test --workers=2
-          git rm scripts/remote-approval.patch .github/workflows/remote-approval-workspace.yml
+          git rm scripts/remote-approval-part1.data scripts/remote-approval.patch .github/workflows/remote-approval-workspace.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat: require revision-bound manager approval before proposal delivery'
