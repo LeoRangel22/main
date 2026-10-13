@@ -7,6 +7,7 @@ async function mount(page){
     state.session={user:{id:'qa-user',email:'leorangel@gmail.com'}};
     state.supabase=createQaSupabaseClient();
     const p=state.proposals.find(x=>x.id==='qa-proposal-sem-resposta');
+    Object.assign(p,{revision:1,public_token:'00000000-0000-4000-8000-000000000751',public_token_revoked_at:null});
     openSavedProposal(p.id);window.approvalProductionCalls=[];
     state.supabase.functions.invoke=async(name,{body})=>{
       window.approvalProductionCalls.push({name,body});
@@ -52,7 +53,7 @@ for(const channel of ['email','whatsapp'])test(`production disabled policy retai
   confirmClientSend=async()=>{reviews++;return false;};
   state.supabase.functions.invoke=async(name,{body})=>{
    window.approvalProductionCalls.push({name,body});
-   if(name==='send-proposal-email'&&body.preview)return {data:{ok:true,mode:'preview',html:'<p>Reviewed fixture</p>',text:'Reviewed fixture',contentHash:'hash',reviewedRevision:p.revision}};
+   if(name==='send-proposal-email'&&body.preview)return {data:{ok:true,mode:'preview',html:'<p>Reviewed fixture</p>',text:'Reviewed fixture',contentHash:'hash',reviewedRevision:body.reviewedRevision}};
    throw Error('Unexpected external operation');
   };
   const options={proposal:p,proposalUrl:getPublicProposalUrl(p),email:'fixture@example.test',message:'Exact fixture message'};
@@ -74,12 +75,15 @@ test('production repeated clean approval request preserves saved revision and id
  await mount(page);
  const result=await page.evaluate(async()=>{
   const p=getActiveProposal();Object.assign(p,{revision:3,is_current:true,publication_status:'ready',status:'proposta_pronta',public_token_expires_at:'2099-11-18T12:00:00Z'});openSavedProposal(p.id);
+  if(hasUnsavedEditorChanges()||!state.editorProposalBase.public_token)throw Error('Expected complete clean persisted fixture');
   ensureProposalReadyForSending=()=>true;
   const rpc=state.supabase.rpc.bind(state.supabase);let writes=0;
   state.supabase.rpc=async(name,args)=>{if(name==='save_event_proposal')writes++;return rpc(name,args);};
   const first=await ensureProposalForSharing({forApproval:true});
+  if(!first)throw Error(state.lastProposalShareError||'Ready proposal unavailable');
   await requestRemoteProposalApproval('whatsapp',{proposal:first.saved,proposalUrl:first.url,message:'Exact fixture message'});
   const second=await ensureProposalForSharing({forApproval:true});
+  if(!second)throw Error(state.lastProposalShareError||'Repeated ready proposal unavailable');
   await requestRemoteProposalApproval('whatsapp',{proposal:second.saved,proposalUrl:second.url,message:'Exact fixture message'});
   return {writes,first:first.saved.revision,second:second.saved.revision,calls:window.approvalProductionCalls};
  });expect(result.writes).toBe(0);expect(result.first).toBe(3);expect(result.second).toBe(3);
