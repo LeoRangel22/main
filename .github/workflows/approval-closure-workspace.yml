@@ -1,0 +1,72 @@
+name: Approval closure workspace
+on:
+  push:
+    branches: [fix/approval-closure-20261013]
+    paths: ['.github/workflows/approval-closure-workspace.yml', 'scripts/approval-closure.patch']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    if: github.repository == 'LeoRangel22/main' && github.ref == 'refs/heads/fix/approval-closure-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: ['5432:5432']
+        options: --health-cmd 'pg_isready -U postgres' --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Export source and verification dependencies
+        if: hashFiles('scripts/approval-closure.patch') == ''
+        run: |
+          git archive --format=tar.gz -o /tmp/approval-source.tar.gz HEAD
+          tar -czf /tmp/approval-deps.tar.gz node_modules
+          npx --yes supabase@2.39.2 migration new --help
+          npx --yes supabase@2.39.2 migration new approval_closure
+          tar -czf /tmp/approval-migration.tar.gz supabase/migrations/*_approval_closure.sql
+          curl -fsSL --max-time 20 https://supabase.com/changelog.md -o /tmp/supabase-changelog.md || true
+      - name: Apply scoped repair and verify before commit
+        if: hashFiles('scripts/approval-closure.patch') != ''
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/approval-closure-20261013'
+          git apply --check scripts/approval-closure.patch
+          git apply --index scripts/approval-closure.patch
+          git diff --cached --name-only | while read -r file; do
+            case "$file" in app.js|index.html|proposta.html|formulario.html|aprovacoes.html|remote-approval-ui.js|aprovacoes.js|approval.css|checks/*|tests/*|supabase/migrations/*_approval_closure.sql|supabase/functions/event-approval-monitor/*|supabase/functions/_shared/approval-notifications.ts|supabase/functions/event-proposal-approval/index.ts|scripts/test-database.cjs|docs/REMOTE-APPROVAL.md) ;; *) echo "Unexpected path: $file"; exit 1;; esac
+          done
+          npx playwright install --with-deps chromium
+          npm test
+          npm run test:db
+          bash scripts/restore-test.sh
+          git rm scripts/approval-closure.patch .github/workflows/approval-closure-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: close approval review gaps and add stalled-request monitoring'
+          git push origin HEAD:refs/heads/fix/approval-closure-20261013
+          git archive --format=tar.gz -o /tmp/approval-source.tar.gz HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: approval-closure-workspace
+          path: |
+            /tmp/approval-source.tar.gz
+            /tmp/approval-deps.tar.gz
+            /tmp/approval-migration.tar.gz
+            /tmp/supabase-changelog.md
+            playwright-report/
+            test-results/
+          retention-days: 2
