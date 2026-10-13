@@ -52,6 +52,11 @@ async function verify() {
   });
   assert.equal(response.status, 401, 'The e-mail function must reject anonymous requests');
   report.anonymousEmailStatus = response.status;
+  const approvalResponse = await fetch('https://pdgbnpztdnrvrphzdjas.supabase.co/functions/v1/event-proposal-approval', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(15000),
+  });
+  assert.equal(approvalResponse.status, 401, 'Approval actions must reject anonymous requests');
+  report.anonymousApprovalStatus = approvalResponse.status;
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -70,6 +75,19 @@ async function verify() {
     assert.deepEqual(loaded, { client: true, save: true, review: true, locked: true });
     assert.deepEqual(errors, [], 'The public login screen must load without JavaScript errors');
     report.browser = loaded;
+    await page.setViewportSize({ width: 390, height: 844 });
+    const approvalNavigation = await page.goto(new URL('aprovacoes.html', base).href, { waitUntil: 'networkidle', timeout: 30000 });
+    assert.equal(approvalNavigation.status(), 200);
+    await page.locator('#loginForm').waitFor({ state: 'visible' });
+    const approval = await page.evaluate(() => ({
+      loginVisible: !document.getElementById('login').hidden,
+      workspaceHidden: document.getElementById('workspace').hidden,
+      decisions: document.querySelectorAll('[data-decision]').length,
+      noOverflow: document.documentElement.scrollWidth <= innerWidth,
+    }));
+    assert.deepEqual(approval, { loginVisible: true, workspaceHidden: true, decisions: 0, noOverflow: true });
+    assert.deepEqual(errors, [], 'The mobile approval login must load without JavaScript errors');
+    report.approvalBrowser = approval;
   } finally { await browser.close(); }
   report.passed = true;
 }
