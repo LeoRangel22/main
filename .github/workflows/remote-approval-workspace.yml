@@ -40,6 +40,8 @@ jobs:
           python3 - <<'PY'
           import pathlib,base64,gzip,hashlib
           encoded=pathlib.Path('scripts/remote-approval-part1.data').read_text()+pathlib.Path('scripts/remote-approval.patch').read_text()
+          for i,j,v in reversed([[5390,5392,'H'],[5402,5403,''],[6421,6422,'']]):
+              encoded=encoded[:i]+v+encoded[j:]
           data=gzip.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(data).hexdigest()=='3d6d669445337a660878399074602ff21051af16183214b14f596019b1975b33'
           pathlib.Path('/tmp/remote-approval.diff').write_bytes(data)
