@@ -7,13 +7,14 @@ This release fixes the returning-browser asset URLs and the disabled-policy emai
 - The seven affected entry pages version the changed application assets as `20261013-approval-hotfix`.
 - When remote approval is enabled, a link-bearing email quick reply still requests the manager's approval.
 - When the server confirms approval is disabled, the selected quick reply is shown for explicit review and opened as the exact mailto draft. It is not wrapped in the initial-proposal email template.
+- Email addresses are trimmed and validated before approval or contingency review. A malformed, blank or incomplete address never opens a draft.
 - Unknown/unavailable approval policy fails closed. Canceling review does not open or send an email.
 - Opening a draft is logged as `opened`, never as a confirmed send.
 - The direct proposal sender preserves explicitly supplied message/subject; proposal defaults remain available when neither is supplied.
 
 ## Verification
 
-The dedicated refinement workflow `38451925617` passed the full application/browser suite before committing the source. Added coverage includes seven asset-version checks, four real-function routing tests (enabled, disabled, unknown policy, cancellation), and a production-mode browser fixture verifying preview/dispatch subject and message. The standard pull-request checks and public-release verifier remain mandatory before calling this release published.
+The dedicated refinement workflows `38451925617` and `38453024300` passed the full application/browser suite before committing the source. Added coverage includes seven asset-version checks, four real-function routing tests (enabled, disabled, unknown policy, cancellation), five address-validation cases, and a production-mode browser fixture verifying preview/dispatch subject and message. The standard pull-request checks and public-release verifier remain mandatory before calling this release published.
 
 ## Explicit non-deliveries
 
