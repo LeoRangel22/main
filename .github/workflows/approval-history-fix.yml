@@ -1,0 +1,112 @@
+name: Approval customer history validation
+on:
+  push:
+    branches: ['feat/remote-proposal-approval-20261013']
+    paths: ['.github/workflows/approval-history-fix.yml']
+permissions:
+  contents: read
+jobs:
+  history:
+    if: github.ref == 'refs/heads/feat/remote-proposal-approval-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Generate scoped history migration and regression
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feat/remote-proposal-approval-20261013'
+          npx --yes supabase@2.39.2 migration new --help
+          npx --yes supabase@2.39.2 migration new remote_approval_customer_history
+          python3 - <<'PY'
+          from pathlib import Path
+          migration=next(Path('supabase/migrations').glob('*_remote_approval_customer_history.sql'))
+          migration.write_text('''-- Keep one customer-visible version per opportunity while its replacement awaits approval.
+          create or replace function public.get_my_event_history()
+          returns table(proposal_id uuid, oportunidade_id uuid, versao integer, status text, cliente_nome text, tipo_evento text, data_evento date, horario_evento time without time zone, convidados integer, total numeric, public_token uuid, snapshot jsonb, created_at timestamptz, updated_at timestamptz)
+          language sql stable security definer set search_path='' as $$
+          with me as (
+            select lower(nullif(trim(coalesce(auth.jwt()->>'email','')),'')) as email
+          ), visible as (
+            select distinct on (coalesce(p.oportunidade_id,p.id)) p.*
+            from public.propostas p,me
+            where me.email is not null and lower(coalesce(p.cliente_email,''))=me.email
+              and p.publication_status<>'draft' and p.public_token_revoked_at is null
+              and event_private.remote_proposal_is_public(p)
+            order by coalesce(p.oportunidade_id,p.id),coalesce(p.is_current,false) desc,p.versao desc nulls last,p.updated_at desc,p.id
+          )
+          select p.id,p.oportunidade_id,p.versao,p.status,p.cliente_nome,p.tipo_evento,p.data_evento,p.horario_evento,p.convidados,p.total,p.public_token,
+            jsonb_strip_nulls(jsonb_build_object('client',p.snapshot->'client','event',p.snapshot->'event','selectedItems',p.snapshot->'selectedItems','qualificacao',p.snapshot->'qualificacao','sourceRequestSnapshot',p.snapshot->'sourceRequestSnapshot')),
+            p.created_at,p.updated_at
+          from visible p
+          order by coalesce(p.data_evento,p.created_at::date) desc,p.updated_at desc limit 12;
+          $$;
+          revoke all on function public.get_my_event_history() from public,anon;
+          grant execute on function public.get_my_event_history() to authenticated;
+          ''')
+          path=Path('checks/remote-approval.sql');source=path.read_text()
+          marker=" assert not exists(select 1 from get_public_proposal(other.public_token)),'New link is not public';"
+          assert source.count(marker)==1
+          extra="""
+           perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','fixture@example.test','role','authenticated')::text,true);
+           set local role authenticated;
+           assert exists(select 1 from get_my_event_history() h where h.proposal_id=p.id),'Customer history preserves last approved version';
+           assert not exists(select 1 from get_my_event_history() h where h.proposal_id=other.id),'Customer history hides unapproved replacement';
+           assert (select count(*)=1 from get_my_event_history() h where h.oportunidade_id=opp),'Customer history does not duplicate an opportunity';
+           reset role;
+           perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','unrelated@example.test','role','authenticated')::text,true);
+           set local role authenticated;
+           assert not exists(select 1 from get_my_event_history()),'Unrelated customer cannot read approved history';
+           reset role;
+           perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+          """
+          path.write_text(source.replace(marker,marker+extra))
+          PY
+      - name: Validate history, permissions, transactions and restore
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          npm ci
+          npm run build
+          node --test checks/*.test.cjs
+          npm run test:db
+          bash scripts/restore-test.sh
+      - name: Commit verified history correction only
+        run: |
+          git add supabase/migrations/*_remote_approval_customer_history.sql checks/remote-approval.sql
+          git rm .github/workflows/approval-history-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: retain approved customer history while a replacement is pending'
+          git push origin HEAD:refs/heads/feat/remote-proposal-approval-20261013
+      - name: Export verified source
+        if: always()
+        run: |
+          git archive --format=tar.gz -o /tmp/approval-history-source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/approval-history-head.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: approval-history-source
+          path: |
+            /tmp/approval-history-source.tar.gz
+            /tmp/approval-history-head.txt
+          retention-days: 2
