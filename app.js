@@ -3272,9 +3272,9 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "email") {
-    const email = context.email;
-    if (!email) {
-      showToast("Preencha o e-mail do cliente para abrir a mensagem.");
+    const email = String(context.email || "").trim();
+    if (!isLikelyEmailAddress(email)) {
+      showToast("Preencha um e-mail válido do cliente antes de abrir a mensagem.");
       return;
     }
     if (state.sendLocks.email) {
@@ -3288,7 +3288,13 @@ async function runQuickReply(replyId, channel) {
     }
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
     if (!payload) return;
-    if (needsLink && !QA_MODE) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+    if (needsLink && !QA_MODE) {
+      const approvalEnabled = await remoteProposalApprovalEnabled();
+      if (approvalEnabled === null) return;
+      if (approvalEnabled) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+      // In the disabled-policy contingency, keep the selected reviewed draft.
+      // The generic proposal email renderer must not wrap follow-ups/payments.
+    }
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
@@ -14344,8 +14350,11 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
   state.sendLocks.email = true;
   try {
   const emailTemplate = getCommunicationTemplate("proposta");
-  const emailMessage = renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
-  const emailSubject = emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
+  // Preserve the chosen quick reply when remote approval is disabled.
+  const emailMessage = typeof message === "string" ? message
+    : renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
+  const emailSubject = typeof subject === "string" && subject.trim() ? subject
+    : emailTemplate.subject || "Sua proposta de evento na Embaixada Carioca";
   const reviewedResponseAt = getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.ultima_resposta_cliente_em || null;
   const previewSignature = getSendReviewSignature();
   const previewResult = await state.supabase.functions.invoke("send-proposal-email", {
