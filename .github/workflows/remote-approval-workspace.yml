@@ -29,17 +29,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Generate migration with CLI
-        if: hashFiles('supabase/migrations/*_remote_proposal_approval.sql') == ''
-        run: |
-          npx --yes supabase@2.39.2 migration new --help
-          npx --yes supabase@2.39.2 migration new remote_proposal_approval
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add supabase/migrations/*_remote_proposal_approval.sql
-          git commit -m 'chore: scaffold remote proposal approval migration'
-          git push origin HEAD:refs/heads/feat/remote-proposal-approval-20261013
-      - name: Apply scoped patch and validate
+      - name: Apply exact scoped patch and validate
         if: hashFiles('scripts/remote-approval.patch') != ''
         env:
           TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
@@ -47,20 +37,29 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/feat/remote-proposal-approval-20261013'
-          git apply --check scripts/remote-approval.patch
-          git apply --index scripts/remote-approval.patch
+          python3 - <<'PY'
+          import pathlib,base64,gzip,hashlib
+          data=gzip.decompress(base64.b64decode(pathlib.Path('scripts/remote-approval.patch').read_text()))
+          assert hashlib.sha256(data).hexdigest()=='3d6d669445337a660878399074602ff21051af16183214b14f596019b1975b33'
+          pathlib.Path('/tmp/remote-approval.diff').write_bytes(data)
+          PY
+          git apply --check /tmp/remote-approval.diff
+          git apply --index /tmp/remote-approval.diff
           if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then exit 1; fi
+          git diff --cached --stat
           npm ci
-          npx playwright install --with-deps chromium
-          npm test
+          npm run build
+          node --test checks/*.test.cjs
           npm run test:db
           bash scripts/restore-test.sh
+          npx playwright install --with-deps chromium
+          npx playwright test --workers=2
           git rm scripts/remote-approval.patch .github/workflows/remote-approval-workspace.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat: require revision-bound manager approval before proposal delivery'
           git push origin HEAD:refs/heads/feat/remote-proposal-approval-20261013
-      - name: Export source only
+      - name: Export source and diagnostics
         if: always()
         run: |
           git archive --format=tar.gz -o /tmp/approval-source.tar.gz HEAD
@@ -74,5 +73,6 @@ jobs:
             /tmp/approval-source.tar.gz
             /tmp/approval-head.txt
             /tmp/approval-migration.txt
+            /tmp/remote-approval.diff
             test-results/
           retention-days: 2
