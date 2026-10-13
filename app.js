@@ -3282,12 +3282,13 @@ async function runQuickReply(replyId, channel) {
       return;
     }
     if (needsLink) {
-      share = await ensureProposalForSharing();
+      share = await ensureProposalForSharing({ forApproval: true });
       proposalUrl = share?.url || "";
       if (!proposalUrl) return;
     }
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
     if (!payload) return;
+    if (needsLink && !QA_MODE) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
@@ -3328,7 +3329,7 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "whatsapp") {
-    share = await ensureProposalForSharing();
+    share = await ensureProposalForSharing({ forApproval: true });
     if (!share?.saved || !share?.url) return;
     proposalUrl = share.url;
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "whatsapp");
@@ -13893,12 +13894,19 @@ async function openPipelineCardElement(card) {
   }
 }
 
-async function ensureProposalForSharing() {
+async function ensureProposalForSharing({ forApproval = false } = {}) {
+  if (!forApproval && !(await remoteProposalMayShare())) return null;
   state.lastProposalShareError = "";
   if (!ensureProposalReadyForSending()) return null;
-  const activeProposal = state.proposals.find((item) => item.id === state.activeProposalId);
+  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase : state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
-  const saved = await saveCurrentProposal(status, null, { forSharing: true });
+  // A repeated clean request must keep the same approval identity and revision.
+  const reuseReady = !QA_MODE && !hasUnsavedEditorChanges() && activeProposal?.is_current &&
+    !activeProposal._dashboard_summary && ["ready", "sent"].includes(activeProposal.publication_status) &&
+    activeProposal.public_token && !activeProposal.public_token_revoked_at &&
+    Date.parse(activeProposal.public_token_expires_at) > Date.now();
+  const saved = reuseReady ? structuredClone(activeProposal) : await saveCurrentProposal(status, null, { forSharing: true });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
     return null;
@@ -13918,6 +13926,7 @@ async function ensureProposalForSharing() {
 }
 
 async function registerConfirmedProposalSend(proposal, manualChannel = "") {
+  if (!QA_MODE && !(await remoteProposalMayShare())) return false;
   if (!proposal || proposal.status !== "proposta_pronta") return true;
   const sentAt = new Date().toISOString();
   // A Edge Function pode ter acrescentado o registro do envio ao snapshot.
@@ -14214,6 +14223,9 @@ function warnUnreconciledProposalSend(result) {
 }
 
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+  const approvalEnabled = await remoteProposalApprovalEnabled();
+  if (approvalEnabled === null) return false;
+  if (approvalEnabled) return requestRemoteProposalApproval("whatsapp", { proposal, proposalUrl, message, title });
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar WhatsApp direto.");
     return false;
@@ -14309,7 +14321,10 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 }
 
-async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, title = "Proposta comercial" }) {
+async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial" }) {
+  const approvalEnabled = await remoteProposalApprovalEnabled();
+  if (approvalEnabled === null) return false;
+  if (approvalEnabled) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
   if (!state.supabase || !state.session) {
     showToast("Entre com o e-mail da equipe para enviar e-mail direto.");
     return false;
@@ -14444,7 +14459,7 @@ async function openEmail() {
     return;
   }
   if (!ensureProposalReadyForSending()) return;
-  const share = await ensureProposalForSharing();
+  const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) {
     const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
     createIntegrationLog({
@@ -14466,6 +14481,7 @@ async function openEmail() {
 }
 
 async function copyProposal() {
+  if (!(await remoteProposalMayShare())) return;
   const text = buildProposalText();
   try {
     await navigator.clipboard.writeText(text);
@@ -14577,7 +14593,7 @@ async function runServiceCockpitAction(action, button = null) {
 async function openWhatsApp() {
   if (!ensureProposalReadyForSending()) return;
   const phone = fields.clientPhone.value.trim();
-  const share = await ensureProposalForSharing();
+  const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) return;
   await sendProposalWhatsAppViaZapi({
     proposal: share.saved,
@@ -15336,7 +15352,7 @@ function bindEvents() {
     renderAll();
   });
 
-  document.querySelector("#printBtn")?.addEventListener("click", () => window.print());
+  document.querySelector("#printBtn")?.addEventListener("click", async () => { if (await remoteProposalMayShare()) window.print(); });
   document.querySelector("#newProposalBtn")?.addEventListener("click", startNewProposal);
   document.querySelector("#topbarNewProposalBtn")?.addEventListener("click", startNewProposal);
   nodes.startManualProposalBtn?.addEventListener("click", startNewProposal);
