@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 const dest=path.join(root,'dist');
 // Explicit public surface: tooling, SQL, tests and credentials cannot be copied.
 const publicFiles=[
-  'index.html','clientes.html','comunicacao.html','valores.html','formulario.html','proposta.html',
+  'index.html', 'aprovacoes.html', 'aprovacoes.js', 'approval-config.js', 'approval.css', 'remote-approval-ui.js','clientes.html','comunicacao.html','valores.html','formulario.html','proposta.html',
   'styles.css','app.js','event-operations.js','analytics.js','formulario.js','proposta.js',
   'event-data.js','event-performance.js','commercial-rules.js','commercial-dashboard.js',
   'assets/logo-embaixada.svg','assets/logo-reducao.svg','assets/venue.jpg',

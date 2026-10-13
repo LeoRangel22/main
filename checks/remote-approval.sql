@@ -1,0 +1,114 @@
+-- Disposable fixtures only; no provider calls and every change is rolled back.
+begin;
+do $$
+declare manager uuid; seller uuid; opp uuid; p public.propostas; a public.event_proposal_approvals; other public.propostas; c jsonb; decision jsonb; claim jsonb; blocked boolean; n jsonb;
+begin
+ select id into manager from auth.users where email='leorangel@gmail.com';
+ select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';
+ assert manager is not null and seller is not null;
+ assert not has_table_privilege('anon','public.event_proposal_approvals','select');
+ assert not has_table_privilege('authenticated','public.event_proposal_approvals','insert');
+ assert not has_table_privilege('authenticated','public.event_proposal_approvals','update');
+ assert not has_function_privilege('authenticated','public.event_create_proposal_approval(uuid,bigint,uuid,jsonb)','execute');
+ assert not has_function_privilege('anon','public.event_decide_proposal_approval(uuid,text,text,boolean,text)','execute');
+ assert not has_function_privilege('authenticated','public.event_claim_approval_notification(uuid,text)','execute');
+ update event_private.proposal_approval_policy set enabled=true,approver_id=manager,approver_email='leorangel@gmail.com',whatsapp='5521000000000' where id;
+ insert into oportunidades(cliente_nome,status,data_evento) values('Approval fixture','proposta_pronta','2099-11-18') returning id into opp;
+ insert into propostas(oportunidade_id,cliente_nome,cliente_email,cliente_whatsapp,tipo_evento,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,privatizacao,total,status,publication_status,is_current,snapshot)
+ values(opp,'Approval fixture','fixture@example.test','5521000000001','Coffee Break','2099-11-18','10:00',20,2,1000,120,0,1120,'proposta_pronta','ready',true,
+ '{"event":{"type":"Coffee Break","guests":20,"notes":"Reviewed notes","signalDeadlineHours":48},"totals":{"subtotal":1000,"serviceFee":120,"total":1120},"selectedItems":[{"name":"Coffee Break","calc":{"total":1000}}],"generalTerms":"Reviewed terms"}') returning * into p;
+ c:=jsonb_build_object('channel','whatsapp','destination','5521000000001','body','Approved fixture message','message','Approved fixture message','title','Fixture','contentHash',null,'reviewedResponseAt',null,'proposalUrl','https://leorangel22.github.io/main/proposta.html?p='||p.public_token);
+ select * into a from event_create_proposal_approval(p.id,p.revision,seller,c);
+ assert a.status='pending' and a.approver_id=manager;
+ assert a.expires_at<=now()+interval '48 hours';
+ assert (select count(*)=2 from event_approval_notifications where approval_id=a.id);
+ assert (select id=a.id from event_create_proposal_approval(p.id,p.revision,seller,c)), 'Duplicate request has the same identity';
+ assert (select count(*)=1 from event_approval_audit where approval_id=a.id and action='requested');
+ assert not event_private.remote_proposal_is_public(p),'Ready proposal is private until manager authorization';
+ assert not exists(select 1 from get_public_proposal(p.public_token)), 'Bearer link cannot bypass pending approval';
+ blocked:=false;begin perform event_private.lock_public_proposal(p.public_token);exception when others then blocked:=true;end;assert blocked,'Public response cannot bypass approval';
+ n:=event_claim_approval_notification(a.id,'whatsapp');assert n->>'destination'='5521000000000';
+ assert event_claim_approval_notification(a.id,'whatsapp') is null,'Duplicate notification is not claimed';
+ perform event_finish_approval_notification(a.id,'whatsapp','uncertain',null,'Timeout');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ assert not (event_approval_policy()->>'is_approver')::boolean;
+ assert not event_proposal_can_share(p.id,p.revision);
+ blocked:=false;begin perform event_decide_proposal_approval(a.id,'approve',a.review_hash,true,'');exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot approve';
+ blocked:=false;begin perform begin_event_send_reviewed(p.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null);exception when insufficient_privilege then blocked:=true;end;assert blocked,'Old sender cannot bypass manager';
+ perform event_retry_approval_notifications(a.id);
+ assert (select status='uncertain' from event_approval_notifications where approval_id=a.id and channel='whatsapp'),'Uncertain alerts must not retry';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform event_decide_proposal_approval(a.id,'approve','tampered',true,'');exception when others then blocked:=true;end;assert blocked,'Review hash must match';
+ blocked:=false;begin perform event_decide_proposal_approval(a.id,'approve',a.review_hash,false,'');exception when others then blocked:=true;end;assert blocked,'Explicit confirmation required';
+ decision:=event_decide_proposal_approval(a.id,'approve',a.review_hash,true,'');assert decision->>'status'='approved';
+ assert not event_proposal_can_share(p.id,p.revision),'Approval alone is not public before dispatch';
+ blocked:=false;begin perform begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000099','Approved fixture message','Fixture',null,null);exception when others then blocked:=true;end;assert blocked,'Changed destination blocked';
+ blocked:=false;begin perform begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Different body','Fixture',null,null);exception when others then blocked:=true;end;assert blocked,'Changed message blocked';
+ claim:=begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null);assert (claim->>'claimed')::boolean;
+ assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Double click does not send twice';
+ assert event_proposal_can_share(p.id,p.revision);
+ reset role;
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'failed',null,'Definitive fixture rejection');
+ set local role authenticated;
+ claim:=begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null);
+ assert (claim->>'claimed')::boolean and (claim#>>'{send,attempts}')::integer=2,'Definitive rejection can be explicitly retried';
+ assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Retry double click still cannot duplicate';
+ reset role;
+ -- Uncertainty cannot be retried; then restore the synthetic attempt for acceptance checks.
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'uncertain',null,'Fixture timeout');
+ set local role authenticated;
+ assert not (begin_event_approved_send(a.id,p.revision,'whatsapp','5521000000001','Approved fixture message','Fixture',null,null)->>'claimed')::boolean,'Uncertain sends cannot retry';
+ reset role;
+ update event_outbox set status='sending' where id=(claim#>>'{send,id}')::uuid;
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'accepted','fixture-provider');
+ select * into p from propostas where id=p.id;
+ assert event_private.remote_proposal_is_public(p),'Acceptance update keeps approved content public';
+ assert (select count(*)=1 from event_outbox where proposal_id=p.id);
+ assert (select status='approved' from event_proposal_approvals where id=a.id),'Send result does not invalidate own approval';
+ assert (select status='proposta_enviada' from propostas where id=p.id),'No automatic confirmation of event';
+ -- A new ready version must not replace the approved public version.
+ insert into propostas(oportunidade_id,cliente_nome,cliente_email,tipo_evento,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,privatizacao,total,status,publication_status,is_current,snapshot)
+ values(opp,'Approval fixture','fixture@example.test','Coffee Break','2099-11-18','10:00',21,2,1000,120,0,1120,'proposta_pronta','ready',true,p.snapshot) returning * into other;
+ assert (select id=p.id from get_public_proposal(p.public_token)),'Old customer link stays on approved content';
+ assert not exists(select 1 from get_public_proposal(other.public_token)),'New link is not public';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','fixture@example.test','role','authenticated')::text,true);
+ set local role authenticated;
+ assert exists(select 1 from get_my_event_history() h where h.proposal_id=p.id),'Customer history preserves last approved version';
+ assert not exists(select 1 from get_my_event_history() h where h.proposal_id=other.id),'Customer history hides unapproved replacement';
+ assert (select count(*)=1 from get_my_event_history() h where h.oportunidade_id=opp),'Customer history does not duplicate an opportunity';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','unrelated@example.test','role','authenticated')::text,true);
+ set local role authenticated;
+ assert not exists(select 1 from get_my_event_history()),'Unrelated customer cannot read approved history';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+
+ c:=c||jsonb_build_object('proposalUrl','https://leorangel22.github.io/main/proposta.html?p='||other.public_token);
+ select * into a from event_create_proposal_approval(other.id,other.revision,seller,c);
+ set local role authenticated;
+ decision:=event_decide_proposal_approval(a.id,'changes_requested',a.review_hash,true,'Adjust guest count');assert decision->>'status'='changes_requested';
+ reset role;
+ update propostas set convidados=22 where id=other.id returning * into other;
+ select * into a from event_create_proposal_approval(other.id,other.revision,seller,c);
+ set local role authenticated;
+ decision:=event_decide_proposal_approval(a.id,'rejected',a.review_hash,true,'Not approved');assert decision->>'status'='rejected';
+ reset role;
+ update propostas set convidados=23 where id=other.id returning * into other;
+ select * into a from event_create_proposal_approval(other.id,other.revision,seller,c);
+ update propostas set convidados=24 where id=other.id returning * into other;
+ assert (select status='invalidated' from event_proposal_approvals where id=a.id),'Changed proposal invalidates pending request';
+ select * into a from event_create_proposal_approval(other.id,other.revision,seller,c);
+ update event_proposal_approvals set expires_at=now()-interval '1 second' where id=a.id;
+ set local role authenticated;
+ blocked:=false;begin perform event_decide_proposal_approval(a.id,'approve',a.review_hash,true,'');exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Expired request cannot approve';
+ reset role;
+ -- Existing published versions may be grandfathered once, but not later changes.
+ insert into event_private.proposal_public_baseline values(other.id,event_private.public_proposal_fingerprint(other));
+ assert event_private.remote_proposal_is_public(other);
+ update propostas set total=1200 where id=other.id returning * into other;
+ assert not event_private.remote_proposal_is_public(other),'Grandfathering cannot approve future changes';
+end $$;
+rollback;
