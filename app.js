@@ -3288,7 +3288,13 @@ async function runQuickReply(replyId, channel) {
     }
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
     if (!payload) return;
-    if (needsLink && !QA_MODE) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+    if (needsLink && !QA_MODE) {
+      const approvalEnabled = await remoteProposalApprovalEnabled();
+      if (approvalEnabled === null) return;
+      if (approvalEnabled) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+      // In the disabled-policy contingency, keep the selected reviewed draft.
+      // The generic proposal email renderer must not wrap follow-ups/payments.
+    }
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
