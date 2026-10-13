@@ -1,0 +1,74 @@
+name: Remote approval workspace
+on:
+  push:
+    branches: ['feat/remote-proposal-approval-20261013']
+    paths: ['.github/workflows/remote-approval-workspace.yml','scripts/remote-approval.patch']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    if: github.ref == 'refs/heads/feat/remote-proposal-approval-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: [5432:5432]
+        options: --health-cmd 'pg_isready -U postgres' --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Generate migration with CLI
+        if: hashFiles('supabase/migrations/*_remote_proposal_approval.sql') == ''
+        run: |
+          npx --yes supabase@2.39.2 migration new --help
+          npx --yes supabase@2.39.2 migration new remote_proposal_approval
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/migrations/*_remote_proposal_approval.sql
+          git commit -m 'chore: scaffold remote proposal approval migration'
+          git push origin HEAD:refs/heads/feat/remote-proposal-approval-20261013
+      - name: Apply scoped patch and validate
+        if: hashFiles('scripts/remote-approval.patch') != ''
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feat/remote-proposal-approval-20261013'
+          git apply --check scripts/remote-approval.patch
+          git apply --index scripts/remote-approval.patch
+          if git diff --cached --name-only | grep -E '(^\.github/|(^|/)\.env|package(-lock)?\.json$)'; then exit 1; fi
+          npm ci
+          npx playwright install --with-deps chromium
+          npm test
+          npm run test:db
+          bash scripts/restore-test.sh
+          git rm scripts/remote-approval.patch .github/workflows/remote-approval-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: require revision-bound manager approval before proposal delivery'
+          git push origin HEAD:refs/heads/feat/remote-proposal-approval-20261013
+      - name: Export source only
+        if: always()
+        run: |
+          git archive --format=tar.gz -o /tmp/approval-source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/approval-head.txt
+          ls supabase/migrations/*_remote_proposal_approval.sql > /tmp/approval-migration.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: approval-workspace
+          path: |
+            /tmp/approval-source.tar.gz
+            /tmp/approval-head.txt
+            /tmp/approval-migration.txt
+            test-results/
+          retention-days: 2
