@@ -32,9 +32,19 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/approval-closure-edit.py
-          git add app.js aprovacoes.html aprovacoes.js checks/remote-approval.test.cjs clientes.html comunicacao.html docs/REMOTE-APPROVAL.md formulario.html index.html proposta.html scripts/test-database.cjs supabase/functions/event-proposal-approval/index.ts tests/remote-approval-production.spec.js tests/remote-approval.spec.js valores.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('supabase/migrations/20261013183019_approval_closure.sql')
+          s=p.read_text()
+          a=s.index('    elsif exists(select 1 from public.event_approval_notifications n')
+          b=s.index('    elsif a.created_at',a)
+          s=s[:a]+re.sub(r'\bn\b','notice_row',s[a:b])+s[b:]
+          p.write_text(s)
+          PY
+          git add app.js aprovacoes.html aprovacoes.js checks/remote-approval.test.cjs clientes.html comunicacao.html docs/REMOTE-APPROVAL.md formulario.html index.html proposta.html scripts/test-database.cjs supabase/functions/event-proposal-approval/index.ts tests/remote-approval-production.spec.js tests/remote-approval.spec.js valores.html supabase/migrations/20261013183019_approval_closure.sql
           git diff --cached --name-only | while read -r file; do
-            case "$file" in app.js|index.html|clientes.html|comunicacao.html|valores.html|proposta.html|formulario.html|aprovacoes.html|aprovacoes.js|checks/remote-approval.test.cjs|tests/remote-approval-production.spec.js|tests/remote-approval.spec.js|supabase/functions/event-proposal-approval/index.ts|scripts/test-database.cjs|docs/REMOTE-APPROVAL.md) ;; *) echo "Unexpected path: $file"; exit 1;; esac
+            case "$file" in app.js|index.html|clientes.html|comunicacao.html|valores.html|proposta.html|formulario.html|aprovacoes.html|aprovacoes.js|checks/remote-approval.test.cjs|tests/remote-approval-production.spec.js|tests/remote-approval.spec.js|supabase/functions/event-proposal-approval/index.ts|scripts/test-database.cjs|docs/REMOTE-APPROVAL.md|supabase/migrations/20261013183019_approval_closure.sql) ;; *) echo "Unexpected path: $file"; exit 1;; esac
           done
           git diff --cached --stat
       - run: npm ci
