@@ -1,3 +1,6 @@
+-- Monotonic server-owned lock. No historical data is rewritten.
+alter table public.propostas add column journey_commercial_locked boolean not null default false;
+
 -- Audited journey guards. No updates/backfills of real proposals, payments or acknowledgements.
 create function event_private.journey_financial_operator() returns boolean
 language sql stable security definer set search_path='' as $$
@@ -26,8 +29,11 @@ begin
  -- Trusted maintenance has no end-user claims. User-facing writes do not get this exemption.
  if auth.uid() is null and session_user='postgres' and nullif(current_setting('request.jwt.claims',true),'') is null then return new; end if;
  if tg_op='UPDATE' then
+  new.journey_commercial_locked:=old.journey_commercial_locked or old.publication_status='sent' or old.status=any(booked)
+    or exists(select 1 from public.event_outbox b where b.proposal_id=old.id and b.status in ('sending','accepted','uncertain'))
+    or exists(select 1 from event_private.proposal_public_baseline b where b.proposal_id=old.id);
   prior:=old.snapshot;
-  if (old.publication_status='sent' or old.status=any(booked)) and event_private.journey_commercial_value(old) is distinct from event_private.journey_commercial_value(new) then
+  if new.journey_commercial_locked and event_private.journey_commercial_value(old) is distinct from event_private.journey_commercial_value(new) then
    raise exception using errcode='PT409',message='O conteúdo liberado deve ser preservado. Crie uma nova versão ou rascunho de aditivo, sem sobrescrever o acordo.';
   end if;
   if old.is_current and old.status=any(booked) and not new.is_current then
@@ -39,6 +45,7 @@ begin
     and p.id<>new.id and p.status=any(booked) for update;
   if found then raise exception using errcode='PT409',message='Preserve o evento confirmado. Salve a alteração como rascunho de aditivo, sem promover ou alterar a operação.'; end if;
  end if;
+ if tg_op='INSERT' then new.journey_commercial_locked:=new.publication_status='sent' or new.status=any(booked); end if;
  for key in select unnest(array['pagamentoSinal','pagamentoRestante']) loop
   value:=nullif(new.snapshot->key,'null'::jsonb);
   if nullif(prior->key,'null'::jsonb) is distinct from value then
@@ -77,7 +84,7 @@ language plpgsql security definer set search_path='' as $$
 declare h public.event_handoffs; required_key text;
 begin
  if auth.uid() is null and session_user='postgres' and nullif(current_setting('request.jwt.claims',true),'') is null then return new; end if;
- if new.task_key='financeiro_saldo' and (new.status='done' or new.acknowledged_at is distinct from old.acknowledged_at)
+ if new.task_key='financeiro_saldo' and ((new.status='done' and old.status is distinct from new.status) or (new.acknowledged_at is not null and new.acknowledged_at is distinct from old.acknowledged_at))
    and not event_private.journey_financial_operator() then
   raise insufficient_privilege using message='A ciência financeira deve ser registrada pelo Financeiro ou gestor';
  end if;

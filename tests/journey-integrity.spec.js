@@ -65,9 +65,9 @@ test('signal confirmation reconciles the editor revision and preserves typing du
   const r=await page.evaluate(async()=>{
     window.journeyReleased=true;window.journeyRelease();await window.signalAttempt;
     const after={base:state.editorProposalBase.revision,row:getActiveProposal().revision,dirty:hasUnsavedEditorChanges(),text:fields.notes.value};
-    let dialogs=0;showSignalPaymentDialog=async()=>{dialogs++;return null;};const saved=await saveCurrentProposal('confirmado');
-    return {after,dialogs,saved:Boolean(saved),error:state.lastProposalSaveError,text:saved?.snapshot.event.notes,paid:saved?.snapshot.pagamentoSinal?.valor};
-  });expect(r.after.base).toBe(r.after.row);expect(r.after.dirty).toBe(true);expect(r.dialogs).toBe(0);expect(r.saved,r.error).toBe(true);expect(r.text).toBe('Digitado durante a validação do sinal');expect(r.paid).toBeGreaterThan(0);
+    let dialogs=0;showSignalPaymentDialog=async()=>{dialogs++;return null;};const diagnosticDiff=getProposalChangeList(state.editorProposalBase.snapshot,getProposalSnapshot());const diagnosticInput=hasCommercialEditorInputChanges();const saved=await saveCurrentProposal('confirmado');
+    return {diagnosticDiff,diagnosticInput,after,dialogs,saved:Boolean(saved),error:state.lastProposalSaveError,text:saved?.snapshot.event.notes,paid:saved?.snapshot.pagamentoSinal?.valor};
+  });expect(r.after.base).toBe(r.after.row);expect(r.after.dirty).toBe(true);expect(r.dialogs).toBe(0);expect(r.saved,r.error).toBe(true);expect(r.text).toBe('Digitado durante a validação do sinal');expect(r.paid,JSON.stringify(r)).toBeGreaterThan(0);
 });
 test('status change in another editor cannot advance the current editing base',async({page})=>{
   await fixture(page);
@@ -122,4 +122,18 @@ test('planning after a validated signal does not request the remaining payment',
     let dialogs=0;showRemainingPaymentDialog=async()=>{dialogs++;return null;};
     await updateProposalStatus(getActiveProposal().id,'planejamento');return {dialogs,status:getActiveProposal().status};
   });expect(r).toEqual({dialogs:0,status:'planejamento'});
+});
+
+test('a stale operational version is not presented as the current checklist',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(()=>{
+  const p=getActiveProposal(),d=getOperationalHandoffData(p);d.handoff.version+=1;
+  renderOperationalChecklist(p);return {screen:nodes.operationalChecklist.textContent,context:getOperationalDocContext(p).progress,summary:buildOperationalSummaryText(p)};
+ });expect(r.context.total).toBe(0);expect(r.summary).toContain('indisponível');expect(r.screen).not.toContain('8/8');
+});
+test('unchanged commercial inputs preserve exact historical terms and descriptions while saving notes',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(async()=>{
+  const p=getActiveProposal();p.snapshot.paymentTerms=['Condição histórica revisada para este cliente'];openSavedProposal(p.id);
+  const before=structuredClone(p.snapshot);fields.notes.value='Somente nota interna';
+  const saved=await saveCurrentProposal('confirmado');return {same:saved?.id===p.id,terms:saved?.snapshot.paymentTerms,expected:before.paymentTerms,paid:saved?.snapshot.pagamentoSinal?.valor};
+ });expect(r.same).toBe(true);expect(r.terms).toEqual(r.expected);expect(r.paid).toBeGreaterThan(0);
 });

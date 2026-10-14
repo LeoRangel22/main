@@ -19,11 +19,26 @@ begin
  exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Released terms must not be overwritten';
  blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560}}','status','confirmado'),p.revision,null);
  exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot validate a payment';
+ select * into p from save_event_proposal(p.id,'{"publication_status":"ready"}'::jsonb,p.revision,null);
+ assert p.journey_commercial_locked,'Operational restaging cannot unlock a released agreement';
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"generalTerms":"Bypass attempt"}'),p.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Restaging cannot enable a contractual overwrite';
  reset role;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',finance,'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);
  set local role authenticated;
  select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-14","bancos":["Fixture"]}}','status','confirmado'),p.revision,null);
  assert p.snapshot#>>'{pagamentoSinal,validadoPor}'=finance::text,'Financial validation has a server-recorded actor';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',jsonb_set(p.snapshot,'{event,notes}','"Internal operational note"')),p.revision,null);
+ assert p.snapshot#>>'{pagamentoSinal,validadoPor}'=finance::text,'Notes preserve financial validation';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',finance,'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":1}}'),p.revision,null);
+ exception when insufficient_privilege then blocked:=true;end;assert blocked,'Finance cannot authorize a below-standard exception';
+
  blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":null}'),p.revision,null);
  exception when others then blocked:=true;end;assert blocked,'A confirmed event cannot lose its validated signal';
  blocked:=false;begin perform save_event_proposal(p.id,'{"convidados":23}'::jsonb,p.revision,null);
@@ -41,6 +56,7 @@ begin
  assert release_id is not null;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
  set local role authenticated;
+ perform acknowledge_event_handoff_changes(opp,h.version);
  blocked:=false;begin perform update_event_handoff_task(release_id,'done',null,null,null,h.version);
  exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot release operation';
  reset role;

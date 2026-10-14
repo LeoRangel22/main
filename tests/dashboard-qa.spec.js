@@ -386,7 +386,8 @@ test.describe("Dashboard interno em modo QA", () => {
     expect(operationalHtml).toContain("Itens contratados");
     expect(operationalHtml).toContain("Lista de insumos");
     expect(operationalHtml).toContain("Julia Morena");
-    expect(operationalHtml).not.toContain("Financeiro");
+    // Sector ownership may name Financeiro, but no financial section or currency is exposed.
+    expect(operationalHtml).not.toContain("<h2>Financeiro</h2>");
     expect(operationalHtml).not.toContain("R$");
 
     const technicalHtml = await page.evaluate(() => buildTechnicalSheetHtml(getActiveProposal(), { showFinance: true }));
