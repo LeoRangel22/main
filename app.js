@@ -3527,7 +3527,11 @@ function getOperationalHandoffData(proposal) {
 function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffData(proposal)) {
   const blockers = [];
   if (!isSuperAdminSession()) blockers.push("Somente o gestor pode liberar a execução.");
-  if (!isContractedProposal(proposal) || !proposal.is_current) blockers.push("Confira o acordo confirmado atual.");
+  // The persistent lock preserves a prior agreement; it is not authorization to
+  // release a canceled or renegotiating event. Match the server's active stages.
+  if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
+    blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
+  }
   if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Financeiro ou gestor devem validar o sinal antes da liberação.");
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
@@ -7927,6 +7931,12 @@ function formatSignalDeadlineHours(hours = getSignalDeadlineHours()) {
   return `${days} ${days === 1 ? "dia" : "dias"}`;
 }
 
+function getProposalPaymentTerms() {
+  const source = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase : getActiveProposal();
+  return Array.isArray(source?.snapshot?.paymentTerms) ? [...source.snapshot.paymentTerms] : [...paymentTerms];
+}
+
 function buildProposalText() {
   const selected = getSelectedItems();
   const clientName = fields.clientName.value.trim() || "Cliente";
@@ -7953,7 +7963,7 @@ function buildProposalText() {
   const terms = fields.generalTerms.value.trim();
   if (terms) lines.push(``, terms);
 
-  lines.push(``, `Pagamento:`, ...paymentTerms);
+  lines.push(``, `Pagamento:`, ...getProposalPaymentTerms());
 
   lines.push(``, `Itens selecionados:`);
 
@@ -8109,7 +8119,7 @@ function getProposalSnapshot() {
     sourceRequestSnapshot: activeRequest?.snapshot || activeProposal?.snapshot?.sourceRequestSnapshot || null,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
-    paymentTerms: activeProposal?.snapshot?.paymentTerms || paymentTerms,
+    paymentTerms: getProposalPaymentTerms(),
     operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
     commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
     sendReviewApproval: reviewApproval,
@@ -13761,7 +13771,7 @@ function renderProposal() {
         <h3>Pagamento</h3>
       </div>
       <div class="proposal-payment">
-        ${paymentTerms.map((term) => `<div><span></span><strong>${escapeHtml(term)}</strong></div>`).join("")}
+        ${getProposalPaymentTerms().map((term) => `<div><span></span><strong>${escapeHtml(term)}</strong></div>`).join("")}
       </div>
 
       ${

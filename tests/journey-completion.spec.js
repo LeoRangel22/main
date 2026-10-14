@@ -86,3 +86,21 @@ test('rescheduling takes request and owner from its source, not another editor',
   return {request:draft?.solicitacao_id,owner:draft?.responsavel_id,email:draft?.responsavel_email};
  });expect(r).toEqual({request:'00000000-0000-4000-8000-000000000733',owner:'00000000-0000-4000-8000-000000000734',email:'eventos@embaixadacarioca.com.br'});
 });
+
+test('retained payment terms agree in the editor preview, copied text and saved snapshot',async({page})=>{
+ await fixture(page);const r=await page.evaluate(()=>{
+  const terms=['30% na assinatura do acordo especial.','70% até a data contratada.'];
+  const p=getActiveProposal();p.snapshot.paymentTerms=terms;upsertProposalState(p);openSavedProposal(p.id);renderProposal();
+  const result={preview:document.querySelector('#proposalContent').innerText,text:buildProposalText(),saved:getProposalSnapshot().paymentTerms};
+  window.confirm=()=>true;startNewProposal();result.fresh=getProposalSnapshot().paymentTerms;result.defaults=[...paymentTerms];return result;
+ });expect(r.saved).toEqual(['30% na assinatura do acordo especial.','70% até a data contratada.']);
+ for(const term of r.saved){expect(r.preview).toContain(term);expect(r.text).toContain(term);}
+ expect(r.preview).not.toContain(r.defaults[0]);expect(r.text).not.toContain(r.defaults[0]);expect(r.fresh).toEqual(r.defaults);
+});
+test('a historical booked lock does not release an event currently back in negotiation',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(()=>{
+  const p=getActiveProposal();p.journey_booked_locked=true;p.status='negociacao';upsertProposalState(p);openSavedProposal(p.id);
+  const d=getOperationalHandoffData(p);for(const t of d.tasks){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';}
+  return {protected:isContractedProposal(p),blockers:getOperationalReleaseBlockers(p)};
+ });expect(r.protected).toBe(true);expect(r.blockers.join(' ')).toContain('em renegociação');
+});

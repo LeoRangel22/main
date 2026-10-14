@@ -77,6 +77,18 @@ begin
  end loop;
  perform update_event_handoff_task(release_id,'done',null,null,'Synthetic final decision',h.version);
  assert (select status='done' and acknowledged_by=manager from event_handoff_tasks where id=release_id);
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ select * into t from event_handoff_tasks where opportunity_id=opp and task_key='financeiro_saldo';
+ blocked:=false;begin perform update_event_handoff_task(t.id,'done','Seller changed owner',now(),'Changed after financial validation',h.version);
+ exception when insufficient_privilege then blocked:=true;end;
+ assert blocked,'A seller cannot alter a completed finance task while retaining the finance signature';
+ assert (select notes=t.notes and owner_label=t.owner_label and acknowledged_by=manager from event_handoff_tasks where id=t.id);
+ blocked:=false;begin perform update_event_handoff_task(release_id,'pending',null,null,'Seller reopening final release',h.version);
+ exception when insufficient_privilege then blocked:=true;end;
+ assert blocked and (select status='done' from event_handoff_tasks where id=release_id),'Only the manager may directly reopen the management release';
+ -- A legitimate sector prerequisite reopening must still invalidate the release.
  select * into t from event_handoff_tasks where opportunity_id=opp and task_key='salao_montagem';
  perform update_event_handoff_task(t.id,'blocked',null,null,'Synthetic reopened prerequisite',h.version);
  assert (select status='pending' and completed_at is null from event_handoff_tasks where id=release_id),'Reopened prerequisite invalidates release';

@@ -94,11 +94,22 @@ language plpgsql security definer set search_path='' as $$
 declare h public.event_handoffs; required_key text;
 begin
  if auth.uid() is null and session_user='postgres' and nullif(current_setting('request.jwt.claims',true),'') is null then return new; end if;
- if new.task_key='financeiro_saldo' and ((new.status='done' and old.status is distinct from new.status) or (new.acknowledged_at is not null and new.acknowledged_at is distinct from old.acknowledged_at))
-   and not event_private.journey_financial_operator() then
-  raise insufficient_privilege using message='A ciência financeira deve ser registrada pelo Financeiro ou gestor';
+ -- Only nested database invalidations may clear a prior decision without
+ -- impersonating its owner. Direct RPC updates fire at depth 1 and never qualify.
+ if pg_trigger_depth()>1 then
+  if (to_jsonb(new)-'updated_at')=(to_jsonb(old)-'updated_at') then return new; end if;
+  if new.status='pending' and new.acknowledged_at is null and new.acknowledged_by is null
+    and new.completed_at is null and new.completed_by is null and new.source_version>=old.source_version
+    and (new.source_version>old.source_version or
+      (to_jsonb(new)-array['status','acknowledged_at','acknowledged_by','completed_at','completed_by','updated_at'])=
+      (to_jsonb(old)-array['status','acknowledged_at','acknowledged_by','completed_at','completed_by','updated_at'])) then
+   return new;
+  end if;
  end if;
- if new.task_key='gerencia_go_no_go' and (new.status='done' or (new.acknowledged_at is not null and new.acknowledged_at is distinct from old.acknowledged_at)) then
+ if new.task_key='financeiro_saldo' and not event_private.journey_financial_operator() then
+  raise insufficient_privilege using message='Somente Financeiro ou gestor podem alterar a tarefa de validação financeira';
+ end if;
+ if new.task_key='gerencia_go_no_go' then
   if auth.uid() is null or not public.is_super_admin() then raise insufficient_privilege using message='Somente o gestor pode dar ciência e liberar a execução'; end if;
   select * into h from public.event_handoffs where opportunity_id=new.opportunity_id for update;
   if not found or h.changes_pending or new.source_version<>h.version then raise exception 'Revise as mudanças da versão operacional antes da liberação'; end if;
