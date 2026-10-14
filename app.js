@@ -1456,7 +1456,7 @@ function hasCommercialEditorInputChanges() {
 
 function preserveUneditedCommercialSnapshot(snapshot, proposal) {
   if (!proposal?.snapshot || state.forceNewVersionDraft || hasCommercialEditorInputChanges()) return;
-  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions"]) {
+  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
     if (Object.hasOwn(proposal.snapshot, key)) snapshot[key] = structuredClone(proposal.snapshot[key]);
     else delete snapshot[key];
   }
@@ -1465,7 +1465,7 @@ function preserveUneditedCommercialSnapshot(snapshot, proposal) {
 
 function isContractedProposal(proposal) {
   return Boolean(proposal && proposal.publication_status !== "draft" &&
-    ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal.status)));
+    (proposal.journey_booked_locked || ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal.status))));
 }
 
 function formatCommercialHistoryDate(value) {
@@ -8079,6 +8079,7 @@ function getProposalSnapshot() {
     internalComments: getInternalComments(activeProposal?.snapshot || {}),
     eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
     smartDraft: state.smartDraftApproval || activeProposal?.snapshot?.smartDraft || null,
+    ...(Object.hasOwn(activeProposal?.snapshot || {}, "versionChanges") ? {versionChanges: structuredClone(activeProposal.snapshot.versionChanges)} : {}),
     proposalText: buildProposalText(),
   };
 }

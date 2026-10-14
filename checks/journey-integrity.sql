@@ -47,6 +47,14 @@ begin
   'status','negociacao','publication_status','draft','is_current',false,'convidados',23,
   'snapshot',(p.snapshot-'pagamentoSinal')||jsonb_build_object('amendmentOf',jsonb_build_object('id',p.id,'revision',p.revision))),p.revision,p.id);
  assert not d.is_current and d.publication_status='draft';
+ blocked:=false;begin perform save_event_proposal(d.id,jsonb_build_object('status','confirmado','snapshot',d.snapshot||'{"pagamentoSinal":{"valor":560}}'),d.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Amendment draft cannot create a payment or confirmation';
+ select * into p from save_event_proposal(p.id,'{"status":"negociacao"}'::jsonb,p.revision,null);
+ assert p.journey_booked_locked,'Restaging cannot forget the previously closed agreement';
+ blocked:=false;begin perform save_event_proposal(d.id,'{"is_current":true,"publication_status":"ready"}'::jsonb,d.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Restaging cannot allow a draft to replace a closed agreement';
+ select * into p from save_event_proposal(p.id,'{"status":"confirmado"}'::jsonb,p.revision,null);
+
  assert (select is_current and convidados=20 from propostas where id=p.id),'Original agreement is untouched';
  blocked:=false;begin perform save_event_proposal(d.id,'{"is_current":true,"publication_status":"ready"}'::jsonb,d.revision,null);
  exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Draft cannot displace booked operation';
@@ -72,6 +80,12 @@ begin
  select * into t from event_handoff_tasks where opportunity_id=opp and task_key='salao_montagem';
  perform update_event_handoff_task(t.id,'blocked',null,null,'Synthetic reopened prerequisite',h.version);
  assert (select status='pending' and completed_at is null from event_handoff_tasks where id=release_id),'Reopened prerequisite invalidates release';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',jsonb_set(p.snapshot,'{event,notes}','"Revised operational note requiring renewed science"')),p.revision,null);
+ assert not exists(select 1 from event_handoff_tasks where opportunity_id=opp and acknowledged_at is not null),'Source invalidation may clear financial science without impersonating Finance';
+
  reset role;
 end; $$;
 rollback;

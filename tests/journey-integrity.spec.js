@@ -137,3 +137,19 @@ test('unchanged commercial inputs preserve exact historical terms and descriptio
   const saved=await saveCurrentProposal('confirmado');return {same:saved?.id===p.id,terms:saved?.snapshot.paymentTerms,expected:before.paymentTerms,paid:saved?.snapshot.pagamentoSinal?.valor};
  });expect(r.same).toBe(true);expect(r.terms).toEqual(r.expected);expect(r.paid).toBeGreaterThan(0);
 });
+
+test('restaged booked agreement is still treated as an amendment source',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(async()=>{
+  const p=getActiveProposal();p.status='negociacao';p.journey_booked_locked=true;upsertProposalState(p);openSavedProposal(p.id);
+  fields.guestCount.value=String(Number(fields.guestCount.value)+1);
+  const draft=await saveCurrentProposal('negociacao');return {source:draft?.snapshot.amendmentOf?.id,expected:p.id,current:draft?.is_current};
+ });expect(r.source).toBe(r.expected);expect(r.current).toBe(false);
+});
+
+test('internal notes preserve the customer-visible revision comparison',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(async()=>{
+  const p=getActiveProposal();p.snapshot.versionChanges=[{label:'Itens',from:'Coffee break inicial',to:'Coffee break revisado'}];
+  upsertProposalState(p);openSavedProposal(p.id);fields.notes.value='Nota interna sem alterar a revisão pública';
+  const saved=await saveCurrentProposal('confirmado');return {same:saved?.id===p.id,changes:saved?.snapshot.versionChanges,expected:p.snapshot.versionChanges};
+ });expect(r.same).toBe(true);expect(r.changes).toEqual(r.expected);
+});

@@ -1,5 +1,6 @@
 -- Monotonic server-owned lock. No historical data is rewritten.
-alter table public.propostas add column journey_commercial_locked boolean not null default false;
+alter table public.propostas add column journey_commercial_locked boolean not null default false,
+  add column journey_booked_locked boolean not null default false;
 
 -- Audited journey guards. No updates/backfills of real proposals, payments or acknowledgements.
 create function event_private.journey_financial_operator() returns boolean
@@ -14,7 +15,7 @@ language sql immutable set search_path='' as $$
  select jsonb_build_object(
   'client',p.snapshot->'client','event',coalesce(p.snapshot->'event','{}')-'notes'-'signalDeadlineAt',
   'items',p.snapshot->'selectedItems','totals',p.snapshot->'totals','terms',p.snapshot->'generalTerms',
-  'paymentTerms',p.snapshot->'paymentTerms','offers',p.snapshot->'publicOfferOptions',
+  'paymentTerms',p.snapshot->'paymentTerms','offers',p.snapshot->'publicOfferOptions','versionChanges',p.snapshot->'versionChanges',
   'name',p.cliente_nome,'email',p.cliente_email,'phone',p.cliente_whatsapp,
   'type',p.tipo_evento,'date',p.data_evento,'time',p.horario_evento,'guests',p.convidados,
   'duration',p.duracao,'subtotal',p.subtotal,'service',p.taxa_servico,'private',p.privatizacao,'total',p.total);
@@ -29,23 +30,31 @@ begin
  -- Trusted maintenance has no end-user claims. User-facing writes do not get this exemption.
  if auth.uid() is null and session_user='postgres' and nullif(current_setting('request.jwt.claims',true),'') is null then return new; end if;
  if tg_op='UPDATE' then
-  new.journey_commercial_locked:=old.journey_commercial_locked or old.publication_status='sent' or old.status=any(booked)
+  new.journey_booked_locked:=old.journey_booked_locked or old.status=any(booked) or new.status=any(booked);
+  new.journey_commercial_locked:=old.journey_commercial_locked or old.journey_booked_locked or old.publication_status='sent' or old.status=any(booked)
     or exists(select 1 from public.event_outbox b where b.proposal_id=old.id and b.status in ('sending','accepted','uncertain'))
     or exists(select 1 from event_private.proposal_public_baseline b where b.proposal_id=old.id);
   prior:=old.snapshot;
   if new.journey_commercial_locked and event_private.journey_commercial_value(old) is distinct from event_private.journey_commercial_value(new) then
    raise exception using errcode='PT409',message='O conteúdo liberado deve ser preservado. Crie uma nova versão ou rascunho de aditivo, sem sobrescrever o acordo.';
   end if;
-  if old.is_current and old.status=any(booked) and not new.is_current then
+  if old.is_current and (old.journey_booked_locked or old.status=any(booked)) and not new.is_current then
    raise exception using errcode='PT409',message='O acordo confirmado não pode ser substituído por um rascunho. O aditivo exige aprovação e aceite próprios.';
   end if;
  end if;
  if new.is_current and new.oportunidade_id is not null then
   select * into original from public.propostas p where p.oportunidade_id=new.oportunidade_id and p.is_current
-    and p.id<>new.id and p.status=any(booked) for update;
+    and p.id<>new.id and (p.journey_booked_locked or p.status=any(booked)) for update;
   if found then raise exception using errcode='PT409',message='Preserve o evento confirmado. Salve a alteração como rascunho de aditivo, sem promover ou alterar a operação.'; end if;
  end if;
- if tg_op='INSERT' then new.journey_commercial_locked:=new.publication_status='sent' or new.status=any(booked); end if;
+ if tg_op='INSERT' then
+  new.journey_booked_locked:=new.status=any(booked);
+  new.journey_commercial_locked:=new.publication_status='sent' or new.journey_booked_locked;
+ end if;
+ if new.snapshot ? 'amendmentOf' and (new.is_current or new.publication_status<>'draft' or new.status=any(booked)
+    or nullif(new.snapshot->'pagamentoSinal','null'::jsonb) is not null or nullif(new.snapshot->'pagamentoRestante','null'::jsonb) is not null) then
+  raise exception using errcode='PT409',message='Aditivo em rascunho não pode confirmar venda, pagamento, envio ou operação. Preserve o acordo atual.';
+ end if;
  for key in select unnest(array['pagamentoSinal','pagamentoRestante']) loop
   value:=nullif(new.snapshot->key,'null'::jsonb);
   if nullif(prior->key,'null'::jsonb) is distinct from value then
