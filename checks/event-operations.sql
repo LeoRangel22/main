@@ -45,7 +45,10 @@ begin
   perform public.finish_event_send((claim#>>'{send,id}')::uuid,'failed',null,'400 simulado');
   retry:=public.begin_event_send(p1,'email','fixture@example.test','Texto recusado','Fixture',response_at);
   assert (retry->>'claimed')::boolean and (retry#>>'{send,attempts}')::integer=2,'Recusa conhecida admite nova aprovação';
+  -- Administrative discount fixture setup; user overwrites are rejected in journey-integrity.sql.
+  perform set_config('request.jwt.claims','',true);
   update public.propostas set snapshot=jsonb_set(snapshot,'{totals,adjustment}','-2000'),total=9200 where id=p1;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
   blocked:=false;
   begin perform public.begin_event_send(p1,'email','fixture@example.test','Com desconto','Fixture',response_at); exception when others then blocked:=true; end;
   assert blocked,'Desconto exige alçada';
@@ -56,9 +59,15 @@ begin
   perform public.approve_event_discount(p1);
   claim:=public.begin_event_send(p1,'email','fixture@example.test','Com desconto','Fixture',response_at);
   assert (claim->>'claimed')::boolean,'Gestor autentica versão';
+  -- Administrative discount fixture setup; user overwrites are rejected in journey-integrity.sql.
+  perform set_config('request.jwt.claims','',true);
   update public.propostas set snapshot=jsonb_set(snapshot,'{totals,adjustment}','-2100'),total=9100 where id=p1;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
   assert (select not valid from public.get_event_discount_approvals() where proposal_id=p1),'Preço alterado invalida alçada';
+  -- Administrative discount fixture setup; user overwrites are rejected in journey-integrity.sql.
+  perform set_config('request.jwt.claims','',true);
   update public.propostas set snapshot=jsonb_set(snapshot,'{totals,adjustment}','0'),total=11200 where id=p1;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
   perform public.hold_event_proposal(p1,now()+interval '1 hour');
   blocked:=false; begin perform public.hold_event_proposal(p2,now()+interval '1 hour'); exception when others then blocked:=true; end;
   assert blocked,'Agenda sobreposta atravessando meia-noite deve limitar capacidade';

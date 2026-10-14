@@ -9,5 +9,5 @@ for(const page of ['index.html','clientes.html','comunicacao.html','valores.html
 });
 for(const [page,asset] of [['aprovacoes.html','aprovacoes.js'],['formulario.html','formulario.js'],['proposta.html','proposta.js']])test(`approval public cache rollout: ${page}`,()=>{
   const html=fs.readFileSync(`${__dirname}/../${page}`,'utf8');
-  assert.ok(html.includes(asset+'?v=20261013-approval-'));
+  assert.ok(html.includes(asset+'?v=20261014-journey-integrity'));
 });
