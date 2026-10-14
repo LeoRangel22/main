@@ -2,7 +2,7 @@ name: Journey completion workspace
 on:
   push:
     branches: [fix/journey-integrity-20261014]
-    paths: ['.github/workflows/journey-completion-workspace.yml','scripts/journey-completion-edit.py','checks/journey-completion.sql','checks/journey-completion.test.cjs','tests/journey-completion.spec.js']
+    paths: ['.github/workflows/journey-completion-workspace.yml','scripts/journey-completion-edit.py','scripts/journey-final-polish.py','checks/journey-completion.sql','checks/journey-completion.test.cjs','tests/journey-completion.spec.js']
 permissions:
   contents: read
 jobs:
@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           test "$(git hash-object app.js)" = '568959d642b3f8d2d352b43f7346bbecf356861f'
           python3 scripts/journey-completion-edit.py
+          python3 scripts/journey-final-polish.py
           node --check app.js
           node --check commercial-rules.js
           git diff --stat
@@ -51,11 +52,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/fix/journey-integrity-20261014'
-          git add app.js commercial-rules.js index.html clientes.html comunicacao.html valores.html scripts/test-database.cjs supabase/migrations/20261014084722_journey_integrity.sql
+          git add app.js commercial-rules.js index.html clientes.html comunicacao.html valores.html scripts/test-database.cjs supabase/migrations/20261014084722_journey_integrity.sql tests/dashboard-qa.spec.js tests/journey-completion.spec.js checks/journey-completion.sql
           git diff --cached --name-only | while read -r f; do
-            case "$f" in app.js|commercial-rules.js|index.html|clientes.html|comunicacao.html|valores.html|scripts/test-database.cjs|supabase/migrations/20261014084722_journey_integrity.sql) ;; *) echo "Unexpected path: $f"; exit 1;; esac
+            case "$f" in app.js|commercial-rules.js|index.html|clientes.html|comunicacao.html|valores.html|scripts/test-database.cjs|supabase/migrations/20261014084722_journey_integrity.sql|tests/dashboard-qa.spec.js|tests/journey-completion.spec.js|checks/journey-completion.sql) ;; *) echo "Unexpected path: $f"; exit 1;; esac
           done
-          git rm scripts/journey-completion-edit.py .github/workflows/journey-completion-workspace.yml
+          git rm scripts/journey-completion-edit.py scripts/journey-final-polish.py .github/workflows/journey-completion-workspace.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: preserve public evidence and complete reviewed journey transitions'
