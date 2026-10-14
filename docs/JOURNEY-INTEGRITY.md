@@ -19,6 +19,7 @@ Este pacote não conclui a aplicação de aditivos contratados: permite guardá-
 ## Pagamentos e edição
 
 - Atualizações próprias de sinal/etapa reconciliam a revisão do editor, sem perder a digitação posterior. Alterações concorrentes continuam bloqueadas.
+- As condições de pagamento preservadas na proposta são as mesmas da prévia do editor, texto copiado e conteúdo salvo. Iniciar outra cotação recupera os padrões.
 - Financeiro ou gestor validam, corrigem ou removem pagamentos. O servidor registra identidade e horário da validação.
 - Um sinal abaixo do padrão de 50% exige gestor e justificativa. A regra não presume que todo valor menor seja comercialmente incorreto: exige registro da exceção aprovada.
 - Aceite público com comprovante registra o arquivo como evidência, sem inferir valor de sinal nem confirmar reserva. O fluxo de resposta mantém validação de arquivo, revisão e idempotência.
@@ -29,14 +30,16 @@ Este pacote não conclui a aplicação de aditivos contratados: permite guardá-
 
 - Tela, ficha, resumo e próximo passo usam as mesmas tarefas setoriais e a mesma versão do evento. Controles adicionais legados ficam identificados separadamente.
 - Uma versão operacional desatualizada não aparece como checklist vigente.
-- Ciência financeira é do Financeiro/gestor; ciência e liberação final são do gestor autorizado.
-- A liberação final exige acordo atual, sinal validado, ausência de mudanças pendentes e as sete tarefas prévias concluídas com ciência na versão correta.
-- Reabrir um pré-requisito invalida a liberação final. O sistema não conclui tarefas nem registra ciência em nome de uma pessoa por conveniência.
+- Toda alteração direta da tarefa financeira exige Financeiro/gestor; toda alteração direta da tarefa de liberação exige gestor, inclusive reabertura. Não é permitido manter a assinatura de outro setor alterando descrição, prazo ou responsável.
+- A liberação final exige acordo atual em etapa operacional ativa, sinal validado, ausência de mudanças pendentes e as sete tarefas prévias concluídas com ciência na versão correta. O bloqueio histórico de acordo não libera um evento atualmente em renegociação.
+- Reabrir um pré-requisito invalida a liberação final. Invalidações automáticas estritamente delimitadas podem limpar decisões antigas, nunca criar ciência ou aprovação.
 
 ## Verificação
 
-A publicação exige: suíte completa de código/navegador; banco recém-instalado e atualizado; papéis reais anon/equipe/financeiro/gestor em ambiente isolado; concorrência; preservação de links e histórico; restauração isolada; revisão dos apontamentos; migração confirmada no projeto correto; e verificação pública do commit implantado.
+O workflow isolado `38555861203` passou 179 testes de código e 171 testes de navegador, além de instalação/atualização, permissões, provas públicas, concorrência, reversão e restauração isolada. O código-fonte do artefato foi comparado byte a byte com os arquivos revisados. A suíte padrão da PR deve testar o commit final já contendo a implementação, não depender de transformações em um workflow auxiliar.
 
-Os testes de remarcação foram atualizados para exigir outra versão e a preservação da proposta anterior, em vez de aceitar a sobrescrita como comportamento esperado. A simulação de um comprovante pendente em um acordo legado confirma que nem o gestor pode liberar a execução sem a validação financeira exigida.
+A publicação exige também revisão dos apontamentos, migração confirmada no projeto correto e verificação pública do commit implantado. Os workflows temporários e scripts de transformação são removidos antes da integração.
+
+Os testes de remarcação foram atualizados para exigir outra versão e a preservação da proposta anterior, em vez de aceitar a sobrescrita como comportamento esperado. A simulação de um comprovante pendente em um acordo legado confirma que nem o gestor pode liberar a execução sem a validação financeira exigida. Há regressões específicas para alteração indevida de tarefa financeira já concluída e reabertura direta da liberação por um vendedor.
 
 Nenhuma execução simulada comprova recebimento real de WhatsApp/e-mail, decisão real do gestor ou conciliação bancária.
