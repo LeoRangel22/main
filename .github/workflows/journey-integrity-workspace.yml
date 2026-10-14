@@ -1,0 +1,101 @@
+name: Journey integrity verification workspace
+on:
+  push:
+    branches: [fix/journey-integrity-20261014]
+    paths:
+      - '.github/workflows/journey-integrity-workspace.yml'
+      - 'scripts/journey-integrity-edit.py'
+      - 'scripts/journey-integrity-migration.sql'
+      - 'scripts/journey-integrity-refine.py'
+      - 'checks/journey-integrity.sql'
+      - 'tests/journey-integrity.spec.js'
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'LeoRangel22/main' && github.ref == 'refs/heads/fix/journey-integrity-20261014'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply explicit reviewed edits on the feature branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/journey-integrity-20261014'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/journey-integrity-edit.py')
+          s=p.read_text().replace('readSignalProofFile(file)', 'readSignalProofFile(proofInput.files?.[0] || null)')
+          p.write_text(s)
+          PY
+          python3 scripts/journey-integrity-edit.py
+          if test -f scripts/journey-integrity-refine.py; then python3 scripts/journey-integrity-refine.py; fi
+          npx --yes supabase@2.39.2 migration new --help
+          npx --yes supabase@2.39.2 migration new journey_integrity
+          files=(supabase/migrations/*_journey_integrity.sql)
+          test "${#files[@]}" = 1
+          cp scripts/journey-integrity-migration.sql "${files[0]}"
+          node --check app.js
+          git diff --stat
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Audited user journey regressions
+        run: |
+          set -euo pipefail
+          npm run build
+          npx playwright test tests/journey-integrity.spec.js --reporter=list 2>&1 | tee /tmp/journey-browser.log
+      - name: Full application and browser regressions
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee /tmp/journey-full-suite.log
+      - name: Fresh upgrade roles concurrency and isolated restore
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          npm run test:db 2>&1 | tee /tmp/journey-database.log
+          bash scripts/restore-test.sh 2>&1 | tee /tmp/journey-restore.log
+      - name: Commit only the fully verified implementation
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/journey-integrity-20261014'
+          git rm scripts/journey-integrity-edit.py scripts/journey-integrity-migration.sql .github/workflows/journey-integrity-workspace.yml
+          if test -f scripts/journey-integrity-refine.py; then git rm scripts/journey-integrity-refine.py; fi
+          git add app.js index.html clientes.html comunicacao.html valores.html formulario.html proposta.html aprovacoes.html checks/approval-cache.test.cjs checks/journey-integrity.sql tests/journey-integrity.spec.js scripts/test-database.cjs supabase/migrations/*_journey_integrity.sql
+          git diff --cached --name-only | while read -r file; do
+            case "$file" in app.js|index.html|clientes.html|comunicacao.html|valores.html|formulario.html|proposta.html|aprovacoes.html|checks/approval-cache.test.cjs|checks/journey-integrity.sql|tests/journey-integrity.spec.js|scripts/test-database.cjs|supabase/migrations/*_journey_integrity.sql|scripts/journey-integrity-edit.py|scripts/journey-integrity-refine.py|scripts/journey-integrity-migration.sql|.github/workflows/journey-integrity-workspace.yml) ;; *) echo "Unexpected change: $file"; exit 1;; esac
+          done
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: preserve quoted agreements and align financial and operational journeys'
+          git push origin HEAD:refs/heads/fix/journey-integrity-20261014
+      - name: Retain exact tested source and diagnostics without production data
+        if: always()
+        run: tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=playwright-report --exclude=test-results -czf /tmp/journey-tested-source.tar.gz .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: journey-integrity-verification
+          path: |
+            /tmp/journey-tested-source.tar.gz
+            /tmp/journey-browser.log
+            /tmp/journey-full-suite.log
+            /tmp/journey-database.log
+            /tmp/journey-restore.log
+            playwright-report/
+            test-results/
+          retention-days: 2
