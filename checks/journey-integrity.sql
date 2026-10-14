@@ -1,0 +1,61 @@
+-- Isolated regression fixtures only; all changes rolled back; no provider calls.
+begin;
+do $$
+declare manager uuid; seller uuid; finance uuid; opp uuid; p public.propostas; d public.propostas;
+  result public.propostas; blocked boolean; h public.event_handoffs; t public.event_handoff_tasks; release_id uuid;
+begin
+ select id into manager from auth.users where email='leorangel@gmail.com';
+ select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';
+ select id into finance from auth.users where email='financeiro@embaixadacarioca.com.br';
+ assert not has_function_privilege('anon','event_private.journey_financial_operator()','execute');
+ assert not has_function_privilege('authenticated','event_private.guard_journey_proposal()','execute');
+ insert into oportunidades(cliente_nome,status) values('Journey fixture','negociacao') returning id into opp;
+ insert into propostas(oportunidade_id,cliente_nome,tipo_evento,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,status,publication_status,is_current,snapshot)
+ values(opp,'Journey fixture','Coffee Break','2099-11-18','10:00',20,2,1000,120,1120,'negociacao','sent',true,
+ '{"generalTerms":"Original terms","event":{"type":"Coffee Break","date":"2099-11-18","time":"10:00","guests":20,"duration":2,"notes":"Internal note"},"totals":{"subtotal":1000,"serviceFee":120,"total":1120},"selectedItems":[{"id":"fixture","nome":"Fixture","descricao":"Original composition","calc":{"total":1000}}]}') returning * into p;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"generalTerms":"Changed terms"}'),p.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Released terms must not be overwritten';
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560}}','status','confirmado'),p.revision,null);
+ exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot validate a payment';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',finance,'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-14","bancos":["Fixture"]}}','status','confirmado'),p.revision,null);
+ assert p.snapshot#>>'{pagamentoSinal,validadoPor}'=finance::text,'Financial validation has a server-recorded actor';
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":null}'),p.revision,null);
+ exception when others then blocked:=true;end;assert blocked,'A confirmed event cannot lose its validated signal';
+ blocked:=false;begin perform save_event_proposal(p.id,'{"convidados":23}'::jsonb,p.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Confirmed agreement cannot be overwritten';
+ select * into d from save_event_proposal(null,jsonb_build_object('oportunidade_id',opp,'cliente_nome','Journey fixture',
+  'status','negociacao','publication_status','draft','is_current',false,'convidados',23,
+  'snapshot',(p.snapshot-'pagamentoSinal')||jsonb_build_object('amendmentOf',jsonb_build_object('id',p.id,'revision',p.revision))),p.revision,p.id);
+ assert not d.is_current and d.publication_status='draft';
+ assert (select is_current and convidados=20 from propostas where id=p.id),'Original agreement is untouched';
+ blocked:=false;begin perform save_event_proposal(d.id,'{"is_current":true,"publication_status":"ready"}'::jsonb,d.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Draft cannot displace booked operation';
+ reset role;
+ select * into h from event_handoffs where opportunity_id=opp;
+ select id into release_id from event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go';
+ assert release_id is not null;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform update_event_handoff_task(release_id,'done',null,null,null,h.version);
+ exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot release operation';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform update_event_handoff_task(release_id,'done',null,null,null,h.version);
+ exception when others then blocked:=true;end;assert blocked,'Even manager needs the sector prerequisites';
+ for t in select * from event_handoff_tasks where opportunity_id=opp and task_key<>'gerencia_go_no_go' order by sort_order loop
+  perform update_event_handoff_task(t.id,'done',null,null,'Synthetic checked prerequisite',h.version);
+ end loop;
+ perform update_event_handoff_task(release_id,'done',null,null,'Synthetic final decision',h.version);
+ assert (select status='done' and acknowledged_by=manager from event_handoff_tasks where id=release_id);
+ select * into t from event_handoff_tasks where opportunity_id=opp and task_key='salao_montagem';
+ perform update_event_handoff_task(t.id,'blocked',null,null,'Synthetic reopened prerequisite',h.version);
+ assert (select status='pending' and completed_at is null from event_handoff_tasks where id=release_id),'Reopened prerequisite invalidates release';
+ reset role;
+end; $$;
+rollback;
