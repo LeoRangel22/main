@@ -1,0 +1,77 @@
+name: Journey review closure verification
+on:
+  push:
+    branches: [fix/journey-integrity-20261014]
+    paths: ['.github/workflows/journey-review-closure-workspace.yml','scripts/journey-review-closure.py']
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'LeoRangel22/main' && github.ref == 'refs/heads/fix/journey-integrity-20261014'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: event-test-only
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply bounded final review fixes
+        run: |
+          set -euo pipefail
+          test "$(git hash-object app.js)" = '92feda5dc9197ebcbab596207fe703a9c185f857'
+          python3 scripts/journey-review-closure.py
+          node --check app.js
+          node --check tests/journey-completion.spec.js
+          git diff --stat
+      - run: npm ci
+      - name: Verify database authorization and isolated restore
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+          PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          npm run test:db 2>&1 | tee /tmp/journey-review-db.log
+          bash scripts/restore-test.sh 2>&1 | tee /tmp/journey-review-restore.log
+      - run: npx playwright install --with-deps chromium
+      - name: Verify complete application and browser regressions
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee /tmp/journey-review-suite.log
+      - name: Commit verified source and remove temporary workspace
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/journey-integrity-20261014'
+          git add app.js supabase/migrations/20261014084722_journey_integrity.sql checks/journey-integrity.sql tests/journey-completion.spec.js
+          git diff --cached --name-only | while read -r f; do
+            case "$f" in app.js|supabase/migrations/20261014084722_journey_integrity.sql|checks/journey-integrity.sql|tests/journey-completion.spec.js) ;; *) echo "Unexpected path: $f"; exit 1;; esac
+          done
+          git rm scripts/journey-review-closure.py .github/workflows/journey-review-closure-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: align payment terms and protect every financial and management task update'
+          git push origin HEAD:refs/heads/fix/journey-integrity-20261014
+      - name: Retain exact source and results
+        if: always()
+        run: tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=playwright-report --exclude=test-results -czf /tmp/journey-review-source.tar.gz .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: journey-review-closure-verification
+          path: |
+            /tmp/journey-review-source.tar.gz
+            /tmp/journey-review-db.log
+            /tmp/journey-review-restore.log
+            /tmp/journey-review-suite.log
+            playwright-report/
+            test-results/
+          retention-days: 2
