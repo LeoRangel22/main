@@ -1,0 +1,23 @@
+name: Journey completion workspace
+on:
+  push:
+    branches: [fix/journey-integrity-20261014]
+    paths: ['.github/workflows/journey-completion-workspace.yml','scripts/journey-completion-edit.py']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'LeoRangel22/main' && github.ref == 'refs/heads/fix/journey-integrity-20261014'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Export current tracked source without credentials
+        run: git archive --format=tar.gz -o /tmp/journey-current.tar.gz HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: journey-current-source
+          path: /tmp/journey-current.tar.gz
+          retention-days: 2
