@@ -1,7 +1,7 @@
 -- Public evidence is not financial validation. Isolated fixtures; no provider requests.
 begin;
 do $$
-declare p public.propostas; q public.propostas; r record; o uuid; actor uuid; token uuid:=gen_random_uuid(); evidence jsonb;
+declare p public.propostas; q public.propostas; r record; o uuid; actor uuid; token uuid:=gen_random_uuid(); evidence jsonb; h public.event_handoffs; t public.event_handoff_tasks; blocked boolean; manager uuid;
 begin
  select id into actor from auth.users where email='financeiro@embaixadacarioca.com.br';
  insert into oportunidades(cliente_nome,status) values('Public proof journey fixture','proposta_enviada') returning id into o;
@@ -33,5 +33,23 @@ begin
  assert q.snapshot#>>'{pagamentoSinal,validacaoPendente}'='false';
  assert q.snapshot#>>'{clienteResposta,comprovante,nome}'='fixture.png','Validation retains submitted evidence';
  reset role;
+ -- Explicit maintenance fixture simulates a legacy booked row with unvalidated proof.
+ -- No live database is permitted by the test runner.
+ perform set_config('request.jwt.claims','',true);
+ update propostas set snapshot=jsonb_set(snapshot,'{pagamentoSinal,validacaoPendente}','true') where id=q.id;
+ select * into h from event_handoffs where opportunity_id=o;
+ select id into manager from auth.users where email='leorangel@gmail.com';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ set local role authenticated;
+ perform acknowledge_event_handoff_changes(o,h.version);
+ for t in select * from event_handoff_tasks where opportunity_id=o and task_key<>'gerencia_go_no_go' order by sort_order loop
+  perform update_event_handoff_task(t.id,'done',null,null,'Synthetic prerequisite',h.version);
+ end loop;
+ select * into t from event_handoff_tasks where opportunity_id=o and task_key='gerencia_go_no_go';
+ blocked:=false;begin perform update_event_handoff_task(t.id,'done',null,null,'Synthetic release attempt',h.version);
+ exception when others then blocked:=true;end;
+ assert blocked,'Manager cannot release a legacy event with an unvalidated deposit even when all tasks are done';
+ reset role;
+
 end $$;
 rollback;

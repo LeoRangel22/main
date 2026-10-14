@@ -64,3 +64,25 @@ test('pending proof does not count as collected money or skip finance validation
   return {paid:coverage.paidTotal,full:coverage.isFullyPaid,operational,dialogs,status:getActiveProposal().status};
  });expect(r).toEqual({paid:0,full:false,operational:false,dialogs:1,status:'negociacao'});
 });
+
+test('legacy pending proof is not displayed as received and cannot release an otherwise complete operation',async({page})=>{
+ await fixture(page,true);const r=await page.evaluate(()=>{
+  const p=getActiveProposal();p.snapshot.pagamentoSinal={valor:p.total,validacaoPendente:true};upsertProposalState(p);openSavedProposal(p.id);
+  const d=getOperationalHandoffData(p);for(const t of d.tasks){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';}
+  return {summary:renderPaymentSummaryLine('Sinal registrado',p.snapshot.pagamentoSinal),
+    next:getProposalNextStepConfig(),doc:buildOperationalPaymentStatusBlock(getOperationalDocContext(p)),blockers:getOperationalReleaseBlockers(p)};
+ });expect(r.summary).toContain('Recebimento ainda não confirmado');expect(r.summary).not.toContain('Sinal registrado');
+ expect(r.next.action).toBe('mark_signal');expect(r.doc).toContain('pendente de validação');expect(r.doc).not.toContain('Sem saldo restante aparente');
+ expect(r.blockers.join(' ')).toContain('validar o sinal');
+});
+test('rescheduling takes request and owner from its source, not another editor',async({page})=>{
+ await fixture(page);const r=await page.evaluate(async()=>{
+  const p=getActiveProposal();p.data_evento='2020-01-10';p.snapshot.event.date=p.data_evento;
+  p.solicitacao_id='00000000-0000-4000-8000-000000000733';p.responsavel_id='00000000-0000-4000-8000-000000000734';p.responsavel_email='eventos@embaixadacarioca.com.br';
+  upsertProposalState(p);state.activeQuoteRequestId='00000000-0000-4000-8000-000000000735';
+  requestPastEventOutcome=async()=>({outcome:'remarcado',newDate:'2099-11-20',detail:'Fixture'});
+  await classifyPastEvent('proposal',p.id);
+  const draft=state.proposals.find(x=>x.oportunidade_id===p.oportunidade_id&&x.publication_status==='draft');
+  return {request:draft?.solicitacao_id,owner:draft?.responsavel_id,email:draft?.responsavel_email};
+ });expect(r).toEqual({request:'00000000-0000-4000-8000-000000000733',owner:'00000000-0000-4000-8000-000000000734',email:'eventos@embaixadacarioca.com.br'});
+});

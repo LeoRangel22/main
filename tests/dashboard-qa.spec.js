@@ -525,11 +525,20 @@ test.describe("Dashboard interno em modo QA", () => {
     await dialog.getByRole("button", { name: "Salvar desfecho" }).click();
 
     await expect(dialog).toHaveCount(0);
-    await expect(page.locator('.pipeline-stage-negociacao [data-pipeline-card-id="qa-proposal-desfecho"]')).toBeVisible();
-    const saved = await page.evaluate(() => state.proposals.find((item) => item.id === "qa-proposal-desfecho"));
-    expect(saved.status).toBe("negociacao");
-    expect(saved.data_evento).toBe(futureDate);
-    expect(saved.snapshot.eventOutcome.outcome).toBe("remarcado");
+    // Rescheduling creates a new draft; never overwrite the sent original.
+    const result = await page.evaluate(() => {
+      const original = state.proposals.find(item => item.id === "qa-proposal-desfecho");
+      const draft = state.proposals.find(item => item.oportunidade_id === original.oportunidade_id && item.publication_status === "draft");
+      return {original, draft};
+    });
+    expect(result.draft).toBeTruthy();
+    expect(result.draft.id).not.toBe(result.original.id);
+    expect(result.draft.status).toBe("negociacao");
+    expect(result.draft.data_evento).toBe(futureDate);
+    expect(result.draft.snapshot.eventOutcome.outcome).toBe("remarcado");
+    expect(result.draft.is_current).toBe(false);
+    expect(result.original.data_evento).not.toBe(futureDate);
+    await expect(page.locator(`.pipeline-stage-negociacao [data-pipeline-card-id="${result.draft.id}"]`)).toBeVisible();
     await expectNoBrowserErrors(errors);
   });
 

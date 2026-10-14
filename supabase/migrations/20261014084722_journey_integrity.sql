@@ -73,13 +73,14 @@ begin
      value:=value||jsonb_build_object('excecaoAutorizadaPor',auth.uid(),'excecaoAutorizadaEm',now());
     end if;
     select lower(email) into actor_email from auth.users where id=auth.uid();
-    value:=value||jsonb_build_object('validadoPor',auth.uid(),'validadoEmail',actor_email,'validadoEm',now());
+    value:=value||jsonb_build_object('validadoPor',auth.uid(),'validadoEmail',actor_email,'validadoEm',now(),'validacaoPendente',false);
     new.snapshot:=jsonb_set(new.snapshot,array[key],value,true);
    end if;
   end if;
  end loop;
  if new.is_current and new.status in ('confirmado','pagamento_final','planejamento','evento_proximo')
-  and coalesce((new.snapshot#>>'{pagamentoSinal,valor}')::numeric,0)<=0 then
+  and (coalesce((new.snapshot#>>'{pagamentoSinal,valor}')::numeric,0)<=0
+    or coalesce((new.snapshot#>>'{pagamentoSinal,validacaoPendente}')::boolean,false)) then
   raise exception 'Registre e valide o sinal antes de confirmar ou preparar a reserva';
  end if;
  return new;
@@ -103,7 +104,10 @@ begin
   if not found or h.changes_pending or new.source_version<>h.version then raise exception 'Revise as mudanças da versão operacional antes da liberação'; end if;
   if new.status='done' then
    if not exists(select 1 from public.propostas p where p.id=h.proposal_id and p.is_current
-     and p.status in ('confirmado','pagamento_final','planejamento','evento_proximo')) then raise exception 'Evento sem acordo confirmado atual'; end if;
+     and p.status in ('confirmado','pagamento_final','planejamento','evento_proximo')
+     and coalesce((p.snapshot#>>'{pagamentoSinal,valor}')::numeric,0)>0
+     and not coalesce((p.snapshot#>>'{pagamentoSinal,validacaoPendente}')::boolean,false)) then
+      raise exception 'Evento sem acordo confirmado atual e sinal validado pelo Financeiro ou gestor'; end if;
    foreach required_key in array array['eventos_briefing','financeiro_saldo','cozinha_cardapio','bar_bebidas','estoque_insumos','salao_montagem','gerencia_infra'] loop
     if not exists(select 1 from public.event_handoff_tasks t where t.opportunity_id=new.opportunity_id
       and t.task_key=required_key and t.status='done' and t.acknowledged_at is not null and t.source_version=h.version) then
@@ -132,3 +136,161 @@ end; $$;
 revoke all on function event_private.invalidate_journey_release() from public,anon,authenticated;
 create trigger journey_invalidate_release after update on public.event_handoff_tasks
 for each row execute function event_private.invalidate_journey_release();
+
+-- Public proof intake records evidence only. Never infer a payment amount from a file.
+-- Existing revision/idempotency wrappers and their privileges are unchanged.
+CREATE OR REPLACE FUNCTION public.respond_public_proposal(proposal_token uuid, action text, requested_date date DEFAULT NULL::date, requested_time time without time zone DEFAULT NULL::time without time zone, requested_guests integer DEFAULT NULL::integer, message text DEFAULT NULL::text, payment_proof jsonb DEFAULT NULL::jsonb)
+ RETURNS TABLE(ok boolean, status text, cliente_resposta text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  normalized_action text := lower(trim(coalesce(action, '')));
+  clean_message text := nullif(trim(coalesce(message, '')), '');
+  target_id uuid;
+  current_status text;
+  current_snapshot jsonb;
+  response_payload jsonb;
+  history_entry jsonb;
+  proof_history_entry jsonb := null;
+  clean_proof jsonb := null;
+  next_status text;
+  new_snapshot jsonb;
+  proposal_total numeric := 0;
+  locked_row public.propostas;
+  proof_name text;
+  proof_type text;
+  proof_size integer;
+  proof_data_url text;
+begin
+  if normalized_action not in ('confirmar', 'cancelar', 'alteracao') then
+    raise exception 'Acao invalida.';
+  end if;
+
+  if length(coalesce(clean_message,''))>6000 then raise exception 'Mensagem acima do limite'; end if;
+
+  if requested_guests is not null and (requested_guests < 1 or requested_guests > 500) then
+    raise exception 'Numero de convidados invalido.';
+  end if;
+
+  if normalized_action in ('cancelar', 'alteracao') and length(coalesce(clean_message, '')) < 3 then
+    raise exception 'Mensagem obrigatoria.';
+  end if;
+
+  locked_row:=event_private.lock_public_proposal(proposal_token);
+  target_id:=locked_row.id;
+  current_status:=locked_row.status;
+  current_snapshot:=coalesce(locked_row.snapshot,'{}');
+  proposal_total:=locked_row.total;
+
+  if target_id is null or current_snapshot is null then
+    raise exception 'Proposta nao encontrada ou link expirado.';
+  end if;
+
+  if current_status not in ('proposta_enviada', 'negociacao') then
+    raise exception 'Esta proposta nao aceita mais respostas pelo link publico.';
+  end if;
+
+  if payment_proof is not null then
+    proof_name := left(nullif(trim(coalesce(payment_proof ->> 'nome', '')), ''), 160);
+    proof_type := lower(nullif(trim(coalesce(payment_proof ->> 'tipo', '')), ''));
+    proof_data_url := nullif(trim(coalesce(payment_proof ->> 'dataUrl', '')), '');
+    proof_size := nullif(trim(coalesce(payment_proof ->> 'tamanho', '')), '')::integer;
+
+    if proof_name is null or proof_type is null or proof_data_url is null then
+      raise exception 'Comprovante incompleto.';
+    end if;
+    if proof_size is null or proof_size <= 0 or proof_size > 5242880 then
+      raise exception 'Comprovante acima do limite permitido.';
+    end if;
+    if proof_type not in ('application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif') then
+      raise exception 'Tipo de comprovante nao permitido.';
+    end if;
+    if length(proof_data_url) > 7200000 or proof_data_url !~ '^data:(application/pdf|image/(jpeg|png|webp|heic|heif));base64,' then
+      raise exception 'Formato do comprovante invalido.';
+    end if;
+
+    clean_proof := jsonb_strip_nulls(jsonb_build_object(
+      'nome', proof_name,
+      'tipo', proof_type,
+      'tamanho', proof_size,
+      'dataUrl', proof_data_url,
+      'anexadoEm', coalesce(payment_proof ->> 'anexadoEm', now()::text)
+    ));
+  end if;
+
+  response_payload := jsonb_strip_nulls(jsonb_build_object(
+    'acao', normalized_action,
+    'data', requested_date,
+    'horario', requested_time,
+    'convidados', requested_guests,
+    'mensagem', clean_message,
+    'comprovante', clean_proof,
+    'registradoEm', now()
+  ));
+
+  history_entry := jsonb_build_object(
+    'id', 'cliente-' || extract(epoch from now())::text,
+    'type', 'cliente_resposta',
+    'title', case
+      when normalized_action = 'confirmar' then 'Cliente aprovou a proposta'
+      when normalized_action = 'cancelar' then 'Cliente solicitou cancelamento'
+      else 'Cliente solicitou alteração'
+    end,
+    'detail', coalesce(clean_message, 'Resposta registrada pelo link público.') ||
+      case when clean_proof is not null then ' Comprovante anexado: ' || coalesce(clean_proof ->> 'nome', 'arquivo') else '' end,
+    'at', now(),
+    'actor', 'Cliente'
+  );
+
+  next_status := case when normalized_action = 'cancelar' then 'cancelado' else 'negociacao' end;
+  new_snapshot := jsonb_set(current_snapshot, '{clienteResposta}', response_payload, true);
+
+  if normalized_action = 'cancelar' then
+    new_snapshot := jsonb_set(
+      new_snapshot,
+      '{cancelamento}',
+      jsonb_build_object(
+        'motivo', coalesce(clean_message, 'Cancelado pelo cliente'),
+        'canceladoEm', now(),
+        'canceladoPor', 'cliente'
+      ),
+      true
+    );
+  end if;
+
+  if normalized_action = 'confirmar' and clean_proof is not null then
+    proof_history_entry := jsonb_build_object(
+      'id', 'sinal-cliente-' || extract(epoch from now())::text,
+      'type', 'comprovante_sinal',
+      'title', 'Comprovante enviado pelo cliente',
+      'detail', 'Comprovante anexado pelo link público. Validar no banco antes da confirmação operacional: ' || coalesce(clean_proof ->> 'nome', 'arquivo'),
+      'at', now(),
+      'actor', 'Cliente'
+    );
+  end if;
+
+  new_snapshot := jsonb_set(
+    new_snapshot,
+    '{commercialHistory}',
+    (case when proof_history_entry is not null then jsonb_build_array(proof_history_entry, history_entry) else jsonb_build_array(history_entry) end)
+      || coalesce(new_snapshot -> 'commercialHistory', '[]'::jsonb),
+    true
+  );
+
+  update public.propostas
+  set
+    status = next_status,
+    cliente_resposta = normalized_action,
+    cliente_resposta_em = now(),
+    cliente_mensagem = clean_message,
+    cliente_solicitacao = response_payload,
+    snapshot = new_snapshot
+  where id = target_id;
+
+  return query select true, next_status, normalized_action;
+end;
+$function$
+;
+revoke all on function public.respond_public_proposal(uuid,text,date,time,integer,text,jsonb) from public,anon,authenticated;

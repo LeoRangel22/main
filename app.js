@@ -1281,6 +1281,9 @@ function formatSignalPaymentDate(value) {
 
 function renderPaymentSummaryLine(title, payment) {
   if (!payment) return "";
+  if (payment.validacaoPendente === true) {
+    return '<span>Comprovante aguardando validação</span><strong>Recebimento ainda não confirmado pelo Financeiro</strong><small>O valor informado anteriormente não entra no total recebido até a conferência bancária.</small>';
+  }
   const banks = Array.isArray(payment.bancos) ? payment.bancos.join(", ") : payment.banco || "Banco não informado";
   const proofName = payment.comprovante?.nome || "";
   const proof = proofName
@@ -1442,7 +1445,37 @@ function getProposalChangeList(previousSnapshot = {}, nextSnapshot = {}) {
 
 function getClientVisibleProposalChanges(previousSnapshot = {}, nextSnapshot = {}) {
   const privateLabels = new Set(["Cliente", "E-mail", "Celular", "Empresa", "Cliente final", "Grupo", "Anotações do briefing"]);
-  return getProposalChangeList(previousSnapshot, nextSnapshot).filter(change => !privateLabels.has(change.label));
+  const previous = new Map(proposalCommercialSections(previousSnapshot));
+  const next = new Map(proposalCommercialSections(nextSnapshot));
+  return getProposalChangeList(previousSnapshot, nextSnapshot)
+    .filter(change => !privateLabels.has(change.label))
+    .map(change => {
+      const from = formatClientProposalChange(change.label, previous.get(change.label));
+      let to = formatClientProposalChange(change.label, next.get(change.label));
+      if (from === to) to += " — detalhes comerciais revisados; confira a proposta completa.";
+      return {label: change.label, from, to};
+    });
+}
+
+function formatClientProposalChange(label, value) {
+  const text = v => String(v ?? "").trim();
+  if (label === "Itens") return (Array.isArray(value) ? value : []).map(item => {
+    const parts = [text(item.nome) || "Item", text(item.composicao || item.descricao)];
+    if (Number(item.quantidade) > 0) parts.push(`${item.quantidade} unidades`);
+    if (Number.isFinite(Number(item.calculo?.total))) parts.push(formatMoney(Number(item.calculo.total)));
+    return parts.filter(Boolean).join(" · ");
+  }).join("; ") || "Sem itens";
+  if (["Subtotal", "Taxa de serviço", "Total"].includes(label)) return formatMoney(Number(value) || 0);
+  if (label === "Privatização") {
+    if (!value || typeof value !== "object") return text(value) || "Sem privatização";
+    return [text(value.label || value.title || value.name || value.type),
+      Number.isFinite(Number(value.amount)) ? formatMoney(Number(value.amount)) : ""].filter(Boolean).join(" · ") || "Condição de privatização da proposta";
+  }
+  if (label === "Ajuste comercial") return `${formatMoney(Number(value?.valor) || 0)}${value?.motivo ? " · " + text(value.motivo) : ""}`;
+  if (label === "Alternativas") return (Array.isArray(value) ? value : []).map(option => text(option.title || option.label || option.name) || "Alternativa revisada").join("; ") || "Sem alternativas";
+  if (Array.isArray(value)) return value.map(v => typeof v === "string" ? v : text(v?.text || v?.description || v?.label) || "Condição revisada").join("; ");
+  if (value && typeof value === "object") return "Detalhes comerciais na proposta";
+  return text(value) || "Não informado";
 }
 
 function hasCommercialEditorInputChanges() {
@@ -1722,9 +1755,15 @@ function getProposalNextStepConfig() {
   const request = getActiveQuoteRequest();
   if (proposal) {
     const status = normalizeProposalStatus(proposal.status);
-    const progress = getChecklistProgress(proposal.snapshot || {});
-    const hasSignal = Boolean(proposal.snapshot?.pagamentoSinal);
+    const progress = getOperationalHandoffProgress(getOperationalHandoffData(proposal).tasks);
+    const hasSignal = hasValidatedSignal(proposal.snapshot?.pagamentoSinal);
     const paymentCoverage = getPaymentCoverage(proposal.total || proposal.snapshot?.totals?.total || 0, proposal.snapshot?.pagamentoSinal, proposal.snapshot?.pagamentoRestante);
+
+    if (proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
+      return {tone: "warning", title: "Validar o comprovante antes de liberar a operação",
+        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Financeiro ou gestor devem conferir o sinal.",
+        action: "mark_signal", actionLabel: "Validar sinal"};
+    }
 
     if (status === "proposta_enviada" && proposal.clientResponse === "confirmar") {
       return {
@@ -1772,7 +1811,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "success",
         title: "Cobrar e registrar o pagamento restante",
-        note: "Sinal registrado. Alinhe o saldo para liberar planejamento.",
+        note: "Planejamento já pode começar após o sinal validado. Confira o prazo combinado do saldo antes da execução.",
         action: "mark_remaining",
         actionLabel: "Registrar saldo",
       };
@@ -1788,7 +1827,7 @@ function getProposalNextStepConfig() {
       };
     }
 
-    if (["pagamento_final", "planejamento"].includes(status) && hasIncompleteChecklist(proposal.snapshot || {})) {
+    if (["pagamento_final", "planejamento"].includes(status) && (!progress.total || progress.done < progress.total)) {
       return {
         tone: "operation",
         title: "Fechar o checklist operacional",
@@ -2591,8 +2630,8 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
   const status = normalizeProposalStatus(proposal.status);
   const snapshot = proposal.snapshot || {};
   const clientResponse = proposal.cliente_resposta || snapshot.clienteResposta?.acao || snapshot.clientResponse?.action || "";
-  const signal = snapshot.pagamentoSinal;
-  const remaining = snapshot.pagamentoRestante;
+  const signal = hasValidatedSignal(snapshot.pagamentoSinal) ? snapshot.pagamentoSinal : null;
+  const remaining = snapshot.pagamentoRestante?.validacaoPendente === true ? null : snapshot.pagamentoRestante;
   const responseLabels = {
     confirmar: "Aprovou",
     alteracao: "Pediu ajuste",
@@ -2614,7 +2653,7 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
     {
       tone: remaining ? "money" : signal ? "warning" : "muted",
       label: "Financeiro",
-      value: remaining ? "Saldo registrado" : signal ? "Sinal registrado" : "Sem sinal",
+      value: snapshot.pagamentoSinal?.validacaoPendente === true ? "Comprovante pendente" : remaining ? "Saldo registrado" : signal ? "Sinal registrado" : "Sem sinal",
       detail: remaining
         ? `${formatMoney(Number(remaining.valor) || 0)} · ${formatSignalPaymentDate(remaining.data)}`
         : signal
@@ -3442,7 +3481,7 @@ function shouldShowOperationalChecklist(proposal) {
   if (!proposal || proposal.snapshot?.amendmentOf || (proposal.publication_status === "draft" && !proposal.is_current)) return false;
   const status = normalizeProposalStatus(proposal.status);
   if (["cancelado", "perdido", "pos_venda"].includes(status)) return false;
-  return Boolean(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
+  return hasValidatedSignal(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
 }
 
 function getOperationalHandoffData(proposal) {
@@ -3489,6 +3528,7 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
   const blockers = [];
   if (!isSuperAdminSession()) blockers.push("Somente o gestor pode liberar a execução.");
   if (!isContractedProposal(proposal) || !proposal.is_current) blockers.push("Confira o acordo confirmado atual.");
+  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Financeiro ou gestor devem validar o sinal antes da liberação.");
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
   if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
@@ -3812,7 +3852,7 @@ function formatOperationalBanks(payment) {
 function buildOperationalPaymentBlock(context) {
   const signal = context.signal;
   const remaining = context.remaining;
-  const signalDetail = signal
+  const signalDetail = signal?.validacaoPendente === true ? "Comprovante pendente de validação bancária; recebimento não confirmado." : signal
     ? `${formatMoney(signal.valor)} · ${formatSignalPaymentDate(signal.data)} · ${formatOperationalBanks(signal)}`
     : "Sinal ainda não registrado.";
   const remainingDetail = remaining
@@ -3830,12 +3870,9 @@ function buildOperationalPaymentBlock(context) {
 
 function buildOperationalPaymentStatusBlock(context) {
   const total = Number(context.totals.total || 0);
-  const signalValue = Number(context.signal?.valor || 0);
-  const remainingValue = Number(context.remaining?.valor || 0);
-  const paidTotal = signalValue + remainingValue;
-  const isFullyPaid = total > 0 && paidTotal >= total - 1;
+  const {isFullyPaid} = getPaymentCoverage(total, context.signal, context.remaining);
   return buildOperationalRows([
-    { label: "Sinal de reserva", value: context.signal ? "Registrado. Conferir comprovante com financeiro." : "Pendente. Cobrar sinal antes de confirmar operação." },
+    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado pelo Financeiro ou gestor." : "Pendente. Cobrar sinal antes de confirmar operação." },
     {
       label: "Pagamento restante",
       value: isFullyPaid
@@ -4213,14 +4250,18 @@ function getSignalDefaultAmount(total) {
   return roundCurrency((Number(total) || 0) * 0.5);
 }
 
+function hasValidatedSignal(signalInfo) {
+  return signalInfo?.validacaoPendente !== true && toNumber(signalInfo?.valor) > 0;
+}
+
 function getRemainingDefaultAmount(total, signalInfo) {
-  return Math.max(0, roundCurrency((Number(total) || 0) - toNumber(signalInfo?.valor)));
+  return Math.max(0, roundCurrency((Number(total) || 0) - (hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0)));
 }
 
 function getPaymentCoverage(total, signalInfo = null, remainingInfo = null) {
   const totalValue = roundCurrency(Number(total) || 0);
-  const signalValue = toNumber(signalInfo?.valor);
-  const remainingValue = toNumber(remainingInfo?.valor);
+  const signalValue = hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0;
+  const remainingValue = remainingInfo?.validacaoPendente === true ? 0 : toNumber(remainingInfo?.valor);
   const paidTotal = roundCurrency(signalValue + remainingValue);
   const remainingDue = Math.max(0, roundCurrency(totalValue - paidTotal));
   const isFullyPaid = totalValue > 0 && paidTotal >= totalValue - 0.01;
@@ -12212,6 +12253,36 @@ async function classifyPastEvent(kind, id) {
     ],
   );
 
+  if (kind === "proposal" && isRescheduled && source.publication_status !== "draft") {
+    // A new date is a commercial revision, never an overwrite of a sent agreement.
+    const draftSnapshot = structuredClone(nextSnapshot);
+    draftSnapshot.clienteResposta = null;
+    draftSnapshot.pagamentoSinal = null;
+    draftSnapshot.pagamentoRestante = null;
+    draftSnapshot.event = {...draftSnapshot.event, signalDeadlineAt: null};
+    draftSnapshot.rescheduleRequest = {sourceId: source.id, previousDate: item.date,
+      newDate: answer.newDate, requestedAt: recordedAt, requestedBy: actor, approvalPending: true};
+    if (isContractedProposal(source)) draftSnapshot.amendmentOf = {id: source.id,
+      revision: source.revision, version: source.versao, total: source.total};
+    draftSnapshot.versionChanges = getClientVisibleProposalChanges(source.snapshot, draftSnapshot);
+    const row = {...getProposalRow(draftSnapshot, "negociacao"), oportunidade_id: source.oportunidade_id,
+      solicitacao_id: source.solicitacao_id || null,
+      responsavel_id: source.responsavel_id || null, responsavel_email: source.responsavel_email || null,
+      is_current: false, publication_status: "draft", sent_at: null};
+    const result = await persistEventProposal(null, row, source);
+    if (result.error || !result.data) {
+      showToast(getSupabaseSaveErrorMessage(result.error) || "Não foi possível guardar a remarcação. O acordo anterior permanece intacto.");
+      return;
+    }
+    upsertProposalState(result.data);
+    renderHistory(); renderPipeline();
+    await openSavedProposal(result.data.id);
+    showToast(draftSnapshot.amendmentOf
+      ? "Remarcação guardada como rascunho de aditivo. Data, reserva e operação contratadas não foram alteradas."
+      : "Nova data guardada em outra versão. Revise e solicite aprovação; o conteúdo enviado anteriormente foi preservado.");
+    return;
+  }
+
   const table = kind === "proposal" ? "propostas" : "solicitacoes_cotacao";
   const changes = {
     status: nextStatus,
@@ -12488,7 +12559,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, o
   const finalPaymentRequiredStatuses = new Set(["evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
   let remainingPayment = null;
-  if (normalizedNext === "confirmado" && !proposal.snapshot?.pagamentoSinal) {
+  if (normalizedNext === "confirmado" && !hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) {
     paymentSignal = paymentSignal || (await showSignalPaymentDialog(proposal.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. A etapa não foi alterada.");
@@ -13059,13 +13130,15 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   const amendmentSource = activeProposal?.snapshot?.amendmentOf ||
     (isContractedProposal(activeProposal) && (getProposalChangeList(activeProposal.snapshot || {}, snapshot).length || state.forceNewVersionDraft)
       ? {id: activeProposal.id, revision: activeProposal.revision, version: activeProposal.versao, total: activeProposal.total} : null);
-  if (amendmentSource && options.forSharing) {
+  if (amendmentSource && (options.forSharing || options.markReady)) {
     state.lastProposalSaveError = "Aditivo em revisão: o acordo fechado e a reserva permanecem intactos. Salve o rascunho; a aplicação do aditivo exige homologação específica e não pode substituir o evento confirmado.";
     showToast(state.lastProposalSaveError);
     return null;
   }
   if (amendmentSource) snapshot.amendmentOf = structuredClone(amendmentSource);
-  const nextStatus = amendmentSource ? "negociacao" : status || activeProposal?.status || "proposta_pronta";
+  const nextStatus = amendmentSource ? "negociacao"
+    : options.markReady && (!activeProposal || activeProposal.publication_status === "draft") ? "proposta_pronta"
+    : status || activeProposal?.status || "proposta_pronta";
   const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
   if (!opportunityId) {
     state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
@@ -13081,7 +13154,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
-  if (!options.asDraft && (normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
+  if (!options.asDraft && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
     if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
@@ -13113,7 +13186,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     }
   }
 
-  if (normalizedNext === "confirmado" && !activeProposal?.snapshot?.pagamentoSinal) {
+  if (normalizedNext === "confirmado" && !hasValidatedSignal(activeProposal?.snapshot?.pagamentoSinal)) {
     paymentSignal = paymentSignal || (await showSignalPaymentDialog(snapshot.totals.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. O evento continua sem confirmação.");
@@ -13253,7 +13326,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     row.snapshot.pagamentoSinal = null;
     row.snapshot.pagamentoRestante = null;
   }
-  const publishNewVersion = Boolean(options.forSharing && (activeIsDraft || needsNewVersion));
+  const promoteReady = Boolean(options.forSharing || options.markReady);
+  const publishNewVersion = Boolean(promoteReady && (activeIsDraft || needsNewVersion));
   if (publishNewVersion) {
     row.status = "proposta_pronta";
     row.snapshot = {
@@ -13266,18 +13340,18 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (activeIsDraft && persistableProposalId) {
     const draftRow = {
       ...row,
-      is_current: Boolean(options.forSharing || activeProposal.is_current),
-      publication_status: options.forSharing ? "ready" : "draft",
-      ...(options.forSharing ? { sent_at: null } : {}),
+      is_current: Boolean(promoteReady || activeProposal.is_current),
+      publication_status: promoteReady ? "ready" : "draft",
+      ...(promoteReady ? { sent_at: null } : {}),
     };
     save = persistEventProposal(persistableProposalId, draftRow, activeProposal);
   } else if (needsNewVersion) {
     const versionRow = {
       ...row,
       oportunidade_id: opportunityId,
-      is_current: Boolean(options.forSharing),
-      publication_status: options.forSharing ? "ready" : "draft",
-      ...(options.forSharing ? { sent_at: null } : {}),
+      is_current: promoteReady,
+      publication_status: promoteReady ? "ready" : "draft",
+      ...(promoteReady ? { sent_at: null } : {}),
     };
     save = persistEventProposal(null, versionRow, activeProposal);
   } else if (persistableProposalId) {
@@ -15539,7 +15613,7 @@ function bindEvents() {
       showToast("Sugestão ignorada. A proposta permanece livre para montagem manual.");
     }
   });
-  document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
+  document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal(null, null, {markReady: true}));
   document.querySelector("#saveDraftBtn")?.addEventListener("click", () => saveCurrentProposal(null, null, {asDraft: true}));
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
