@@ -108,7 +108,12 @@ begin
  -- Existing published versions may be grandfathered once, but not later changes.
  insert into event_private.proposal_public_baseline values(other.id,event_private.public_proposal_fingerprint(other));
  assert event_private.remote_proposal_is_public(other);
- update propostas set total=1200 where id=other.id returning * into other;
+ blocked:=false;
+ begin update propostas set total=1200 where id=other.id; exception when sqlstate 'PT409' then blocked:=true; end;
+ assert blocked,'The grandfathered agreement cannot be overwritten by a team request';
+ assert (select total=other.total from propostas where id=other.id),'The original customer-visible total is preserved';
+ -- Still prove the public fingerprint rejects a hypothetical changed representation, without mutating a released row.
+ other.total:=1200;
  assert not event_private.remote_proposal_is_public(other),'Grandfathering cannot approve future changes';
 end $$;
 rollback;

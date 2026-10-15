@@ -1,7 +1,17 @@
--- Approval identity is separate from unchanged reviewed content. Historical links remain immutable.
+-- Approval identity excludes dispatch metadata and the email hash derived from revision.
+-- Keep every actual prepared message field; changes of content still require review.
+create function event_private.approval_request_fingerprint(p public.propostas,content jsonb,approver uuid)
+returns text language sql immutable set search_path='' as $$
+ select encode(extensions.digest(jsonb_build_object(
+  'proposal',event_private.proposal_fingerprint(p),'paymentTerms',p.snapshot->'paymentTerms',
+  'content',content-'contentHash','approver',approver)::text,'sha256'),'hex');
+$$;
+revoke all on function event_private.approval_request_fingerprint(public.propostas,jsonb,uuid) from public,anon,authenticated,service_role;
+-- Historical links remain immutable. Backfill identity from the reviewed snapshot,
+-- never the live proposal; preserve review_hash used by existing decision links.
 alter table public.event_proposal_approvals add column request_fingerprint text;
 alter table public.event_proposal_approvals add column request_generation integer not null default 1;
-update public.event_proposal_approvals set request_fingerprint=review_hash;
+update public.event_proposal_approvals set request_fingerprint=event_private.approval_request_fingerprint(jsonb_populate_record(null::public.propostas,proposal_snapshot),content,approver_id);
 alter table public.event_proposal_approvals alter column request_fingerprint set not null;
 alter table public.event_proposal_approvals add column supersedes_id uuid references public.event_proposal_approvals(id);
 create index event_approvals_request_fingerprint_idx on public.event_proposal_approvals(request_fingerprint,created_at desc);
@@ -24,7 +34,7 @@ begin
  if coalesce(prepared_content->>'channel','') not in ('email','whatsapp') or length(trim(coalesce(prepared_content->>'body',''))) not between 1 and 12000 or length(coalesce(prepared_content->>'destination','')) not between 5 and 320 then raise exception 'Conteúdo de envio inválido'; end if;
  if prepared_content->>'proposalUrl' is distinct from ('https://leorangel22.github.io/main/proposta.html?p='||p.public_token::text||case when p.snapshot#>>'{event,clientLanguage}'='en' then '&lang=en' else '' end) then raise exception 'Link divergente da proposta'; end if;
  if prepared_content->>'channel'='email' and (coalesce(prepared_content->>'contentHash','') !~ '^[a-f0-9]{64}$' or length(coalesce(prepared_content->>'html',''))=0) then raise exception 'Prévia completa do e-mail obrigatória'; end if;
- fp:=encode(extensions.digest(jsonb_build_object('proposal',to_jsonb(p),'content',prepared_content,'approver',c.approver_id)::text,'sha256'),'hex');
+ fp:=event_private.approval_request_fingerprint(p,prepared_content,c.approver_id);
  -- The proposal row lock serializes requests, including simultaneous renewals.
  select * into prior from public.event_proposal_approvals
  where request_fingerprint=fp order by request_generation desc,created_at desc,id desc limit 1 for update;
@@ -78,6 +88,15 @@ grant select on public.event_approval_watch_alerts to authenticated;
 grant all on public.event_approval_watch_alerts to service_role;
 create policy approval_watch_team_read on public.event_approval_watch_alerts for select to authenticated using ((select public.is_team_member()));
 
+-- One predicate for initial detection and last-moment revalidation.
+create function event_private.approval_dispatch_needs_attention(b public.event_outbox,decided_at timestamptz)
+returns boolean language sql stable set search_path='' as $$
+ select coalesce((b.id is null and decided_at<=now()-interval '5 minutes')
+  or b.status in ('failed','uncertain') or b.delivery_status in ('failed','uncertain')
+  or (b.status='sending' and b.updated_at<=now()-interval '10 minutes'),false);
+$$;
+revoke all on function event_private.approval_dispatch_needs_attention(public.event_outbox,timestamptz) from public,anon,authenticated,service_role;
+
 create function public.event_claim_approval_watch(supplied_key text,probe_id uuid default null) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare c event_private.approval_watch_config; p event_private.proposal_approval_policy; a record; n record;
@@ -89,6 +108,11 @@ begin
  end if;
  select * into p from event_private.proposal_approval_policy where id;
  if not c.enabled or not p.enabled then return jsonb_build_object('skipped',true,'jobs',jobs); end if;
+ -- A crashed worker may already have contacted the provider. Quarantine its
+ -- abandoned claims as uncertain, never reset to pending or resend automatically.
+ update public.event_approval_watch_alerts set status='uncertain',
+  detail='Tentativa anterior sem resultado confirmado; conferir o provedor antes de qualquer nova ação.',updated_at=now()
+ where status='sending' and updated_at<=now()-interval '10 minutes';
  if probe_id is not null then
   if exists(select 1 from public.event_approval_watch_alerts where dedupe_key='probe:'||probe_id::text||':email') then
    return jsonb_build_object('skipped',true,'jobs',jobs);
@@ -103,7 +127,7 @@ begin
   if c.last_started_at>now()-interval '4 minutes' then return jsonb_build_object('skipped',true,'jobs',jobs); end if;
   -- Scan continuously; outbound alerts are restricted to local business hours.
   for a in
-   select q.*,b.status as send_status,b.updated_at as send_updated_at
+   select q.*,b as send_row
    from public.event_proposal_approvals q join public.propostas v on v.id=q.proposal_id
    left join public.event_outbox b on b.id=q.send_id
    where q.status in ('pending','approved') and q.approver_id=p.approver_id
@@ -119,8 +143,7 @@ begin
       (notice_row.status='uncertain' or (notice_row.status in ('pending','sending') and notice_row.updated_at<=now()-interval '10 minutes'))) then reason:='notification_stalled';
     elsif a.created_at<=now()-interval '2 hours' then reason:='approval_waiting';
     end if;
-   elsif (a.send_id is null and a.decided_at<=now()-interval '5 minutes') or a.send_status in ('failed','uncertain') or
-     (a.send_status='sending' and a.send_updated_at<=now()-interval '10 minutes') then reason:='dispatch_attention';
+   elsif event_private.approval_dispatch_needs_attention(a.send_row,a.decided_at) then reason:='dispatch_attention';
    end if;
    if reason is not null then
     foreach channel_name in array array['whatsapp','email'] loop
@@ -147,7 +170,7 @@ begin
       when 'approval_waiting' then q.status='pending' and q.expires_at>now() and q.created_at<=now()-interval '2 hours'
       when 'notification_failed' then q.status='pending' and q.expires_at>now() and exists(select 1 from public.event_approval_notifications nn where nn.approval_id=q.id and nn.status='failed')
       when 'notification_stalled' then q.status='pending' and q.expires_at>now() and exists(select 1 from public.event_approval_notifications nn where nn.approval_id=q.id and (nn.status='uncertain' or (nn.status in ('pending','sending') and nn.updated_at<=now()-interval '10 minutes')))
-      when 'dispatch_attention' then q.status='approved' and ((q.send_id is null and q.decided_at<=now()-interval '5 minutes') or exists(select 1 from public.event_outbox bb where bb.id=q.send_id and (bb.status in ('failed','uncertain') or (bb.status='sending' and bb.updated_at<=now()-interval '10 minutes'))))
+      when 'dispatch_attention' then q.status='approved' and event_private.approval_dispatch_needs_attention((select bb from public.event_outbox bb where bb.id=q.send_id),q.decided_at)
       else false end))
   order by w.created_at,w.id limit 8 for update of w skip locked
  loop
@@ -174,7 +197,12 @@ grant execute on function public.event_finish_approval_watch_alert(uuid,text,tex
 
 create function public.event_complete_approval_watch(target_run uuid) returns void language plpgsql security definer set search_path='' as $$
 begin
- if exists(select 1 from public.event_approval_watch_alerts where run_id=target_run and status='sending') then raise exception 'Resultados do monitor ainda não confirmados'; end if;
+ perform 1 from event_private.approval_watch_config where id and run_id=target_run for update;
+ if not found then raise exception 'Execução do monitor já substituída'; end if;
+ -- Include all runs, including uncertain results, not just this batch.
+ if exists(select 1 from public.event_approval_watch_alerts where status in ('sending','uncertain')) then
+  raise exception 'Resultados do monitor ainda não confirmados; conferir tentativas anteriores';
+ end if;
  update event_private.approval_watch_config set last_success_at=now() where id and run_id=target_run;
 end; $$;
 revoke all on function public.event_complete_approval_watch(uuid) from public,anon,authenticated;
@@ -185,6 +213,7 @@ begin
  perform event_private.require_team();
  return jsonb_build_object('enabled',(select enabled from event_private.approval_watch_config where id),
  'last_success_at',(select last_success_at from event_private.approval_watch_config where id),
+ 'unresolved_count',(select count(*) from public.event_approval_watch_alerts where status in ('sending','uncertain','failed')),
  'alerts',coalesce((select jsonb_agg(to_jsonb(w)) from (
   select id,approval_id,kind,channel,status,created_at,updated_at,detail from public.event_approval_watch_alerts
   where kind<>'probe' order by created_at desc limit 30) w),'[]'::jsonb));

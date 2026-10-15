@@ -156,7 +156,10 @@ begin
   assert (select status <> 'completed' from public.event_handoffs where opportunity_id = fixture_opportunity_id),
     'Ciencia global nao substitui revisao das tarefas setoriais';
 
+  -- Administrative source-revision fixture; retain all historical actor/version assertions.
+  perform set_config('request.jwt.claims','',true);
   update public.propostas set convidados = 76 where id = fixture_proposal_id;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',team_user,'email',(select email from auth.users where id=team_user),'role','authenticated')::text,true);
   assert exists(select 1 from public.event_handoff_task_history
     where event_handoff_task_history.task_id = fixture_task_id and opportunity_id = fixture_opportunity_id
       and source_version = 2 and reason = 'version_reopened'

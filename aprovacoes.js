@@ -41,17 +41,22 @@
     await run(async()=>{const generation=state.generation;const r=await api({action,id:a.id,reviewHash:a.review_hash,confirmed:true,reason});if(generation!==state.generation)return;render(r.approval);notice(r.warning||status(r.approval),Boolean(r.warning));});
   }
   async function loadWatch(generation){
+    let timeout;
+    $('watchStatus').textContent='Consultando estado do monitor…';
     try {
-      const result=await client.rpc('get_event_approval_watch_health');
+      const result=await Promise.race([
+        client.rpc('get_event_approval_watch_health'),
+        new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('timeout')),3000);})
+      ]);
       if(generation!==state.generation||!state.user)return;
       if(result.error||typeof result.data?.enabled!=='boolean')throw Error('unavailable');
       const health=result.data;
       const stale=!health.last_success_at||Date.now()-Date.parse(health.last_success_at)>15*60*1000;
-      const label=!health.enabled?'Monitor de aprovações desativado':stale?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
+      const label=!health.enabled?'Monitor de aprovações desativado':Number(health.unresolved_count)>0?'Monitor com tentativas que exigem conferência':stale?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
       const names={approval_waiting:'Aguardando decisão',approval_expired:'Aprovação expirada',notification_failed:'Aviso recusado',notification_stalled:'Aviso parado ou incerto',dispatch_attention:'Envio requer conferência'};
       const alerts=(health.alerts||[]).slice(0,8);
       $('watchStatus').innerHTML=`<p>${esc(label)}. Verificação a cada 5 minutos; alertas das 08h30 às 21h (Brasília).</p>${alerts.length?'<details><summary>Histórico recente de alertas</summary>'+alerts.map(a=>`<p>${esc(names[a.kind]||a.kind)} · ${esc(a.channel)} · ${esc(a.status==='accepted'?'aceito pelo provedor; entrega não confirmada':a.status)} ${/^[a-f0-9-]{36}$/i.test(a.approval_id||'')?`<a href="./aprovacoes.html?id=${esc(a.approval_id)}">Conferir solicitação</a>`:''}</p>`).join('')+'</details>':''}`;
-    }catch{if(generation===state.generation&&state.user)$('watchStatus').textContent='Estado do monitor indisponível. A revisão da proposta permanece acessível.';}
+    }catch{if(generation===state.generation&&state.user)$('watchStatus').textContent='Estado do monitor indisponível. A revisão da proposta permanece acessível.';}finally{clearTimeout(timeout);}
   }
   async function load(){
     const generation=++state.generation;const {data,error}=await client.auth.getUser();
@@ -59,8 +64,9 @@
     state.user=data?.user||null;$('login').hidden=Boolean(state.user);$('workspace').hidden=!state.user;$('logout').hidden=!state.user;
     if(error||!state.user){state.current=null;$('detail').innerHTML='';$('list').innerHTML='';$('watchStatus').textContent='';notice('Entre para acessar a solicitação. Nenhuma decisão foi registrada.');return;}
     const policy=await client.rpc('event_approval_policy');if(policy.error)throw Error('Esta conta não possui acesso à equipe de Eventos.');
+    if(generation!==state.generation||!state.user)return;
     $('identity').textContent=`${state.user.email} · ${policy.data.is_approver?'Gestor aprovador':'Consulta da equipe'}`;
-    await loadWatch(generation);
+    void loadWatch(generation);
     if(generation!==state.generation)return;
     if(state.id){if(!/^[0-9a-f-]{36}$/i.test(state.id))throw Error('Identificador de solicitação inválido.');const r=await api({action:'get',id:state.id});if(generation!==state.generation)return;render(r.approval);notice(status(r.approval));}
     else {

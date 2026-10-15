@@ -23,3 +23,7 @@ verify_jwt = false
 
 [functions.event-proposal-approval]
 verify_jwt = true
+
+# Private cron key is validated in a service-only RPC before any work is read.
+[functions.event-approval-monitor]
+verify_jwt = false

@@ -57,7 +57,10 @@ begin
   assert job->>'destination' in ('manager@example.test','5521000000000');
   perform event_finish_approval_watch_alert((job->>'id')::uuid,'uncertain',null,'Fixture timeout');
  end loop;
- perform event_complete_approval_watch((batch->>'run_id')::uuid);
+ blocked:=false;begin perform event_complete_approval_watch((batch->>'run_id')::uuid);exception when others then blocked:=true;end;
+ assert blocked,'Uncertain probe cannot report healthy';
+ -- Explicit synthetic reconciliation, not an automatic resend.
+ update event_approval_watch_alerts set status='accepted' where kind='probe';
  assert (event_claim_approval_watch(k,probe)->>'skipped')::boolean,'Real probe cannot be repeated by retry';
  assert (select count(*)=2 from event_approval_watch_alerts where kind='probe');
  update event_private.approval_watch_config set last_started_at=now()-interval '5 minutes' where id;

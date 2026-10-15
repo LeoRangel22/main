@@ -69,6 +69,13 @@ function getWorkingProposals() {
     const published = versions.filter((row) => row.publication_status !== "draft")
       .sort((a, b) => Number(b.is_current === true) - Number(a.is_current === true) || byRecentUpdate(a, b))[0];
     if (!draft) return published;
+    // A working amendment is not the booked agreement. Keep it reachable without
+    // moving the confirmed event, agenda, financial totals or operational queue.
+    const booked = published && (published.journey_booked_locked ||
+      ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(published.status)));
+    if (published && (booked || draft.snapshot?.amendmentOf)) {
+      return {...published, pendingDraftId: draft.id, pendingDraftVersion: draft.versao};
+    }
     const response = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao;
     const responseAt = published?.cliente_resposta_em || published?.snapshot?.clienteResposta?.registradoEm;
     const responseNeedsAttention = published && ["proposta_enviada", "negociacao"].includes(normalizeProposalStatus(published.status)) && response && (
@@ -289,7 +296,9 @@ function getActionTasks(items = getPipelineItems()) {
       });
     }
 
-    if (item.kind === "proposal" && status === "confirmado") {
+    if (item.kind === "proposal" && item.snapshot?.pagamentoSinal?.validacaoPendente === true) {
+      tasks.push({...base, title: "Validar comprovante do sinal", note: "Comprovante pendente não é recebimento validado. Conferir antes da liberação operacional.", priority: 98, track: "Financeiro"});
+    } else if (item.kind === "proposal" && status === "confirmado") {
       if (item.hasPaymentComplete) {
         tasks.push({
           ...base,

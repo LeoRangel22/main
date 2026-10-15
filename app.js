@@ -1095,12 +1095,7 @@ function loadPrivatizationRules() {
 }
 
 function loadGeneralTerms() {
-  try {
-    const saved = localStorage.getItem(TERMS_KEY);
-    if (saved && saved.trim()) return saved;
-  } catch (error) {
-    console.warn("Não foi possível carregar condições gerais salvas.", error);
-  }
+  // A prior customer's terms must never become a global quotation template.
   return defaultGeneralTerms;
 }
 
@@ -1119,7 +1114,8 @@ function savePrivatizationRules({ localOnly = false } = {}) {
 }
 
 function saveGeneralTerms() {
-  localStorage.setItem(TERMS_KEY, fields.generalTerms.value);
+  // Persisted in the individual proposal, never as a browser-wide template.
+  if (typeof renderLoadedEditorBar === "function") renderLoadedEditorBar();
 }
 
 function getCommercialSettingValue(key) {
@@ -1285,6 +1281,9 @@ function formatSignalPaymentDate(value) {
 
 function renderPaymentSummaryLine(title, payment) {
   if (!payment) return "";
+  if (payment.validacaoPendente === true) {
+    return '<span>Comprovante aguardando validação</span><strong>Recebimento ainda não confirmado pelo Financeiro</strong><small>O valor informado anteriormente não entra no total recebido até a conferência bancária.</small>';
+  }
   const banks = Array.isArray(payment.bancos) ? payment.bancos.join(", ") : payment.banco || "Banco não informado";
   const proofName = payment.comprovante?.nome || "";
   const proof = proofName
@@ -1403,30 +1402,103 @@ function formatAuditChanges(changes = []) {
     .join(" · ");
 }
 
+function proposalCommercialSections(snapshot = {}) {
+  const text = value => String(value ?? "").replace(/\r\n/g, "\n").trim();
+  const event = snapshot.event || {}, client = snapshot.client || {}, totals = snapshot.totals || {};
+  const numeric = value => Number.isFinite(Number(value)) ? Number(value) : text(value);
+  const items = (snapshot.selectedItems || []).map(item => ({
+    id: text(item.id), codigo: text(item.codigo), nome: text(item.nome || item.name),
+    descricao: text(item.descricao), composicao: text(item.commercialSummary || item.descricao),
+    tipoEvento: text(item.tipoEvento), formula: text(item.formula),
+    preco1h: numeric(item.preco1h ?? 0), preco2h: numeric(item.preco2h ?? 0),
+    precoFixo: numeric(item.precoFixo ?? 0), precoMeiaHoraExtra: numeric(item.precoMeiaHoraExtra ?? 0),
+    valorAdicional: numeric(item.valorAdicional ?? 0), minimo: numeric(item.minimo ?? 0),
+    quantidade: numeric(item.quantidade ?? item.quantity ?? item.calc?.quantity ?? 0),
+    calculo: proposalSendContent(item.calc || {}),
+  }));
+  return [
+    ["Cliente", text(client.name)], ["E-mail", text(client.email)], ["Celular", text(client.phone)],
+    ["Empresa", text(client.company)], ["Cliente final", text(client.finalClient)], ["Grupo", text(client.groupName)],
+    ["Tipo", text(event.type)], ["Data", text(event.date)], ["Horário", text(event.time)],
+    ["Convidados", numeric(event.guests)], ["Duração", numeric(event.duration)],
+    ["Validade", text(event.validity || "14 dias")],
+    ["Prazo do sinal", numeric(event.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS)],
+    ["Idioma", text(event.clientLanguage || "pt")], ["Itens", items],
+    ["Condições gerais", text(snapshot.generalTerms)], ["Condições de pagamento", snapshot.paymentTerms || []],
+    ["Finalidade", text(event.reason)], ["Anotações do briefing", text(event.sourceNotes)],
+    ["Preferências", text(event.preferences)], ["Extras", text(event.extras)],
+    ["Subtotal", numeric(totals.subtotal ?? 0)], ["Taxa de serviço", numeric(totals.serviceFee ?? 0)],
+    ["Privatização", proposalSendContent(totals.privatization || {})],
+    ["Ajuste comercial", {valor: numeric(totals.adjustment ?? 0), motivo: text(totals.adjustmentLabel)}],
+    ["Total", numeric(totals.total ?? 0)], ["Alternativas", proposalSendContent(snapshot.publicOfferOptions || [])],
+  ];
+}
+
 function getProposalChangeList(previousSnapshot = {}, nextSnapshot = {}) {
   if (!previousSnapshot || !nextSnapshot) return [];
-  const previousNames = (previousSnapshot.selectedItems || []).map((item) => item.nome).filter(Boolean).join(", ");
-  const nextNames = (nextSnapshot.selectedItems || []).map((item) => item.nome).filter(Boolean).join(", ");
-  const checks = [
-    ["Cliente", previousSnapshot.client?.name, nextSnapshot.client?.name],
-    ["E-mail", previousSnapshot.client?.email, nextSnapshot.client?.email],
-    ["Celular", previousSnapshot.client?.phone, nextSnapshot.client?.phone],
-    ["Tipo", previousSnapshot.event?.type, nextSnapshot.event?.type],
-    ["Data", previousSnapshot.event?.date, nextSnapshot.event?.date],
-    ["Horário", previousSnapshot.event?.time, nextSnapshot.event?.time],
-    ["Convidados", previousSnapshot.event?.guests, nextSnapshot.event?.guests],
-    ["Duração", previousSnapshot.event?.duration, nextSnapshot.event?.duration],
-    ["Itens", previousNames, nextNames],
-    ["Total", previousSnapshot.totals?.total ? formatMoney(previousSnapshot.totals.total) : "", nextSnapshot.totals?.total ? formatMoney(nextSnapshot.totals.total) : ""],
-  ];
-  return checks
-    .filter(([, from, to]) => String(from || "") !== String(to || ""))
-    .map(([label, from, to]) => ({ label, from: String(from || ""), to: String(to || "") }));
+  const previous = new Map(proposalCommercialSections(previousSnapshot));
+  const serialize = value => typeof value === "object" ? JSON.stringify(proposalSendContent(value)) : String(value ?? "");
+  return proposalCommercialSections(nextSnapshot)
+    .filter(([label, value]) => serialize(previous.get(label)) !== serialize(value))
+    .map(([label, value]) => ({label, from: serialize(previous.get(label)), to: serialize(value)}));
 }
 
 function getClientVisibleProposalChanges(previousSnapshot = {}, nextSnapshot = {}) {
-  const visibleLabels = new Set(["Tipo", "Data", "Horário", "Convidados", "Duração", "Itens", "Total"]);
-  return getProposalChangeList(previousSnapshot, nextSnapshot).filter((change) => visibleLabels.has(change.label));
+  const privateLabels = new Set(["Cliente", "E-mail", "Celular", "Empresa", "Cliente final", "Grupo", "Anotações do briefing"]);
+  const previous = new Map(proposalCommercialSections(previousSnapshot));
+  const next = new Map(proposalCommercialSections(nextSnapshot));
+  return getProposalChangeList(previousSnapshot, nextSnapshot)
+    .filter(change => !privateLabels.has(change.label))
+    .map(change => {
+      const from = formatClientProposalChange(change.label, previous.get(change.label));
+      let to = formatClientProposalChange(change.label, next.get(change.label));
+      if (from === to) to += " — detalhes comerciais revisados; confira a proposta completa.";
+      return {label: change.label, from, to};
+    });
+}
+
+function formatClientProposalChange(label, value) {
+  const text = v => String(v ?? "").trim();
+  if (label === "Itens") return (Array.isArray(value) ? value : []).map(item => {
+    const parts = [text(item.nome) || "Item", text(item.composicao || item.descricao)];
+    if (Number(item.quantidade) > 0) parts.push(`${item.quantidade} unidades`);
+    if (Number.isFinite(Number(item.calculo?.total))) parts.push(formatMoney(Number(item.calculo.total)));
+    return parts.filter(Boolean).join(" · ");
+  }).join("; ") || "Sem itens";
+  if (["Subtotal", "Taxa de serviço", "Total"].includes(label)) return formatMoney(Number(value) || 0);
+  if (label === "Privatização") {
+    if (!value || typeof value !== "object") return text(value) || "Sem privatização";
+    return [text(value.label || value.title || value.name || value.type),
+      Number.isFinite(Number(value.amount)) ? formatMoney(Number(value.amount)) : ""].filter(Boolean).join(" · ") || "Condição de privatização da proposta";
+  }
+  if (label === "Ajuste comercial") return `${formatMoney(Number(value?.valor) || 0)}${value?.motivo ? " · " + text(value.motivo) : ""}`;
+  if (label === "Alternativas") return (Array.isArray(value) ? value : []).map(option => text(option.title || option.label || option.name) || "Alternativa revisada").join("; ") || "Sem alternativas";
+  if (Array.isArray(value)) return value.map(v => typeof v === "string" ? v : text(v?.text || v?.description || v?.label) || "Condição revisada").join("; ");
+  if (value && typeof value === "object") return "Detalhes comerciais na proposta";
+  return text(value) || "Não informado";
+}
+
+function hasCommercialEditorInputChanges() {
+  if (!state.loadedEditorSignature) return true;
+  try {
+    const before = JSON.parse(state.loadedEditorSignature), after = JSON.parse(getCurrentEditorSignature());
+    delete before.notes; delete after.notes;
+    return JSON.stringify(proposalSendContent(before)) !== JSON.stringify(proposalSendContent(after));
+  } catch (_) { return true; }
+}
+
+function preserveUneditedCommercialSnapshot(snapshot, proposal) {
+  if (!proposal?.snapshot || state.forceNewVersionDraft || hasCommercialEditorInputChanges()) return;
+  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
+    if (Object.hasOwn(proposal.snapshot, key)) snapshot[key] = structuredClone(proposal.snapshot[key]);
+    else delete snapshot[key];
+  }
+  snapshot.event = {...structuredClone(proposal.snapshot.event || {}), notes: snapshot.event.notes, signalDeadlineAt: snapshot.event.signalDeadlineAt};
+}
+
+function isContractedProposal(proposal) {
+  return Boolean(proposal && proposal.publication_status !== "draft" &&
+    (proposal.journey_booked_locked || ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal.status))));
 }
 
 function formatCommercialHistoryDate(value) {
@@ -1683,9 +1755,15 @@ function getProposalNextStepConfig() {
   const request = getActiveQuoteRequest();
   if (proposal) {
     const status = normalizeProposalStatus(proposal.status);
-    const progress = getChecklistProgress(proposal.snapshot || {});
-    const hasSignal = Boolean(proposal.snapshot?.pagamentoSinal);
+    const progress = getOperationalHandoffProgress(getOperationalHandoffData(proposal).tasks);
+    const hasSignal = hasValidatedSignal(proposal.snapshot?.pagamentoSinal);
     const paymentCoverage = getPaymentCoverage(proposal.total || proposal.snapshot?.totals?.total || 0, proposal.snapshot?.pagamentoSinal, proposal.snapshot?.pagamentoRestante);
+
+    if (proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
+      return {tone: "warning", title: "Validar o comprovante antes de liberar a operação",
+        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Financeiro ou gestor devem conferir o sinal.",
+        action: "mark_signal", actionLabel: "Validar sinal"};
+    }
 
     if (status === "proposta_enviada" && proposal.clientResponse === "confirmar") {
       return {
@@ -1733,7 +1811,7 @@ function getProposalNextStepConfig() {
       return {
         tone: "success",
         title: "Cobrar e registrar o pagamento restante",
-        note: "Sinal registrado. Alinhe o saldo para liberar planejamento.",
+        note: "Planejamento já pode começar após o sinal validado. Confira o prazo combinado do saldo antes da execução.",
         action: "mark_remaining",
         actionLabel: "Registrar saldo",
       };
@@ -1749,7 +1827,7 @@ function getProposalNextStepConfig() {
       };
     }
 
-    if (["pagamento_final", "planejamento"].includes(status) && hasIncompleteChecklist(proposal.snapshot || {})) {
+    if (["pagamento_final", "planejamento"].includes(status) && (!progress.total || progress.done < progress.total)) {
       return {
         tone: "operation",
         title: "Fechar o checklist operacional",
@@ -2552,8 +2630,8 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
   const status = normalizeProposalStatus(proposal.status);
   const snapshot = proposal.snapshot || {};
   const clientResponse = proposal.cliente_resposta || snapshot.clienteResposta?.acao || snapshot.clientResponse?.action || "";
-  const signal = snapshot.pagamentoSinal;
-  const remaining = snapshot.pagamentoRestante;
+  const signal = hasValidatedSignal(snapshot.pagamentoSinal) ? snapshot.pagamentoSinal : null;
+  const remaining = snapshot.pagamentoRestante?.validacaoPendente === true ? null : snapshot.pagamentoRestante;
   const responseLabels = {
     confirmar: "Aprovou",
     alteracao: "Pediu ajuste",
@@ -2575,7 +2653,7 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
     {
       tone: remaining ? "money" : signal ? "warning" : "muted",
       label: "Financeiro",
-      value: remaining ? "Saldo registrado" : signal ? "Sinal registrado" : "Sem sinal",
+      value: snapshot.pagamentoSinal?.validacaoPendente === true ? "Comprovante pendente" : remaining ? "Saldo registrado" : signal ? "Sinal registrado" : "Sem sinal",
       detail: remaining
         ? `${formatMoney(Number(remaining.valor) || 0)} · ${formatSignalPaymentDate(remaining.data)}`
         : signal
@@ -2695,6 +2773,18 @@ function renderEventAttachmentsPanel(proposal = getActiveProposal()) {
 async function persistEventProposal(proposalId, changes, source = null) {
   const existing = source || state.proposals.find((row) => row.id === proposalId);
   if (changes.snapshot?._dashboard_summary || existing?._dashboard_summary) return { data: null, error: { code: "PT409", message: "Abra os detalhes completos antes de salvar; o resumo do painel não pode substituir a proposta." } };
+  const editorWrite = {
+    base: state.editorProposalBase, user: state.session?.user?.id, client: state.supabase,
+    identity: JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]),
+  };
+  if (changes.snapshot && !isFinanceSession()) {
+    for (const key of ["pagamentoSinal", "pagamentoRestante"]) {
+      const before = existing?.snapshot?.[key] ?? null, after = changes.snapshot[key] ?? null;
+      if (JSON.stringify(proposalSendContent(before)) !== JSON.stringify(proposalSendContent(after)) && (proposalId || after !== null)) {
+        return {data: null, error: {code: "42501", message: "Somente Financeiro ou gestor podem validar pagamentos. Anexe a informação para conferência, sem confirmar o recebimento."}};
+      }
+    }
+  }
   let result;
   try {
     result = await state.supabase.rpc("save_event_proposal", {
@@ -2711,6 +2801,15 @@ async function persistEventProposal(proposalId, changes, source = null) {
   // A successful HTTP response with no saved row is not proof of persistence.
   if (!data?.id || (proposalId && data.id !== proposalId) || !Number.isSafeInteger(Number(data.revision)) || Number(data.revision) < 1 || !data.snapshot || data.snapshot._dashboard_summary) {
     return { data: null, error: { code: "SAVE_UNCONFIRMED", message: "O banco não confirmou a proposta gravada. Suas alterações continuam no editor. Atualize o histórico para conferir antes de repetir." } };
+  }
+  if (proposalId && editorWrite.base?.id === proposalId && state.editorProposalBase === editorWrite.base &&
+      Number(editorWrite.base.revision) === Number(existing?.revision) && Number(data.revision) === Number(existing.revision) + 1 &&
+      editorWrite.user && editorWrite.user === state.session?.user?.id && editorWrite.client === state.supabase &&
+      editorWrite.identity === JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey])) {
+    state.editorProposalBase = structuredClone(data);
+    // Preserve input fields and any typing performed while this RPC was pending.
+    upsertProposalState(data);
+    renderLoadedEditorBar();
   }
   invalidateCommercialDashboard();
   return { data, error: null };
@@ -3272,9 +3371,9 @@ async function runQuickReply(replyId, channel) {
   }
 
   if (channel === "email") {
-    const email = context.email;
-    if (!email) {
-      showToast("Preencha o e-mail do cliente para abrir a mensagem.");
+    const email = String(context.email || "").trim();
+    if (!isLikelyEmailAddress(email)) {
+      showToast("Preencha um e-mail válido do cliente antes de abrir a mensagem.");
       return;
     }
     if (state.sendLocks.email) {
@@ -3288,7 +3387,13 @@ async function runQuickReply(replyId, channel) {
     }
     const payload = getQuickReplyPayload(replyId, context, proposalUrl, "email");
     if (!payload) return;
-    if (needsLink && !QA_MODE) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+    if (needsLink && !QA_MODE) {
+      const approvalEnabled = await remoteProposalApprovalEnabled();
+      if (approvalEnabled === null) return;
+      if (approvalEnabled) return sendProposalEmailViaZepto({proposal:share.saved,proposalUrl,email,message:payload.message,subject:payload.subject,title:payload.title});
+      // In the disabled-policy contingency, keep the selected reviewed draft.
+      // The generic proposal email renderer must not wrap follow-ups/payments.
+    }
     const confirmed = await confirmClientSend({
       channel: "E-mail",
       destination: email,
@@ -3373,10 +3478,10 @@ function renderQuickReplies() {
 }
 
 function shouldShowOperationalChecklist(proposal) {
-  if (!proposal) return false;
+  if (!proposal || proposal.snapshot?.amendmentOf || (proposal.publication_status === "draft" && !proposal.is_current)) return false;
   const status = normalizeProposalStatus(proposal.status);
   if (["cancelado", "perdido", "pos_venda"].includes(status)) return false;
-  return Boolean(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
+  return hasValidatedSignal(proposal.snapshot?.pagamentoSinal) || operationStatuses.has(status);
 }
 
 function getOperationalHandoffData(proposal) {
@@ -3410,11 +3515,30 @@ function getOperationalHandoffData(proposal) {
       source_version: 1,
     }));
   }
+  const handoff = operations.handoffs.find(item => item.opportunity_id === opportunityId) || null;
+  const valid = handoff?.proposal_id === proposal?.id && shouldShowOperationalChecklist(proposal);
   return {
-    handoff: operations.handoffs.find((item) => item.opportunity_id === opportunityId) || null,
-    tasks: operations.handoffTasks.filter((item) => item.opportunity_id === opportunityId).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)),
-    changes: operations.handoffChanges.filter((item) => item.opportunity_id === opportunityId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+    handoff: valid ? handoff : null,
+    tasks: valid ? operations.handoffTasks.filter(item => item.opportunity_id === opportunityId && Number(item.source_version) === Number(handoff.version)).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)) : [],
+    changes: valid ? operations.handoffChanges.filter(item => item.opportunity_id === opportunityId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) : [],
   };
+}
+
+function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffData(proposal)) {
+  const blockers = [];
+  if (!isSuperAdminSession()) blockers.push("Somente o gestor pode liberar a execução.");
+  // The persistent lock preserves a prior agreement; it is not authorization to
+  // release a canceled or renegotiating event. Match the server's active stages.
+  if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
+    blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
+  }
+  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Financeiro ou gestor devem validar o sinal antes da liberação.");
+  if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
+  const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
+  if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
+    blockers.push("Conclua e registre a ciência das sete tarefas setoriais antes da liberação final.");
+  }
+  return blockers;
 }
 
 function getOperationalHandoffProgress(tasks = []) {
@@ -3455,7 +3579,7 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
   }
   const checklist = proposal.snapshot?.operationalChecklist || {};
   const handoffData = getOperationalHandoffData(proposal);
-  const progress = handoffData.tasks.length ? getOperationalHandoffProgress(handoffData.tasks) : getChecklistProgress(proposal.snapshot || {});
+  const progress = getOperationalHandoffProgress(handoffData.tasks);
   const latestChange = handoffData.changes.find((item) => !item.acknowledged_at) || handoffData.changes[0];
   nodes.operationalChecklist.classList.remove("is-hidden");
   nodes.operationalChecklist.innerHTML = `
@@ -3487,6 +3611,14 @@ async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = f
   const proposal = getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal || !runRpc || !state.session) return;
+  const handoffData = getOperationalHandoffData(proposal);
+  const task = handoffData.tasks.find(item => item.id === taskId);
+  if (task?.task_key === "financeiro_saldo" && !isFinanceSession()) { showToast("A ciência financeira é exclusiva do Financeiro ou gestor."); renderOperationalChecklist(proposal); return; }
+  if (task?.task_key === "gerencia_go_no_go" && !isSuperAdminSession()) { showToast("Somente o gestor pode dar ciência ou liberar a execução."); renderOperationalChecklist(proposal); return; }
+  if (task?.task_key === "gerencia_go_no_go" && checked && !acknowledgeOnly) {
+    const blockers = getOperationalReleaseBlockers(proposal, handoffData);
+    if (blockers.length) { showToast(blockers.join(" ")); renderOperationalChecklist(proposal); return; }
+  }
   try {
     await runRpc("update_event_handoff_task", {
       target_task: taskId,
@@ -3594,7 +3726,10 @@ function getOperationalDocContext(proposal = getActiveProposal()) {
   const qualification = snapshot.qualificacao || {};
   const selectedItems = Array.isArray(snapshot.selectedItems) ? snapshot.selectedItems : [];
   const checklist = snapshot.operationalChecklist || {};
-  const progress = getChecklistProgress(snapshot);
+  const data = getOperationalHandoffData(proposal);
+  const validHandoff = data.handoff?.proposal_id === proposal?.id && shouldShowOperationalChecklist(proposal);
+  const sectorTasks = validHandoff ? data.tasks.filter(task => Number(task.source_version) === Number(data.handoff.version)) : [];
+  const progress = getOperationalHandoffProgress(sectorTasks);
   const attachments = getEventAttachments(snapshot);
   const signal = snapshot.pagamentoSinal || null;
   const remaining = snapshot.pagamentoRestante || null;
@@ -3602,7 +3737,10 @@ function getOperationalDocContext(proposal = getActiveProposal()) {
     proposal,
     snapshot,
     reference: getOperationalReference(proposal, snapshot),
-    generatedAt: new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }),
+    generatedAt: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }),
+    sectorTasks,
+    handoffVersion: validHandoff ? data.handoff.version : null,
+    changesPending: Boolean(data.handoff?.changes_pending),
     client,
     event,
     totals,
@@ -3718,7 +3856,7 @@ function formatOperationalBanks(payment) {
 function buildOperationalPaymentBlock(context) {
   const signal = context.signal;
   const remaining = context.remaining;
-  const signalDetail = signal
+  const signalDetail = signal?.validacaoPendente === true ? "Comprovante pendente de validação bancária; recebimento não confirmado." : signal
     ? `${formatMoney(signal.valor)} · ${formatSignalPaymentDate(signal.data)} · ${formatOperationalBanks(signal)}`
     : "Sinal ainda não registrado.";
   const remainingDetail = remaining
@@ -3736,12 +3874,9 @@ function buildOperationalPaymentBlock(context) {
 
 function buildOperationalPaymentStatusBlock(context) {
   const total = Number(context.totals.total || 0);
-  const signalValue = Number(context.signal?.valor || 0);
-  const remainingValue = Number(context.remaining?.valor || 0);
-  const paidTotal = signalValue + remainingValue;
-  const isFullyPaid = total > 0 && paidTotal >= total - 1;
+  const {isFullyPaid} = getPaymentCoverage(total, context.signal, context.remaining);
   return buildOperationalRows([
-    { label: "Sinal de reserva", value: context.signal ? "Registrado. Conferir comprovante com financeiro." : "Pendente. Cobrar sinal antes de confirmar operação." },
+    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado pelo Financeiro ou gestor." : "Pendente. Cobrar sinal antes de confirmar operação." },
     {
       label: "Pagamento restante",
       value: isFullyPaid
@@ -3750,7 +3885,7 @@ function buildOperationalPaymentStatusBlock(context) {
           ? "Registrado. Conferir comprovante com financeiro."
           : "Pendente. Cobrar antes da execução, conforme combinado.",
     },
-    { label: "Responsável pela conferência", value: "Financeiro / eventos" },
+    { label: "Responsável pela conferência", value: "Financeiro / gestor" },
   ]);
 }
 
@@ -3776,7 +3911,7 @@ function buildOperationalAttachments(context, options = {}) {
   `;
 }
 
-function buildOperationalChecklistRows(context, printable = false) {
+function buildOperationalAdditionalChecklistRows(context, printable = false) {
   return operationalChecklistItems
     .map((item) => {
       const checked = Boolean(context.checklist[item.id]);
@@ -3788,6 +3923,16 @@ function buildOperationalChecklistRows(context, printable = false) {
       `;
     })
     .join("");
+}
+
+function buildOperationalChecklistRows(context, printable = false) {
+  const rows = (context.sectorTasks || []).map(task => `<div class="op-check-row${task.status === "done" ? " is-done" : ""}">
+    <span>${escapeHtml(task.status === "done" ? "OK" : task.status === "blocked" ? "BLOQUEADO" : task.status === "in_progress" ? "EM EXECUÇÃO" : "PENDENTE")}</span>
+    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
+  </div>`).join("");
+  return `${context.changesPending ? '<p class="op-note">Há mudanças pendentes de ciência. Esta ficha não comprova liberação da execução.</p>' : ""}
+    ${rows || '<p class="op-note">Checklist setorial indisponível. Atualize o painel antes de distribuir esta ficha; não foi presumida conclusão.</p>'}
+    <h3>Controles adicionais da proposta — lista separada</h3>${buildOperationalAdditionalChecklistRows(context, printable)}`;
 }
 
 function buildOperationalPrintShell(title, subtitle, contentHtml) {
@@ -3840,7 +3985,7 @@ function buildOperationalPrintShell(title, subtitle, contentHtml) {
                 <h1>${escapeHtml(title)}</h1>
               </div>
             </div>
-            <div class="op-meta">${escapeHtml(subtitle)}</div>
+            <div class="op-meta">${escapeHtml(subtitle).replace(/&lt;br&gt;/g, "<br>")}</div>
           </header>
           ${contentHtml}
         </main>
@@ -3855,7 +4000,7 @@ function buildTechnicalSheetHtml(proposal = getActiveProposal(), options = {}) {
   const eventTitle = `${context.event.type || "Evento"} · ${formatOperationalDateTime(context.event)} · ${context.event.guests || 0} pax`;
   return buildOperationalPrintShell(
     showFinance ? "Ficha técnica do evento" : "Ficha operacional do evento",
-    `Ref. ${context.reference}<br>Gerado em ${context.generatedAt}`,
+    `Ref. ${context.reference}<br>Proposta V${proposal?.versao || "—"} · Operação V${context.handoffVersion || "não carregada"}<br>Gerado em ${context.generatedAt} (Brasília)`,
     `
       <div class="op-summary">
         <strong>${escapeHtml(eventTitle)}</strong>
@@ -3921,7 +4066,8 @@ function buildTechnicalSheetHtml(proposal = getActiveProposal(), options = {}) {
           { label: "Observações", value: context.event.notes || context.event.sourceNotes || context.qualification.observacoes || "Sem observações adicionais" },
         ])}
       </section>
-      <div class="op-note">Antes da execução, confirme operação avisada, responsável do dia, cardápio, extras, restrições e pagamento restante.</div>
+      <section class="op-section"><h2>Checklist setorial · ${context.progress.done}/${context.progress.total}</h2>${buildOperationalChecklistRows(context)}</section>
+      <div class="op-note">A emissão da ficha não registra recebimento, ciência nem liberação da execução. Confira versão, responsabilidades, restrições e condições de pagamento.</div>
     `,
   );
 }
@@ -3930,7 +4076,7 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
   const context = getOperationalDocContext(proposal);
   return buildOperationalPrintShell(
     "Checklist do evento",
-    `Ref. ${context.reference}<br>${context.progress.done}/${context.progress.total} concluídos`,
+    `Ref. ${context.reference}<br>Operação V${context.handoffVersion || "não carregada"} · ${context.progress.done}/${context.progress.total} tarefas setoriais concluídas<br>Gerado em ${context.generatedAt} (Brasília)`,
     `
       <div class="op-summary">
         <strong>${escapeHtml(context.client.name || "Cliente")} · ${escapeHtml(context.event.type || "Evento")}</strong>
@@ -3960,9 +4106,8 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
 
 function buildOperationalSummaryText(proposal = getActiveProposal()) {
   const context = getOperationalDocContext(proposal);
-  const checklist = operationalChecklistItems
-    .map((item) => `${context.checklist[item.id] ? "OK" : "PENDENTE"} - ${item.label}`)
-    .join("\n");
+  const checklist = context.sectorTasks.map(task => `${task.status === "done" ? "OK" : "PENDENTE"} - ${task.label} | ${task.owner_label || "a definir"} | ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}`).join("\n") || "Checklist setorial indisponível; atualize o painel.";
+  const additional = operationalChecklistItems.map(item => `${context.checklist[item.id] ? "OK" : "PENDENTE"} - ${item.label}`).join("\n");
   const items = context.selectedItems.map((item) => `- ${item.nome} (${item.tipoEvento || "item"})`).join("\n") || "- Sem itens selecionados";
   const supplies =
     context.selectedItems
@@ -3983,8 +4128,11 @@ function buildOperationalSummaryText(proposal = getActiveProposal()) {
     `Contato: ${context.client.email || "-"} | ${context.client.phone || "-"}`,
     `Observações: ${context.event.notes || context.event.sourceNotes || context.event.preferences || "Sem observações adicionais"}`,
     "",
-    "Checklist:",
+    `Checklist setorial V${context.handoffVersion || "não carregada"}: ${context.progress.done}/${context.progress.total}`,
+    context.changesPending ? "Mudanças pendentes de ciência: execução não liberada." : "",
     checklist,
+    "", "Controles adicionais da proposta — lista separada:", additional,
+    `Gerado em ${context.generatedAt} (Brasília). Emissão não registra ciência nem liberação.`,
   ].join("\n");
 }
 
@@ -3994,6 +4142,8 @@ function openOperationalPrintDocument(kind) {
     showToast("Abra uma proposta confirmada para gerar a ficha.");
     return;
   }
+  if (!shouldShowOperationalChecklist(proposal)) { showToast("Use a versão confirmada atual para gerar a ficha operacional."); return; }
+  if (kind === "technical-finance" && !isFinanceSession()) { showToast("Ficha com valores restrita ao Financeiro ou gestor."); return; }
   const html =
     kind === "checklist"
       ? buildOperationalChecklistHtml(proposal)
@@ -4014,6 +4164,7 @@ async function handleOperationalDocAction(action) {
     showToast("Abra uma proposta com sinal para gerar documentos.");
     return;
   }
+  if (!shouldShowOperationalChecklist(proposal)) { showToast("Use o acordo confirmado atual; o rascunho não foi encaminhado à operação."); return; }
   if (action === "summary") {
     try {
       await navigator.clipboard.writeText(buildOperationalSummaryText(proposal));
@@ -4103,14 +4254,18 @@ function getSignalDefaultAmount(total) {
   return roundCurrency((Number(total) || 0) * 0.5);
 }
 
+function hasValidatedSignal(signalInfo) {
+  return signalInfo?.validacaoPendente !== true && toNumber(signalInfo?.valor) > 0;
+}
+
 function getRemainingDefaultAmount(total, signalInfo) {
-  return Math.max(0, roundCurrency((Number(total) || 0) - toNumber(signalInfo?.valor)));
+  return Math.max(0, roundCurrency((Number(total) || 0) - (hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0)));
 }
 
 function getPaymentCoverage(total, signalInfo = null, remainingInfo = null) {
   const totalValue = roundCurrency(Number(total) || 0);
-  const signalValue = toNumber(signalInfo?.valor);
-  const remainingValue = toNumber(remainingInfo?.valor);
+  const signalValue = hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0;
+  const remainingValue = remainingInfo?.validacaoPendente === true ? 0 : toNumber(remainingInfo?.valor);
   const paidTotal = roundCurrency(signalValue + remainingValue);
   const remainingDue = Math.max(0, roundCurrency(totalValue - paidTotal));
   const isFullyPaid = totalValue > 0 && paidTotal >= totalValue - 0.01;
@@ -4167,6 +4322,10 @@ function readSignalProofFile(file) {
 }
 
 function showSignalPaymentDialog(total = 0, options = {}) {
+  if (!isFinanceSession()) {
+    showToast("Validação do sinal restrita ao Financeiro ou gestor. O comprovante pode ser anexado para conferência.");
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
     const totalValue = roundCurrency(Number(total) || 0);
     const thirtyPercentAmount = roundCurrency(totalValue * 0.3);
@@ -4245,6 +4404,9 @@ function showSignalPaymentDialog(total = 0, options = {}) {
               .join("")}
           </div>
         </fieldset>
+        <label>Justificativa da condição aprovada para sinal abaixo de 50% (somente gestor)
+          <textarea name="exceptionReason" maxlength="1000" placeholder="Indique o motivo e a referência da condição negociada"></textarea>
+        </label>
         <small class="signal-error" aria-live="polite"></small>
         <div class="signal-modal-actions">
           <button class="secondary" type="button" data-signal-cancel>Cancelar</button>
@@ -4320,11 +4482,17 @@ function showSignalPaymentDialog(total = 0, options = {}) {
         return;
       }
 
+      const exceptionReason = form.querySelector('[name="exceptionReason"]').value.trim();
+      if (amount + 0.01 < totalValue * 0.5 && (!isSuperAdminSession() || exceptionReason.length < 10)) {
+        errorNode.textContent = "Sinal abaixo do padrão exige gestor e justificativa da condição aprovada.";
+        return;
+      }
       try {
         const proof = await readSignalProofFile(proofInput.files?.[0] || null);
         const coverage = getPaymentCoverage(totalValue, { valor: amount });
         const manualPercentual = totalValue ? roundCurrency((amount / totalValue) * 100) : null;
         const info = createSignalPaymentInfo(amount, date, banks, {
+          ...(amount + 0.01 < totalValue * 0.5 ? {motivoExcecao: exceptionReason} : {}),
           percentualSinal: preset === "custom" ? manualPercentual : totalValue ? Number(preset) : null,
           tipoPagamento: coverage.isSignalIntegral ? "integral" : preset === "custom" ? "manual" : `percentual_${preset}`,
           pagamentoIntegral: coverage.isSignalIntegral,
@@ -4345,6 +4513,10 @@ function showSignalPaymentDialog(total = 0, options = {}) {
 }
 
 function showRemainingPaymentDialog(defaultAmount = 0, total = 0, signalInfo = null, previousRemainingInfo = null) {
+  if (!isFinanceSession()) {
+    showToast("Validação do pagamento restrita ao Financeiro ou gestor.");
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
     const backdrop = document.createElement("div");
     const signalValue = toNumber(signalInfo?.valor);
@@ -7759,6 +7931,12 @@ function formatSignalDeadlineHours(hours = getSignalDeadlineHours()) {
   return `${days} ${days === 1 ? "dia" : "dias"}`;
 }
 
+function getProposalPaymentTerms() {
+  const source = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase : getActiveProposal();
+  return Array.isArray(source?.snapshot?.paymentTerms) ? [...source.snapshot.paymentTerms] : [...paymentTerms];
+}
+
 function buildProposalText() {
   const selected = getSelectedItems();
   const clientName = fields.clientName.value.trim() || "Cliente";
@@ -7785,7 +7963,7 @@ function buildProposalText() {
   const terms = fields.generalTerms.value.trim();
   if (terms) lines.push(``, terms);
 
-  lines.push(``, `Pagamento:`, ...paymentTerms);
+  lines.push(``, `Pagamento:`, ...getProposalPaymentTerms());
 
   lines.push(``, `Itens selecionados:`);
 
@@ -7941,7 +8119,7 @@ function getProposalSnapshot() {
     sourceRequestSnapshot: activeRequest?.snapshot || activeProposal?.snapshot?.sourceRequestSnapshot || null,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
-    paymentTerms,
+    paymentTerms: getProposalPaymentTerms(),
     operationalChecklist: activeProposal?.snapshot?.operationalChecklist || {},
     commercialHistory: getCommercialHistory(activeProposal?.snapshot || {}),
     sendReviewApproval: reviewApproval,
@@ -7952,6 +8130,7 @@ function getProposalSnapshot() {
     internalComments: getInternalComments(activeProposal?.snapshot || {}),
     eventAttachments: getEventAttachments(activeProposal?.snapshot || {}),
     smartDraft: state.smartDraftApproval || activeProposal?.snapshot?.smartDraft || null,
+    ...(Object.hasOwn(activeProposal?.snapshot || {}, "versionChanges") ? {versionChanges: structuredClone(activeProposal.snapshot.versionChanges)} : {}),
     proposalText: buildProposalText(),
   };
 }
@@ -10616,6 +10795,7 @@ function renderLoadedEditorBar() {
     <div class="loaded-editor-main">
       <span>${escapeHtml(context.sourceLabel || "Carregado do funil")}</span>
       <strong>Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
+      ${activeProposal?.snapshot?.amendmentOf ? `<p role="status">Aditivo em rascunho — o acordo confirmado não foi alterado. Não liberado para envio ou execução.</p>` : ""}
       <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
     </div>
     <div class="loaded-editor-actions">
@@ -12083,6 +12263,36 @@ async function classifyPastEvent(kind, id) {
     ],
   );
 
+  if (kind === "proposal" && isRescheduled && source.publication_status !== "draft") {
+    // A new date is a commercial revision, never an overwrite of a sent agreement.
+    const draftSnapshot = structuredClone(nextSnapshot);
+    draftSnapshot.clienteResposta = null;
+    draftSnapshot.pagamentoSinal = null;
+    draftSnapshot.pagamentoRestante = null;
+    draftSnapshot.event = {...draftSnapshot.event, signalDeadlineAt: null};
+    draftSnapshot.rescheduleRequest = {sourceId: source.id, previousDate: item.date,
+      newDate: answer.newDate, requestedAt: recordedAt, requestedBy: actor, approvalPending: true};
+    if (isContractedProposal(source)) draftSnapshot.amendmentOf = {id: source.id,
+      revision: source.revision, version: source.versao, total: source.total};
+    draftSnapshot.versionChanges = getClientVisibleProposalChanges(source.snapshot, draftSnapshot);
+    const row = {...getProposalRow(draftSnapshot, "negociacao"), oportunidade_id: source.oportunidade_id,
+      solicitacao_id: source.solicitacao_id || null,
+      responsavel_id: source.responsavel_id || null, responsavel_email: source.responsavel_email || null,
+      is_current: false, publication_status: "draft", sent_at: null};
+    const result = await persistEventProposal(null, row, source);
+    if (result.error || !result.data) {
+      showToast(getSupabaseSaveErrorMessage(result.error) || "Não foi possível guardar a remarcação. O acordo anterior permanece intacto.");
+      return;
+    }
+    upsertProposalState(result.data);
+    renderHistory(); renderPipeline();
+    await openSavedProposal(result.data.id);
+    showToast(draftSnapshot.amendmentOf
+      ? "Remarcação guardada como rascunho de aditivo. Data, reserva e operação contratadas não foram alteradas."
+      : "Nova data guardada em outra versão. Revise e solicite aprovação; o conteúdo enviado anteriormente foi preservado.");
+    return;
+  }
+
   const table = kind === "proposal" ? "propostas" : "solicitacoes_cotacao";
   const changes = {
     status: nextStatus,
@@ -12342,7 +12552,7 @@ async function cancelPipelineItem(kind, id) {
   showToast("Cancelamento registrado.");
 }
 
-async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
+async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, options = {}) {
   if (!state.supabase || !state.session) return;
   if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
@@ -12356,10 +12566,10 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
 
   const normalizedNext = normalizeProposalStatus(nextStatus);
   const wasCanceled = normalizeProposalStatus(proposal.status) === "cancelado" && normalizedNext !== "cancelado";
-  const finalPaymentRequiredStatuses = new Set(["planejamento", "evento_proximo", "pos_venda"]);
+  const finalPaymentRequiredStatuses = new Set(["evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
   let remainingPayment = null;
-  if (normalizedNext === "confirmado" && !proposal.snapshot?.pagamentoSinal) {
+  if (normalizedNext === "confirmado" && !hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) {
     paymentSignal = paymentSignal || (await showSignalPaymentDialog(proposal.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. A etapa não foi alterada.");
@@ -12367,7 +12577,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null) {
       return;
     }
   }
-  if (finalPaymentRequiredStatuses.has(normalizedNext)) {
+  if (finalPaymentRequiredStatuses.has(normalizedNext) || options.recordRemainingPayment) {
     const signal = proposal.snapshot?.pagamentoSinal || paymentSignal;
     const paymentCoverage = getPaymentCoverage(proposal.total, signal, proposal.snapshot?.pagamentoRestante);
     if (!signal) {
@@ -12926,7 +13136,19 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   const activeProposal = state.editorProposalBase?.id === state.activeProposalId
     ? state.editorProposalBase
     : state.proposals.find((item) => item.id === state.activeProposalId);
-  const nextStatus = status || activeProposal?.status || "proposta_pronta";
+  preserveUneditedCommercialSnapshot(snapshot, activeProposal);
+  const amendmentSource = activeProposal?.snapshot?.amendmentOf ||
+    (isContractedProposal(activeProposal) && (getProposalChangeList(activeProposal.snapshot || {}, snapshot).length || state.forceNewVersionDraft)
+      ? {id: activeProposal.id, revision: activeProposal.revision, version: activeProposal.versao, total: activeProposal.total} : null);
+  if (amendmentSource && (options.forSharing || options.markReady)) {
+    state.lastProposalSaveError = "Aditivo em revisão: o acordo fechado e a reserva permanecem intactos. Salve o rascunho; a aplicação do aditivo exige homologação específica e não pode substituir o evento confirmado.";
+    showToast(state.lastProposalSaveError);
+    return null;
+  }
+  if (amendmentSource) snapshot.amendmentOf = structuredClone(amendmentSource);
+  const nextStatus = amendmentSource ? "negociacao"
+    : options.markReady && (!activeProposal || activeProposal.publication_status === "draft") ? "proposta_pronta"
+    : status || activeProposal?.status || "proposta_pronta";
   const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
   if (!opportunityId) {
     state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
@@ -12938,11 +13160,11 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   }
   const normalizedNext = normalizeProposalStatus(nextStatus);
-  const finalPaymentRequiredStatuses = new Set(["planejamento", "evento_proximo", "pos_venda"]);
+  const finalPaymentRequiredStatuses = new Set(["evento_proximo", "pos_venda"]);
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
-  if (normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada") {
+  if (!options.asDraft && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
     if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
@@ -12974,7 +13196,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     }
   }
 
-  if (normalizedNext === "confirmado" && !activeProposal?.snapshot?.pagamentoSinal) {
+  if (normalizedNext === "confirmado" && !hasValidatedSignal(activeProposal?.snapshot?.pagamentoSinal)) {
     paymentSignal = paymentSignal || (await showSignalPaymentDialog(snapshot.totals.total));
     if (!paymentSignal) {
       showToast("Sinal não registrado. O evento continua sem confirmação.");
@@ -13045,7 +13267,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
           "auditoria",
           "Alterações salvas",
           formatAuditChanges(proposalChanges.slice(0, 5)),
-          { changes: proposalChanges.slice(0, 8) },
+          { changes: proposalChanges },
         ),
       );
     }
@@ -13104,13 +13326,18 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   const activeWasPublished =
     Boolean(activeProposal) &&
     activeProposal?.publication_status !== "draft" &&
-    ["proposta_pronta", "proposta_enviada", "negociacao"].includes(normalizeProposalStatus(activeProposal.status));
+    !["cancelado", "perdido"].includes(normalizeProposalStatus(activeProposal.status));
   const needsNewVersion = activeWasPublished && (proposalChanges.length > 0 || state.forceNewVersionDraft);
   if (needsNewVersion) {
     snapshotWithHistory.versionChanges = getClientVisibleProposalChanges(activeProposal?.snapshot || {}, snapshotWithHistory);
   }
   const row = getProposalRow(snapshotWithHistory, nextStatus);
-  const publishNewVersion = Boolean(options.forSharing && (activeIsDraft || needsNewVersion));
+  if (amendmentSource) {
+    row.snapshot.pagamentoSinal = null;
+    row.snapshot.pagamentoRestante = null;
+  }
+  const promoteReady = Boolean(options.forSharing || options.markReady);
+  const publishNewVersion = Boolean(promoteReady && (activeIsDraft || needsNewVersion));
   if (publishNewVersion) {
     row.status = "proposta_pronta";
     row.snapshot = {
@@ -13123,18 +13350,18 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (activeIsDraft && persistableProposalId) {
     const draftRow = {
       ...row,
-      is_current: Boolean(options.forSharing),
-      publication_status: options.forSharing ? "ready" : "draft",
-      ...(options.forSharing ? { sent_at: null } : {}),
+      is_current: Boolean(promoteReady || activeProposal.is_current),
+      publication_status: promoteReady ? "ready" : "draft",
+      ...(promoteReady ? { sent_at: null } : {}),
     };
     save = persistEventProposal(persistableProposalId, draftRow, activeProposal);
   } else if (needsNewVersion) {
     const versionRow = {
       ...row,
       oportunidade_id: opportunityId,
-      is_current: Boolean(options.forSharing),
-      publication_status: options.forSharing ? "ready" : "draft",
-      ...(options.forSharing ? { sent_at: null } : {}),
+      is_current: promoteReady,
+      publication_status: promoteReady ? "ready" : "draft",
+      ...(promoteReady ? { sent_at: null } : {}),
     };
     save = persistEventProposal(null, versionRow, activeProposal);
   } else if (persistableProposalId) {
@@ -13144,8 +13371,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
       ...row,
       oportunidade_id: opportunityId,
       is_current: true,
-      publication_status: normalizedNext === "proposta_pronta" ? "ready" : "sent",
-      sent_at: normalizedNext === "proposta_pronta" ? null : new Date().toISOString(),
+      publication_status: options.asDraft ? "draft" : normalizedNext === "proposta_pronta" ? "ready" : "sent",
+      sent_at: options.asDraft || normalizedNext === "proposta_pronta" ? null : new Date().toISOString(),
     });
   }
   const { data, error } = await save;
@@ -13206,7 +13433,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     });
   }
   const persistableQuoteRequestId = getPersistableQuoteRequestId();
-  if (persistableQuoteRequestId) {
+  if (persistableQuoteRequestId && !options.asDraft && !amendmentSource) {
     await updateQuoteRequest(
       persistableQuoteRequestId,
       { status: "proposta_gerada", proposta_id: data.id },
@@ -13232,6 +13459,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   renderLoadedEditorBar();
   if (hasUnsavedEditorChanges()) {
     showToast("Proposta gravada. As alterações feitas durante a gravação ainda não estão salvas.");
+  } else if (data.snapshot?.amendmentOf) {
+    showToast("Rascunho de aditivo salvo. O acordo confirmado, o link do cliente e a operação não foram alterados.");
   } else if (data.publication_status === "draft") {
     showToast("Nova versão V" + (data.versao || "") + " salva como rascunho. O cliente continua vendo a versão anterior até o envio.");
   } else if (needsNewVersion || (activeIsDraft && options.forSharing)) {
@@ -13542,7 +13771,7 @@ function renderProposal() {
         <h3>Pagamento</h3>
       </div>
       <div class="proposal-payment">
-        ${paymentTerms.map((term) => `<div><span></span><strong>${escapeHtml(term)}</strong></div>`).join("")}
+        ${getProposalPaymentTerms().map((term) => `<div><span></span><strong>${escapeHtml(term)}</strong></div>`).join("")}
       </div>
 
       ${
@@ -13700,6 +13929,9 @@ function startNewProposal(options = {}) {
   delete state.sourceOverrides["manual:draft"];
   delete state.sourceOverrides["manual:realized"];
   state.manualSourceKey = isRealizedMode ? "manual:realized" : "manual:draft";
+  state.editorProposalBase = null;
+  state.forceNewVersionDraft = false;
+  fields.generalTerms.value = loadGeneralTerms();
   state.activeEditorContext = null;
   state.loadedEditorSignature = "";
   state.quoteGuideDismissed = true;
@@ -14344,8 +14576,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
   state.sendLocks.email = true;
   try {
   const emailTemplate = getCommunicationTemplate("proposta");
-  // A quick reply already contains the chosen follow-up/payment content.
-  // Disabling manager approval must not replace it with an initial proposal.
+  // Preserve the chosen quick reply when remote approval is disabled.
   const emailMessage = typeof message === "string" ? message
     : renderCommunicationTemplateText(emailTemplate.emailBody, getQuickReplyContext(), proposalUrl);
   const emailSubject = typeof subject === "string" && subject.trim() ? subject
@@ -14535,7 +14766,7 @@ async function runProposalNextStepAction(action) {
       if (activeProposal) await updateProposalStatus(activeProposal.id, "confirmado");
       break;
     case "mark_remaining":
-      if (activeProposal) await updateProposalStatus(activeProposal.id, "planejamento");
+      if (activeProposal) await updateProposalStatus(activeProposal.id, "planejamento", null, {recordRemainingPayment: true});
       break;
     case "focus_client":
       scrollToReviewTarget("client");
@@ -15392,7 +15623,8 @@ function bindEvents() {
       showToast("Sugestão ignorada. A proposta permanece livre para montagem manual.");
     }
   });
-  document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal());
+  document.querySelector("#saveProposalBtn")?.addEventListener("click", () => saveCurrentProposal(null, null, {markReady: true}));
+  document.querySelector("#saveDraftBtn")?.addEventListener("click", () => saveCurrentProposal(null, null, {asDraft: true}));
   document.querySelector("#confirmEventBtn")?.addEventListener("click", confirmCurrentEvent);
   document.querySelector("#copyBtn")?.addEventListener("click", copyProposalLink);
   document.querySelector("#manualSendBtn")?.addEventListener("click", openManualSendDialog);
@@ -15729,7 +15961,7 @@ function bindEvents() {
     }
     const finalPaymentButton = event.target.closest("button[data-mark-final-payment]");
     if (finalPaymentButton) {
-      updateProposalStatus(finalPaymentButton.dataset.markFinalPayment, "planejamento");
+      updateProposalStatus(finalPaymentButton.dataset.markFinalPayment, "planejamento", null, {recordRemainingPayment: true});
       return;
     }
     const useButton = event.target.closest("button[data-use-request]");
