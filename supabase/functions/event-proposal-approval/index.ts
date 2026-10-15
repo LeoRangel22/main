@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { deliverManagerNotice } from "../_shared/approval-notifications.ts";
 
 const APPROVAL_SITE = "https://leorangel22.github.io/main/";
 const headers = { "Access-Control-Allow-Origin": "https://leorangel22.github.io", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
@@ -25,33 +26,10 @@ function notificationText(a: any) {
 async function notify(worker: any, approvalId: string, channel: string) {
   const claimed = await rpc(worker,"event_claim_approval_notification", { target_approval: approvalId, target_channel: channel });
   if (!claimed) return;
-  let status = "failed", providerId: string | null = null, detail: string | null = null, attempted = false;
-  try {
-    const body = notificationText(claimed.approval);
-    let endpoint: string, options: any;
-    if (channel === "whatsapp") {
-      const instance = firstEnv(["ZAPI_INSTANCE_ID"]), token = firstEnv(["ZAPI_TOKEN"]), client = firstEnv(["ZAPI_CLIENT_TOKEN","CLIENT_TOKEN"]);
-      if (!instance || !token || !client || !/^\d{12,15}$/.test(claimed.destination || "")) throw Error("Configuração do aviso de WhatsApp incompleta.");
-      endpoint = `https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/send-text`;
-      options = { headers: { "Content-Type": "application/json", "Client-Token": client }, body: JSON.stringify({ phone: claimed.destination, message: body }) };
-    } else {
-      let token = firstEnv(["ZEPTO_MAIL_TOKEN","ZEPTOMAIL_TOKEN","ZEPTO_TOKEN","ZOHO_ZEPTO_TOKEN","ZOHO_ZEPTOMAIL_TOKEN"]);
-      const sender = firstEnv(["PROPOSAL_FROM_EMAIL","LEAD_ALERT_FROM_EMAIL"]);
-      if (!token || !sender || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claimed.destination || "")) throw Error("Configuração do aviso de e-mail incompleta.");
-      token = token.replace(/^authorization:\s*/i, "").replace(/^token de envio\s*\d*\s*:\s*/i, "").replace(/^["']+|["']+$/g, "");
-      if (!/^zoho-enczapikey /i.test(token)) token = "Zoho-enczapikey " + token;
-      const link = `${APPROVAL_SITE}aprovacoes.html?id=${approvalId}`;
-      endpoint = "https://api.zeptomail.com/v1.1/email";
-      options = { headers: { "Content-Type": "application/json", Authorization: token }, body: JSON.stringify({ client_reference: `APPROVAL:${approvalId}:email`, from: { address: sender, name: "Aprovações · Embaixada Carioca" }, to: [{ email_address: { address: claimed.destination } }], subject: `Aprovar proposta — ${text(claimed.approval.proposal_snapshot.cliente_nome).slice(0,80)}`, textbody: body, htmlbody: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:24px;color:#183a2d"><h1 style="font-size:24px">Sua aprovação é necessária</h1><p style="white-space:pre-wrap;line-height:1.6">${html(body)}</p><a style="display:block;padding:16px;background:#183a2d;color:white;text-align:center;border-radius:8px" href="${html(link)}">Revisar proposta</a></div>` }) };
-    }
-    attempted = true;
-    const res = await fetch(endpoint, { ...options, method: "POST", signal: AbortSignal.timeout(20000) });
-    let data: any = null; try { data = await res.json(); } catch { /* an unparseable response is uncertain */ }
-    providerId = text(data?.messageId || data?.zaapId || data?.request_id || data?.id) || null;
-    status = res.ok && providerId ? "accepted" : res.status >= 400 && res.status < 500 ? "failed" : "uncertain";
-    detail = status === "accepted" ? "Aceito pelo provedor; entrega não confirmada." : `Aviso ${status === "failed" ? "recusado" : "com resultado incerto"} (HTTP ${res.status}).`;
-  } catch (e) { status = attempted ? "uncertain" : "failed"; detail = attempted ? "Resultado incerto. Não repetir sem conferir o provedor." : String((e as Error).message); }
-  await rpc(worker,"event_finish_approval_notification", { target_approval: approvalId, target_channel: channel, result_status: status, external_id: providerId, result_detail: detail });
+  const result = await deliverManagerNotice(channel,claimed.destination,notificationText(claimed.approval),
+    `Aprovar proposta — ${text(claimed.approval.proposal_snapshot.cliente_nome).slice(0,80)}`,
+    `${APPROVAL_SITE}aprovacoes.html?id=${approvalId}`,`APPROVAL:${approvalId}:${channel}`);
+  await rpc(worker,"event_finish_approval_notification", { target_approval: approvalId, target_channel: channel, result_status: result.status, external_id: result.providerId, result_detail: result.detail });
 }
 
 Deno.serve(async (req: Request) => {

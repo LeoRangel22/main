@@ -27,7 +27,8 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions']) {
+
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
 }
@@ -64,6 +65,20 @@ async function concurrent(c,name) {
     assert.equal(race.filter(r=>r.status==='fulfilled').length,1);
     assert.equal(race.filter(r=>r.status==='rejected'&&r.reason.code==='PT409').length,1);
     console.log('PASS concurrent public retry and team/client race');
+    // A renewal uses the proposal lock: concurrent unchanged requests share one successor.
+    await c.query("update event_private.proposal_approval_policy set enabled=true,approver_id=$1,approver_email='leorangel@gmail.com',whatsapp='5521000000000' where id",[actor]);
+    const renewalOpp=(await c.query("insert into oportunidades(cliente_nome,status,data_evento) values('Renewal race fixture','proposta_pronta','2099-11-18') returning id")).rows[0].id;
+    const renewal=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,data_evento,horario_evento,convidados,subtotal,taxa_servico,total,snapshot) values($1,'Renewal race fixture','proposta_pronta','ready','2099-11-18','10:00',20,1000,120,1120,'{\"totals\":{\"subtotal\":1000,\"serviceFee\":120,\"total\":1120},\"selectedItems\":[{\"name\":\"Fixture\",\"calc\":{\"total\":1000}}]}') returning *",[renewalOpp])).rows[0];
+    const content=JSON.stringify({channel:'whatsapp',destination:'5521000000001',body:'Renewal race fixture',message:'Renewal race fixture',title:'Fixture',contentHash:null,reviewedResponseAt:null,proposalUrl:'https://leorangel22.github.io/main/proposta.html?p='+renewal.public_token});
+    const prior=(await c.query('select * from event_create_proposal_approval($1,$2,$3,$4)',[renewal.id,renewal.revision,actor,content])).rows[0];
+    await c.query("update event_proposal_approvals set expires_at=now()-interval '1 second' where id=$1",[prior.id]);
+    await Promise.all(writers.map(x=>x.query('set role service_role')));
+    const renewed=await Promise.all(writers.map(x=>x.query('select * from event_create_proposal_approval($1,$2,$3,$4)',[renewal.id,renewal.revision,actor,content])));
+    assert.equal(renewed[0].rows[0].id,renewed[1].rows[0].id);assert.notEqual(renewed[0].rows[0].id,prior.id);
+    assert.equal(Number((await c.query('select count(*) from event_proposal_approvals where proposal_id=$1',[renewal.id])).rows[0].count),2);
+    assert.equal(Number((await c.query('select revision from propostas where id=$1',[renewal.id])).rows[0].revision),Number(renewal.revision));
+    await c.query('update event_private.proposal_approval_policy set enabled=false where id');
+    console.log('PASS concurrent approval expiry renewal without proposal mutation');
   } finally { await Promise.all(writers.map(x=>x.end())); }
 }
 (async()=>{
@@ -82,6 +97,40 @@ async function concurrent(c,name) {
     c=await create('events_fresh_test');
     for(const f of migrationFiles) await apply(c,`supabase/migrations/${f}`);
     await checks(c); console.log('PASS fresh installation');
+    await c.end(); c=null;
+    // Production already has journey_integrity (#52) installed. Exercise the
+    // late approval_closure installation as well as chronological fresh installs.
+    c=await create('events_current_upgrade_test');
+    const closure=migrationFiles.find(f=>f.endsWith('_approval_closure.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure)) await apply(c,`supabase/migrations/${f}`);
+    const legacyApproval=(await c.query(`
+      update event_private.proposal_approval_policy set enabled=true,
+        approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
+      insert into oportunidades(cliente_nome,status,data_evento) values('Legacy approval fixture','proposta_pronta','2099-11-18');
+      insert into propostas(oportunidade_id,cliente_nome,status,publication_status,data_evento,total,subtotal,taxa_servico,snapshot)
+        select id,cliente_nome,'proposta_pronta','ready','2099-11-18',1120,1000,120,
+          '{"totals":{"subtotal":1000,"serviceFee":120,"total":1120},"selectedItems":[{"name":"Legacy fixture","calc":{"total":1000}}]}'::jsonb
+        from oportunidades where cliente_nome='Legacy approval fixture';
+      select a.* from propostas p cross join lateral event_create_proposal_approval(p.id,p.revision,
+        (select id from auth.users where email='leorangel@gmail.com'),
+        jsonb_build_object('channel','whatsapp','destination','5521000000001','body','Legacy approved content',
+          'proposalUrl','https://leorangel22.github.io/main/proposta.html?p='||p.public_token)) a
+        where p.cliente_nome='Legacy approval fixture';
+    `)).at(-1).rows[0];
+    await apply(c,`supabase/migrations/${closure}`);
+    const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
+    assert.equal(backfilled.review_hash,legacyApproval.review_hash);
+    assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
+    assert.deepEqual(backfilled.content,legacyApproval.content);
+    const reused=(await c.query('select a.* from propostas p cross join lateral event_create_proposal_approval(p.id,p.revision,$1,$2) a where p.id=$3',
+      [legacyApproval.requested_by,legacyApproval.content,legacyApproval.proposal_id])).rows[0];
+    assert.equal(reused.id,legacyApproval.id);
+    // Remove synthetic pre-migration rows so common permission/monitor checks start clean.
+    await c.query('delete from event_approval_notifications where approval_id=$1',[legacyApproval.id]);
+    await c.query('delete from event_approval_audit where approval_id=$1',[legacyApproval.id]);
+    await c.query('delete from event_proposal_approvals where id=$1',[legacyApproval.id]);
+    await c.query('update event_private.proposal_approval_policy set enabled=false where id');
+    await checks(c); console.log('PASS current production upgrade preserves existing approval links and identity');
     await c.end(); c=null;
     c=await connect('events_test');
     await c.query('begin'); await apply(c,'supabase/rollback/priority_integrity_compatibility.sql');

@@ -15,5 +15,5 @@ test('ordinary negotiating draft remains the working quotation',()=>{
  vm.runInContext(working,c);assert.equal(c.getWorkingProposals()[0].id,'draft');
 });
 for(const page of ['index.html','clientes.html','comunicacao.html','valores.html'])test(`working-version rules cache matches journey rollout in ${page}`,()=>{
- const html=fs.readFileSync(`${__dirname}/../${page}`,'utf8');assert.match(html,/commercial-rules\.js\?v=20261014-journey-integrity/);
+ const html=fs.readFileSync(`${__dirname}/../${page}`,'utf8');assert.match(html,/commercial-rules\.js\?v=20261015-approval-closure/);
 });

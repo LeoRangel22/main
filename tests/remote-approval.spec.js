@@ -9,12 +9,21 @@ async function setup(page,options={}){
   let user=options.unauthenticated?null:{id:'manager',email:'manager@example.test'};
   window.approvalMock={
    auth:{getUser:async()=>({data:{user}}),onAuthStateChange:fn=>{listener=fn;return {data:{subscription:{unsubscribe(){}}}}},signInWithPassword:async()=>({data:{}}),signOut:async()=>{user=null;listener('SIGNED_OUT');return {};}},
-   rpc:async()=>({data:{enabled:true,is_approver:!options.seller}}),
+   rpc:async(name)=>{
+    if(name==='get_event_approval_watch_health'){
+     if(options.watch==='hung')return new Promise(()=>{});
+     if(options.watch==='error')throw Error('Monitor unavailable');
+     if(options.watch==='delayed')await new Promise(r=>setTimeout(r,500));
+     return {data:{enabled:true,last_success_at:new Date().toISOString(),unresolved_count:options.unresolved||0,alerts:[]}};
+    }
+    return {data:{enabled:true,is_approver:!options.seller}};
+   },
+   from:()=>({select(){return this;},order(){return this;},limit:async()=>({data:[{id:aid,status:'pending',cliente_nome:'List fixture',total:1120,data_evento:'2099-11-18'}]})}),
    functions:{invoke:async(name,{body})=>{window.approvalCalls.push(body);if(body.action==='approve'){await new Promise(r=>setTimeout(r,100));a.status='approved';a.send_id='send';a.send={status:'accepted'};}if(['changes_requested','rejected'].includes(body.action)){a.status=body.action;a.reason=body.reason;}return {data:{ok:true,approval:structuredClone(a)}};}}
   };
  },{aid,options});
- await page.goto('/aprovacoes.html?id='+aid);
- if(!options.unauthenticated)await expect(page.locator('#detail')).toBeVisible();
+ await page.goto('/aprovacoes.html'+(options.list?'':'?id='+aid));
+ if(!options.unauthenticated)await expect(page.locator(options.list?'#list':'#detail')).toBeVisible();
 }
 test('aprovação remota: abrir link mostra revisão mas não decide nem envia',async({page})=>{await setup(page);await expect(page.locator('#exactMessage')).toHaveValue('Mensagem exata que será enviada');await expect(page.locator('#detail')).toContainText('client@example.test');await expect(page.locator('#detail')).toContainText('50% de sinal');expect(await page.evaluate(()=>window.approvalCalls.every(c=>c.action==='get'))).toBe(true);expect(await page.evaluate(()=>window.executed)).toBeUndefined();await expect(page.locator('#emailPreview')).toHaveAttribute('sandbox','');});
 test('aprovação remota: conta não autenticada não lê propostas',async({page})=>{await setup(page,{unauthenticated:true});await expect(page.locator('#login')).toBeVisible();expect(await page.evaluate(()=>window.approvalCalls)).toEqual([]);await expect(page.locator('#workspace')).toBeHidden();});
@@ -39,4 +48,29 @@ for(const sendStatus of ['failed','sending','uncertain','accepted'])test(`aprova
  await expect(b).toBeVisible();await b.click();expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(0);
  await page.locator('#confirmed').check();await b.click();await expect(page.locator('#notice')).toContainText('envio aceito');
  expect(await page.evaluate(()=>window.approvalCalls.filter(c=>c.action==='approve').length)).toBe(1);
+});
+
+
+test('monitor banner is authenticated, shows health, and logout removes it',async({page})=>{
+ await setup(page);await expect(page.locator('#watchStatus')).toContainText('Monitor de aprovações ativo');
+ await page.locator('#logout').click();await expect(page.locator('#watchStatus')).toBeEmpty();
+});
+
+for(const watch of ['hung','error'])for(const list of [false,true])test(`monitor ${watch} never blocks approval ${list?'list':'review or decision'}`,async({page})=>{
+ await setup(page,{watch,list});
+ if(list)await expect(page.locator('#list')).toContainText('List fixture');
+ else {
+  await expect(page.locator('#exactMessage')).toHaveValue('Mensagem exata que será enviada');
+  await page.locator('#confirmed').check();await page.getByRole('button',{name:'Aprovar e enviar ao cliente',exact:true}).click();
+  await expect(page.locator('#notice')).toContainText('envio aceito');
+ }
+ await expect(page.locator('#watchStatus')).toContainText('Estado do monitor indisponível');
+});
+test('late monitor response cannot repopulate data after logout',async({page})=>{
+ await setup(page,{watch:'delayed'});await page.locator('#logout').click();
+ await page.waitForTimeout(600);await expect(page.locator('#watchStatus')).toBeEmpty();await expect(page.locator('#detail')).toBeEmpty();
+});
+test('recent scan with unresolved attempts cannot display healthy monitor',async({page})=>{
+ await setup(page,{unresolved:1});await expect(page.locator('#watchStatus')).toContainText('tentativas que exigem conferência');
+ await expect(page.locator('#watchStatus')).not.toContainText('Monitor de aprovações ativo');
 });
