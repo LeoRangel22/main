@@ -8,7 +8,7 @@ declare manager uuid;seller uuid;opp uuid;p public.propostas;before_send public.
 begin
  select id into manager from auth.users where email='leorangel@gmail.com';
  select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';
- update event_private.proposal_approval_policy set enabled=true,approver_id=manager,approver_email='manager@example.test',whatsapp='5521000000000' where id;
+ update event_private.proposal_approval_policy set enabled=true,approver_id=manager,approver_email='leorangel@gmail.com',whatsapp='5521000000000' where id;
  update event_private.approval_watch_config set enabled=true,job_key=k where id;
  assert not has_function_privilege('authenticated','event_private.approval_request_fingerprint(public.propostas,jsonb,uuid)','execute');
  assert not has_function_privilege('anon','event_private.approval_dispatch_needs_attention(public.event_outbox,timestamptz)','execute');
@@ -23,6 +23,12 @@ begin
  claim:=begin_event_approved_send(a.id,p.revision,'whatsapp',c->>'destination',c->>'body',c->>'title',null,null);
  assert (claim->>'claimed')::boolean;
  before_send:=p;
+ update event_proposal_approvals set expires_at=now()-interval '1 second' where id=a.id;
+ assert (select id=a.id from event_create_proposal_approval(p.id,p.revision,seller,c)),'In-flight approval cannot renew into another dispatch';
+ perform finish_event_send((claim#>>'{send,id}')::uuid,'uncertain',null,'Synthetic timeout');
+ assert (select id=a.id from event_create_proposal_approval(p.id,p.revision,seller,c)),'Uncertain dispatch cannot renew into a second attempt';
+ -- Synthetic provider reconciliation only, no additional transport call.
+ update event_outbox set status='sending' where id=(claim#>>'{send,id}')::uuid;
  perform finish_event_send((claim#>>'{send,id}')::uuid,'accepted','synthetic-provider-id');
  select * into p from propostas where id=p.id;
  assert p.publication_status='sent' and p.status='proposta_enviada' and p.sent_at is not null;
