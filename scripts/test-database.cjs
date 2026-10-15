@@ -129,6 +129,7 @@ async function concurrent(c,name) {
     await c.query('delete from event_approval_notifications where approval_id=$1',[legacyApproval.id]);
     await c.query('delete from event_approval_audit where approval_id=$1',[legacyApproval.id]);
     await c.query('delete from event_proposal_approvals where id=$1',[legacyApproval.id]);
+    await c.query('update event_private.proposal_approval_policy set enabled=false where id');
     await checks(c); console.log('PASS current production upgrade preserves existing approval links and identity');
     await c.end(); c=null;
     c=await connect('events_test');
