@@ -9,13 +9,44 @@
   const state={id:new URLSearchParams(location.search).get('id'),current:null,user:null,busy:false,generation:0};
   const labels={pending:'Aguardando aprovação',approved:'Aprovação registrada',changes_requested:'Ajustes solicitados',rejected:'Versão rejeitada',invalidated:'Versão alterada — solicite nova aprovação'};
   function notice(message,error=false){$('notice').textContent=message;$('notice').className=error?'error':'';}
-  async function api(body){const r=await client.functions.invoke('event-proposal-approval',{body});if(r.error||!r.data?.ok){let message=r.data?.message;try{message=message||(await r.error.context.clone().json()).message;}catch{}throw Error(message||'A operação não foi confirmada. Atualize o histórico antes de repetir.');}return r.data;}
+  async function api(body){
+    const generation=state.generation;
+    try {
+      const r=await client.functions.invoke('event-proposal-approval',{body});
+      if(r.error||!r.data?.ok){let message=r.data?.message;try{message=message||(await r.error.context.clone().json()).message;}catch{}throw Error(message||'A operação não foi confirmada. Atualize o histórico antes de repetir.');}
+      if(generation!==state.generation||!state.user)throw Error('Sessão alterada.');
+      return r.data;
+    }catch(error){
+      // A late get/notify/decision result belongs to the session that started it.
+      if(generation!==state.generation||!state.user)throw Object.assign(Error('Resposta de sessão anterior descartada.'),{staleSession:true});
+      throw error;
+    }
+  }
+  function clearPrivateView(){
+    state.current=null;$('workspace').hidden=true;
+    for(const id of ['detail','list','watchStatus','identity'])$(id).textContent='';
+  }
   function disable(value){state.busy=value;document.querySelectorAll('button').forEach(b=>b.disabled=value);}
-  function status(a){if(a.send?.status==='accepted')return 'Aprovada · envio aceito pelo provedor. Entrega não confirmada.';if(a.send?.status==='uncertain'||a.send?.status==='sending')return 'Aprovação registrada · envio em andamento ou incerto. Não repita sem conferir o provedor.';if(a.send?.status==='failed')return 'Aprovação registrada · envio recusado. Confira o canal antes de autorizar nova tentativa. Não haverá repetição automática.';if(a.status==='pending'&&(a.stale||a.expired))return a.expired?'Solicitação expirada — solicite nova revisão':'A proposta mudou — solicite nova revisão';return labels[a.status]||a.status;}
+  function canRetryRefusedSend(a){
+    return a.send?.status==='failed' && [undefined,null,'','failed'].includes(a.send?.delivery_status);
+  }
+  function status(a){
+    // Provider delivery receipts outrank the original transport acceptance.
+    const delivery=a.send?.delivery_status;
+    if(delivery==='read')return 'Aprovada · leitura registrada pelo provedor. Isso não confirma aceite comercial, pagamento ou operação.';
+    if(delivery==='delivered')return 'Aprovada · entrega confirmada pelo provedor. Leitura e aceite comercial não confirmados.';
+    if(delivery==='failed')return 'Aprovação registrada · falha de entrega informada pelo provedor. Confira o canal antes de qualquer nova tentativa; não haverá reenvio automático.';
+    if(delivery==='uncertain')return 'Aprovação registrada · entrega com resultado incerto. Não repita sem conferir o provedor.';
+    if(a.send?.status==='accepted'||delivery==='accepted')return 'Aprovada · envio aceito pelo provedor. Entrega não confirmada.';
+    if(a.send?.status==='uncertain'||a.send?.status==='sending')return 'Aprovação registrada · envio em andamento ou incerto. Não repita sem conferir o provedor.';
+    if(a.send?.status==='failed')return 'Aprovação registrada · envio recusado. Confira o canal antes de autorizar nova tentativa. Não haverá repetição automática.';
+    if(a.status==='pending'&&(a.stale||a.expired))return a.expired?'Solicitação expirada — solicite nova revisão':'A proposta mudou — solicite nova revisão';
+    return labels[a.status]||a.status;
+  }
   function render(a){
     state.current=a;const p=a.proposal_snapshot,c=a.content,s=p.snapshot||{};
     const discount=Math.max(0,-Number(s.totals?.adjustment||0))+Math.max(0,-Number(s.totals?.privatizationAdjustment||0));
-    const allowed=a.can_decide&&!a.expired&&!a.stale&&(!a.send_id||a.send?.status==='failed')&&['pending','approved'].includes(a.status);
+    const allowed=a.can_decide&&!a.expired&&!a.stale&&(!a.send_id||canRetryRefusedSend(a))&&['pending','approved'].includes(a.status);
     const nstatus={pending:'aguardando processamento',sending:'em andamento; resultado ainda não confirmado',accepted:'aceito pelo provedor; entrega não confirmada',failed:'recusado',uncertain:'resultado incerto; não repetir automaticamente'};
     $('detail').hidden=false;$('list').hidden=true;
     $('detail').innerHTML=`<div class="summary"><p class="eyebrow">VERSÃO ${esc(p.versao)} · REVISÃO ${esc(a.revision)}</p><h2>${esc(p.cliente_nome)}</h2><p>${esc(p.tipo_evento)} · ${esc(date(p.data_evento))} às ${esc(String(p.horario_evento||'').slice(0,5))} (Brasília)</p><p class="amount">${esc(money(p.total))}</p><p class="status">${esc(status(a))}</p></div>
@@ -34,7 +65,7 @@
     $('retryNotifications').onclick=()=>run(async()=>{const r=await api({action:'notify',id:a.id});render(r.approval);notice('Avisos processados. Aceitação não comprova entrega.');});
     $('detail').querySelectorAll('[data-decision]').forEach(b=>b.onclick=()=>decide(b.dataset.decision));
   }
-  async function run(fn){if(state.busy)return;disable(true);try{await fn();}catch(e){notice(e.message,true);}finally{disable(false);const r=$('retryNotifications');if(r&&state.current)r.disabled=state.current.status!=='pending'||state.current.expired||state.current.stale;}}
+  async function run(fn){if(state.busy)return;disable(true);try{await fn();}catch(e){if(!e.staleSession)notice(e.message,true);}finally{disable(false);const r=$('retryNotifications');if(r&&state.current)r.disabled=state.current.status!=='pending'||state.current.expired||state.current.stale;}}
   async function decide(action){const a=state.current;if(!a||state.busy)return;const reason=$('reason')?.value.trim()||'';
     if(action==='approve'&&!$('confirmed')?.checked){notice('Marque a confirmação após revisar a mensagem e o destinatário.',true);return;}
     if(action!=='approve'&&reason.length<3){notice('Informe o motivo para orientar a equipe.',true);$('reason').focus();return;}
@@ -51,7 +82,9 @@
       if(generation!==state.generation||!state.user)return;
       if(result.error||typeof result.data?.enabled!=='boolean')throw Error('unavailable');
       const health=result.data;
-      const stale=!health.last_success_at||Date.now()-Date.parse(health.last_success_at)>15*60*1000;
+      const checkedAt=Date.parse(health.last_success_at);
+      const stale=!Number.isFinite(checkedAt)||checkedAt>Date.now()+60000||Date.now()-checkedAt>15*60*1000;
+      if(!Number.isSafeInteger(health.unresolved_count)||health.unresolved_count<0)throw Error('unavailable');
       const label=!health.enabled?'Monitor de aprovações desativado':Number(health.unresolved_count)>0?'Monitor com tentativas que exigem conferência':stale?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
       const names={approval_waiting:'Aguardando decisão',approval_expired:'Aprovação expirada',notification_failed:'Aviso recusado',notification_stalled:'Aviso parado ou incerto',dispatch_attention:'Envio requer conferência'};
       const alerts=(health.alerts||[]).slice(0,8);
@@ -59,27 +92,29 @@
     }catch{if(generation===state.generation&&state.user)$('watchStatus').textContent='Estado do monitor indisponível. A revisão da proposta permanece acessível.';}finally{clearTimeout(timeout);}
   }
   async function load(){
-    const generation=++state.generation;const {data,error}=await client.auth.getUser();
+    const generation=++state.generation;clearPrivateView();const {data,error}=await client.auth.getUser();
     if(generation!==state.generation)return;
-    state.user=data?.user||null;$('login').hidden=Boolean(state.user);$('workspace').hidden=!state.user;$('logout').hidden=!state.user;
+    state.user=error?null:data?.user||null;$('login').hidden=Boolean(state.user);$('logout').hidden=!state.user;
     if(error||!state.user){state.current=null;$('detail').innerHTML='';$('list').innerHTML='';$('watchStatus').textContent='';notice('Entre para acessar a solicitação. Nenhuma decisão foi registrada.');return;}
-    const policy=await client.rpc('event_approval_policy');if(policy.error)throw Error('Esta conta não possui acesso à equipe de Eventos.');
+    const policy=await client.rpc('event_approval_policy');
     if(generation!==state.generation||!state.user)return;
+    if(policy.error||!policy.data)throw Error('Esta conta não possui acesso à equipe de Eventos.');
+    $('workspace').hidden=false;
     $('identity').textContent=`${state.user.email} · ${policy.data.is_approver?'Gestor aprovador':'Consulta da equipe'}`;
     void loadWatch(generation);
     if(generation!==state.generation)return;
     if(state.id){if(!/^[0-9a-f-]{36}$/i.test(state.id))throw Error('Identificador de solicitação inválido.');const r=await api({action:'get',id:state.id});if(generation!==state.generation)return;render(r.approval);notice(status(r.approval));}
     else {
       const r=await client.from('event_proposal_approvals').select('id,status,created_at,expires_at,reason,send_id,cliente_nome:proposal_snapshot->>cliente_nome,data_evento:proposal_snapshot->>data_evento,total:proposal_snapshot->>total,channel:content->>channel').order('created_at',{ascending:false}).limit(50);
-      if(r.error)throw Error('Não foi possível carregar as solicitações.');if(generation!==state.generation)return;
+      if(generation!==state.generation)return;if(r.error)throw Error('Não foi possível carregar as solicitações.');
       $('detail').hidden=true;$('list').hidden=false;$('list').innerHTML=(r.data||[]).map(a=>`<div class="request"><h3>${esc(a.cliente_nome)}</h3><p>${esc(date(a.data_evento))} · ${esc(money(a.total))} · ${esc(a.channel)}</p><p>${esc(labels[a.status]||a.status)}${a.status==='pending'&&Date.parse(a.expires_at)<=Date.now()?' · expirada':''}</p>${a.reason?`<p>${esc(a.reason)}</p>`:''}<a href="./aprovacoes.html?id=${esc(a.id)}">Abrir revisão e histórico</a></div>`).join('')||'<p>Nenhuma solicitação de aprovação registrada.</p>';
       notice('Até 50 solicitações recentes. A equipe acompanha decisões e ajustes nesta central.');
     }
   }
   $('loginForm').onsubmit=e=>{e.preventDefault();run(async()=>{const r=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('password').value='';if(r.error)throw Error('Não foi possível entrar. Confira e-mail e senha.');await load();});};
   $('magicLink').onclick=()=>run(async()=>{const email=$('email').value.trim();if(!$('email').reportValidity()||!email)return;const redirect=new URL('aprovacoes.html',location.href);if(state.id)redirect.searchParams.set('id',state.id);const r=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirect.href}});if(r.error)throw Error('Não foi possível enviar o acesso. Use sua senha ou confira a configuração de e-mail.');notice('Acesso solicitado. Confira seu e-mail. O acesso não aprova propostas.');});
-  $('logout').onclick=()=>run(async()=>{++state.generation;state.current=null;$('detail').innerHTML='';$('list').innerHTML='';$('watchStatus').textContent='';await client.auth.signOut();await load();});
+  $('logout').onclick=()=>run(async()=>{++state.generation;state.user=null;clearPrivateView();await client.auth.signOut();await load();});
   $('refresh').onclick=()=>run(load);
-  client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){++state.generation;state.current=null;$('workspace').hidden=true;$('detail').innerHTML='';$('list').innerHTML='';$('watchStatus').textContent='';$('login').hidden=false;}});
+  client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){++state.generation;state.user=null;clearPrivateView();$('logout').hidden=true;$('login').hidden=false;notice('Sessão encerrada. Entre novamente para conferir os resultados; nenhuma ação será repetida automaticamente.');}});
   run(load);
 })();
