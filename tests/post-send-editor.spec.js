@@ -105,3 +105,38 @@ test('leitura indisponível após aceitação não inventa revisão nem descarta
   });
   expect(result.revision).toBe(result.before);expect(result.text).toBe('Preservar sem leitura');expect(result.dirty).toBe(true);
 });
+
+for(const channel of ['whatsapp','email'])test(`${channel}: salvar durante despacho aguarda conciliação sem perder texto`,async({page})=>{
+  await prepare(page,channel);
+  await page.locator('#notes').fill('Preservar até o provedor concluir');
+  const blocked=await page.evaluate(async()=>{
+    const old=window.postSendWrite;const result=await saveCurrentProposal('negociacao');
+    const p=getActiveProposal();const otherWrite=await persistEventProposal(p.id,{snapshot:p.snapshot},p);
+    return {result,unchanged:window.postSendWrite===old,error:state.lastProposalSaveError,otherError:otherWrite.error?.code,guard:!!proposalDispatchGuard()};
+  });
+  expect(blocked.result).toBeNull();expect(blocked.unchanged).toBe(true);expect(blocked.otherError).toBe('PT409');expect(blocked.guard).toBe(true);
+  expect(blocked.error).toContain('Aguarde');await page.evaluate(async()=>{window.finishProvider();await window.attempt;});
+  expect(await page.evaluate(()=>proposalDispatchGuard())).toBeNull();
+  expect(await page.locator('#notes').inputValue()).toBe('Preservar até o provedor concluir');
+  const saved=await page.evaluate(async()=>Boolean(await saveCurrentProposal('negociacao')));expect(saved).toBe(true);
+});
+test('outro canal não despacha enquanto a mesma aba aguarda provedor',async({page})=>{
+  await prepare(page,'whatsapp');
+  const result=await page.evaluate(async()=>{
+    let calls=0;const original=state.supabase.functions.invoke;
+    state.supabase.functions.invoke=async(...args)=>{calls++;return original(...args);};
+    const sent=await sendProposalEmailViaZepto({proposal:window.beforeSend,proposalUrl:'https://example.test/proposta',email:'test@example.test'});
+    return {sent,calls};
+  });
+  expect(result).toEqual({sent:false,calls:0});await page.evaluate(async()=>{window.finishProvider();await window.attempt;});
+});
+test('gravação em andamento impede iniciar despacho',async({page})=>{
+  await page.goto('/index.html?qa=1');
+  const result=await page.evaluate(async()=>{
+    state.proposalWritesInProgress=[{client:state.supabase,userId:state.session.user.id}];let calls=0;
+    state.supabase.functions.invoke=async()=>{calls++;return {data:{ok:true}};};
+    const p=state.proposals[0];const sent=await sendProposalWhatsAppViaZapi({proposal:p,message:'Revisado',proposalUrl:'https://example.test/proposta'});
+    state.proposalWritesInProgress=[];return {sent,calls,guard:proposalDispatchGuard()};
+  });
+  expect(result).toEqual({sent:false,calls:0,guard:null});
+});

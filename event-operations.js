@@ -1,7 +1,112 @@
 /* Central independente do Bot. Nenhum envio automático sem revisão humana. */
-const eventOps = { messages: [], outbox: [], reservations: [], approvals: [], providerEvents: [], channelHealth: [], handoffs: [], handoffTasks: [], handoffChanges: [], policy: {}, loadedFor: "", loading: null, tab: "pending", opportunity: "", error: "" };
+const eventOps = { messages: [], outbox: [], reservations: [], approvals: [], providerEvents: [], channelHealth: [], handoffs: [], handoffTasks: [], handoffChanges: [], policy: {}, loadedFor: "", loading: null, tab: "execution", opportunity: "", error: "" };
 window.EventOperationsState = eventOps;
 const eventOfferDrafts = new Map();
+// Read-only queue: human decisions stay in their existing authenticated workflows.
+function resetOpsExecution() {
+  eventOps.execution = {client:state.supabase,userId:state.session?.user?.id,rows:[],loadedAt:0,attemptedAt:0,error:"",pending:null};
+  return eventOps.execution;
+}
+function opsExecutionState() {
+  const cached=eventOps.execution;
+  return cached && cached.client===state.supabase && cached.userId===state.session?.user?.id ? cached : resetOpsExecution();
+}
+async function loadOpsExecution({force=false}={}) {
+  if(!state.session||!state.supabase||QA_MODE)return;
+  const cache=opsExecutionState();
+  if(cache.pending)return cache.pending;
+  if(!force&&Date.now()-cache.attemptedAt<30000)return;
+  cache.attemptedAt=Date.now();
+  const current=()=>eventOps.execution===cache&&state.supabase===cache.client&&state.session?.user?.id===cache.userId;
+  cache.pending=(async()=>{
+    try {
+      const rows=[];
+      for(let offset=0;offset<10000;offset+=100){
+        const {data,error}=await cache.client.from('event_proposal_approvals')
+          .select('id,proposal_id,revision,status,created_at,expires_at,client_name:proposal_snapshot->>cliente_nome,event_date:proposal_snapshot->>data_evento,channel:content->>channel')
+          .eq('status','pending').order('created_at').order('id').range(offset,offset+99);
+        if(!current())return;
+        if(error||!Array.isArray(data))throw Error('Não foi possível atualizar as aprovações. Confira Aprovações antes de decidir.');
+        rows.push(...data);
+        if(data.length<100){cache.rows=rows;cache.loadedAt=Date.now();cache.error="";return;}
+      }
+      throw Error('A lista excede este recorte. Consulte Aprovações; os dados anteriores continuam visíveis.');
+    }catch(error){if(current())cache.error=error.message||'Aprovações indisponíveis.';}
+    finally{if(current()){cache.pending=null;renderEventOperations();}}
+  })();
+  return cache.pending;
+}
+function getOpsExecutionEntries(items=getOpsItems(), now=new Date()) {
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(now);
+  const horizon=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(now.getTime()+7*864e5));
+  const entries=[];
+  for(const request of opsExecutionState().rows){
+    const item=items.find(i=>i.id===request.proposal_id),expired=new Date(request.expires_at)<=now;
+    entries.push({key:`approval:${request.id}`,kind:'approval',item,request,name:item?.name||request.client_name||'Proposta',date:item?.date||request.event_date||'',score:expired?50:110,reason:expired?'Aprovação expirada · revisar ou renovar no painel':'Aguardando decisão do gestor',owner:'Gestor'});
+  }
+  for(const item of items){
+    const p=state.proposals.find(p=>p.id===item.id),past=Boolean(item.date&&item.date<today),plan=getTaskPlan(item);
+    const terminal=['cancelado','perdido','realizado','pos_venda'].includes(item.status);
+    if(terminal)continue;
+    const pending=p?.snapshot?.pagamentoSinal?.validacaoPendente===true;
+    const proof=p?.comprovante_sinal||item.hasSignalProof;
+    if(p&&(pending||proof&&!hasValidatedSignal(p.snapshot?.pagamentoSinal))){
+      entries.push({key:`finance:${item.id}`,kind:'finance',item,name:item.name,date:item.date||'',score:past?65:130,reason:`Sinal sem validação bancária${past?' · histórico, não cobrar automaticamente':''}`,owner:'Financeiro / gestor'});
+    }
+    if(item.stage==='desfecho_pendente'){
+      entries.push({key:`outcome:${item.id}`,kind:'outcome',item,name:item.name,date:item.date||'',score:40,reason:'Data passada · confirmar o desfecho com a equipe',owner:plan.owner||'Equipe responsável'});continue;
+    }
+    if(past)continue;
+    const handoff=eventOps.handoffs.find(h=>h.proposal_id===p?.id&&h.opportunity_id===item.opportunityId);
+    const tasks=handoff?eventOps.handoffTasks.filter(t=>t.opportunity_id===item.opportunityId&&Number(t.source_version)===Number(handoff.version)):[];
+    const incomplete=tasks.filter(t=>t.status!=='done'||!t.acknowledged_at);
+    if(operationStatuses.has(item.status)&&(!item.date||item.date<=horizon)){
+      const reason=!handoff?'Prontidão sem checklist carregado':incomplete.length?`${incomplete.length} tarefas sem conclusão ou ciência`:handoff.changes_pending?'Alterações operacionais sem ciência':'Revisar liberação da operação';
+      entries.push({key:`operation:${item.id}`,kind:'operation',item,name:item.name,date:item.date||'',score:item.date===today?150:120,reason,owner:plan.owner||'Equipe operacional'});
+    }
+    if(!operationStatuses.has(item.status)&&(plan.overdue||!plan.owner||!plan.due||getOpsIncoming(item))){
+      entries.push({key:`contact:${item.id}`,kind:'contact',item,name:item.name,date:item.date||'',score:getOpsIncoming(item)?125:80,reason:getOpsIncoming(item)?'Resposta do cliente aguardando atendimento':plan.overdue?'Próximo contato vencido':!plan.owner?'Definir responsável':'Definir próximo contato',owner:plan.owner||'Sem responsável'});
+    }
+  }
+  return entries.sort((a,b)=>b.score-a.score||(a.date||'9999').localeCompare(b.date||'9999')||a.key.localeCompare(b.key));
+}
+function renderOpsExecution(items) {
+  const cache=opsExecutionState(),entries=getOpsExecutionEntries(items),filter=eventOps.executionFilter||'all';
+  const selected=entries.filter(e=>filter==='all'||e.kind===filter),limit=eventOps.executionLimit||20;
+  return `<h3>Executar agora</h3><p>Confira as evidências antes de agir. Pagamento, decisão, ciência e desfecho exigem confirmação da pessoa responsável.</p><p role="status">${escapeHtml(cache.error||(cache.pending?'Atualizando aprovações…':cache.loadedAt?'Aprovações atualizadas em '+formatSavedAt(new Date(cache.loadedAt).toISOString()):QA_MODE?'Ambiente de testes · sem ações externas':'Aprovações ainda não carregadas.'))} <a href="./aprovacoes.html">Abrir Aprovações</a></p><nav aria-label="Filtrar execução">${[['all','Todas'],['approval','Aprovações'],['finance','Sinal'],['operation','Prontidão'],['contact','Contatos'],['outcome','Desfechos']].map(([id,label])=>`<button class="secondary" type="button" data-ops-execution-filter="${id}" aria-pressed="${filter===id}">${label} (${id==='all'?entries.length:entries.filter(e=>e.kind===id).length})</button>`).join('')}</nav><p>${selected.length} pendências · exibindo até ${limit}. A mesma oportunidade pode exigir ações de setores diferentes.</p><div class="event-ops-list">${selected.slice(0,limit).map(e=>`<article class="event-ops-row" data-execution-kind="${e.kind}"><span><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.date||'Sem data')} · ${escapeHtml(e.owner)}</small><small>${escapeHtml(e.reason)}</small>${e.kind==='finance'&&e.item.hasSignalProof?`<button class="secondary" type="button" data-load-proof="${escapeHtml(e.item.id)}" data-proof-type="signal">Ver comprovante</button>`:''}</span>${e.kind==='approval'?`<a class="secondary" href="./aprovacoes.html?id=${encodeURIComponent(e.request.id)}">${new Date(e.request.expires_at)<=new Date()?'Revisar expiração':'Revisar aprovação'}</a>`:e.kind==='outcome'?`<button class="secondary" type="button" data-ops-outcome="${escapeHtml(e.item.id)}" data-kind="${escapeHtml(e.item.kind)}">Registrar desfecho</button>`:e.kind==='finance'&&isFinanceSession()?`<button class="primary" type="button" data-ops-validate-signal="${escapeHtml(e.item.id)}">Conferir sinal no banco</button>`:`<button class="secondary" type="button" data-ops-work="${escapeHtml(e.item.opportunityId)}">Revisar evento</button>`}</article>`).join('')||'<p>Nenhuma pendência neste filtro.</p>'}</div>${selected.length>limit?'<button class="secondary" type="button" data-ops-execution-more>Mostrar mais 20</button>':''}`;
+}
+async function validateOpsSignal(proposalId) {
+  if(!isFinanceSession())throw Error('Validação restrita ao Financeiro ou gestor.');
+  if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw Error(commercialRefreshError);}
+  const client=state.supabase,userId=state.session?.user?.id,proposal=await ensureFullProposal(proposalId);
+  if(!proposal||!proposal.is_current||proposal.snapshot?.amendmentOf)throw Error('Abra o acordo atual antes de validar o sinal.');
+  if(hasValidatedSignal(proposal.snapshot?.pagamentoSinal)){showToast('O sinal já está validado. Confira o histórico.');return;}
+  const source=structuredClone(proposal),previous=source.snapshot?.pagamentoSinal;
+  const payment=await showSignalPaymentDialog(source.total,{defaultPreset:'custom',requireBankConfirmation:true,existingPayment:previous});
+  if(!payment)return;
+  if(state.supabase!==client||state.session?.user?.id!==userId)throw Error('A sessão mudou. Reabra e confira o sinal.');
+  if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw Error(commercialRefreshError);}
+  const current=await ensureFullProposal(proposalId);
+  if(state.supabase!==client||state.session?.user?.id!==userId||!isFinanceSession())throw Error("A sessão mudou. Reabra e confira o sinal.");
+  if(!current||!current.is_current||Number(current.revision)!==Number(source.revision))throw Error('A proposta mudou durante a conferência. Revise novamente antes de validar.');
+  const snapshot=structuredClone(source.snapshot);
+  snapshot.pagamentoSinal={...payment,...(!payment.comprovante&&previous?.comprovante?{comprovante:previous.comprovante}:{}),validacaoPendente:false};
+  const result=await persistEventProposal(source.id,{snapshot},source);
+  if(result.error)throw Error(result.error.message||'A validação não foi confirmada. Confira o histórico antes de repetir.');
+  upsertProposalState(result.data);showToast('Sinal validado pelo seu usuário. A etapa do evento foi preservada.');
+  await loadEventOperations();renderPipeline();
+}
+async function requestOpsDraftApproval(item, proposal, channel, destination, message) {
+  if(QA_MODE)throw Error('Solicitação externa desativada no modo QA.');
+  const client=state.supabase,userId=state.session?.user?.id;
+  if(await remoteProposalApprovalEnabled()!==true||state.supabase!==client||state.session?.user?.id!==userId)throw Error('Não foi possível confirmar a aprovação remota. Use o fluxo revisado da proposta.');
+  const {data,error}=await client.functions.invoke('event-proposal-approval',{body:{action:'request',channel,proposalId:proposal.id,reviewedRevision:Number(proposal.revision),destination,message,title:'Atendimento do seu evento',reviewedResponseAt:getOpportunityForItem(item)?.ultima_resposta_cliente_em||null}});
+  if(error||!data?.ok||!data.approval?.id)throw Error(data?.message||await getFunctionErrorMessage(error)||'Solicitação não confirmada. Confira Aprovações antes de repetir.');
+  if(state.supabase!==client||state.session?.user?.id!==userId)return;
+  await loadOpsExecution({force:true});
+  showToast('Solicitação registrada em Aprovações. O pedido não envia a mensagem ao cliente.');
+}
+
 function getOpsItems() { const seen = new Set(); return getPipelineItems().filter((i) => i.opportunityId && !seen.has(i.opportunityId) && seen.add(i.opportunityId)); }
 function getOpsOpenItems() { const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); return getOpsItems().filter((i) => ["lead_recebido", "proposta_pronta", "proposta_enviada", "negociacao"].includes(i.status) && (!i.date || i.date >= today)); }
 function getOpsWorkItems() {
@@ -82,10 +187,12 @@ function renderEventOperations() {
   let root=document.querySelector("#eventOperations");
   if(!root){root=document.createElement("section");root.id="eventOperations";root.className="event-operations";document.querySelector("#salesCommand")?.after(root);root.addEventListener("click",handleEventOpsClick);root.addEventListener("change",(e)=>{if(e.target.matches("[data-ops-selector]")){eventOps.opportunity=e.target.value;renderEventOperations();}});}
   root.hidden=!state.session;
-  if(!state.session){Object.assign(eventOps,{messages:[],outbox:[],reservations:[],approvals:[],providerEvents:[],channelHealth:[],handoffs:[],handoffTasks:[],handoffChanges:[],loadedFor:"",opportunity:""});eventOfferDrafts.clear();return;}
+  if(!state.session){eventOps.execution=null;Object.assign(eventOps,{messages:[],outbox:[],reservations:[],approvals:[],providerEvents:[],channelHealth:[],handoffs:[],handoffTasks:[],handoffChanges:[],loadedFor:"",opportunity:""});eventOfferDrafts.clear();return;}
   if(!eventOps.loadedFor&&!eventOps.loading&&!eventOps.error)queueMicrotask(loadEventOperations);
+  if(!QA_MODE)void loadOpsExecution();
   const items=getOpsItems(),open=getOpsWorkItems(),c=getOpsCoverage(),selected=items.find((i)=>i.opportunityId===eventOps.opportunity),expanded=root.querySelector("details")?.open||false;
-  root.innerHTML=`<details ${expanded?"open":""}><summary><strong>Central comercial</strong><span>${c.unassigned} sem responsável · ${c.unplanned} sem próximo contato</span></summary><div class="event-ops-content"><nav aria-label="Central comercial">${[["pending","Pendências"],["closure","Desfechos e operação"],["inbox","Conversas"],["sends","Envios"],["channels","Canais"],["reservations","Reservas"]].map(([id,label])=>`<button class="secondary" type="button" data-ops-tab="${id}" aria-pressed="${eventOps.tab===id}">${label}</button>`).join("")}<button class="secondary" type="button" data-ops-refresh>Atualizar</button></nav><p role="status">${escapeHtml(eventOps.error||(eventOps.loading?"Atualizando…":"Dados compartilhados. Consulte Canais para verificar a integração e os retornos reais."))}</p>
+  root.innerHTML=`<details ${expanded?"open":""}><summary><strong>Central comercial</strong><span>${c.unassigned} sem responsável · ${c.unplanned} sem próximo contato</span></summary><div class="event-ops-content"><nav aria-label="Central comercial">${[["execution","Executar agora"],["pending","Pendências"],["closure","Desfechos e operação"],["inbox","Conversas"],["sends","Envios"],["channels","Canais"],["reservations","Reservas"]].map(([id,label])=>`<button class="secondary" type="button" data-ops-tab="${id}" aria-pressed="${eventOps.tab===id}">${label}</button>`).join("")}<button class="secondary" type="button" data-ops-refresh>Atualizar</button></nav><p role="status">${escapeHtml(eventOps.error||(eventOps.loading?"Atualizando…":"Dados compartilhados. Consulte Canais para verificar a integração e os retornos reais."))}</p>
+  ${eventOps.tab==="execution"?renderOpsExecution(items):""}
   ${eventOps.tab==="pending"?`<div class="event-ops-metrics"><span>${c.total} eventos ativos · comercial e operação</span><span>${c.overdue} prazos vencidos</span><span>Primeira resposta: ${c.samples?`${formatResponseTime(c.median)} mediana · ${formatResponseTime(c.p90)} P90 · ${c.samples} registros`:"sem registros"}</span></div><small>Tempo corrido desde a entrada, apenas contatos registrados; não limitado ao horário de atendimento.</small><button class="secondary" type="button" data-ops-all>Selecionar pendências</button><div class="event-ops-list">${open.filter((i)=>!getTaskPlan(i).owner||!getTaskPlan(i).due||getTaskPlan(i).overdue||getOpsIncoming(i)||Boolean(i.date&&i.date<=new Date(Date.now()+7*864e5).toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"}))).map((i)=>`<label class="event-ops-row"><input type="checkbox" data-ops-select value="${escapeHtml(i.opportunityId)}"/><span><strong>${escapeHtml(i.name)}</strong><small>${escapeHtml(i.date||"Data a definir")} · ${escapeHtml(getTaskPlan(i).owner||"Sem responsável")} · ${escapeHtml(getOpsIncoming(i)?"Resposta recebida":getTaskPlan(i).action)}</small></span><button class="secondary" type="button" data-ops-work="${escapeHtml(i.opportunityId)}">Revisar evento</button></label>`).join("")||"<p>Nenhuma pendência neste recorte.</p>"}</div><button class="primary" type="button" data-ops-bulk>Planejar selecionadas</button><p>Classifique os eventos passados no histórico com os resultados confirmados pela equipe.</p>`:""}
   ${eventOps.tab==="closure"?renderOpsClosureReview(items):""}
   ${["inbox","reservations"].includes(eventOps.tab)?`<label>Evento<select data-ops-selector><option value="">Escolha o evento</option>${items.map((i)=>`<option value="${escapeHtml(i.opportunityId)}" ${i===selected?"selected":""}>${escapeHtml(i.name)} · ${escapeHtml(i.date||"sem data")} · ${escapeHtml(getProposalStatusLabel(i.status))}</option>`).join("")}</select></label>`:""}
@@ -159,24 +266,33 @@ function buildOpsDraft(item) {
   const message=item.clientResponse==="confirmar"&&!incoming?tr(`Olá, ${name}! Recebemos sua aprovação. O próximo passo é o sinal indicado na proposta. A reserva depende de validação da disponibilidade e do pagamento.`,`Hello, ${name}! We received your approval. The next step is the deposit indicated in your proposal. Booking requires our team's availability and payment checks.`):incoming||item.clientResponse==="alteracao"?tr(`Olá, ${name}! Recebi sua mensagem e vou revisar os detalhes do seu evento para retornar com uma opção adequada.`,`Hello, ${name}! I received your message and will review the event details before returning with a suitable option.`):request?buildFirstReplyDraft(request):tr(`Olá, ${name}! Você conseguiu avaliar sua proposta de evento? Podemos revisar o formato e esclarecer as condições.`,`Hello, ${name}! Have you had a chance to review your event proposal? We can review the format and clarify the terms.`);
   const url=p?getPublicProposalUrl(p):"";return {proposal:p,blocked:!getOpsOpenItems().some((i)=>i.opportunityId===item.opportunityId),scheduled:Boolean(getScheduledReturnInfo(item)&&!incoming),reason:incoming?"Há mensagem recebida após o último contato.":item.clientResponse==="confirmar"?"Cliente aprovou; orientar sinal sem prometer reserva.":request?"Acolher o lead e confirmar dados.":"Retomar a proposta com contexto, sem presumir decisão.",message:message+(url?`\n\n${url}`:"")};
 }
-function showOpsDraft(item) {
+async function showOpsDraft(item) {
+  const client=state.supabase,userId=state.session?.user?.id;
+  if(item.kind==="proposal"&&!await ensureFullProposal(item.id))return;
+  const remoteEnabled=await remoteProposalApprovalEnabled();
+  if(state.supabase!==client||state.session?.user?.id!==userId)return;
+  item=getOpsItems().find(i=>i.opportunityId===item.opportunityId);if(!item)return;
   const draft=buildOpsDraft(item);if(draft.blocked){showToast("Evento fora da negociação. Consulte o histórico.");return;}if(draft.scheduled){showToast("Retorno já agendado. Ajuste o plano se precisar antecipar.");return;}
   const signature=getOpsContextSignature(item),id=crypto.randomUUID();
-  const d=opsDialog("Revisar atendimento preparado",`<p>${escapeHtml(draft.reason)}</p><small>Confira fatos, canal e destinatário. O rascunho não altera preços nem promete reserva.</small><label>Canal<select name="channel"><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option></select></label><label>Destinatário<input name="destination" value="${escapeHtml(item.phone||item.email||"")}" required/></label><label>Mensagem<textarea name="body" rows="7" maxlength="6000" required>${escapeHtml(draft.message)}</textarea></label><label>Modo<select name="mode"><option value="copy">Copiar para envio manual</option><option value="manual">Registrar mensagem já enviada manualmente</option>${draft.proposal?'<option value="direct">Enviar pelo canal integrado</option>':""}</select></label><label class="event-ops-check"><input name="approved" type="checkbox" required/> Revisei mensagem, destinatário e canal e autorizo esta ação.</label><label class="event-ops-check" data-draft-sent hidden><input name="sent" type="checkbox"/> Confirmo que esta mensagem já foi enviada manualmente.</label>`,"Executar ação revisada",async(f)=>{
-    if(!QA_MODE){await refreshCommercialDashboard({force:true});}
+  const d=opsDialog("Revisar atendimento preparado",`<p>${escapeHtml(draft.reason)}</p><small>Confira fatos, canal e destinatário. O rascunho não altera preços nem promete reserva.</small><label>Canal<select name="channel"><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option></select></label><label>Destinatário<input name="destination" value="${escapeHtml(item.phone||item.email||"")}" required/></label><label>Mensagem<textarea name="body" rows="7" maxlength="6000" required>${escapeHtml(draft.message)}</textarea></label><label>Modo<select name="mode"><option value="copy">Copiar para envio manual</option><option value="manual">Registrar mensagem já enviada manualmente</option>${draft.proposal&&remoteEnabled===true?'<option value="approval">Solicitar aprovação do gestor</option>':""}</select></label><label class="event-ops-check"><input name="approved" type="checkbox" required/> Revisei mensagem, destinatário e canal e autorizo esta ação.</label><label class="event-ops-check" data-draft-sent hidden><input name="sent" type="checkbox"/> Confirmo que esta mensagem já foi enviada manualmente.</label>`,"Executar ação revisada",async(f)=>{
+    if(state.supabase!==client||state.session?.user?.id!==userId)throw new Error("A sessão mudou. Feche e prepare novamente.");
+    if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw new Error(commercialRefreshError);}
+    if(state.supabase!==client||state.session?.user?.id!==userId)throw new Error("A sessão mudou. Feche e prepare novamente.");
     const current=getOpsItems().find((i)=>i.opportunityId===item.opportunityId);if(!current||signature!==getOpsContextSignature(current))throw new Error("O evento ou a resposta mudou. Feche e prepare novamente antes de aprovar.");
     const body=f.elements.body.value.trim(),channel=f.elements.channel.value,mode=f.elements.mode.value;
     if(mode==="copy"){await navigator.clipboard.writeText(body);showToast("Copiado. Contato só será registrado após envio confirmado.");return;}
     if(mode==="manual"){if(!f.elements.sent.checked)throw new Error("Confirme o envio manual.");await eventOpsRpc("record_event_message",{target_opportunity:item.opportunityId,message_body:body,message_channel:channel,message_direction:"outbound",message_at:new Date().toISOString(),request_id:id});return;}
-    if(QA_MODE)throw new Error("Envio externo desativado no modo QA.");
-    const p=draft.proposal,result=await state.supabase.functions.invoke(channel==="email"?"send-proposal-email":"send-proposal-whatsapp",{body:{approved:true,reviewedRevision:p.revision,reviewedResponseAt:getOpportunityForItem(item)?.ultima_resposta_cliente_em||null,proposalId:p.id,proposalUrl:getPublicProposalUrl(p),message:body,title:"Atendimento do seu evento",...(channel==="email"?{email:f.elements.destination.value.trim()}:{phone:f.elements.destination.value.trim()})}});
-    if(result.error||!result.data?.ok)throw new Error(result.data?.message||await getFunctionErrorMessage(result.error)||"Confira o canal antes de repetir.");await loadProposalHistory();showToast(result.data.message);
+    if(mode!=="approval"||!draft.proposal)throw new Error("Escolha uma ação disponível.");
+    await requestOpsDraftApproval(current,draft.proposal,channel,f.elements.destination.value.trim(),body);
   });
   d.querySelector('[name="channel"]').onchange=(e)=>{const target=d.querySelector('[name="destination"]');target.value=e.target.value==="email"?item.email||"":item.phone||"";target.type=e.target.value==="email"?"email":"text";d.querySelector('[name="approved"]').checked=false;};
   d.querySelector('[name="mode"]').onchange=(e)=>{d.querySelector("[data-draft-sent]").hidden=e.target.value!=="manual";d.querySelector('[name="approved"]').checked=false;d.querySelector('[name="sent"]').checked=false;};
   d.querySelector("form").addEventListener("input",(e)=>{if(["body","destination"].includes(e.target.name))d.querySelector('[name="approved"]').checked=false;});
 }
 async function handleEventOpsClick(e) {
+  const filter=e.target.closest('[data-ops-execution-filter]');if(filter){eventOps.executionFilter=filter.dataset.opsExecutionFilter;eventOps.executionLimit=20;renderEventOperations();return;}
+  if(e.target.closest('[data-ops-execution-more]')){eventOps.executionLimit=(eventOps.executionLimit||20)+20;renderEventOperations();return;}
+  const validate=e.target.closest('[data-ops-validate-signal]');if(validate){validate.disabled=true;try{await validateOpsSignal(validate.dataset.opsValidateSignal);}catch(error){showToast(error.message);}finally{validate.disabled=false;}return;}
   const outcome=e.target.closest("[data-ops-outcome]");if(outcome){await classifyPastEvent(outcome.dataset.kind,outcome.dataset.opsOutcome);await loadEventOperations();return;}
   const work=e.target.closest("[data-ops-work]");if(work){const i=getOpsItems().find(i=>i.opportunityId===work.dataset.opsWork);if(!i)return;if(i.kind==="proposal"){await safeOpenSavedProposal(i.id,"Revisão diária");if(operationStatuses.has(i.status))nodes.operationalChecklist?.scrollIntoView({behavior:"smooth",block:"start"});}else await safeApplyQuoteRequest(i.id,"Revisão diária");return;}
   const link=e.target.closest("[data-ops-link], [data-ops-ignore]");
@@ -184,12 +300,12 @@ async function handleEventOpsClick(e) {
   const channel=e.target.closest("[data-ops-channel]");if(channel){try{await showOpsChannelSetup(channel.dataset.opsChannel);}catch(err){showToast(err.message);}return;}
   if(e.target.closest("[data-ops-email-delivery]")){const b=e.target.closest("button");b.disabled=true;try{const r=await callOpsChannelAdmin("sync-email");showToast(r.message);await loadEventOperations();}catch(err){showToast(err.message);}finally{b.disabled=false;}return;}
   const tab=e.target.closest("[data-ops-tab]");if(tab){eventOps.tab=tab.dataset.opsTab;renderEventOperations();return;}
-  if(e.target.closest("[data-ops-refresh]")){if(QA_MODE){await loadEventOperations();}else await refreshCommercialDashboard({force:true,source:'manual'});return;}
+  if(e.target.closest("[data-ops-refresh]")){await loadOpsExecution({force:true});if(QA_MODE){await loadEventOperations();}else await refreshCommercialDashboard({force:true,source:'manual'});return;}
   if(e.target.closest("[data-ops-all]")){const boxes=[...document.querySelectorAll("[data-ops-select]")],checked=!boxes.every((b)=>b.checked);boxes.forEach((b)=>b.checked=checked);return;}
   const open=e.target.closest("[data-ops-open]");if(open){eventOps.opportunity=open.dataset.opsOpen;eventOps.tab="inbox";renderEventOperations();return;}
   if(e.target.closest("[data-ops-bulk]")){showOpsPlan([...document.querySelectorAll("[data-ops-select]:checked")].map((i)=>i.value));return;}
   const item=getOpsItems().find((i)=>i.opportunityId===eventOps.opportunity);
-  if(e.target.closest("[data-ops-record]")&&item)showOpsRecord(item);if(e.target.closest("[data-ops-prepare]")&&item)showOpsDraft(item);
+  if(e.target.closest("[data-ops-record]")&&item)showOpsRecord(item);if(e.target.closest("[data-ops-prepare]")&&item){try{await showOpsDraft(item);}catch(error){showToast(error.message);}}
   if(e.target.closest("[data-ops-read]")&&item){try{await eventOpsRpc("mark_event_messages_read",{target_opportunity:item.opportunityId,message_ids:eventOps.messages.filter((m)=>m.opportunity_id===item.opportunityId&&m.direction==="inbound").map((m)=>m.id)});await loadEventOperations();}catch(err){showToast(err.message);}}
   if(e.target.closest("[data-ops-policy]"))opsDialog("Regras da operação",`<p>Valores autorizados pela gestão. A distribuição vale apenas para novos pedidos.</p><label>Capacidade simultânea autorizada<input name="capacity" type="number" min="1" max="500" value="${eventOps.policy.capacity||""}" required/></label><label>Responsável padrão<select name="owner"><option value="">Triagem manual</option>${opsOwnerOptions(eventOps.policy.default_owner).replace('<option value="">Escolha</option>',"")}</select></label>`,"Salvar regras",(f)=>eventOpsRpc("save_event_commercial_policy",{target_capacity:Number(f.elements.capacity.value),owner_email:f.elements.owner.value||null}));
   if(e.target.closest("[data-ops-hold]")&&item?.kind==="proposal")opsDialog("Pré-reserva com validade",`<p>${escapeHtml(item.name)}. Agenda e capacidade serão verificadas no servidor. Não confirma pagamento.</p><label>Validade<input name="until" type="datetime-local" required/></label>`,"Verificar e pré-reservar",async(f)=>{const result=await eventOpsRpc("hold_event_proposal",{target_proposal:item.id,hold_until:new Date(f.elements.until.value).toISOString()});captureEventAnalytics("reservation_held",item,{result:"held"},{entityId:item.opportunityId,dedupeKey:`reservation-held:${item.opportunityId}`});return result;});

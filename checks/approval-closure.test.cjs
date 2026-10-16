@@ -28,7 +28,7 @@ function fixture(options={}){
  }};
 }
 for(const page of ['index.html','clientes.html','comunicacao.html','valores.html'])test(`cache: ${page} loads new approval app and helper`,()=>{
- const html=fs.readFileSync(root+'/'+page,'utf8');assert.match(html,/app\.js\?v=20261015-approval-closure/);assert.match(html,/remote-approval-ui\.js\?v=20261015-approval-closure/);assert.doesNotMatch(html,/app\.js\?v=20261012/);
+ const html=fs.readFileSync(root+'/'+page,'utf8');assert.match(html,/app\.js\?v=20261016-execution/);assert.match(html,/remote-approval-ui\.js\?v=20261016-execution/);assert.doesNotMatch(html,/app\.js\?v=20261012/);
 });
 for(const [page,asset,release] of [
  ['aprovacoes.html','aprovacoes.js','20261015-approval-evidence'],
