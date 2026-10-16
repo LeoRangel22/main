@@ -12572,6 +12572,13 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, o
   if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
+  if (normalizeProposalStatus(nextStatus) === "confirmado" && proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
+    try {
+      if (typeof validateOpsSignal !== "function") throw new Error("A conferência bancária não carregou. Atualize a página antes de validar.");
+      await validateOpsSignal(proposal.id);
+    } catch (error) { showToast(error.message); }
+    return;
+  }
   const validation = canMoveProposalStatus(proposal.status, nextStatus);
   if (!validation.ok) {
     showToast(validation.message);

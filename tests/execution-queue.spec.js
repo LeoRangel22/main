@@ -18,3 +18,9 @@ test('prepared attendance requests approval and never invokes direct send',async
  await expect(d).toHaveCount(0);const call=await page.evaluate(()=>window.serviceCall);expect(call).toMatchObject({channel:'whatsapp',destination:'5521999999999',message:'Mensagem revisada para o evento',proposalId:'qa-proposal-sem-resposta'});
 });
 for(const width of [320,390,1440])test(`execution queue fits ${width}px`,async({page})=>{await page.setViewportSize({width,height:900});await page.goto('/index.html?qa=1');await page.locator('#eventOperations summary').click();await expect(page.getByRole('heading',{name:'Executar agora',exact:true})).toBeVisible();await expectNoHorizontalOverflow(page);});
+test('legacy signal shortcut validates the bank evidence without resetting an operational stage',async({page})=>{
+ await page.goto('/index.html?qa=1');const result=await page.evaluate(async()=>{
+  const p=state.proposals.find(p=>p.id==='qa-proposal-sem-resposta');p.status='planejamento';p.snapshot.pagamentoSinal={valor:p.total/2,validacaoPendente:true};let checked;
+  validateOpsSignal=async id=>{checked=id;};await updateProposalStatus(p.id,'confirmado');return {checked,id:p.id,status:p.status};
+ });expect(result.checked).toBe(result.id);expect(result.status).toBe('planejamento');
+});
