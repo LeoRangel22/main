@@ -4416,7 +4416,7 @@ function showSignalPaymentDialog(total = 0, options = {}) {
         <label>Justificativa da condição aprovada para sinal abaixo de 50% (somente gestor)
           <textarea name="exceptionReason" maxlength="1000" placeholder="Indique o motivo e a referência da condição negociada"></textarea>
         </label>
-        ${options.requireBankConfirmation ? '<label><input name="bankConfirmed" type="checkbox" /> Conferi o crédito efetivo no extrato bancário. O comprovante sozinho não confirma recebimento.</label>' : ""}
+        ${options.requireBankConfirmation ? '<label class="event-ops-check"><input name="bankConfirmed" type="checkbox" /> Conferi o crédito efetivo no extrato bancário. O comprovante sozinho não confirma recebimento.</label>' : ""}
         <small class="signal-error" aria-live="polite"></small>
         <div class="signal-modal-actions">
           <button class="secondary" type="button" data-signal-cancel>Cancelar</button>

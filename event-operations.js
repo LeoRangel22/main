@@ -18,7 +18,7 @@ async function loadOpsExecution({force=false}={}) {
   if(!force&&Date.now()-cache.attemptedAt<30000)return;
   cache.attemptedAt=Date.now();
   const current=()=>eventOps.execution===cache&&state.supabase===cache.client&&state.session?.user?.id===cache.userId;
-  cache.pending=(async()=>{
+  cache.pending=Promise.resolve().then(async()=>{
     try {
       const rows=[];
       for(let offset=0;offset<10000;offset+=100){
@@ -33,7 +33,7 @@ async function loadOpsExecution({force=false}={}) {
       throw Error('A lista excede este recorte. Consulte Aprovações; os dados anteriores continuam visíveis.');
     }catch(error){if(current())cache.error=error.message||'Aprovações indisponíveis.';}
     finally{if(current()){cache.pending=null;renderEventOperations();}}
-  })();
+  });
   return cache.pending;
 }
 function getOpsExecutionEntries(items=getOpsItems(), now=new Date()) {

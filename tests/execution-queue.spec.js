@@ -6,8 +6,8 @@ test('execution queue exposes financial, readiness and historical actions withou
  await page.locator('#eventOperations summary').click();await page.locator('[data-ops-execution-filter="finance"]').click();await expect(page.locator('[data-execution-kind="finance"]')).toContainText('Sinal sem validação bancária');
  expect(await page.evaluate(()=>JSON.stringify(state.proposals.find(p=>p.id==='qa-proposal-sem-resposta')))).toBe(before);await expectNoBrowserErrors(errors);
 });
-test('bank review requires explicit credit confirmation and preserves the reported date',async({page})=>{
- await page.goto('/index.html?qa=1');await page.evaluate(()=>{window.bankDialog=showSignalPaymentDialog(1000,{defaultPreset:'custom',requireBankConfirmation:true,existingPayment:{valor:500,data:'2026-10-12'}});});
+for(const width of [320,390,1440])test(`bank review requires explicit credit confirmation and preserves the reported date at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:720});await page.goto('/index.html?qa=1');await page.evaluate(()=>{window.bankDialog=showSignalPaymentDialog(1000,{defaultPreset:'custom',requireBankConfirmation:true,existingPayment:{valor:500,data:'2026-10-12'}});});
  const d=page.locator('.signal-modal');await expect(d.locator('[name="date"]')).toHaveValue('2026-10-12');await expect(d.locator('[name="amount"]')).toHaveValue('500,00');await expect(d.locator('[name="bankConfirmed"]')).not.toBeChecked();
  await d.getByRole('button',{name:'Confirmar sinal',exact:true}).click();await expect(d.locator('.signal-error')).toContainText('extrato');await d.locator('[data-signal-cancel]').click();expect(await page.evaluate(()=>window.bankDialog)).toBeNull();
 });
