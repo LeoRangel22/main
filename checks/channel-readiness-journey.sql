@@ -11,6 +11,7 @@ begin
  assert not has_function_privilege('anon','public.event_request_channel_diagnostics()','execute');
  assert not has_function_privilege('anon','public.event_channel_diagnostics_status()','execute');
  assert not has_function_privilege('anon','public.event_journey_evidence(uuid,bigint)','execute');
+ assert not has_function_privilege('anon','public.confirm_event_reservation(uuid,bigint)','execute');
  assert not has_function_privilege('authenticated','event_private.queue_channel_diagnostics()','execute');
  assert not has_table_privilege('authenticated','event_private.channel_diagnostic_batch','select');
  perform set_config('request.jwt.claims',jsonb_build_object('sub',outsider,'email','outsider@example.test','role','authenticated')::text,true);
@@ -79,5 +80,28 @@ begin
  result:=public.event_journey_evidence(p.id,p.revision);
  assert (select s->>'state'='pending' from jsonb_array_elements(result->'steps') s where s->>'key'='payment'),'Proof pending cannot count as money received';
  assert (select s->>'state'='pending' from jsonb_array_elements(result->'steps') s where s->>'key'='operation'),'No sector science inferred';
+ -- Isolated maintenance fixture reproduces a legacy booking without a reservation.
+ perform set_config('request.jwt.claims','',true);
+ update propostas set status='confirmado',snapshot=jsonb_set(snapshot,'{pagamentoSinal}','{"valor":560,"data":"2026-10-17"}') where id=p.id returning * into p;
+ delete from event_reservations where opportunity_id=opp;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision);exception when others then blocked:=true;end;
+ assert blocked and not exists(select 1 from event_reservations where opportunity_id=opp),'Legacy amount without finance audit cannot confirm reservation';
+ select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17","bancos":["Fixture"]}}'),p.revision,null);
+ assert not exists(select 1 from event_reservations where opportunity_id=opp),'Financial validation preserves stage and creates no silent reservation';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',(select id from auth.users where email='eventos@embaixadacarioca.com.br'),'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
+ blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision);exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot reconcile legacy reservation';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision+1);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Reservation requires reviewed revision';
+ update event_commercial_policy set capacity=10 where id;
+ blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision);exception when others then blocked:=true;end;
+ assert blocked and not exists(select 1 from event_reservations where opportunity_id=opp),'Capacity conflict cannot produce a reservation or change the agreement';
+ update event_commercial_policy set capacity=200 where id;
+ result:=public.confirm_event_reservation(p.id,p.revision);assert result#>>'{reservation,status}'='confirmed' and result->>'already_confirmed'='false';
+ select count(*) into n from event_messages where proposal_id=p.id and channel='note';
+ result:=public.confirm_event_reservation(p.id,p.revision);assert result->>'already_confirmed'='true';
+ assert (select count(*)=n from event_messages where proposal_id=p.id and channel='note'),'Retry cannot duplicate reservation audit';
+ assert (select revision=p.revision and status='confirmado' from propostas where id=p.id),'Reservation preserves agreement revision and stage';
+ assert (select count(*)=before_rows+1 from event_outbox),'Reservation cannot send a message';
 end $$;
 rollback;

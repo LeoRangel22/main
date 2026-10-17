@@ -18,6 +18,12 @@ Esses dados não provam que o Bot usa a mesma instância configurada em Eventos.
 - Aceitação do provedor não confirma entrega. Contato manual não comprova recebimento integrado. Pagamento legado não equivale a validação auditada neste fluxo. Checklist de outra versão não libera a versão atual. Data passada não comprova realização.
 - O worker de entrega de e-mail não altera prontidão ao receber entrada inválida, erro de autenticação/configuração ou falha inesperada. Um erro transitório preserva a configuração existente para nova tentativa do agendador, sem habilitar uma configuração desativada.
 
+## Reserva explícita de acordo legado
+
+A validação de um sinal legado preserva a etapa e não cria automaticamente uma reserva. A trilha agora oferece ao gestor a conferência e confirmação explícita da reserva para um acordo atual, já confirmado e com início futuro. O servidor exige sinal auditado, revisa capacidade/conflitos e alçada, usa a revisão esperada e registra uma nota interna com o usuário real. Repetição não duplica a reserva ou a nota. Não há backfill automático.
+
+O Financeiro ou gestor também pode conferir um sinal legado sem validação auditada a partir da trilha. A conferência exige extrato, valor, data e banco; mantém a etapa e preserva o comprovante.
+
 ## Para concluir a homologação real
 
 1. Configurar por canais seguros a URL oficial do Bot e um segredo exclusivo em Script Properties e nos secrets do projeto Eventos. Não reutilizar chave de envio/webhook nem copiar segredos para Git, chat ou navegador.

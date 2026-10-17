@@ -20,3 +20,8 @@ for(const width of [320,390,1440])test(`journey and diagnostic evidence fit ${wi
 test('unavailable journey keeps other actions usable and does not invent successful evidence',async({page})=>{
  await start(page);await page.evaluate(()=>{state.supabase.rpc=async()=>({error:{message:'Fixture offline'}});});await page.locator('[data-ops-tab="journey"]').click();await page.locator('[data-ops-selector]').selectOption('qa-opp-qa-proposal-sem-resposta');await expect(page.locator('#eventOperations [role="alert"]')).toContainText('offline');await expect(page.locator('[data-journey-step]')).toHaveCount(0);await page.locator('[data-ops-tab="pending"]').click();await expect(page.locator('[data-ops-bulk]')).toBeVisible();
 });
+test('reservation review requires a manager decision and QA cannot create a real booking',async({page})=>{
+ await start(page);await page.evaluate(()=>{state.proposals.find(p=>p.id==='qa-proposal-sem-resposta').status='confirmado';});await journey(page);
+ await page.locator('[data-ops-journey-reserve]').click();const d=page.locator('.event-ops-dialog');await expect(d.locator('[name="reviewed"]')).not.toBeChecked();await d.getByRole('button',{name:'Verificar e confirmar reserva',exact:true}).click();await expect(d).toBeVisible();await expect(d.locator('[name="reviewed"]')).not.toBeChecked();await d.locator('[name="reviewed"]').check();await d.getByRole('button',{name:'Verificar e confirmar reserva',exact:true}).click();await expect(d.locator('[role="alert"]')).toContainText('QA');await d.getByRole('button',{name:'Voltar',exact:true}).click();
+ expect(await page.evaluate(()=>window.EventOperationsState.reservations.length)).toBe(0);
+});
