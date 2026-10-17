@@ -10,7 +10,13 @@ Deno.serve(async(req:Request)=>{
     const {data:config,error}=await worker.rpc('event_channel_worker_config',{target_provider:'zepto'});
     if(error)return json(503,'Configuração indisponível');
     if(!config||!sameSecret(req.headers.get('x-event-job-key')||'',config.delivery_job_key))return json(401,'Origem não autenticada');
-    const payload=await req.json();
+    let payload;
+    try {
+      const raw=await req.text();
+      if(raw.length>2048)return json(400,'Solicitação inválida');
+      payload=JSON.parse(raw);
+      if(!payload||typeof payload!=='object'||Array.isArray(payload)||(payload.action!==undefined&&payload.action!=='diagnose'))return json(400,'Ação inválida');
+    }catch{return json(400,'Solicitação inválida');}
     if(payload.action==='diagnose'){
       try{
         // This branch is strictly read-only: failures must never change delivery readiness.
@@ -33,7 +39,8 @@ Deno.serve(async(req:Request)=>{
     if(saveError)return json(503,'Resultado da consulta indisponível');
     return json(result.ok?200:409,result.message);
   }catch{
-    await worker.rpc('event_delivery_sync_result',{ready:true,diagnostic:'Consulta indisponível; nova tentativa no próximo ciclo. Nenhuma entrega presumida.'});
+    // A failed/authentication/malformed request cannot alter configuration or readiness.
+    // Keep an already configured scheduler available for a later transient retry.
     return json(503,'Consulta indisponível');
   }
 });

@@ -77,12 +77,12 @@ for(const scenario of [{status:'opened'},{to:'other@example.test'},{duplicates:t
 
 test("Admin: revisão de outra instância não configura callbacks",async()=>{const r=await admin("activate-zapi",{instanceId:"other"});assert.equal(r.status,409);assert.equal(r.fetchCount,1);assert.equal(r.rpcCalls.includes("configure_event_channel"),false);});
 
-async function deliveryWorker({correctKey=true,providerFailure=false,configFailure=false}={}){
+async function deliveryWorker({correctKey=true,providerFailure=false,configFailure=false,initialFailure=false,rawBody='{"action":"diagnose"}'}={}){
  let handler,fetches=0;const rpcCalls=[];const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'private',ZAPI_INSTANCE_ID:'instance',ZAPI_TOKEN:'zapi-token-should-not-leak',ZAPI_CLIENT_TOKEN:'client-token-should-not-leak'};
- const client={rpc:async(name,args)=>{rpcCalls.push({name,args});if(args?.target_provider==='zapi'&&configFailure)return{error:{message:'db'}};return{data:{delivery_job_key:'job-key',secret:'callback-secret',enabled:false}};}};
+ const client={rpc:async(name,args)=>{rpcCalls.push({name,args});if(initialFailure)throw Error('database');if(args?.target_provider==='zapi'&&configFailure)return{error:{message:'db'}};return{data:{delivery_job_key:'job-key',secret:'callback-secret',enabled:false}};}};
  const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,TextEncoder,TextDecoder,Uint8Array,btoa,crypto:require('node:crypto').webcrypto,createClient:()=>client,Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},fetch:async()=>{fetches++;if(providerFailure)throw new Error('provider');return new Response(JSON.stringify({connected:true,receivedCallbackUrl:'https://bot.example.test/hook?secret=hidden',messageStatusCallbackUrl:''}));}});
  for(const f of ['_shared/channel-events.ts','_shared/email-delivery.ts','event-email-delivery/index.ts'])vm.runInContext(source(f),c);
- const res=await handler(new Request('https://example.test/worker',{method:'POST',headers:{'x-event-job-key':correctKey?'job-key':'bad'},body:'{"action":"diagnose"}'}));return{status:res.status,body:await res.text(),fetches,rpcCalls};
+ const res=await handler(new Request('https://example.test/worker',{method:'POST',headers:{'x-event-job-key':correctKey?'job-key':'bad'},body:rawBody}));return{status:res.status,body:await res.text(),fetches,rpcCalls};
 }
 test('Diagnóstico interno: chave errada não acessa provedores',async()=>{const r=await deliveryWorker({correctKey:false});assert.equal(r.status,401);assert.equal(r.fetches,0);});
 test('Diagnóstico interno: retorna conflito sem expor tokens ou URL completa',async()=>{const r=await deliveryWorker();assert.equal(r.status,200);assert.equal(r.fetches,1);assert.equal(JSON.parse(r.body).diagnostic.whatsapp.received.ours,false);assert.equal(r.body.includes('should-not-leak'),false);assert.equal(r.body.includes('hidden'),false);});
@@ -109,3 +109,6 @@ test('Worker da ponte: outra conta e cursor parado não são ingeridos',async()=
 test('Worker da ponte: drena páginas consecutivas com cursor confirmado',async()=>{const r=await botBridgeWorker({pages:3});assert.equal(r.status,200);assert.equal(r.fetches,3);assert.deepEqual(r.rpcCalls.filter(c=>c.name==='event_bot_bridge_commit').map(c=>c.args.expected_cursor),[7,8,9]);});
 test('Worker da ponte: limite por execução preserva continuação',async()=>{const r=await botBridgeWorker({pages:20});assert.equal(r.status,200);assert.equal(r.fetches,10);assert.equal(JSON.parse(r.body).hasMore,true);});
 test('Worker da ponte: falha de commit interrompe consulta sem avançar fora da transação',async()=>{const r=await botBridgeWorker({commitFailure:true,pages:2});assert.equal(r.status,503);assert.equal(r.fetches,1);assert.equal(r.rpcCalls.filter(c=>c.name==='event_bot_bridge_result').every(c=>c.args.next_cursor_value===null),true);});
+
+for(const rawBody of ['oops','null','[]','{"action":"enable"}'])test(`Delivery worker: malformed/unknown request ${rawBody} cannot change readiness`,async()=>{const r=await deliveryWorker({rawBody});assert.equal(r.status,400);assert.equal(r.fetches,0);assert.equal(r.rpcCalls.some(c=>c.name==='event_delivery_sync_result'),false);});
+test('Delivery worker: configuration read exception does not enable delivery scheduler',async()=>{const r=await deliveryWorker({initialFailure:true});assert.equal(r.status,503);assert.equal(r.fetches,0);assert.equal(r.rpcCalls.some(c=>c.name==='event_delivery_sync_result'),false);});
