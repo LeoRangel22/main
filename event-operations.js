@@ -93,7 +93,11 @@ async function validateOpsSignal(proposalId,{revalidateLegacy=false,confirmStage
   snapshot.pagamentoSinal={...payment,...(!payment.comprovante&&previous?.comprovante?{comprovante:previous.comprovante}:{}),validacaoPendente:false};
   const result=await persistEventProposal(source.id,{snapshot,...(confirmStage?{status:"confirmado"}:{})},source);
   if(result.error)throw Error(result.error.message||'A validação não foi confirmada. Confira o histórico antes de repetir.');
-  upsertProposalState(result.data);showToast(confirmStage?'Sinal registrado e etapa atualizada diretamente.':'Sinal validado pelo seu usuário. A etapa do evento foi preservada.');
+  upsertProposalState(result.data);
+  if(confirmStage&&source.status!=='confirmado'&&result.data.status==='confirmado'&&typeof captureEventAnalytics==='function'){
+    captureEventAnalytics('event_won',result.data,{previous_status:source.status||'unknown'},{dedupeKey:`event-won:${result.data.oportunidade_id||result.data.id}`});
+  }
+  showToast(confirmStage?'Sinal registrado e etapa atualizada diretamente.':'Sinal validado pelo seu usuário. A etapa do evento foi preservada.');
   await loadEventOperations();renderPipeline();
 }
 async function requestOpsDraftApproval(item, proposal, channel, destination, message) {
