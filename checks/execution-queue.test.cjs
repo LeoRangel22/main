@@ -3,7 +3,7 @@ const source=fs.readFileSync(__dirname+'/../event-operations.js','utf8');
 const helpers=source.slice(source.indexOf('function resetOpsExecution('),source.indexOf('function getOpsItems('));
 function fixture({query,qa=false}={}){
  const state={session:{user:{id:'u'}},supabase:{from:()=>query},proposals:[]};const eventOps={handoffs:[],handoffTasks:[]};let renders=0;
- const c=vm.createContext({state,eventOps,QA_MODE:qa,Intl,Date,Promise,Error,Number,Array,JSON,structuredClone,operationStatuses:new Set(['planejamento','evento_proximo']),getTaskPlan:i=>i.plan||{},getOpsItems:()=>[],getOpsIncoming:i=>i.incoming,hasValidatedSignal:p=>p?.validacaoPendente!==true&&p?.valor>0,renderEventOperations:()=>renders++});
+ const c=vm.createContext({state,eventOps,QA_MODE:qa,Intl,Date,Promise,Error,Number,Array,JSON,structuredClone,isSignalSession:()=>true,operationStatuses:new Set(['planejamento','evento_proximo']),getTaskPlan:i=>i.plan||{},getOpsItems:()=>[],getOpsIncoming:i=>i.incoming,hasValidatedSignal:p=>p?.validacaoPendente!==true&&p?.valor>0,renderEventOperations:()=>renders++});
  vm.runInContext(helpers,c);return {c,state,eventOps,renders:()=>renders};
 }
 function queryPages(pages){let offset;const q={select(){return q},eq(){return q},order(){return q},range(a){offset=a;return Promise.resolve(pages[Math.floor(offset/100)])}};return q;}

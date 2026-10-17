@@ -12885,3 +12885,16 @@ body[data-page="app"] .pipeline-card-bottom-row {
 @media (max-width:600px) { .commercial-status { align-items:flex-start; flex-wrap:wrap; } .commercial-measures-grid { grid-template-columns:1fr; } .commercial-diagnostics { padding:12px; } }
 
 .send-confirm-message { width: 100%; box-sizing: border-box; white-space: pre-wrap; min-height: 180px; max-height: 40vh; resize: vertical; }
+
+/* Follow-up review uses the page scroll, with stable card sizes and visible stage controls. */
+body[data-page="app"] .pipeline-stage-proposta_enviada .pipeline-column-list {
+  max-height: none;
+  height: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding-right: 0;
+}
+body[data-page="app"] .pipeline-card-stage-proposta_enviada { min-height: 250px; align-content: start; }
+body[data-page="app"] .pipeline-card-bottom-row > .pipeline-status-control { margin: 0; }
+.quick-budget-item .quick-item-description { grid-column: 1 / -1; }
+.quick-budget-item textarea { width: 100%; min-height: 88px; resize: vertical; box-sizing: border-box; }

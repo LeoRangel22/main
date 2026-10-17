@@ -24,10 +24,11 @@ async function create(name) {
   return c;
 }
 async function checks(c) {
+  await apply(c,'supabase/seller_workflow_feedback.sql');
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','seller-workflow-feedback']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }

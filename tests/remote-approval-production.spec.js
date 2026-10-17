@@ -103,10 +103,10 @@ test('production approved sharing reconciles remote send metadata but not concur
  });expect(result.allowed).toBe(true);expect(result.revision).toBe(4);expect(result.expected).toBe(4);expect(result.conflict).toBe(false);expect(result.finalRevision).toBe(4);
 });
 
-test('production disabled approval preserves selected quick-reply subject and text in preview and dispatch',async({page})=>{
+test('returned proposal with disabled manager queue keeps seller review and exact selected content',async({page})=>{
   await mount(page);
   const result=await page.evaluate(async()=>{
-    const proposal=getActiveProposal();let capturedReview;
+    const proposal=getActiveProposal();proposal.cliente_resposta='alteracao';let capturedReview;
     state.supabase.rpc=async()=>({data:{enabled:false}});
     confirmClientSend=async review=>{capturedReview=review;return true;};
     state.supabase.functions.invoke=async(name,{body})=>{
@@ -120,6 +120,6 @@ test('production disabled approval preserves selected quick-reply subject and te
     return {ok,calls:window.approvalProductionCalls,review:capturedReview};
   });
   expect(result.ok).toBe(true);expect(result.calls).toHaveLength(2);
-  for(const call of result.calls){expect(call.body.message).toBe('Retorno escolhido sobre o pagamento');expect(call.body.title).toBe('Assunto específico de acompanhamento');}
+  for(const call of result.calls){expect(call.name).toBe('send-proposal-email');expect(call.body.message).toBe('Retorno escolhido sobre o pagamento');expect(call.body.title).toBe('Assunto específico de acompanhamento');}
   expect(result.review.message).toBe('Retorno escolhido sobre o pagamento');expect(result.review.subject).toBe('Assunto específico de acompanhamento');
 });
