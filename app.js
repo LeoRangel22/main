@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "embaixada_orcamentos_precos_v1";
+const STORAGE_KEY = "embaixada_orcamentos_precos_v1";
 const PRODUCT_TYPES_KEY = "embaixada_orcamentos_tipos_produto_v1";
 const SELECTED_KEY = "embaixada_orcamentos_selecionados_v1";
 const PRIVATIZATION_KEY = "embaixada_orcamentos_privatizacao_v1";
@@ -3543,9 +3543,13 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
     blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
   }
   if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Eventos, Financeiro ou gestor devem conferir o crédito e validar o sinal antes da liberação.");
+  const reservation = window.EventOperationsState?.reservations?.find(item => item.opportunity_id === proposal?.oportunidade_id && item.proposal_id === proposal?.id);
+  if (!reservation || reservation.status !== "confirmed" || !reservation.confirmed_by || !reservation.confirmed_at || !reservation.agreement_fingerprint) {
+    blockers.push("Confirme a disponibilidade e a reserva auditada deste acordo.");
+  }
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
-  if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
+  if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && task.acknowledged_by && task.completed_at && task.completed_by && Number(task.source_version) === Number(data.handoff?.version)))) {
     blockers.push("Conclua e registre a ciência das sete tarefas setoriais antes da liberação final.");
   }
   return blockers;
@@ -3626,6 +3630,15 @@ async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = f
   if (task?.task_key === "financeiro_saldo" && !isFinanceSession()) { showToast("A ciência financeira é exclusiva do Financeiro ou gestor."); renderOperationalChecklist(proposal); return; }
   if (task?.task_key === "gerencia_go_no_go" && !isSuperAdminSession()) { showToast("Somente o gestor pode dar ciência ou liberar a execução."); renderOperationalChecklist(proposal); return; }
   if (task?.task_key === "gerencia_go_no_go" && checked && !acknowledgeOnly) {
+    if (!QA_MODE) {
+      try {
+        const result = await state.supabase.rpc("event_operation_readiness", { target_proposal: proposal.id, expected_revision: proposal.revision });
+        if (result.error || result.data?.proposal_id !== proposal.id || Number(result.data?.revision) !== Number(proposal.revision) || result.data?.ready !== true) {
+          showToast(result.error?.message || result.data?.blockers?.join(" ") || "Não foi possível comprovar a prontidão desta revisão.");
+          renderOperationalChecklist(proposal); return;
+        }
+      } catch (error) { showToast(error.message || "Confira a prontidão antes de liberar."); return; }
+    }
     const blockers = getOperationalReleaseBlockers(proposal, handoffData);
     if (blockers.length) { showToast(blockers.join(" ")); renderOperationalChecklist(proposal); return; }
   }
@@ -4265,7 +4278,15 @@ function getSignalDefaultAmount(total) {
 }
 
 function hasValidatedSignal(signalInfo) {
-  return signalInfo?.validacaoPendente !== true && toNumber(signalInfo?.valor) > 0;
+  return hasAuditedPayment(signalInfo);
+}
+
+function hasAuditedPayment(payment) {
+  const actor = String(payment?.validadoEmail || "").toLowerCase();
+  return payment?.validacaoPendente === false && toNumber(payment?.valor) > 0
+    && Boolean(payment?.validadoPor) && Number.isFinite(Date.parse(payment?.validadoEm))
+    && (!actor || ["leorangel@gmail.com", "financeiro@embaixadacarioca.com.br"].includes(actor)
+      || (actor === "eventos@embaixadacarioca.com.br" && payment.bankConferido === true));
 }
 
 function getRemainingDefaultAmount(total, signalInfo) {
