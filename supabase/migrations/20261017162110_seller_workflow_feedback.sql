@@ -101,3 +101,37 @@ begin
     raise exception 'Desconto fora da alçada. Salve a proposta e solicite aprovação autenticada do gestor.';
   end if;
 end; $$;
+
+-- Explicit legacy reservation reconciliation accepts the same bank-attested Events actor.
+create or replace function public.confirm_event_reservation(target_proposal uuid,expected_revision bigint) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare p public.propostas; payment jsonb; before_row public.event_reservations; after_row public.event_reservations; unchanged boolean;
+begin
+ perform event_private.require_team();
+ if not public.is_super_admin() then raise insufficient_privilege using message='A confirmação de disponibilidade é exclusiva do gestor.'; end if;
+ select * into p from public.propostas where id=target_proposal for update;
+ if not found or p.revision is distinct from expected_revision then raise exception using errcode='PT409',message='A proposta mudou. Revise o acordo atual antes de reservar.'; end if;
+ if p.is_current is distinct from true or coalesce(p.publication_status,'') not in ('ready','sent') or p.snapshot ? 'amendmentOf' or coalesce(p.status,'') not in ('confirmado','pagamento_final','planejamento','evento_proximo')
+  or p.data_evento is null or p.horario_evento is null or (p.data_evento+p.horario_evento) at time zone 'America/Sao_Paulo'<=now() then
+  raise exception 'Use um acordo atual já confirmado e com início futuro. A reserva não reabre nem confirma a venda.';
+ end if;
+ payment:=p.snapshot->'pagamentoSinal';
+ if payment->>'validacaoPendente'='true' or not (case when jsonb_typeof(payment->'valor')='number' then (payment->>'valor')::numeric>0 else false end)
+  or nullif(payment->>'validadoEm','') is null or not exists(select 1 from auth.users u where u.id::text=payment->>'validadoPor' and (lower(u.email) in ('leorangel@gmail.com','financeiro@embaixadacarioca.com.br') or (lower(u.email)='eventos@embaixadacarioca.com.br' and payment->'bankConferido'='true'::jsonb))) then
+  raise exception 'Confira o crédito e registre a validação auditada do sinal antes de reservar.';
+ end if;
+ if (payment->>'valor')::numeric+0.01<p.total*0.5 and (length(trim(coalesce(payment->>'motivoExcecao','')))<10 or nullif(payment->>'excecaoAutorizadaEm','') is null
+  or not exists(select 1 from auth.users u where u.id::text=payment->>'excecaoAutorizadaPor' and lower(u.email)='leorangel@gmail.com')) then
+  raise exception 'Revalide a exceção do sinal abaixo do padrão com o gestor antes de reservar.';
+ end if;
+ select * into before_row from public.event_reservations where opportunity_id=p.oportunidade_id;
+ -- Existing shared lock, money/discount checks, overlapping reservations and legacy bookings.
+ after_row:=event_private.reserve_proposal(p,'confirmed',null);
+ unchanged:=before_row.proposal_id is not distinct from after_row.proposal_id and before_row.status='confirmed'
+  and (before_row.starts_at,before_row.ends_at,before_row.guests,before_row.exclusive) is not distinct from (after_row.starts_at,after_row.ends_at,after_row.guests,after_row.exclusive);
+ if not coalesce(unchanged,false) then
+  insert into public.event_messages(opportunity_id,proposal_id,channel,direction,source,body,created_by)
+  values(p.oportunidade_id,p.id,'note','internal','system','Disponibilidade e capacidade conferidas; reserva confirmada pelo gestor para a revisão '||p.revision::text||'. Esta ação não registra pagamento ou contato com cliente.',auth.uid());
+ end if;
+ return jsonb_build_object('proposal_id',p.id,'revision',p.revision,'reservation',to_jsonb(after_row),'already_confirmed',coalesce(unchanged,false));
+end; $$;

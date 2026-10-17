@@ -33,6 +33,12 @@ begin
  reset role;
  assert (select count(*)=1 from event_reservations where proposal_id=p.id and status='confirmed');
  assert not exists(select 1 from event_outbox where proposal_id=p.id),'Stage change does not resend anything';
+ -- A manager can reconcile the reservation without invalidating the Events bank signature.
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',(select id from auth.users where email='leorangel@gmail.com'),'email','leorangel@gmail.com','role','authenticated')::text,true);
+ set local role authenticated;
+ perform confirm_event_reservation(p.id,p.revision);
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
  set local role authenticated;
  blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',jsonb_set(p.snapshot,'{pagamentoSinal,valor}','600')),p.revision,null);
  exception when insufficient_privilege then blocked:=true;end;

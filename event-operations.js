@@ -51,7 +51,7 @@ function getOpsExecutionEntries(items=getOpsItems(), now=new Date()) {
     const pending=p?.snapshot?.pagamentoSinal?.validacaoPendente===true;
     const proof=p?.comprovante_sinal||item.hasSignalProof;
     if(p&&(pending||proof&&!hasValidatedSignal(p.snapshot?.pagamentoSinal))){
-      entries.push({key:`finance:${item.id}`,kind:'finance',item,name:item.name,date:item.date||'',score:past?65:130,reason:`Sinal sem validação bancária${past?' · histórico, não cobrar automaticamente':''}`,owner:'Financeiro / gestor'});
+      entries.push({key:`finance:${item.id}`,kind:'finance',item,name:item.name,date:item.date||'',score:past?65:130,reason:`Sinal sem validação bancária${past?' · histórico, não cobrar automaticamente':''}`,owner:'Eventos / Financeiro / gestor'});
     }
     if(item.stage==='desfecho_pendente'){
       entries.push({key:`outcome:${item.id}`,kind:'outcome',item,name:item.name,date:item.date||'',score:40,reason:'Data passada · confirmar o desfecho com a equipe',owner:plan.owner||'Equipe responsável'});continue;

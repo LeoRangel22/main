@@ -1762,7 +1762,7 @@ function getProposalNextStepConfig() {
 
     if (proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
       return {tone: "warning", title: "Validar o comprovante antes de liberar a operação",
-        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Financeiro ou gestor devem conferir o sinal.",
+        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Eventos, Financeiro ou gestor devem conferir o sinal.",
         action: "mark_signal", actionLabel: "Validar sinal"};
     }
 
@@ -3542,7 +3542,7 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
   if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
     blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
   }
-  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Financeiro ou gestor devem validar o sinal antes da liberação.");
+  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Eventos, Financeiro ou gestor devem conferir o crédito e registrar o sinal antes da liberação.");
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
   if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
@@ -3886,7 +3886,7 @@ function buildOperationalPaymentStatusBlock(context) {
   const total = Number(context.totals.total || 0);
   const {isFullyPaid} = getPaymentCoverage(total, context.signal, context.remaining);
   return buildOperationalRows([
-    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado pelo Financeiro ou gestor." : "Pendente. Cobrar sinal antes de confirmar operação." },
+    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado por usuário autorizado; confira o histórico." : "Pendente. Cobrar sinal antes de confirmar operação." },
     {
       label: "Pagamento restante",
       value: isFullyPaid

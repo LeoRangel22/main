@@ -12898,3 +12898,27 @@ body[data-page="app"] .pipeline-card-stage-proposta_enviada { min-height: 250px;
 body[data-page="app"] .pipeline-card-bottom-row > .pipeline-status-control { margin: 0; }
 .quick-budget-item .quick-item-description { grid-column: 1 / -1; }
 .quick-budget-item textarea { width: 100%; min-height: 88px; resize: vertical; box-sizing: border-box; }
+
+/* Stage switching shares the action row so collapsed cards stay compact on phones. */
+body[data-page="app"] .pipeline-card-bottom-row:has(> .pipeline-status-control) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+body[data-page="app"] .pipeline-card-bottom-row > .pipeline-status-control > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 31px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid rgba(24, 58, 45, .16);
+  border-radius: 8px;
+  font-size: .64rem;
+  white-space: nowrap;
+}
+body[data-page="app"] .pipeline-card-bottom-row > .pipeline-status-control[open],
+body[data-page="app"] .pipeline-card-bottom-row:has(> .pipeline-status-control[open]) > .pipeline-card-actions { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  body[data-page="app"] .pipeline-card-bottom-row > .pipeline-status-control > summary { min-height: 36px; }
+}

@@ -41,3 +41,15 @@ test('legacy signal may be rechecked explicitly without treating an existing amo
  await f.c.validateOpsSignal('p');assert.equal(dialogs,0);assert.equal(writes,0);
  await f.c.validateOpsSignal('p',{revalidateLegacy:true});assert.equal(dialogs,1);assert.equal(writes,1);
 });
+
+test('direct signal stage after pending proof uses one attested save with the original proof',async()=>{
+ const f=fixture({qa:true}),p={id:'p',revision:4,is_current:true,total:100,status:'proposta_enviada',snapshot:{pagamentoSinal:{valor:50,validacaoPendente:true,comprovante:{nome:'original.pdf'}}}};
+ f.state.proposals=[p];f.c.ensureFullProposal=async()=>p;
+ f.c.showSignalPaymentDialog=async()=>({valor:50,data:'2026-10-17',bancos:['Fixture'],bankConferido:true});
+ let writes=0,changes;
+ f.c.persistEventProposal=async(id,c,source)=>{writes++;changes=c;assert.equal(source.revision,4);return {data:{...p,...c}}};
+ f.c.upsertProposalState=()=>{};f.c.showToast=()=>{};f.c.loadEventOperations=async()=>{};f.c.renderPipeline=()=>{};
+ await f.c.validateOpsSignal('p',{confirmStage:true});
+ assert.equal(writes,1);assert.equal(changes.status,'confirmado');assert.equal(changes.snapshot.pagamentoSinal.bankConferido,true);
+ assert.equal(changes.snapshot.pagamentoSinal.comprovante.nome,'original.pdf');assert.equal(p.status,'proposta_enviada');
+});
