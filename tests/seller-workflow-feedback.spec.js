@@ -82,3 +82,17 @@ for(const width of [1440,390])test('Sem resposta has page scrolling and an acces
  await expect(control.locator('select option[value="confirmado"]')).toHaveCount(1);
  await expect(control.locator('select')).toBeVisible();
 });
+
+test('custom item requires description and saved blank custom item blocks send review',async({page})=>{
+ await fixture(page);
+ const r=await page.evaluate(()=>{
+  state.selectedIds.clear();const before=state.prices.length;
+  fields.quickItemName.value='Serviço personalizado';fields.quickItemValue.value='500';fields.quickItemDescription.value='   ';
+  createQuickBudgetItem();
+  const blocked={count:state.prices.length-before,selected:state.selectedIds.size,focus:document.activeElement.id};
+  fields.quickItemDescription.value='Equipe e montagem';createQuickBudgetItem();
+  const item=state.prices.find(x=>state.selectedIds.has(x.id));item.descricao='';item.commercialSummary='';
+  return {...blocked,review:getProposalReviewItems().find(x=>x.id==='items')};
+ });
+ expect(r.count).toBe(0);expect(r.selected).toBe(0);expect(r.focus).toBe('quickItemDescription');expect(r.review.status).toBe('error');expect(r.review.detail).toContain('descrição');
+});

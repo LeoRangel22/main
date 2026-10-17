@@ -1,10 +1,13 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
 const source=fs.readFileSync(__dirname+'/../event-operations.js','utf8');
+const app=fs.readFileSync(__dirname+'/../app.js','utf8');
+const transitions=app.slice(app.indexOf('function canMoveProposalStatus('),app.indexOf('function buildReopenedSnapshot('));
+const history=app.slice(app.indexOf('function createCommercialHistoryEntry('),app.indexOf('function getInternalComments('));
 const helpers=source.slice(source.indexOf('function resetOpsExecution('),source.indexOf('function getOpsItems('));
 function fixture({query,qa=false}={}){
  const state={session:{user:{id:'u'}},supabase:{from:()=>query},proposals:[]};const eventOps={handoffs:[],handoffTasks:[]};let renders=0;
- const c=vm.createContext({state,eventOps,QA_MODE:qa,Intl,Date,Promise,Error,Number,Array,JSON,structuredClone,isSignalSession:()=>true,operationStatuses:new Set(['planejamento','evento_proximo']),getTaskPlan:i=>i.plan||{},getOpsItems:()=>[],getOpsIncoming:i=>i.incoming,hasValidatedSignal:p=>p?.validacaoPendente!==true&&p?.valor>0,renderEventOperations:()=>renders++});
- vm.runInContext(helpers,c);return {c,state,eventOps,renders:()=>renders};
+ const c=vm.createContext({state,eventOps,QA_MODE:qa,Intl,Date,Promise,Error,Number,Array,JSON,structuredClone,Math,normalizeProposalStatus:s=>s,proposalStatusOptions:['cancelado','negociacao','proposta_enviada','confirmado'],getCommercialActor:()=> 'Events fixture',getTeamProfile:()=>({label:'Eventos'}),getCommercialHistory:s=>s.commercialHistory||[],getProposalStatusLabel:s=>s,formatMoney:v=>String(v),formatSignalPaymentDate:d=>d,isSignalSession:()=>true,operationStatuses:new Set(['planejamento','evento_proximo']),getTaskPlan:i=>i.plan||{},getOpsItems:()=>[],getOpsIncoming:i=>i.incoming,hasValidatedSignal:p=>p?.validacaoPendente!==true&&p?.valor>0,renderEventOperations:()=>renders++});
+ vm.runInContext(transitions+history+helpers,c);return {c,state,eventOps,renders:()=>renders};
 }
 function queryPages(pages){let offset;const q={select(){return q},eq(){return q},order(){return q},range(a){offset=a;return Promise.resolve(pages[Math.floor(offset/100)])}};return q;}
 test('execution queue paginates pending approvals before replacing cache',async()=>{const pages=[{data:Array.from({length:100},(_,n)=>({id:String(n)}))},{data:[{id:'last'}]}];const f=fixture({query:queryPages(pages)});await f.c.loadOpsExecution();assert.equal(f.c.opsExecutionState().rows.length,101);assert.equal(f.c.opsExecutionState().error,'');assert.equal(f.renders(),1);});
@@ -53,5 +56,17 @@ test('direct signal stage after pending proof uses one attested save with the or
  await f.c.validateOpsSignal('p',{confirmStage:true});
  assert.equal(writes,1);assert.equal(changes.status,'confirmado');assert.equal(changes.snapshot.pagamentoSinal.bankConferido,true);
  assert.equal(changes.snapshot.pagamentoSinal.comprovante.nome,'original.pdf');assert.equal(p.status,'proposta_enviada');
+ assert.deepEqual(Array.from(changes.snapshot.commercialHistory,e=>e.type),['etapa','sinal']);assert.match(changes.snapshot.commercialHistory[0].detail,/proposta_enviada → confirmado/);assert.match(changes.snapshot.commercialHistory[1].detail,/50 · 2026-10-17 · Fixture/);assert.equal(p.snapshot.commercialHistory,undefined);
  assert.equal(conversion.event,'event_won');assert.equal(conversion.id,'p');assert.equal(conversion.properties.previous_status,'proposta_enviada');assert.equal(conversion.options.dedupeKey,'event-won:p');
+});
+
+test('canceled pending proof cannot open confirmation or persist through either entry point',async()=>{
+ const f=fixture({qa:true}),p={id:'p',revision:1,is_current:true,status:'cancelado',snapshot:{pagamentoSinal:{valor:50,validacaoPendente:true}}};
+ f.state.proposals=[p];f.c.ensureFullProposal=async()=>p;let dialogs=0,writes=0;
+ f.c.showSignalPaymentDialog=async()=>{dialogs++;throw Error('unexpected dialog')};f.c.persistEventProposal=async()=>{writes++;throw Error('unexpected write')};
+ await assert.rejects(()=>f.c.validateOpsSignal('p',{confirmStage:true}),/Reabra primeiro/);
+ const start=app.indexOf('async function updateProposalStatus('),end=app.indexOf('\nfunction ',start);
+ vm.runInContext(app.slice(start,end),f.c);
+ f.c.showToast=()=>{};f.c.renderPipeline=()=>{};
+ await f.c.updateProposalStatus('p','confirmado');assert.equal(dialogs,0);assert.equal(writes,0);
 });

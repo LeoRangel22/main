@@ -80,6 +80,7 @@ async function validateOpsSignal(proposalId,{revalidateLegacy=false,confirmStage
   if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw Error(commercialRefreshError);}
   const client=state.supabase,userId=state.session?.user?.id,proposal=await ensureFullProposal(proposalId);
   if(!proposal||!proposal.is_current||proposal.snapshot?.amendmentOf)throw Error('Abra o acordo atual antes de validar o sinal.');
+  if(confirmStage){const transition=canMoveProposalStatus(proposal.status,'confirmado');if(!transition.ok)throw Error(transition.message);}
   if(hasValidatedSignal(proposal.snapshot?.pagamentoSinal)&&(!revalidateLegacy||(proposal.snapshot?.pagamentoSinal?.validadoPor&&proposal.snapshot?.pagamentoSinal?.validadoEm))){showToast('O sinal já está validado. Confira o histórico.');return;}
   const source=structuredClone(proposal),previous=source.snapshot?.pagamentoSinal;
   const payment=await showSignalPaymentDialog(source.total,{defaultPreset:'custom',requireBankConfirmation:true,existingPayment:previous});
@@ -89,7 +90,11 @@ async function validateOpsSignal(proposalId,{revalidateLegacy=false,confirmStage
   const current=await ensureFullProposal(proposalId);
   if(state.supabase!==client||state.session?.user?.id!==userId||!isSignalSession())throw Error("A sessão mudou. Reabra e confira o sinal.");
   if(!current||!current.is_current||Number(current.revision)!==Number(source.revision))throw Error('A proposta mudou durante a conferência. Revise novamente antes de validar.');
-  const snapshot=structuredClone(source.snapshot);
+  const history=[];
+  if(confirmStage&&normalizeProposalStatus(source.status)!=='confirmado')history.push(createCommercialHistoryEntry('etapa','Etapa alterada',`${getProposalStatusLabel(source.status)} → ${getProposalStatusLabel('confirmado')}.`));
+  history.push(createCommercialHistoryEntry('sinal','Sinal validado',`${formatMoney(payment.valor)} · ${formatSignalPaymentDate(payment.data)} · ${(payment.bancos||[]).join(', ')}.`));
+  if(payment.comprovante?.nome)history.push(createCommercialHistoryEntry('anexo','Comprovante do sinal anexado',payment.comprovante.nome));
+  const snapshot=withCommercialHistoryEntries(structuredClone(source.snapshot),history);
   snapshot.pagamentoSinal={...payment,...(!payment.comprovante&&previous?.comprovante?{comprovante:previous.comprovante}:{}),validacaoPendente:false};
   const result=await persistEventProposal(source.id,{snapshot,...(confirmStage?{status:"confirmado"}:{})},source);
   if(result.error)throw Error(result.error.message||'A validação não foi confirmada. Confira o histórico antes de repetir.');

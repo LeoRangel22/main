@@ -4985,6 +4985,7 @@ function getProposalReviewItems() {
     context.snapshot?.nomeGrupo ||
     getGroupNameFromSnapshot(context.snapshot);
   // Bespoke items can form the whole offer; a catalog package is optional.
+  const missingCustomDescription = selected.some((item) => (item.custom || item.quoteOnly) && !String(item.commercialSummary || item.descricao || "").trim());
   const catalogSelected = selected.filter((item) => !item.custom && !item.quoteOnly);
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
@@ -5074,9 +5075,11 @@ function getProposalReviewItems() {
     {
       id: "items",
       label: "Cardápio",
-      status: selected.length ? (hasCategoryMismatch ? "error" : missingBaseCategory ? "warning" : "ok") : "error",
+      status: selected.length ? (hasCategoryMismatch || missingCustomDescription ? "error" : missingBaseCategory ? "warning" : "ok") : "error",
       detail: selected.length
-        ? hasCategoryMismatch
+        ? missingCustomDescription
+          ? "Preencha a descrição dos itens personalizados antes de enviar."
+        : hasCategoryMismatch
           ? `Pedido: ${eventType || "evento"}. Troque itens ou formato: a categoria escolhida não combina.`
           : missingBaseCategory
             ? `Confira o produto base de ${requiredCategory}. Há complementos, mas falta o item principal.`
@@ -7529,6 +7532,12 @@ function createQuickBudgetItem() {
   if (!name || name.length < 3) {
     showToast("Digite o nome do item pontual.");
     fields.quickItemName?.focus();
+    return;
+  }
+
+  if (!description) {
+    showToast("Descreva o que está incluído no item pontual.");
+    fields.quickItemDescription?.focus();
     return;
   }
 
@@ -12588,6 +12597,12 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, o
   if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
+  const validation = canMoveProposalStatus(proposal.status, nextStatus);
+  if (!validation.ok) {
+    showToast(validation.message);
+    renderPipeline();
+    return;
+  }
   if (normalizeProposalStatus(nextStatus) === "confirmado" && proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
     try {
       if (typeof validateOpsSignal !== "function") throw new Error("A conferência bancária não carregou. Atualize a página antes de validar.");
@@ -12595,12 +12610,7 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, o
     } catch (error) { showToast(error.message); }
     return;
   }
-  const validation = canMoveProposalStatus(proposal.status, nextStatus);
-  if (!validation.ok) {
-    showToast(validation.message);
-    renderPipeline();
-    return;
-  }
+
 
   const normalizedNext = normalizeProposalStatus(nextStatus);
   const wasCanceled = normalizeProposalStatus(proposal.status) === "cancelado" && normalizedNext !== "cancelado";

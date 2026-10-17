@@ -21,6 +21,9 @@ begin
  -- Trusted maintenance has no end-user claims. User-facing writes do not get this exemption.
  if auth.uid() is null and session_user='postgres' and nullif(current_setting('request.jwt.claims',true),'') is null then return new; end if;
  if tg_op='UPDATE' then
+  if old.status='cancelado' and new.status not in ('cancelado','negociacao','proposta_enviada') then
+   raise exception using errcode='PT409',message='Reabra primeiro para negociação antes de avançar para outra etapa.';
+  end if;
   new.journey_booked_locked:=old.journey_booked_locked or old.status=any(booked) or new.status=any(booked);
   new.journey_commercial_locked:=old.journey_commercial_locked or old.journey_booked_locked or old.publication_status='sent' or old.status=any(booked)
     or exists(select 1 from public.event_outbox b where b.proposal_id=old.id and b.status in ('sending','accepted','uncertain'))

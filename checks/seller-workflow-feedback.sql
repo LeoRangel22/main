@@ -25,6 +25,16 @@ begin
  blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17","bancos":["Fixture"]}}','status','confirmado'),p.revision,null);
  exception when insufficient_privilege then blocked:=true;end;
  assert blocked,'Proof or amount alone is not bank attestation';
+ -- A canceled agreement must be explicitly reopened before an attested deposit can confirm it.
+ select * into p from save_event_proposal(p.id,'{"status":"cancelado"}',p.revision,null);
+ blocked:=false;begin perform save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17","bancos":["Fixture"],"bankConferido":true}}','status','confirmado'),p.revision,null);
+ exception when sqlstate 'PT409' then blocked:=true;end;
+ assert blocked,'Canceled proposal cannot jump to Sinal via bank validation';
+ reset role;
+ assert not exists(select 1 from event_reservations where proposal_id=p.id),'Blocked confirmation creates no reservation';
+ set local role authenticated;
+ select * into p from save_event_proposal(p.id,'{"status":"negociacao"}',p.revision,null);
+
  select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17","bancos":["Fixture"],"bankConferido":true,"validadoPor":"forged","validadoEmail":"forged@example.test"}}','status','confirmado'),p.revision,null);
  assert p.status='confirmado','Direct Sem resposta to Sinal does not require intermediate stages';
  assert p.snapshot#>>'{pagamentoSinal,validadoPor}'=seller::text,'Server stamps the real actor';
