@@ -15,6 +15,9 @@ begin
  perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
  set local role authenticated;
  select * into h from event_handoffs where opportunity_id=opp;
+ for t in select * from event_handoff_tasks where opportunity_id=opp order by sort_order loop
+  perform plan_event_handoff_task(t.id,h.version,t.updated_at,'Synthetic responsible',coalesce(t.due_at,now()),t.notes);
+ end loop;
  for t in select * from event_handoff_tasks where opportunity_id=opp and task_key<>'gerencia_go_no_go' order by sort_order loop
   perform update_event_handoff_task(t.id,'done',null,null,'Synthetic prerequisite',h.version);
  end loop;

@@ -666,7 +666,8 @@ UTILIZAÇÃO DA MARCA DO BONDINHO: qualquer uso comercial ou promocional envolve
 
 function loadWorkspaceMode() {
   try {
-    return localStorage.getItem(WORKSPACE_MODE_KEY) === "full" ? "full" : "sales";
+    const saved = localStorage.getItem(WORKSPACE_MODE_KEY);
+    return ["full", "operations"].includes(saved) ? saved : "sales";
   } catch (_) {
     return "sales";
   }
@@ -3536,7 +3537,7 @@ function getOperationalHandoffData(proposal) {
 
 function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffData(proposal)) {
   const blockers = [];
-  if (!isSuperAdminSession()) blockers.push("Somente o gestor pode liberar a execução.");
+  if (!(typeof isOperationsCoordinator === "function" ? isOperationsCoordinator() : isSuperAdminSession())) blockers.push("Eventos ou gestor devem conferir e liberar a execução.");
   // The persistent lock preserves a prior agreement; it is not authorization to
   // release a canceled or renegotiating event. Match the server's active stages.
   if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
@@ -3548,6 +3549,7 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
     blockers.push("Confirme a disponibilidade e a reserva auditada deste acordo.");
   }
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
+  if (data.tasks.some(task => !task.responsible_name)) blockers.push("Defina uma pessoa responsável para cada tarefa operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
   if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && task.acknowledged_by && task.completed_at && task.completed_by && Number(task.source_version) === Number(data.handoff?.version)))) {
     blockers.push("Conclua e registre a ciência das sete tarefas setoriais antes da liberação final.");
@@ -3556,7 +3558,7 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
 }
 
 function getOperationalHandoffProgress(tasks = []) {
-  return { done: tasks.filter((task) => task.status === "done").length, total: tasks.length };
+  return { done: tasks.filter((task) => task.status === "done" && task.acknowledged_at && task.acknowledged_by && task.completed_at && task.completed_by).length, total: tasks.length };
 }
 
 function formatOperationalTaskDue(value) {
@@ -3573,11 +3575,12 @@ function renderOperationalHandoffTasks(tasks = []) {
       <label class="handoff-task-main">
         <input type="checkbox" data-handoff-task-id="${escapeHtml(task.id)}" ${task.status === "done" ? "checked" : ""} />
         <span>
-          <small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label)}</small>
+          <small>${escapeHtml(task.sector)} · ${escapeHtml(task.responsible_name || "Pessoa responsável a definir")}</small>
           <strong>${escapeHtml(task.label)}</strong>
           <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
         </span>
       </label>
+      <div class="handoff-task-actions"><button class="secondary" type="button" data-handoff-task-plan="${escapeHtml(task.id)}">Responsável e prazo</button><button class="secondary" type="button" data-handoff-task-start="${escapeHtml(task.id)}">Iniciar</button><button class="secondary" type="button" data-handoff-task-block="${escapeHtml(task.id)}">Registrar impedimento</button></div>
       ${!task.acknowledged_at ? `<button class="secondary" type="button" data-handoff-task-ack="${escapeHtml(task.id)}">Revisei e dei ciência desta tarefa</button>` : ""}
       ${task.details || task.notes ? `<details><summary>Orientação e notas</summary>${task.details ? `<p>${escapeHtml(task.details)}</p>` : ""}${task.notes ? `<p>${escapeHtml(task.notes)}</p>` : ""}</details>` : ""}
     </article>
@@ -3621,14 +3624,14 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
   `;
 }
 
-async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = false) {
-  const proposal = getActiveProposal();
+async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = false, proposalId = null) {
+  const proposal = proposalId ? state.proposals.find(p => p.id === proposalId) : getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal || !runRpc || !state.session) return;
   const handoffData = getOperationalHandoffData(proposal);
   const task = handoffData.tasks.find(item => item.id === taskId);
   if (task?.task_key === "financeiro_saldo" && !isFinanceSession()) { showToast("A ciência financeira é exclusiva do Financeiro ou gestor."); renderOperationalChecklist(proposal); return; }
-  if (task?.task_key === "gerencia_go_no_go" && !isSuperAdminSession()) { showToast("Somente o gestor pode dar ciência ou liberar a execução."); renderOperationalChecklist(proposal); return; }
+  if (task?.task_key === "gerencia_go_no_go" && !(typeof isOperationsCoordinator === "function" ? isOperationsCoordinator() : isSuperAdminSession())) { showToast("Eventos ou gestor devem conferir e liberar a execução."); renderOperationalChecklist(proposal); return; }
   if (task?.task_key === "gerencia_go_no_go" && checked && !acknowledgeOnly) {
     if (!QA_MODE) {
       try {
@@ -10241,9 +10244,10 @@ function getActionUrgencyLabel(priority) {
 }
 
 function renderWorkspaceMode() {
-  const mode = state.workspaceMode === "full" ? "full" : "sales";
+  const mode = ["full", "operations"].includes(state.workspaceMode) ? state.workspaceMode : "sales";
   document.body.classList.toggle("workspace-mode-sales", mode === "sales");
   document.body.classList.toggle("workspace-mode-full", mode === "full");
+  document.body.classList.toggle("workspace-mode-operations", mode === "operations");
   nodes.workspaceModeSwitch?.querySelectorAll("[data-workspace-mode]").forEach((button) => {
     const active = button.dataset.workspaceMode === mode;
     button.classList.toggle("is-active", active);
@@ -10251,16 +10255,16 @@ function renderWorkspaceMode() {
   });
   const title = document.querySelector("#workspaceModeTitle");
   const description = document.querySelector("#workspaceModeDescription");
-  if (title) title.textContent = mode === "sales" ? "Modo Vendas" : "Visão completa";
+  if (title) title.textContent = mode === "sales" ? "Modo Vendas" : mode === "operations" ? "Operação" : "Visão completa";
   if (description) {
     description.textContent = mode === "sales"
       ? "Somente ações que ajudam a responder, propor, negociar e fechar."
-      : "Comercial, financeiro, operação, histórico e gestão na mesma visão.";
+      : mode === "operations" ? "Agenda, responsáveis e execução por setor, com a versão atual do acordo." : "Comercial, financeiro, operação, histórico e gestão na mesma visão.";
   }
 }
 
 function setWorkspaceMode(mode) {
-  state.workspaceMode = mode === "full" ? "full" : "sales";
+  state.workspaceMode = ["full", "operations"].includes(mode) ? mode : "sales";
   try {
     localStorage.setItem(WORKSPACE_MODE_KEY, state.workspaceMode);
   } catch (_) {}
@@ -11400,7 +11404,7 @@ function renderOperationsAgenda(items = getPipelineItems()) {
       items: planningQueue.slice(0, 5),
       empty: "Sem fila operacional agora.",
       render: (item) => {
-        const progress = getChecklistProgress(item.snapshot || {});
+        const progress = getOperationalHandoffProgress(getOperationalHandoffData(state.proposals.find(p => p.id === item.id)).tasks);
         return renderAgendaItemCard(item, {
           kicker: getProposalStatusLabel(item.status),
           value: item.total ? formatMoney(item.total) : getAgendaEventLabel(item),
@@ -11884,6 +11888,7 @@ function renderPipelineStage(stage, items) {
 }
 
 function renderPipeline() {
+  if (typeof renderOperationWorkspace === "function") renderOperationWorkspace();
   renderCommercialDiagnostics();
   if (typeof renderEventOperations === "function") renderEventOperations();
   if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
@@ -16009,6 +16014,12 @@ function bindEvents() {
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   nodes.operationalChecklist?.addEventListener("click", (event) => {
+    const plan = event.target.closest("button[data-handoff-task-plan]");
+    if (plan && typeof planOperationalTask === "function") { planOperationalTask(plan.dataset.handoffTaskPlan); return; }
+    const start = event.target.closest("button[data-handoff-task-start]");
+    if (start && typeof setOperationalTaskState === "function") { setOperationalTaskState(start.dataset.handoffTaskStart, "in_progress", getActiveProposal()?.id); return; }
+    const block = event.target.closest("button[data-handoff-task-block]");
+    if (block && typeof setOperationalTaskState === "function") { setOperationalTaskState(block.dataset.handoffTaskBlock, "blocked", getActiveProposal()?.id); return; }
     const handoffAck = event.target.closest("button[data-handoff-task-ack]");
     if (handoffAck) { updateOperationalHandoffTask(handoffAck.dataset.handoffTaskAck, false, true); return; }
 

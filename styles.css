@@ -12925,3 +12925,33 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
   justify-self: stretch;
 }
 body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pipeline-status-control[open]) .pipeline-card-details-content { grid-row: 4; }
+
+/* Dedicated operation workspace, sharing the existing versioned task evidence. */
+.workspace-mode-operations .sales-command-grid,
+.workspace-mode-operations #commercialDiagnostics,
+.workspace-mode-operations .period-metrics,
+.workspace-mode-operations .finance-command-panel,
+.workspace-mode-operations .operations-agenda,
+.workspace-mode-operations #salesPipeline,
+.workspace-mode-operations #eventOperations,
+.workspace-mode-operations .reports-panel { display:none; }
+.operation-workspace { padding:24px; border:1px solid #cadbd4; border-radius:20px; background:#f7faf8; margin:20px 0; }
+.operation-workspace[hidden] { display:none; }
+.operation-workspace-heading { display:flex; justify-content:space-between; gap:16px; align-items:start; }
+.operation-workspace h2,.operation-workspace h3 { margin:6px 0 12px; }
+.operation-filters { display:flex; flex-wrap:wrap; gap:12px; margin:18px 0; }
+.operation-filters label { display:grid; gap:6px; flex:1 1 180px; }
+.operation-workspace-layout { display:grid; grid-template-columns:minmax(240px, .7fr) minmax(0,1.3fr); gap:20px; align-items:start; }
+.operation-event-list { display:grid; gap:12px; }
+.operation-event-card { display:grid; gap:8px; background:#fff; border:1px solid #c5d7ce; border-radius:14px; padding:18px; text-align:left; width:100%; color:#173c30; white-space:normal; overflow-wrap:anywhere; }
+.operation-event-card strong { font-size:1.12rem; }
+.operation-event-card.is-selected { outline:3px solid #277153; outline-offset:1px; }
+.operation-event-card em { font-style:normal; color:#895323; }
+.operation-detail { min-width:0; padding:20px; background:white; border-radius:14px; border:1px solid #d4e1da; }
+.operation-readiness { background:#fff8e8; padding:16px; border-radius:12px; margin:14px 0; }
+.operation-readiness ul { padding-left:20px; }
+.operation-readiness li { margin:6px 0; }
+.handoff-task-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.operation-detail .handoff-sector-grid { grid-template-columns:minmax(0,1fr); }
+.operation-workspace button,.operation-workspace select { min-height:44px; }
+@media(max-width:800px) { .operation-workspace-layout { grid-template-columns:minmax(0,1fr); } .operation-workspace { padding:14px; } .operation-workspace-heading { flex-direction:column; } }

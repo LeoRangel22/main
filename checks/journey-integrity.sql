@@ -66,12 +66,16 @@ begin
  set local role authenticated;
  perform acknowledge_event_handoff_changes(opp,h.version);
  blocked:=false;begin perform update_event_handoff_task(release_id,'done',null,null,null,h.version);
- exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot release operation';
+ exception when others then blocked:=true;end;assert blocked,'Coordinator cannot release without audited prerequisites';
  reset role;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com','role','authenticated')::text,true);
  set local role authenticated;
  blocked:=false;begin perform update_event_handoff_task(release_id,'done',null,null,null,h.version);
  exception when others then blocked:=true;end;assert blocked,'Even manager needs the sector prerequisites';
+ for t in select * from event_handoff_tasks where opportunity_id=opp order by sort_order loop
+  perform plan_event_handoff_task(t.id,h.version,t.updated_at,'Synthetic owner',coalesce(t.due_at,now()),t.notes);
+ end loop;
+ perform confirm_event_reservation(p.id,p.revision);
  for t in select * from event_handoff_tasks where opportunity_id=opp and task_key<>'gerencia_go_no_go' order by sort_order loop
   perform update_event_handoff_task(t.id,'done',null,null,'Synthetic checked prerequisite',h.version);
  end loop;
@@ -85,9 +89,9 @@ begin
  exception when insufficient_privilege then blocked:=true;end;
  assert blocked,'A seller cannot alter a completed finance task while retaining the finance signature';
  assert (select notes=t.notes and owner_label=t.owner_label and acknowledged_by=manager from event_handoff_tasks where id=t.id);
- blocked:=false;begin perform update_event_handoff_task(release_id,'pending',null,null,'Seller reopening final release',h.version);
- exception when insufficient_privilege then blocked:=true;end;
- assert blocked and (select status='done' from event_handoff_tasks where id=release_id),'Only the manager may directly reopen the management release';
+ perform update_event_handoff_task(release_id,'pending',null,null,'Coordinator reopening final release',h.version);
+ assert (select status='pending' from event_handoff_tasks where id=release_id),'Coordinator may explicitly revoke a release';
+ perform update_event_handoff_task(release_id,'done',null,null,'Coordinator reconfirms audited prerequisites',h.version);
  -- A legitimate sector prerequisite reopening must still invalidate the release.
  select * into t from event_handoff_tasks where opportunity_id=opp and task_key='salao_montagem';
  perform update_event_handoff_task(t.id,'blocked',null,null,'Synthetic reopened prerequisite',h.version);

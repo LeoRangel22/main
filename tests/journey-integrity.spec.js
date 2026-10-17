@@ -8,7 +8,7 @@ async function fixture(page,confirmed=false){
     Object.assign(p,{revision:1,versao:1,status:confirmed?'confirmado':'negociacao',publication_status:'sent',is_current:true});
     openSavedProposal(p.id);
     p.snapshot=structuredClone(getProposalSnapshot());
-    if(confirmed)p.snapshot.pagamentoSinal={valor:p.total/2,data:'2026-10-14',bancos:['Fixture']};
+    if(confirmed)p.snapshot.pagamentoSinal={valor:p.total/2,data:'2026-10-14',bancos:['Fixture'],validadoPor:state.session.user.id,validadoEmail:state.session.user.email,validadoEm:new Date().toISOString(),validacaoPendente:false};
     else {p.snapshot.pagamentoSinal=null;p.snapshot.pagamentoRestante=null;}
     upsertProposalState(p);openSavedProposal(p.id);window.journeyOriginal=structuredClone(p);
     for(const h of window.EventOperationsState.handoffs)if(h.opportunity_id===p.oportunidade_id)h.proposal_id=p.id;
@@ -99,7 +99,9 @@ test('manager can release after every prerequisite is done and acknowledged in t
   await fixture(page,true);const r=await page.evaluate(async()=>{
     const p=getActiveProposal(),d=getOperationalHandoffData(p);let calls=0;window.runEventOperationsRpc=async()=>{calls++;};
     const release=d.tasks.find(t=>t.task_key==='gerencia_go_no_go');
-    for(const t of d.tasks.filter(t=>t.id!==release.id)){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';}
+    window.EventOperationsState.reservations.push({opportunity_id:p.oportunidade_id,proposal_id:p.id,status:'confirmed',confirmed_by:state.session.user.id,confirmed_at:new Date().toISOString(),agreement_fingerprint:'qa-fixture'});
+    for(const t of d.tasks)t.responsible_name='Synthetic owner';
+    for(const t of d.tasks.filter(t=>t.id!==release.id)){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';t.acknowledged_by=state.session.user.id;t.completed_at=t.acknowledged_at;t.completed_by=state.session.user.id;}
     await updateOperationalHandoffTask(release.id,true);return calls;
   });expect(r).toBe(1);
 });

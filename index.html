@@ -96,6 +96,7 @@
             </div>
             <div class="workspace-mode-actions" role="group" aria-label="Modo do painel">
               <button type="button" data-workspace-mode="sales">Modo Vendas</button>
+              <button type="button" data-workspace-mode="operations">Operação</button>
               <button type="button" data-workspace-mode="full">Visão completa</button>
             </div>
           </section>
@@ -155,6 +156,7 @@
           <section id="commercialDiagnostics" class="commercial-diagnostics" aria-label="Atualização e resultados comerciais" hidden></section>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
+          <section id="operationWorkspace" class="operation-workspace" aria-label="Central de operação" hidden></section>
           <section class="operations-agenda" aria-label="Agenda operacional">
             <div class="operations-agenda-heading">
               <div>
@@ -826,5 +828,7 @@
     <script defer src="./app.js?v=20261017-seller-feedback"></script>
     <script defer src="./event-readiness.js?v=20261017-amendments"></script>
     <script defer src="./event-operations.js?v=20261017-autonomy-amendments"></script>
+    <script defer src="./event-workspace.js?v=20261018-workspace"></script>
+    <script defer src="./operational-ui.js?v=20261018-workspace"></script>
 </body>
 </html>
