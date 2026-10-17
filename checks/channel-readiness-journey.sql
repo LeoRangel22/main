@@ -6,7 +6,7 @@ returns bigint language plpgsql as $$ declare result bigint; begin
  insert into pg_temp.diagnostic_test_requests(url,body,headers) values(url,body,headers) returning id into result;return result;
 end; $$;
 do $$
-declare actor uuid; outsider uuid:=gen_random_uuid(); batch uuid; result jsonb; blocked boolean; n integer; p public.propostas; opp uuid; send uuid; before_rows bigint; source jsonb;
+declare actor uuid; outsider uuid:=gen_random_uuid(); batch uuid; result jsonb; blocked boolean; n integer; p public.propostas; p2 public.propostas; opp uuid; opp2 uuid; send uuid; before_rows bigint; source jsonb;
 begin
  assert not has_function_privilege('anon','public.event_request_channel_diagnostics()','execute');
  assert not has_function_privilege('anon','public.event_channel_diagnostics_status()','execute');
@@ -66,9 +66,30 @@ begin
  update event_outbox set delivery_updated_at=now() where id=send;
  result:=public.event_journey_evidence(p.id,p.revision);
  assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='delivery');
+ update event_outbox set status='uncertain',provider_id=null where id=send;
+ result:=public.event_journey_evidence(p.id,p.revision);
+ assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='delivery'),'Authenticated late receipt proves delivery despite uncertain transport';
+ update event_outbox set status='accepted',provider_id='provider-fixture' where id=send;
+ insert into event_proposal_approvals(proposal_id,revision,proposal_fingerprint,review_hash,proposal_snapshot,content,requested_by,approver_id,approver_email,status,expires_at,request_fingerprint)
+ values(p.id,p.revision,event_private.proposal_fingerprint(p),'pending-evidence-'||gen_random_uuid(),to_jsonb(p),'{"channel":"email"}',actor,actor,'leorangel@gmail.com','pending',now()+interval '1 day','pending-evidence-fixture');
+ result:=public.event_journey_evidence(p.id,p.revision);
+ assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='dispatch'),'New pending request cannot erase an earlier successful send';
+ assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='delivery'),'New pending request cannot erase delivery evidence';
  insert into event_messages(opportunity_id,channel,direction,source,body,occurred_at) values(opp,'phone','inbound','manual','Reported manually',now()+interval '1 second');
  result:=public.event_journey_evidence(p.id,p.revision);
  assert (select s->>'state'='manual' from jsonb_array_elements(result->'steps') s where s->>'key'='reply'),'Manual report is not authenticated ingress';
+ insert into event_messages(opportunity_id,channel,direction,source,body,occurred_at) values(opp,'email','inbound','provider','Authenticated reply',now()+interval '0.5 second');
+ result:=public.event_journey_evidence(p.id,p.revision);
+ assert (select s->>'state'='confirmed' and s->>'source'='provider' from jsonb_array_elements(result->'steps') s where s->>'key'='reply'),'A later manual note cannot hide an authenticated reply';
+ perform set_config('request.jwt.claims','',true);
+ insert into oportunidades(cliente_nome,status,data_evento) values('Manual sharing evidence fixture','proposta_enviada','2099-11-20') returning id into opp2;
+ insert into propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,data_evento,subtotal,taxa_servico,total,snapshot,cliente_resposta,cliente_resposta_em)
+ values(opp2,'Manual sharing evidence fixture','proposta_enviada','sent',true,'2099-11-20',1000,120,1120,p.snapshot,'confirmar',now()) returning * into p2;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ result:=public.event_journey_evidence(p2.id,p2.revision);
+ assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='client_acceptance'),'Public acceptance from a manually shared link needs no outbox row';
+ assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='reply');
+ assert (select s->>'state'='pending' from jsonb_array_elements(result->'steps') s where s->>'key'='dispatch'),'Public acceptance never invents an integrated send';
  perform set_config('request.jwt.claims','',true);
  update propostas set snapshot=snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17"}}' where id=p.id returning * into p;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);

@@ -26,7 +26,7 @@ O Financeiro ou gestor também pode conferir um sinal legado sem validação aud
 
 ## Para concluir a homologação real
 
-1. Configurar por canais seguros a URL oficial do Bot e um segredo exclusivo em Script Properties e nos secrets do projeto Eventos. Não reutilizar chave de envio/webhook nem copiar segredos para Git, chat ou navegador.
+1. Configurar por canais seguros a URL oficial do Bot e um segredo exclusivo. No Bot, usar `EVENTS_BRIDGE_SECRET` e `EVENTS_BRIDGE_ENABLED`; em Eventos, `EVENT_BOT_BRIDGE_URL` e `EVENT_BOT_BRIDGE_SECRET`. Não reutilizar chave de envio/webhook nem copiar segredos para Git, chat ou navegador.
 2. Confirmar a conta/instância correta e a conexão. Usar a ponte de leitura preservando os callbacks que pertencem ao Bot; não criar outra instância.
 3. Conceder e configurar a autorização de leitura de registros do ZeptoMail. O token de envio existente não concede essa leitura. Conectar a caixa de entrada é uma etapa distinta dos retornos de entrega.
 4. Após o probe autenticado, usar a ativação verificada já existente. Só então acompanhar um retorno real, vinculado ao evento correto, e a confirmação de entrega do provedor. Nenhum reenvio é necessário para testar a leitura.

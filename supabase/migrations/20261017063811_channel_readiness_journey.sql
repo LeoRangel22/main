@@ -97,10 +97,15 @@ begin
  select * into a from public.event_proposal_approvals q where q.proposal_id=p.id
   and event_private.public_proposal_fingerprint(jsonb_populate_record(null::public.propostas,q.proposal_snapshot))=event_private.public_proposal_fingerprint(p)
   order by q.created_at desc,q.id limit 1;
- select * into b from public.event_outbox where proposal_id=p.id and (a.id is null or id=a.send_id) order by created_at desc,id limit 1;
+ select * into b from public.event_outbox where proposal_id=p.id
+  order by (delivery_status in ('delivered','read') and delivery_updated_at is not null) desc nulls last,
+   (status='accepted' and nullif(provider_id,'') is not null) desc,created_at desc,id limit 1;
  select occurred_at,source into reply_at,reply_source from public.event_messages where opportunity_id=p.oportunidade_id
-  and direction='inbound' and source in ('provider','public','manual') and b.id is not null and occurred_at>=b.created_at order by occurred_at desc,id limit 1;
- response_at:=case when b.id is not null and p.cliente_resposta_em>=b.created_at then p.cliente_resposta_em else null end;
+  and direction='inbound' and source in ('provider','public','manual') and occurred_at>=coalesce(b.created_at,p.created_at)
+  order by (source in ('provider','public')) desc,occurred_at desc,id limit 1;
+ -- Public response is bound to this proposal by the portal, including manual link sharing.
+ response_at:=p.cliente_resposta_em;
+ if response_at is not null and (reply_at is null or reply_source='manual' or reply_at<response_at) then reply_at:=response_at;reply_source:='public';end if;
  payment:=p.snapshot->'pagamentoSinal';
  select * into reservation from public.event_reservations where proposal_id=p.id and opportunity_id=p.oportunidade_id;
  select * into h from public.event_handoffs where proposal_id=p.id and opportunity_id=p.oportunidade_id;
@@ -113,7 +118,7 @@ begin
     and case when jsonb_typeof(p.snapshot->'selectedItems')='array' then jsonb_array_length(p.snapshot->'selectedItems')>0 else false end then 'confirmed' else 'pending' end,'at',p.updated_at),
   jsonb_build_object('key','approval','state',case when a.status='approved' and a.decided_by is not null and a.decided_at is not null then 'confirmed' when a.status='pending' and a.expires_at<=now() then 'expired' when a.id is not null then a.status else 'pending' end,'at',a.decided_at,'evidence_id',a.id),
   jsonb_build_object('key','dispatch','state',case when b.status='accepted' and nullif(b.provider_id,'') is not null then 'confirmed' when b.status in ('sending','uncertain','failed') then b.status else 'pending' end,'at',b.created_at,'evidence_id',b.id),
-  jsonb_build_object('key','delivery','state',case when b.status='accepted' and nullif(b.provider_id,'') is not null and b.delivery_updated_at is not null and b.delivery_status in ('delivered','read') then 'confirmed' else 'pending' end,'at',b.delivery_updated_at,'channel',b.channel),
+  jsonb_build_object('key','delivery','state',case when b.delivery_updated_at is not null and b.delivery_status in ('delivered','read') then 'confirmed' else 'pending' end,'at',b.delivery_updated_at,'channel',b.channel),
   jsonb_build_object('key','reply','state',case when reply_source='manual' then 'manual' when reply_at is not null or response_at is not null then 'confirmed' else 'pending' end,'at',coalesce(reply_at,response_at),'source',coalesce(reply_source,case when response_at is not null then 'public' end)),
   jsonb_build_object('key','client_acceptance','state',case when p.cliente_resposta='confirmar' and response_at is not null then 'confirmed' else 'pending' end,'at',response_at),
   jsonb_build_object('key','payment','state',case when payment->>'validacaoPendente'='true' then 'pending'
@@ -144,7 +149,7 @@ begin
   raise exception 'Use um acordo atual já confirmado e com início futuro. A reserva não reabre nem confirma a venda.';
  end if;
  payment:=p.snapshot->'pagamentoSinal';
- if payment->>'validacaoPendente'='true' or not case when jsonb_typeof(payment->'valor')='number' then (payment->>'valor')::numeric>0 else false end
+ if payment->>'validacaoPendente'='true' or not (case when jsonb_typeof(payment->'valor')='number' then (payment->>'valor')::numeric>0 else false end)
   or nullif(payment->>'validadoEm','') is null or not exists(select 1 from auth.users u where u.id::text=payment->>'validadoPor' and lower(u.email) in ('leorangel@gmail.com','financeiro@embaixadacarioca.com.br')) then
   raise exception 'Confira o crédito e registre a validação auditada do Financeiro antes de reservar.';
  end if;
