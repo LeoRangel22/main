@@ -27,3 +27,11 @@ Os testes usam clientes, pagamentos e decisões fictícios em banco isolado e mo
 ## Integração com a autonomia de Eventos
 
 A versão integrada preserva a validação de sinal conferido no banco por Eventos e a proteção contra confirmação de proposta cancelada. A fila de execução consulta a política real e deixa de cobrar decisões antigas quando a aprovação geral está desativada; as decisões históricas permanecem no banco. Erro na leitura da política conserva a última fila e indica a falha.
+
+## Instalação e verificação em produção
+
+Publicação autorizada pelo proprietário em 17/10/2026. Após falha transitória de sessão da ferramenta e confirmação de ausência de instalação parcial, a nova tentativa aplicou a migration às 18:55 UTC no projeto pdgbnpztdnrvrphzdjas. O arquivo originalmente gerado pelo CLI como 20261017075836 foi renomeado para o registro real 20261017185541.
+
+A verificação confirmou tabela privada sem acesso de anon/authenticated, RPC público de resposta instalado, nenhum aditivo ou contexto de aplicação criado, política geral de aprovação ainda desativada e as mesmas 206 propostas, 0 reservas e 19 envios. A versão integrada passou em 264 testes Node, 233 testes de navegador, instalação nova/upgrade, papéis, concorrência e restauração (CI 39058495471). A renomeação exige repetir o CI na ordem efetiva instalada antes do merge.
+
+Quatro acordos futuros ainda não têm validação bancária auditada do sinal. Não foram reconciliados automaticamente: precisam de conferência real da equipe antes da reserva e da operação. Há 18 propostas passadas sem desfecho comercial final segundo os status consultados; a classificação depende da equipe.
