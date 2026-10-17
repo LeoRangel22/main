@@ -258,7 +258,7 @@ begin
   if payment is null and key='pagamentoRestante' then continue; end if;
   if jsonb_typeof(payment->'valor') is distinct from 'number' then raise exception 'Financeiro deve conferir os pagamentos antes de aplicar o aditivo'; end if;
   amount:=(payment->>'valor')::numeric;
-  if amount<=0 or payment->>'validacaoPendente'='true' or nullif(payment->>'validadoEm','') is null or not exists(select 1 from auth.users u where u.id::text=payment->>'validadoPor' and lower(u.email) in ('leorangel@gmail.com','financeiro@embaixadacarioca.com.br')) then
+  if amount<=0 or payment->>'validacaoPendente'='true' or nullif(payment->>'validadoEm','') is null or not exists(select 1 from auth.users u where u.id::text=payment->>'validadoPor' and (lower(u.email) in ('leorangel@gmail.com','financeiro@embaixadacarioca.com.br') or (lower(u.email)='eventos@embaixadacarioca.com.br' and payment->'bankConferido'='true'::jsonb))) then
    raise exception 'Financeiro deve registrar validação bancária auditada dos pagamentos antes de aplicar o aditivo';
   end if;
   paid:=paid+amount;

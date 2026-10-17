@@ -21,13 +21,15 @@ begin
  select count(*) into before_outbox from public.event_outbox;
 
  -- Includes a normal amendment, legacy payment, signal exception, stale agreement and withdrawal.
- for i in 1..5 loop
+ for i in 1..6 loop
   perform set_config('request.jwt.claims','',true);
   base_day:=date '2099-11-01'+i*3;
   insert into public.oportunidades(cliente_nome,status,data_evento) values('Amendment fixture '||i,'confirmado',base_day) returning id into opp;
   payment:=jsonb_build_object('valor',560,'data','2026-10-17','bancos',jsonb_build_array('Fixture'),
    'comprovante',jsonb_build_object('nome','proof-fixture.pdf','conteudo','PRIVATE_PROOF_FIXTURE'));
   if i<>2 then payment:=payment||jsonb_build_object('validadoPor',manager,'validadoEm',now(),'validacaoPendente',false);end if;
+  -- Events bank attestation from the seller workflow fix stays valid across an amendment.
+  if i=6 then payment:=payment||jsonb_build_object('validadoPor',seller,'bankConferido',true);end if;
   insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,cliente_whatsapp,status,publication_status,is_current,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,snapshot)
   values(opp,'Amendment fixture '||i,'fixture@example.test','+5521999990000','confirmado','ready',true,base_day,'10:00',20,2,1000,120,1120,
    jsonb_build_object('event',jsonb_build_object('date',base_day,'time','10:00','guests',20,'duration',2,'notes','PRIVATE_INTERNAL_FIXTURE'),
