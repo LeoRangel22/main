@@ -5,14 +5,14 @@ const transitions=app.slice(app.indexOf('function canMoveProposalStatus('),app.i
 const history=app.slice(app.indexOf('function createCommercialHistoryEntry('),app.indexOf('function getInternalComments('));
 const helpers=source.slice(source.indexOf('function resetOpsExecution('),source.indexOf('function getOpsItems('));
 function fixture({query,qa=false}={}){
- const state={session:{user:{id:'u'}},supabase:{from:()=>query},proposals:[]};const eventOps={handoffs:[],handoffTasks:[]};let renders=0;
+ const state={session:{user:{id:'u'}},supabase:{from:()=>query,rpc:async()=>({data:{enabled:true}})},proposals:[]};const eventOps={handoffs:[],handoffTasks:[]};let renders=0;
  const c=vm.createContext({state,eventOps,QA_MODE:qa,Intl,Date,Promise,Error,Number,Array,JSON,structuredClone,Math,normalizeProposalStatus:s=>s,proposalStatusOptions:['cancelado','negociacao','proposta_enviada','confirmado'],getCommercialActor:()=> 'Events fixture',getTeamProfile:()=>({label:'Eventos'}),getCommercialHistory:s=>s.commercialHistory||[],getProposalStatusLabel:s=>s,formatMoney:v=>String(v),formatSignalPaymentDate:d=>d,isSignalSession:()=>true,operationStatuses:new Set(['planejamento','evento_proximo']),getTaskPlan:i=>i.plan||{},getOpsItems:()=>[],getOpsIncoming:i=>i.incoming,hasValidatedSignal:p=>p?.validacaoPendente!==true&&p?.valor>0,renderEventOperations:()=>renders++});
  vm.runInContext(transitions+history+helpers,c);return {c,state,eventOps,renders:()=>renders};
 }
 function queryPages(pages){let offset;const q={select(){return q},eq(){return q},order(){return q},range(a){offset=a;return Promise.resolve(pages[Math.floor(offset/100)])}};return q;}
 test('execution queue paginates pending approvals before replacing cache',async()=>{const pages=[{data:Array.from({length:100},(_,n)=>({id:String(n)}))},{data:[{id:'last'}]}];const f=fixture({query:queryPages(pages)});await f.c.loadOpsExecution();assert.equal(f.c.opsExecutionState().rows.length,101);assert.equal(f.c.opsExecutionState().error,'');assert.equal(f.renders(),1);});
 test('approval read failure retains last known rows and explicitly marks stale state',async()=>{const f=fixture({query:queryPages([{error:{message:'offline'}}])});f.c.opsExecutionState().rows=[{id:'old'}];await f.c.loadOpsExecution();assert.equal(f.c.opsExecutionState().rows[0].id,'old');assert.match(f.c.opsExecutionState().error,/Não foi possível/);});
-test('late approval response cannot expose a previous session to the next user',async()=>{let finish;const q=queryPages([]);q.range=()=>new Promise(resolve=>finish=resolve);const f=fixture({query:q});const pending=f.c.loadOpsExecution();await Promise.resolve();f.state.session.user.id='next';const fresh=f.c.opsExecutionState();finish({data:[{id:'old-private'}]});await pending;assert.equal(fresh.rows.length,0);assert.equal(f.renders(),0);});
+test('late approval response cannot expose a previous session to the next user',async()=>{let finish;const q=queryPages([]);q.range=()=>new Promise(resolve=>finish=resolve);const f=fixture({query:q});const pending=f.c.loadOpsExecution();while(!finish)await Promise.resolve();f.state.session.user.id='next';const fresh=f.c.opsExecutionState();finish({data:[{id:'old-private'}]});await pending;assert.equal(fresh.rows.length,0);assert.equal(f.renders(),0);});
 test('execution queue separates bank evidence, expired approvals, current task versions and historical outcome',()=>{
  const f=fixture();f.state.proposals=[{id:'p',snapshot:{pagamentoSinal:{valor:50,validacaoPendente:true}}},{id:'old',snapshot:{pagamentoSinal:{valor:50}}}];
  f.eventOps.handoffs=[{proposal_id:'p',opportunity_id:'opp',version:2}];f.eventOps.handoffTasks=[{opportunity_id:'opp',source_version:1,status:'pending'},{opportunity_id:'opp',source_version:2,status:'done',acknowledged_at:'2026-10-15'}];
@@ -69,4 +69,14 @@ test('canceled pending proof cannot open confirmation or persist through either 
  vm.runInContext(app.slice(start,end),f.c);
  f.c.showToast=()=>{};f.c.renderPipeline=()=>{};
  await f.c.updateProposalStatus('p','confirmado');assert.equal(dialogs,0);assert.equal(writes,0);
+});
+
+test('disabled manager policy removes obsolete approval tasks without touching decisions',async()=>{
+ const f=fixture();f.c.opsExecutionState().rows=[{id:'historic'}];let reads=0;
+ f.state.supabase.rpc=async name=>{assert.equal(name,'event_approval_policy');return {data:{enabled:false}}};f.state.supabase.from=()=>{reads++;throw Error('unexpected approval read')};
+ await f.c.loadOpsExecution({force:true});assert.equal(f.c.opsExecutionState().rows.length,0);assert.equal(f.c.opsExecutionState().error,'');assert.equal(reads,0);
+});
+test('unavailable approval policy preserves prior queue and exposes verification failure',async()=>{
+ const f=fixture();f.c.opsExecutionState().rows=[{id:'historic'}];f.state.supabase.rpc=async()=>({error:{message:'offline'}});
+ await f.c.loadOpsExecution({force:true});assert.equal(f.c.opsExecutionState().rows[0].id,'historic');assert.match(f.c.opsExecutionState().error,/política/);
 });

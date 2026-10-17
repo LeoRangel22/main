@@ -88,6 +88,15 @@ async function verify() {
     assert.deepEqual(approval, { loginVisible: true, workspaceHidden: true, decisions: 0, noOverflow: true });
     assert.deepEqual(errors, [], 'The mobile approval login must load without JavaScript errors');
     report.approvalBrowser = approval;
+    const amendmentNavigation=await page.goto(new URL('aditivos.html',base).href,{waitUntil:'networkidle',timeout:30000});
+    assert.equal(amendmentNavigation.status(),200);
+    await page.locator('#loginForm').waitFor({state:'visible'});
+    const amendment=await page.evaluate(()=>({loginVisible:!document.getElementById('login').hidden,
+      teamHidden:document.getElementById('team').hidden,publicHidden:document.getElementById('publicReview').hidden,
+      noOverflow:document.documentElement.scrollWidth<=innerWidth}));
+    assert.deepEqual(amendment,{loginVisible:true,teamHidden:true,publicHidden:true,noOverflow:true});
+    assert.deepEqual(errors,[],'The mobile amendment login must load without JavaScript errors');
+    report.amendmentBrowser=amendment;
   } finally { await browser.close(); }
   report.passed = true;
 }

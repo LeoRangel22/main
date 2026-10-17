@@ -27,7 +27,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','seller-workflow-feedback']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -79,6 +79,30 @@ async function concurrent(c,name) {
     assert.equal(Number((await c.query('select revision from propostas where id=$1',[renewal.id])).rows[0].revision),Number(renewal.revision));
     await c.query('update event_private.proposal_approval_policy set enabled=false where id');
     console.log('PASS concurrent approval expiry renewal without proposal mutation');
+    // Real concurrent database sessions, disposable amendment decisions only.
+    const amendmentOpp=(await c.query("insert into oportunidades(cliente_nome,status,data_evento) values('Amendment race fixture','confirmado','2100-01-10') returning id")).rows[0].id;
+    const amendmentSnapshot={event:{date:'2100-01-10',time:'10:00',guests:20,duration:2},totals:{subtotal:1000,serviceFee:120,total:1120},selectedItems:[{name:'Fixture',calc:{total:1000}}],pagamentoSinal:{valor:560,data:'2026-10-17',validadoPor:actor,validadoEm:new Date().toISOString(),validacaoPendente:false}};
+    const amendmentBase=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,snapshot) values($1,'Amendment race fixture','confirmado','ready',true,'2100-01-10','10:00',20,2,1000,120,1120,$2) returning *",[amendmentOpp,JSON.stringify(amendmentSnapshot)])).rows[0];
+    const draftSnapshot={...amendmentSnapshot,amendmentOf:{id:amendmentBase.id,revision:Number(amendmentBase.revision)},event:{date:'2100-01-11',time:'11:00',guests:25,duration:2}};delete draftSnapshot.pagamentoSinal;
+    const amendmentDraft=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,snapshot) values($1,'Amendment race fixture','negociacao','draft',false,'2100-01-11','11:00',25,2,1000,120,1120,$2) returning *",[amendmentOpp,JSON.stringify(draftSnapshot)])).rows[0];
+    await Promise.all(writers.map(async x=>{await x.query('set role authenticated');await x.query("select set_config('request.jwt.claims',$1,false)",[claims]);}));
+    const requests=await Promise.all(writers.map(x=>x.query("select request_event_amendment($1,$2,'Remarcação para revisão concorrente de fixture') result",[amendmentDraft.id,amendmentDraft.revision])));
+    const amendmentId=requests[0].rows[0].result.id;assert.equal(amendmentId,requests[1].rows[0].result.id);
+    const decisions=await Promise.allSettled(writers.map(x=>x.query("select decide_event_amendment($1,'approve','pending_manager','')",[amendmentId])));
+    assert.equal(decisions.filter(r=>r.status==='fulfilled').length,1);assert.equal(decisions.filter(r=>r.status==='rejected'&&r.reason.code==='PT409').length,1);
+    const amendment=(await c.query('select * from event_private.event_amendments where id=$1',[amendmentId])).rows[0];
+    await Promise.all(writers.map(async x=>{await x.query('set role anon');await x.query("select set_config('request.jwt.claims','',false)");}));
+    const publicRequest=require('node:crypto').randomUUID();
+    const acceptances=await Promise.all(writers.map(x=>x.query("select respond_public_event_amendment($1,$2,'accept','Client fixture','',$3) result",[amendment.client_token,amendment.content_hash,publicRequest])));
+    assert.ok(acceptances.every(x=>x.rows[0].result.status==='client_accepted'));
+    await Promise.all(writers.map(async x=>{await x.query('set role authenticated');await x.query("select set_config('request.jwt.claims',$1,false)",[claims]);}));
+    const applications=await Promise.all(writers.map(x=>x.query("select apply_event_amendment($1,$2,$3,'') result",[amendmentId,amendmentBase.revision,amendmentDraft.revision])));
+    assert.deepEqual(applications.map(x=>x.rows[0].result.existing).sort(),[false,true]);
+    assert.equal(Number((await c.query('select count(*) from event_reservations where opportunity_id=$1',[amendmentOpp])).rows[0].count),1);
+    const effective=(await c.query('select * from propostas where id=$1',[amendmentDraft.id])).rows[0];assert.equal(effective.is_current,true);assert.equal(effective.sent_at,null);
+    assert.equal(Number((await c.query('select version from event_handoffs where opportunity_id=$1',[amendmentOpp])).rows[0].version),2);
+    assert.equal(Number((await c.query('select count(*) from event_private.amendment_apply_context')).rows[0].count),0);
+    console.log('PASS concurrent amendment request, manager decision, bearer acceptance and atomic application');
   } finally { await Promise.all(writers.map(x=>x.end())); }
 }
 (async()=>{
