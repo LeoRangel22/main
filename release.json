@@ -1,9 +1,9 @@
 {
-  "commit": "e08cb179cc88cadfad21a81aacd12004a7ac0b65",
-  "schemaHead": "20261014084722_journey_integrity.sql",
+  "commit": "a39589ec1e3f4e524b8da519056e2fd6bdd41022",
+  "schemaHead": "20261017070555_channel_readiness_journey.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
-    "index.html": "8425c4cf46ea01520d6094a85acd9ebc376304020f8582261dff90facf37b2e7",
+    "index.html": "8101f4fc1c5866f351902d7dbc7b2d12a430822cceb69be78143d70463a57e56",
     "aprovacoes.html": "872dbd5b9ac9d7edd320b8b8d75896f4b73e4c7bcf9807f0ae92bb5d9473b02d",
     "aprovacoes.js": "9909e3783435162f0417e11727e5bddc68eb8034a4b64f36b216ccf8d930749b",
     "approval-config.js": "4067d25492a129f829e7626027946cbbb63b704a16ca7151b5a5fc58b626d310",
@@ -16,7 +16,8 @@
     "proposta.html": "1f830fa5ed62d483584a7f0f87cef66a54c9aaa7021413b21f12be2fa6a7bfc0",
     "styles.css": "d969e2c8b452ce58598c584544cec78e544265dacb63e481b58e798fd12600ea",
     "app.js": "3cdbb6a30092232a9227bf3d5cbaf1d55d2977752ba086eed3900fd8be6986e5",
-    "event-operations.js": "5cd7907e74c255270380e8c8f23404572fa368d5fda43ec4bc7dd4c1d11a955d",
+    "event-readiness.js": "cd9c59faac0e837ec92998938e0b9b4578d5bf6fa6c89e904d41f3040cb02fee",
+    "event-operations.js": "62b697a5a3ff3356d457c4d8a2284754c08707b96afdb4a54bab99015bfc76ad",
     "analytics.js": "3cd5b818322a3026e6dc15e62a3d16fc657aa499e8dd1cf6d6ca58c15af0dd07",
     "formulario.js": "d68b94f723a703e3ca8b11630c4f276c74a7f158b322351a465361133937cd63",
     "proposta.js": "8bdf207a9e9df408433a1792f4a690b0cd685a581a7ff5147afb177fd49ecdd3",
