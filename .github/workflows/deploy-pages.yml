@@ -54,6 +54,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Prepare versioned seller workflow migration in isolated CI
+        run: |
+          npx --yes supabase@2.121.0 --help
+          npx --yes supabase@2.121.0 migration --help
+          npx --yes supabase@2.121.0 migration new --help
+          npx --yes supabase@2.121.0 migration new seller_workflow_feedback
+          node -e "const fs=require('node:fs'); const names=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('_seller_workflow_feedback.sql')); if(names.length!==1)throw Error('Expected one CLI-generated migration'); const target='supabase/migrations/'+names[0]; fs.writeFileSync(target,fs.readFileSync('supabase/seller_workflow_feedback.sql')); console.log('CLI_GENERATED_MIGRATION='+target);"
       - name: Fresh, upgrade, roles, concurrent transactions and rollback
         run: npm run test:db
         env:
