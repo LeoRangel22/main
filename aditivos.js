@@ -24,7 +24,7 @@
   try{await fn(i);}catch(e){if(current(i)&&!e.stale)notice(e.message,true);}
   finally{if(current(i)){state.busy=false;document.querySelectorAll('button:not(#logout)').forEach(b=>b.disabled=false);}}
  }
- function clearTeam(){state.generation++;state.busy=false;state.requests=[];state.drafts=[];state.selected=new URLSearchParams(location.search).get('id')?'request:'+new URLSearchParams(location.search).get('id'):null;state.manager=false;$('team').hidden=true;$('teamList').textContent='';$('teamDetail').textContent='';$('identity').textContent='';}
+ function clearTeam(){state.generation++;state.busy=false;state.requests=[];state.drafts=[];state.selected=new URLSearchParams(location.search).get('id')?'request:'+new URLSearchParams(location.search).get('id'):null;state.manager=false;$('team').hidden=true;$('teamList').textContent='';$('teamDetail').textContent='';$('identity').textContent='';document.querySelectorAll('button').forEach(b=>b.disabled=false);}
  function validateBundle(data){return data&&Array.isArray(data.requests)&&Array.isArray(data.drafts)&&typeof data.manager==='boolean'&&data.user_id===state.user?.id;}
  async function loadTeam(i=identity()){
   const data=await rpc('list_event_amendments',{},i);
@@ -69,7 +69,7 @@
   notice(a.status==='awaiting_client'?'Revise as mudanças antes de responder.':'Resposta da revisão atualizada.');
  }
  $('loginForm').onsubmit=event=>{event.preventDefault();const form=event.currentTarget;void run(async()=>{const {error}=await client.auth.signInWithPassword({email:form.elements.email.value.trim(),password:form.elements.password.value});form.elements.password.value='';if(error)throw Error('Não foi possível entrar. Confira sua conta do Sistema de Eventos.');});};
- $('logout').onclick=async()=>{clearTeam();state.user=null;$('logout').hidden=true;$('login').hidden=false;await client.auth.signOut();notice('Sessão encerrada.');};
+ $('logout').onclick=async()=>{clearTeam();state.user=null;$('logout').hidden=true;$('login').hidden=false;try{const {error}=await client.auth.signOut();if(error)throw error;notice('Sessão encerrada.');}catch{notice('Os dados desta tela foram removidos. Não foi possível confirmar o encerramento da sessão; tente sair novamente.',true);$('logout').hidden=false;}};
  $('refresh').onclick=()=>run(loadTeam);
  async function authenticate(session){
   const user=session?.user;if(user?.id===state.user?.id&&state.user)return;
@@ -80,6 +80,6 @@
  }
  if(token!==null){void run(loadPublic);}else{
   let authEvent=0;client.auth.onAuthStateChange((_event,session)=>{authEvent++;queueMicrotask(()=>void authenticate(session));});
-  const initialEvent=authEvent;client.auth.getSession().then(({data,error})=>{if(authEvent!==initialEvent)return;if(error){$('login').hidden=false;notice('Não foi possível verificar o acesso. Entre novamente.',true);}else void authenticate(data.session);}).catch(()=>{$('login').hidden=false;notice('Acesso indisponível. Tente novamente.',true);});
+  const initialEvent=authEvent;client.auth.getSession().then(({data,error})=>{if(authEvent!==initialEvent)return;if(error){$('login').hidden=false;notice('Não foi possível verificar o acesso. Entre novamente.',true);}else void authenticate(data.session);}).catch(()=>{if(authEvent!==initialEvent)return;$('login').hidden=false;notice('Acesso indisponível. Tente novamente.',true);});
  }
 })();
