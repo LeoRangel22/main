@@ -3,7 +3,7 @@ begin;
 do $$
 declare manager uuid; seller uuid; outsider uuid:=gen_random_uuid(); p public.propostas; d public.propostas; opp uuid;
  a jsonb; aid uuid; token uuid; evidence jsonb; accepted_at timestamptz; req uuid:=gen_random_uuid(); before_outbox bigint;
- before_tasks bigint; before_version integer; blocked boolean; original jsonb; result jsonb; n integer; i integer; payment jsonb; base_day date; draft_revision bigint;
+ before_tasks bigint; before_version integer; blocked boolean; original jsonb; result jsonb; n integer; i integer; payment jsonb; base_day date; draft_revision bigint; old_active uuid; old_history uuid;
 begin
  select id into manager from auth.users where email='leorangel@gmail.com';
  select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';
@@ -11,6 +11,7 @@ begin
  assert not has_table_privilege('authenticated','event_private.amendment_apply_context','insert');
  assert not has_function_privilege('anon','public.request_event_amendment(uuid,bigint,text)','execute');
  assert not has_function_privilege('anon','public.list_event_amendments()','execute');
+ assert not has_function_privilege('anon','public.get_event_amendment(uuid)','execute');
  assert not has_function_privilege('anon','public.apply_event_amendment(uuid,bigint,bigint,text)','execute');
  assert not has_function_privilege('authenticated','event_private.amendment_application_allowed(public.propostas,public.propostas)','execute');
  assert has_function_privilege('anon','public.get_public_event_amendment(uuid)','execute');
@@ -30,7 +31,7 @@ begin
   insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,cliente_whatsapp,status,publication_status,is_current,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,snapshot)
   values(opp,'Amendment fixture '||i,'fixture@example.test','+5521999990000','confirmado','ready',true,base_day,'10:00',20,2,1000,120,1120,
    jsonb_build_object('event',jsonb_build_object('date',base_day,'time','10:00','guests',20,'duration',2,'notes','PRIVATE_INTERNAL_FIXTURE'),
-    'totals',jsonb_build_object('subtotal',1000,'serviceFee',120,'total',1120),'selectedItems',jsonb_build_array(jsonb_build_object('nome','Fixture','calc',jsonb_build_object('total',1000))),
+    'totals',jsonb_build_object('subtotal',1000,'serviceFee',120,'total',1120),'selectedItems',jsonb_build_array(jsonb_build_object('nome','Fixture','formula','SECRET_FORMULA_FIXTURE','preco1h',50,'priority',10,'recommendedWindows',jsonb_build_array('INTERNAL_WINDOW'),'calc',jsonb_build_object('total',1000))),
     'generalTerms','Original terms','paymentTerms','Original payment terms','pagamentoSinal',payment)) returning * into p;
   original:=p.snapshot;
   update public.event_handoff_tasks set status='done',acknowledged_at=now(),acknowledged_by=manager,completed_at=now(),completed_by=manager where opportunity_id=opp;
@@ -67,6 +68,7 @@ begin
   evidence:=public.get_public_event_amendment(token);
   assert evidence#>>'{after,date}'=(base_day+1)::text;
   assert evidence::text not like '%PRIVATE_%' and evidence::text not like '%validadoPor%' and evidence::text not like '%fixture@example.test%','Public capability never leaks bank proof, internal briefing or contact';
+  assert evidence::text not like '%SECRET_FORMULA%' and evidence::text not like '%preco1h%' and evidence::text not like '%recommendedWindows%','Public item projection omits catalog calculation and scheduling metadata';
   blocked:=false;begin perform public.respond_public_event_amendment(token,'changed-hash','accept','Client fixture','',req);exception when others then blocked:=true;end;assert blocked,'Hash binds acceptance to reviewed content';
   if i=5 then
    perform public.respond_public_event_amendment(token,evidence->>'hash','changes_requested','Client fixture','Solicito outro horário para o evento.',req);
@@ -116,12 +118,26 @@ begin
   assert (select version>before_version and changes_pending and proposal_id=d.id from public.event_handoffs where opportunity_id=opp);
   assert (select count(*)=8 from public.event_handoff_tasks where opportunity_id=opp and status='pending' and acknowledged_by is null and completed_by is null),'New agreement requires new sector science and execution';
   assert (select id=d.id from public.get_public_proposal(p.public_token)),'Original public link resolves to the applied, authorized new agreement';
+  if i=1 then old_history:=aid;end if;
   select count(*) into n from public.event_messages where opportunity_id=opp and channel='note';
   assert public.apply_event_amendment(aid,p.revision,draft_revision,'')->>'existing'='true','Apply retry returns the original result';
   assert (select count(*)=n from public.event_messages where opportunity_id=opp and channel='note'),'Retry does not duplicate the audit note';
   assert (select revision=d.revision from public.propostas where id=d.id),'Retry does not mutate the applied agreement';
   blocked:=false;begin perform public.save_event_proposal(d.id,'{"total":9999}',d.revision,null);exception when others then blocked:=true;end;assert blocked,'Normal immutability still protects the newly applied agreement';
  end loop;
+ select id into old_active from event_private.event_amendments where status='client_accepted' limit 1;
+ update event_private.event_amendments set created_at=now()-interval '20 days' where id=old_history;
+ insert into event_private.event_amendments(opportunity_id,base_id,draft_id,base_revision,draft_revision,before_record,after_record,content_hash,summary,status,requested_by,created_at)
+ select a.opportunity_id,a.base_id,a.draft_id,a.base_revision,a.draft_revision,a.before_record,a.after_record,a.content_hash,a.summary,'rejected',a.requested_by,now()+make_interval(secs=>g.seq)
+ from event_private.event_amendments a cross join generate_series(1,205) g(seq) where a.id=old_active;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com')::text,true);
+ evidence:=public.list_event_amendments();
+ assert (select count(*)=1 from jsonb_array_elements(evidence->'requests') a where a->>'id'=old_active::text),'Old active request stays accessible after more than 200 newer closed rows';
+ assert (select count(*)=0 from jsonb_array_elements(evidence->'requests') a where a->>'id'=old_history::text),'Old history is outside the capped listing';
+ assert public.get_event_amendment(old_history)->>'id'=old_history::text,'Direct authenticated link retrieves history outside the cap';
+ evidence:=public.get_public_event_amendment((select client_token from event_private.event_amendments where id=old_history));
+ assert evidence::text not like '%SECRET_FORMULA%';
+ assert (select snapshot::text not like '%SECRET_FORMULA%' and snapshot::text not like '%preco1h%' from public.get_public_proposal((select public_token from public.propostas where id=(select base_id from event_private.event_amendments where id=old_history)))),'Existing proposal portal uses the same item privacy projection';
  assert (select count(*)=before_outbox from public.event_outbox),'Amendment lifecycle never creates customer sends';
  assert (select count(*)=0 from event_private.amendment_apply_context),'No application capability survives its transaction';
 end $$;

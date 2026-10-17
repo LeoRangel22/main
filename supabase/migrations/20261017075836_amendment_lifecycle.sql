@@ -73,12 +73,22 @@ end; $$;
 revoke all on function event_private.freeze_submitted_amendment() from public,anon,authenticated;
 create trigger amendment_freeze before update on public.propostas for each row execute function event_private.freeze_submitted_amendment();
 
+create function event_private.public_proposal_items(snapshot jsonb) returns jsonb
+language sql immutable set search_path='' as $$
+ select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+  'id',i->'id','name',coalesce(i->'name',i->'nome'),'nome',coalesce(i->'nome',i->'name'),
+  'description',coalesce(i->'description',i->'descricao'),'descricao',coalesce(i->'descricao',i->'description'),
+  'calc',jsonb_build_object('total',coalesce(i#>'{calc,total}',i->'total'),'detail',coalesce(i#>'{calc,detail}',i#>'{calc,label}'))
+ ))),'[]') from jsonb_array_elements(case when jsonb_typeof(snapshot->'selectedItems')='array' then snapshot->'selectedItems' else '[]' end) i;
+$$;
+revoke all on function event_private.public_proposal_items(jsonb) from public,anon,authenticated;
+
 create function event_private.amendment_public_record(p public.propostas) returns jsonb
 language sql immutable set search_path='' as $$
  select jsonb_build_object('version',p.versao,'client',p.cliente_nome,'type',p.tipo_evento,'date',p.data_evento,'time',p.horario_evento,
  'guests',p.convidados,'duration',p.duracao,'subtotal',p.subtotal,'service',p.taxa_servico,'private',p.privatizacao,'total',p.total,
  'adjustment',p.snapshot#>'{totals,adjustment}','private_adjustment',p.snapshot#>'{totals,privatizationAdjustment}',
- 'items',p.snapshot->'selectedItems','terms',p.snapshot->'generalTerms','payment_terms',p.snapshot->'paymentTerms');
+ 'items',event_private.public_proposal_items(p.snapshot),'terms',p.snapshot->'generalTerms','payment_terms',p.snapshot->'paymentTerms');
 $$;
 revoke all on function event_private.amendment_public_record(public.propostas) from public,anon,authenticated;
 create function event_private.assert_amendment_current(a event_private.event_amendments) returns void
@@ -289,20 +299,30 @@ end; $$;
 revoke all on function public.apply_event_amendment(uuid,bigint,bigint,text) from public,anon;
 grant execute on function public.apply_event_amendment(uuid,bigint,bigint,text) to authenticated;
 
+create function event_private.amendment_team_record(a event_private.event_amendments) returns jsonb
+language sql stable security definer set search_path='' as $$
+ select jsonb_build_object('id',a.id,'draft_id',a.draft_id,'base_revision',a.base_revision,'draft_revision',a.draft_revision,
+   'status',a.status,'summary',a.summary,'created_at',a.created_at,'requested_by',a.requested_by,
+   'decided_at',a.decided_at,'decision_note',a.decision_note,'withdrawal_reason',a.withdrawal_reason,'client_token',case when a.status in ('awaiting_client','client_accepted','applied') then a.client_token end,
+   'expires_at',a.expires_at,'client_response_at',a.client_response_at,'client_name',a.client_name,'client_message',a.client_message,'applied_at',a.applied_at,
+   'stale',a.status<>'applied' and not exists(select 1 from public.propostas b join public.propostas d on d.id=a.draft_id where b.id=a.base_id and b.is_current and b.revision=a.base_revision and d.revision=a.draft_revision and not d.is_current and d.publication_status='draft' and b.status in ('confirmado','pagamento_final','planejamento','evento_proximo') and (b.data_evento+b.horario_evento) at time zone 'America/Sao_Paulo'>now() and (d.data_evento+d.horario_evento) at time zone 'America/Sao_Paulo'>now()),
+   'before',event_private.amendment_public_record(jsonb_populate_record(null::public.propostas,a.before_record)),
+   'after',event_private.amendment_public_record(jsonb_populate_record(null::public.propostas,a.after_record)));
+$$;
+revoke all on function event_private.amendment_team_record(event_private.event_amendments) from public,anon,authenticated;
+
 create function public.list_event_amendments() returns jsonb
 language plpgsql stable security definer set search_path='' as $$
 declare requests jsonb; drafts jsonb;
 begin
  perform event_private.require_team();
- select coalesce(jsonb_agg(q.payload order by q.created_at desc),'[]') into requests from (
-  select a.created_at,jsonb_build_object('id',a.id,'draft_id',a.draft_id,'base_revision',a.base_revision,'draft_revision',a.draft_revision,
-   'status',a.status,'summary',a.summary,'created_at',a.created_at,'requested_by',a.requested_by,
-   'decided_at',a.decided_at,'decision_note',a.decision_note,'withdrawal_reason',a.withdrawal_reason,'client_token',case when a.status in ('awaiting_client','client_accepted','applied') then a.client_token end,
-   'expires_at',a.expires_at,'client_response_at',a.client_response_at,'client_name',a.client_name,'client_message',a.client_message,'applied_at',a.applied_at,
-   'stale',a.status<>'applied' and not exists(select 1 from public.propostas b join public.propostas d on d.id=a.draft_id where b.id=a.base_id and b.is_current and b.revision=a.base_revision and d.revision=a.draft_revision),
-   'before',event_private.amendment_public_record(jsonb_populate_record(null::public.propostas,a.before_record)),
-   'after',event_private.amendment_public_record(jsonb_populate_record(null::public.propostas,a.after_record))) payload
-  from event_private.event_amendments a order by a.created_at desc,a.id limit 200
+ select coalesce(jsonb_agg(q.payload order by q.active desc,q.created_at desc),'[]') into requests from (
+  select true active,a.created_at,event_private.amendment_team_record(a) payload from event_private.event_amendments a
+   where a.status in ('pending_manager','awaiting_client','client_accepted')
+  union all
+  select false active,a.created_at,event_private.amendment_team_record(a) payload from (
+   select * from event_private.event_amendments where status not in ('pending_manager','awaiting_client','client_accepted') order by created_at desc,id limit 200
+  ) a
  ) q;
  select coalesce(jsonb_agg(jsonb_build_object('id',p.id,'revision',p.revision,'base_revision',b.revision,
   'before',event_private.amendment_public_record(b),'after',event_private.amendment_public_record(p)) order by p.updated_at desc),'[]') into drafts
@@ -310,10 +330,19 @@ begin
  where not p.is_current and p.publication_status='draft' and p.snapshot#>>'{amendmentOf,id}'=b.id::text
   and b.status in ('confirmado','pagamento_final','planejamento','evento_proximo') and (b.data_evento+b.horario_evento) at time zone 'America/Sao_Paulo'>now()
   and not exists(select 1 from event_private.event_amendments a where a.opportunity_id=p.oportunidade_id and a.status in ('pending_manager','awaiting_client','client_accepted'));
- return jsonb_build_object('requests',requests,'drafts',drafts,'manager',public.is_super_admin(),'user_id',auth.uid());
+ return jsonb_build_object('requests',requests,'drafts',drafts,'manager',public.is_super_admin(),'user_id',auth.uid(),'history_truncated',(select count(*)>200 from event_private.event_amendments where status not in ('pending_manager','awaiting_client','client_accepted')));
 end; $$;
 revoke all on function public.list_event_amendments() from public,anon;
 grant execute on function public.list_event_amendments() to authenticated;
+
+create function public.get_event_amendment(target_amendment uuid) returns jsonb
+language plpgsql stable security definer set search_path='' as $$
+begin
+ perform event_private.require_team();
+ return (select event_private.amendment_team_record(a) from event_private.event_amendments a where a.id=target_amendment);
+end; $$;
+revoke all on function public.get_event_amendment(uuid) from public,anon;
+grant execute on function public.get_event_amendment(uuid) to authenticated;
 
 -- The journey recognizes approval recorded by the amendment workflow.
 create or replace function public.event_journey_evidence(target_proposal uuid,expected_revision bigint) returns jsonb
@@ -368,3 +397,121 @@ end; $$;
 revoke all on function public.event_journey_evidence(uuid,bigint) from public,anon;
 grant execute on function public.event_journey_evidence(uuid,bigint) to authenticated;
 
+
+-- Apply the same item privacy projection to the existing customer portal.
+CREATE OR REPLACE FUNCTION public.get_public_proposal(proposal_token uuid)
+ RETURNS TABLE(id uuid, created_at timestamp with time zone, cliente_nome text, cliente_email text, tipo_evento text, data_evento date, horario_evento time without time zone, convidados integer, duracao numeric, subtotal numeric, taxa_servico numeric, privatizacao numeric, total numeric, status text, snapshot jsonb, cliente_resposta text, cliente_resposta_em timestamp with time zone, cliente_mensagem text, cliente_solicitacao jsonb)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  with requested as (
+    select p.*
+    from public.propostas p
+    where p.public_token = proposal_token
+      and p.public_token_revoked_at is null
+    limit 1
+  ),
+  resolved as (
+    select coalesce(current_p.id, requested.id) as resolved_id
+    from requested
+    left join public.propostas current_p
+      on current_p.oportunidade_id = requested.oportunidade_id
+     and current_p.is_current = true
+     and current_p.public_token_revoked_at is null
+     and current_p.public_token_expires_at > now()
+     and event_private.remote_proposal_is_public(current_p)
+  )
+  select
+    p.id,
+    p.created_at,
+    p.cliente_nome,
+    p.cliente_email,
+    p.tipo_evento,
+    p.data_evento,
+    p.horario_evento,
+    p.convidados,
+    p.duracao,
+    p.subtotal,
+    p.taxa_servico,
+    p.privatizacao,
+    p.total,
+    p.status,
+    jsonb_strip_nulls(jsonb_build_object(
+      'event', jsonb_build_object(
+        'type', p.snapshot #> '{event,type}',
+        'validity', p.snapshot #> '{event,validity}',
+        'signalDeadlineHours', p.snapshot #> '{event,signalDeadlineHours}',
+        'signalDeadlineAt', p.snapshot #> '{event,signalDeadlineAt}',
+        'clientLanguage', p.snapshot #> '{event,clientLanguage}'
+      ),
+      'totals', jsonb_build_object(
+        'subtotal', p.subtotal,
+        'serviceFee', p.taxa_servico,
+        'privatizationAmount', p.privatizacao,
+        'total', p.total,
+        'privatization', jsonb_build_object('mode', p.snapshot #> '{totals,privatization,mode}')
+      ),
+      'selectedItems', event_private.public_proposal_items(p.snapshot),
+      'versionChanges', p.snapshot -> 'versionChanges',
+      'publicOfferOptions', p.snapshot -> 'publicOfferOptions',
+      'generalTerms', p.snapshot -> 'generalTerms',
+      'paymentTerms', p.snapshot -> 'paymentTerms',
+      'clienteResposta', p.snapshot -> 'clienteResposta',
+      'versao', p.versao,
+      'publicRevision', p.revision
+    )) as snapshot,
+    p.cliente_resposta,
+    p.cliente_resposta_em,
+    p.cliente_mensagem,
+    p.cliente_solicitacao
+  from public.propostas p
+  join resolved r on r.resolved_id = p.id
+  where p.public_token_revoked_at is null
+    and p.public_token_expires_at > now()
+    and p.publication_status <> 'draft'
+    and event_private.remote_proposal_is_public(p)
+  limit 1;
+$function$
+;
+
+-- Preserve customer-history behavior while removing the same internal item metadata.
+CREATE OR REPLACE FUNCTION public.get_my_event_history()
+ RETURNS TABLE(proposal_id uuid, oportunidade_id uuid, versao integer, status text, cliente_nome text, tipo_evento text, data_evento date, horario_evento time without time zone, convidados integer, total numeric, public_token uuid, snapshot jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  with me as (
+    select lower(nullif(trim(coalesce(auth.jwt() ->> 'email','')), '')) as email
+  )
+  select
+    p.id,
+    p.oportunidade_id,
+    p.versao,
+    p.status,
+    p.cliente_nome,
+    p.tipo_evento,
+    p.data_evento,
+    p.horario_evento,
+    p.convidados,
+    p.total,
+    p.public_token,
+    jsonb_strip_nulls(jsonb_build_object(
+      'client', p.snapshot -> 'client',
+      'event', p.snapshot -> 'event',
+      'selectedItems', event_private.public_proposal_items(p.snapshot),
+      'qualificacao', p.snapshot -> 'qualificacao',
+      'sourceRequestSnapshot', p.snapshot -> 'sourceRequestSnapshot'
+    )),
+    p.created_at,
+    p.updated_at
+  from public.propostas p, me
+  where me.email is not null
+    and lower(coalesce(p.cliente_email,'')) = me.email
+    and coalesce(p.is_current, true) = true
+    and p.publication_status <> 'draft'
+    and event_private.remote_proposal_is_public(p)
+  order by coalesce(p.data_evento, p.created_at::date) desc, p.updated_at desc
+  limit 12;
+$function$;

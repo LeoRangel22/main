@@ -15,7 +15,8 @@ Somente após todas as verificações a nova versão vira o acordo vigente. A an
 - Rascunho submetido fica bloqueado até retirada ou decisão de ajustes; alteração na revisão do acordo original invalida a decisão subsequente.
 - Gestor, cliente e aplicação têm decisões separadas. A equipe não pode agir como gestor nem registrar aceite sem a capacidade específica do link.
 - O link usa token aleatório, expira em até sete dias ou no início do primeiro dos eventos comparados e pode ser invalidado por retirada.
-- O retorno público contém somente campos comerciais permitidos. Briefing interno, contatos, provas bancárias e registros privados não são retornados.
+- A lista mantém todas as solicitações ativas, além de até 200 encerradas; links autenticados específicos recuperam registros fora desse recorte.
+- O retorno público contém somente campos comerciais permitidos. Os itens são projetados campo a campo, sem fórmulas, faixas de preço ou metadados internos de agenda, também no portal de propostas existente. Briefing interno, contatos, provas bancárias e registros privados não são retornados.
 - A aplicação usa contexto privado restrito à transação e às duas linhas exatas esperadas; não aceita sinalizadores de sessão controláveis pelo cliente.
 - Repetir a solicitação, a resposta com a mesma chave ou a aplicação não cria novas decisões ou reservas.
 

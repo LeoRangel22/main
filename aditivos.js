@@ -8,13 +8,13 @@
  const notice=(message,error=false)=>{$('notice').textContent=message;$('notice').className=error?'error':'';};
  const identity=()=>({generation:state.generation,user:state.user?.id});
  const current=i=>i.generation===state.generation&&i.user===state.user?.id;
- async function rpc(name,args={},i=identity()){
+ async function rpc(name,args={},i=identity(),allowNull=false){
   let timer;
   try{
    const result=await Promise.race([client.rpc(name,args),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('A consulta demorou. Atualize o histórico antes de repetir uma decisão.')),15000);})]);
    if(!current(i))throw Object.assign(Error('Sessão alterada'),{stale:true});
    if(result.error)throw Error(result.error.message||'Operação não confirmada. Atualize antes de repetir.');
-   if(result.data==null)throw Error('Revisão indisponível ou link expirado. Solicite um link atual à equipe.');
+   if(result.data==null&&!allowNull)throw Error('Revisão indisponível ou link expirado. Solicite um link atual à equipe.');
    return result.data;
   }finally{clearTimeout(timer);}
  }
@@ -29,6 +29,11 @@
  async function loadTeam(i=identity()){
   const data=await rpc('list_event_amendments',{},i);
   if(!validateBundle(data))throw Error('As revisões não correspondem à conta atual. Entre novamente.');
+  if(state.selected?.startsWith('request:')&&!data.requests.some(a=>'request:'+a.id===state.selected)){
+   const id=state.selected.slice(8);
+   const requested=/^[0-9a-f-]{36}$/i.test(id)?await rpc('get_event_amendment',{target_amendment:id},i,true):null;
+   if(requested?.id===id)data.requests.unshift(requested);else state.selected=null;
+  }
   Object.assign(state,{requests:data.requests,drafts:data.drafts,manager:data.manager});
   $('login').hidden=true;$('team').hidden=false;$('logout').hidden=false;
   $('identity').textContent=`${state.user.email} · ${state.manager?'Gestor':'Equipe de Eventos'}`;
@@ -36,15 +41,15 @@
  }
  function renderList(){
   const options=[...state.requests.map(a=>`<option value="request:${esc(a.id)}">${esc(a.after?.client)} · ${esc(labels[a.status]||a.status)} · ${esc(ui.date(a.after?.date))}</option>`),...state.drafts.map(a=>`<option value="draft:${esc(a.id)}">${esc(a.after?.client)} · rascunho para revisão · ${esc(ui.date(a.after?.date))}</option>`)];
-  $('teamList').innerHTML=options.length?`<label>Escolha o aditivo<select id="amendmentSelect"><option value="">Selecione para comparar os acordos</option>${options.join('')}</select></label><p>${state.requests.length} solicitações mais recentes · ${state.drafts.length} rascunhos disponíveis.</p>`:'<p>Nenhum aditivo solicitado. Para alterar um acordo confirmado, abra o evento na Central, prepare a alteração e salve como rascunho de aditivo. Depois volte para revisar.</p>';
+  $('teamList').innerHTML=options.length?`<label>Escolha o aditivo<select id="amendmentSelect"><option value="">Selecione para comparar os acordos</option>${options.join('')}</select></label><p>${state.requests.length} solicitações neste recorte · ${state.drafts.length} rascunhos disponíveis. Todas as solicitações ativas e até 200 encerradas são carregadas; links específicos também abrem registros anteriores.</p>`:'<p>Nenhum aditivo solicitado. Para alterar um acordo confirmado, abra o evento na Central, prepare a alteração e salve como rascunho de aditivo. Depois volte para revisar.</p>';
   const select=$('amendmentSelect');if(select){select.value=state.selected||'';select.onchange=()=>{if(state.busy)return;state.selected=select.value;renderDetail();};}
  }
  function chosen(){const [kind,id]=(state.selected||'').split(':');return {kind,a:(kind==='draft'?state.drafts:state.requests).find(x=>x.id===id)};}
  function reviewed(){const el=$('reviewed');if(!el?.checked){notice('Marque a confirmação após comparar os dois acordos.',true);el?.focus();return false;}return true;}
  function renderDetail(){
   const {kind,a}=chosen(),root=$('teamDetail');root.hidden=!a;if(!a){root.textContent='';return;}
-  const expired=Boolean(a.expires_at&&Date.parse(a.expires_at)<=Date.now()),live=!a.stale&&!expired;
-  root.innerHTML=`<h2>${esc(a.after.client)}</h2><p class="status">${kind==='draft'?'Rascunho preservado':esc(labels[a.status]||a.status)}</p><ol class="steps"><li>Gestor revisa</li><li>Cliente aceita</li><li>Gestor aplica e revê disponibilidade</li><li>Setores dão nova ciência</li></ol>${a.summary?`<p class="summary">${esc(a.summary)}</p>`:''}${a.stale||expired?'<p class="warning">Esta revisão mudou ou expirou. Retire a solicitação e prepare uma revisão atual.</p>':''}${compare(a.before,a.after)}
+  const active=['pending_manager','awaiting_client','client_accepted'].includes(a.status),expired=Boolean(a.expires_at&&Date.parse(a.expires_at)<=Date.now()),live=!a.stale&&!expired;
+  root.innerHTML=`<h2>${esc(a.after.client)}</h2><p class="status">${kind==='draft'?'Rascunho preservado':esc(labels[a.status]||a.status)}</p><ol class="steps"><li>Gestor revisa</li><li>Cliente aceita</li><li>Gestor aplica e revê disponibilidade</li><li>Setores dão nova ciência</li></ol>${a.summary?`<p class="summary">${esc(a.summary)}</p>`:''}${active&&(a.stale||expired)?'<p class="warning">Esta revisão mudou ou expirou. Retire a solicitação e prepare uma revisão atual.</p>':''}${compare(a.before,a.after)}
    ${a.decision_note?`<h3>Orientação do gestor</h3><p class="terms">${esc(a.decision_note)}</p>`:''}${a.withdrawal_reason?`<h3>Motivo da retirada</h3><p class="terms">${esc(a.withdrawal_reason)}</p>`:''}${a.client_response_at?`<h3>Resposta pelo link do cliente</h3><p>${esc(a.client_name)} · ${esc(at(a.client_response_at))}</p><p class="terms">${esc(a.client_message||'Sem observações adicionais.')}</p>`:''}
    ${kind==='draft'?'<form id="requestForm"><label>Resumo da alteração para o cliente<textarea name="summary" minlength="10" maxlength="2000" required placeholder="Descreva claramente o que está mudando e por quê."></textarea></label><label class="check"><input id="reviewed" type="checkbox" required>Comparei o acordo vigente e o rascunho. Solicito a revisão do gestor, sem alterar a reserva atual.</label><button class="primary">Solicitar revisão do gestor</button></form>':''}
    ${kind==='request'&&a.status==='pending_manager'&&state.manager&&live?'<form id="decisionForm"><label class="check"><input id="reviewed" type="checkbox" required>Revisei os dois acordos, os valores, os descontos e as condições. Autorizo disponibilizar este aditivo para aceite do cliente.</label><label>Orientação à equipe<textarea name="note" maxlength="2000"></textarea></label><div class="actions"><button class="primary" name="decision" value="approve">Aprovar revisão para o cliente</button><button name="decision" value="changes_requested">Solicitar ajustes</button><button name="decision" value="rejected">Recusar revisão</button></div></form>':''}
