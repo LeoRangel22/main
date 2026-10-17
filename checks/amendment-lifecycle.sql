@@ -101,7 +101,7 @@ begin
    assert (select proposal_id=p.id from public.event_reservations where opportunity_id=opp);
    assert (select status='client_accepted' from event_private.event_amendments where id=aid);
    update public.event_commercial_policy set capacity=200 where id;
-  else
+  elsif i=3 then
    blocked:=false;begin perform public.apply_event_amendment(aid,p.revision,d.revision,'');exception when others then blocked:=true;end;assert blocked,'Higher total requires complement or explicit manager exception';
   end if;
   draft_revision:=d.revision;
