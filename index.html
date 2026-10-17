@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261017-seller-feedback" />
+    <link rel="stylesheet" href="./styles.css?v=20261018-synergy" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -96,6 +96,7 @@
             </div>
             <div class="workspace-mode-actions" role="group" aria-label="Modo do painel">
               <button type="button" data-workspace-mode="sales">Modo Vendas</button>
+              <button type="button" data-workspace-mode="operations">Operação</button>
               <button type="button" data-workspace-mode="full">Visão completa</button>
             </div>
           </section>
@@ -155,6 +156,7 @@
           <section id="commercialDiagnostics" class="commercial-diagnostics" aria-label="Atualização e resultados comerciais" hidden></section>
           <div class="period-metrics" id="periodMetrics" aria-label="KPIs por período"></div>
           <section class="finance-command-panel" id="financeCommandPanel" aria-label="Resumo financeiro"></section>
+          <section id="operationWorkspace" class="operation-workspace" aria-label="Central de operação" hidden></section>
           <section class="operations-agenda" aria-label="Agenda operacional">
             <div class="operations-agenda-heading">
               <div>
@@ -817,14 +819,21 @@
     </main>
 
     <script defer src="./vendor/supabase.js"></script>
-    <script defer src="./analytics.js?v=20261007-commercial-v1"></script>
+    <script defer src="./analytics.js?v=20261018-synergy"></script>
     <script defer src="./event-data.js?v=20261007-commercial-v1"></script>
     <script defer src="./event-performance.js?v=20261007-commercial-v1"></script>
     <script defer src="./commercial-rules.js?v=20261015-approval-closure"></script>
     <script defer src="./commercial-dashboard.js?v=20261007-commercial-v1"></script>
-    <script defer src="./remote-approval-ui.js?v=20261017-seller-feedback"></script>
-    <script defer src="./app.js?v=20261017-seller-feedback"></script>
-    <script defer src="./event-readiness.js?v=20261017-amendments"></script>
-    <script defer src="./event-operations.js?v=20261017-autonomy-amendments"></script>
+    <script defer src="./remote-approval-ui.js?v=20261018-synergy"></script>
+    <script defer src="./app.js?v=20261018-synergy"></script>
+    <script defer src="./event-readiness.js?v=20261018-synergy"></script>
+    <script defer src="./event-operations.js?v=20261018-synergy"></script>
+    <script defer src="./event-workspace.js?v=20261018-workspace"></script>
+    <script defer src="./operational-ui.js?v=20261018-workspace"></script>
+    <script defer src="./event-metrics.js?v=20261018-cohort"></script>
+    <script defer src="./sales-guide.js?v=20261018-guide"></script>
+    <script defer src="./payment-ui.js?v=20261018-payments"></script>
+    <script defer src="./production-planning.js?v=20261018-production"></script>
+    <script defer src="./production-ui.js?v=20261018-production"></script>
 </body>
 </html>
