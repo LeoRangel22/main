@@ -103,10 +103,19 @@ test('manager can release after every prerequisite is done and acknowledged in t
     await updateOperationalHandoffTask(release.id,true);return calls;
   });expect(r).toBe(1);
 });
-test('seller cannot validate or write a payment but can retain existing recorded values',async({page})=>{
-  await fixture(page);const r=await page.evaluate(async()=>{
-    const p=getActiveProposal();state.session.user.email='eventos@embaixadacarioca.com.br';let calls=0;state.supabase.rpc=async()=>{calls++;return {data:null};};
-    const dialog=await showSignalPaymentDialog(p.total);
+test('seller must attest bank credit and cannot write unverified payments',async({page})=>{
+  await fixture(page);
+  const pending=await page.evaluate(()=>{
+    state.session.user.email='eventos@embaixadacarioca.com.br';
+    window.sellerSignalDialog=showSignalPaymentDialog(getActiveProposal().total);
+    return document.querySelectorAll('.signal-modal-backdrop').length;
+  });
+  expect(pending).toBe(1);
+  await expect(page.locator('[name="bankConfirmed"]')).not.toBeChecked();
+  await page.locator('[data-signal-cancel]').click();
+  const r=await page.evaluate(async()=>{
+    const dialog=await window.sellerSignalDialog,p=getActiveProposal();let calls=0;
+    state.supabase.rpc=async()=>{calls++;return {data:null};};
     const result=await persistEventProposal(p.id,{snapshot:{...p.snapshot,pagamentoSinal:{valor:1}}},p);
     return {dialog,code:result.error?.code,calls,modals:document.querySelectorAll('.signal-modal-backdrop').length};
   });expect(r).toEqual({dialog:null,code:'42501',calls:0,modals:0});

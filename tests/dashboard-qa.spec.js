@@ -457,6 +457,9 @@ test.describe("Dashboard interno em modo QA", () => {
         const cards = [...list.querySelectorAll('.pipeline-card')];
         return {
           scrollable: list.scrollHeight > list.clientHeight,
+          pageScrollable: document.documentElement.scrollHeight > document.documentElement.clientHeight,
+          overflow: getComputedStyle(list).overflowY,
+          maxHeight: getComputedStyle(list).maxHeight,
           readable: cards.every((item) => {
             const box = item.getBoundingClientRect();
             return ['.pipeline-card-name', '.pipeline-card-event-line'].every((selector) => {
@@ -491,7 +494,10 @@ test.describe("Dashboard interno em modo QA", () => {
           })),
         };
       });
-      expect(result.scrollable).toBe(true);
+      expect(result.scrollable).toBe(false);
+      expect(result.pageScrollable).toBe(true);
+      expect(result.overflow).toBe("visible");
+      expect(result.maxHeight).toBe("none");
       expect(result.readable, JSON.stringify({ width, ...result })).toBe(true);
       expect(result.minimumHeight).toBeGreaterThan(120);
       await expectNoHorizontalOverflow(page);

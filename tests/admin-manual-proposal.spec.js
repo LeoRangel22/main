@@ -571,6 +571,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator('[data-flow-event="cafe"]').click();
 
     await page.locator("#quickItemName").fill("Som dedicado");
+    await page.locator("#quickItemDescription").fill("Equipamento de som com operação durante o evento.");
     await page.locator("#quickItemValue").fill("1200");
     await page.locator("#quickItemCategory").fill("Produção");
     await page.locator("#addQuickItemBtn").click();

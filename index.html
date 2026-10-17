@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orçamentos de Eventos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261016-execution" />
+    <link rel="stylesheet" href="./styles.css?v=20261017-seller-feedback" />
   </head>
   <body class="auth-locked" data-page="app">
     <main class="app-shell">
@@ -648,11 +648,15 @@
               <div class="quick-budget-item" id="quickBudgetItem">
                 <div>
                   <span>Item pontual</span>
-                  <strong>Adicione uma taxa, produção ou serviço extra direto nesta proposta.</strong>
+                  <strong>Crie um item personalizado, sozinho ou junto com itens do catálogo.</strong>
                 </div>
                 <label>
                   Nome do item
-                  <input id="quickItemName" type="text" placeholder="Ex.: som extra, equipe adicional, taxa especial..." />
+                  <input id="quickItemName" type="text" maxlength="160" placeholder="Ex.: som extra, equipe adicional, taxa especial..." />
+                </label>
+                <label class="quick-item-description">
+                  Descrição do item
+                  <textarea id="quickItemDescription" rows="3" maxlength="4000" placeholder="Descreva o serviço, a composição e o que está incluído. Este texto aparece na proposta."></textarea>
                 </label>
                 <label>
                   Valor
@@ -818,9 +822,9 @@
     <script defer src="./event-performance.js?v=20261007-commercial-v1"></script>
     <script defer src="./commercial-rules.js?v=20261015-approval-closure"></script>
     <script defer src="./commercial-dashboard.js?v=20261007-commercial-v1"></script>
-    <script defer src="./remote-approval-ui.js?v=20261016-execution"></script>
-    <script defer src="./app.js?v=20261016-execution"></script>
+    <script defer src="./remote-approval-ui.js?v=20261017-seller-feedback"></script>
+    <script defer src="./app.js?v=20261017-seller-feedback"></script>
     <script defer src="./event-readiness.js?v=20261017-amendments"></script>
-    <script defer src="./event-operations.js?v=20261017-amendments"></script>
+    <script defer src="./event-operations.js?v=20261017-autonomy-amendments"></script>
 </body>
 </html>

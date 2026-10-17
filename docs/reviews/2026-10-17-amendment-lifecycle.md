@@ -23,3 +23,7 @@ Somente após todas as verificações a nova versão vira o acordo vigente. A an
 ## Limites da homologação
 
 Os testes usam clientes, pagamentos e decisões fictícios em banco isolado e mocks de navegador. Não constituem aceite de cliente real ou conferência de extrato real. O piloto e a ciência dos setores continuam dependendo das pessoas responsáveis. Os bloqueios já constatados na ponte do Bot, OAuth de leitura de e-mail e conexão WhatsApp são independentes desta entrega e não foram contornados.
+
+## Integração com a autonomia de Eventos
+
+A versão integrada preserva a validação de sinal conferido no banco por Eventos e a proteção contra confirmação de proposta cancelada. A fila de execução consulta a política real e deixa de cobrar decisões antigas quando a aprovação geral está desativada; as decisões históricas permanecem no banco. Erro na leitura da política conserva a última fila e indica a falha.
