@@ -12955,3 +12955,10 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .operation-detail .handoff-sector-grid { grid-template-columns:minmax(0,1fr); }
 .operation-workspace button,.operation-workspace select { min-height:44px; }
 @media(max-width:800px) { .operation-workspace-layout { grid-template-columns:minmax(0,1fr); } .operation-workspace { padding:14px; } .operation-workspace-heading { flex-direction:column; } }
+.sales-step-guide { display:grid; gap:12px; position:relative; padding:16px; background:#f0f6f2; border-radius:14px; }
+.sales-step-buttons,.sales-guide-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.sales-step-buttons button[aria-current="step"] { outline:2px solid #317759; background:#d9ece1; }
+.sales-guide-controls label { display:flex; gap:8px; align-items:center; }
+.sales-guide-controls input[type="checkbox"] { width:18px; min-height:18px; }
+.sales-quality-message { margin:0; font-size:.9rem; line-height:1.5; color:#5a512d; }
+.sales-step-hidden { display:none !important; }

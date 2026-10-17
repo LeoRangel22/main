@@ -5028,6 +5028,7 @@ function getProposalReviewItems() {
   const commercialApproval = getCommercialApprovalState();
 
   return [
+    ...(typeof proposalQualityIssues === "function" ? proposalQualityIssues() : []),
     {
       id: "contact",
       label: "Contato do cliente",
@@ -8681,6 +8682,15 @@ function createQaSupabaseClient() {
       const query = { action: args.p_proposal_id ? "update" : "insert",
         payload: { ...args.p_changes, revision: args.p_proposal_id ? Number(source.revision || 1) + 1 : 1 },
         filters: args.p_proposal_id ? [{ column: "id", value: args.p_proposal_id }] : [] };
+      if (query.payload.snapshot) {
+        query.payload.snapshot = structuredClone(query.payload.snapshot);
+        for (const key of ["pagamentoSinal", "pagamentoRestante"]) {
+          const payment = query.payload.snapshot[key];
+          if (payment && JSON.stringify(payment) !== JSON.stringify(source?.snapshot?.[key])) {
+            Object.assign(payment, { validacaoPendente: false, validadoPor: state.session.user.id, validadoEmail: state.session.user.email, validadoEm: new Date().toISOString() });
+          }
+        }
+      }
       return runQuery("propostas", query);
     },
     auth: {
@@ -8924,6 +8934,11 @@ function loadQaFixtures() {
 
   state.quoteRequests = [request];
   state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining, pastOutcomePending];
+  // Only fictitious demo records: mirror server-stamped financial fixtures.
+  state.proposals.forEach(p => ["pagamentoSinal", "pagamentoRestante"].forEach(key => {
+    const payment = p.snapshot?.[key];
+    if (payment && payment.validacaoPendente !== true) Object.assign(payment, { validacaoPendente:false, validadoPor:"qa-user", validadoEmail:QA_USER_EMAIL, validadoEm:createQaTimestamp(-1) });
+  }));
   state.opportunities = [...state.quoteRequests, ...state.proposals].map((row) => ({
     id: row.oportunidade_id,
     status: row.status,
@@ -13985,6 +14000,7 @@ function renderAll() {
   renderIntegrationLogs();
   renderCommunicationTemplateEditor();
   renderSharedSettingStatus();
+  if (typeof renderSalesGuide === "function") renderSalesGuide();
 }
 
 function startNewProposal(options = {}) {
@@ -14139,6 +14155,7 @@ function getPublicProposalUrl(proposal) {
 }
 
 function scrollToReviewTarget(target) {
+  if (typeof salesGuide !== "undefined") { salesGuide.focused = false; renderSalesGuide(); }
   const targets = {
     client: "#clientDataSection",
     source: "#formSourcePanel",

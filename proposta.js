@@ -7,6 +7,7 @@ const title = document.querySelector("#proposalPublicTitle");
 const subtitle = document.querySelector("#proposalPublicSubtitle");
 const token = new URLSearchParams(window.location.search).get("p") || "";
 const requestedLanguage = new URLSearchParams(window.location.search).get("lang");
+let publicPaymentRequests = [];
 let language = requestedLanguage === "en" || (!requestedLanguage && localStorage.getItem("embaixada_form_language_v1") === "en") ? "en" : "pt";
 const supabaseClient = window.supabase?.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY);
 const tr = (pt, en) => language === "en" ? en : pt;
@@ -64,7 +65,7 @@ function captureProposalAnalytics(eventName, properties = {}, options = {}) {
   return window.EventAnalytics?.capture(
     eventName,
     { ...getProposalAnalyticsProperties(), ...properties },
-    { ...options, entityId },
+    { ...options, entityId, entityHash: currentProposal?.snapshot?.analyticsEntityHash },
   );
 }
 
@@ -363,10 +364,22 @@ function renderError(message) {
   `;
 }
 
+function publicPaymentReferencesHtml() {
+  return publicPaymentRequests.map(q => `<p>${escapeHtml(tr("Referência do acordo", "Agreement reference"))}: <strong>${escapeHtml(q.reference)}</strong> · ${formatMoney(q.amount)}<br/><small>${escapeHtml(tr("Identificação interna para conferência; use os dados bancários oficiais abaixo.", "Internal reconciliation reference; use the official bank details below."))}</small></p>`).join("");
+}
+async function loadPublicPaymentReferences(proposalId) {
+  try {
+    const result = await supabaseClient.rpc("get_public_event_payment_requests", { proposal_token: token });
+    if (result.error || currentProposal?.id !== proposalId || result.data?.proposal_id !== proposalId || !Array.isArray(result.data.requests)) return;
+    publicPaymentRequests = result.data.requests.filter(q => /^EC-[A-F0-9]{32}$/.test(q.reference) && Number(q.amount) > 0 && ["sinal", "saldo"].includes(q.purpose));
+    document.querySelectorAll("[data-public-payment-references]").forEach(n => { n.innerHTML = publicPaymentReferencesHtml(); });
+  } catch (_) { /* Bank details and the customer's work stay available if this optional read fails. */ }
+}
 function renderPaymentInfo({ proof = null } = {}) {
   const signalAmount = getSignalAmount();
   return `
     <section class="public-payment-info" aria-label="${tr("Dados bancários para sinal de reserva", "Bank details for deposit")}">
+      <div data-public-payment-references>${publicPaymentReferencesHtml()}</div>
       <div class="public-payment-heading">
         <span>${tr("Sinal de reserva", "Booking deposit")}</span>
         <h3>${tr("Dados para pagamento do sinal", "Deposit payment details")}</h3>
@@ -814,7 +827,9 @@ async function loadProposal() {
     renderError(tr("O link pode ter expirado ou ainda falta ativar a consulta pública.", "The link may have expired or the proposal may be temporarily unavailable."));
     return;
   }
+  publicPaymentRequests = [];
   renderProposal(data[0]);
+  void loadPublicPaymentReferences(data[0].id);
   captureProposalAnalytics("proposal_viewed", {}, {
     entityId: data[0].oportunidade_id || data[0].id,
     dedupeKey: `proposal-viewed:${data[0].id}:${data[0].versao || 1}`,

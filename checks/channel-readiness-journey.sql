@@ -110,8 +110,8 @@ begin
  assert blocked and not exists(select 1 from event_reservations where opportunity_id=opp),'Legacy amount without finance audit cannot confirm reservation';
  select * into p from save_event_proposal(p.id,jsonb_build_object('snapshot',p.snapshot||'{"pagamentoSinal":{"valor":560,"data":"2026-10-17","bancos":["Fixture"]}}'),p.revision,null);
  assert not exists(select 1 from event_reservations where opportunity_id=opp),'Financial validation preserves stage and creates no silent reservation';
- perform set_config('request.jwt.claims',jsonb_build_object('sub',(select id from auth.users where email='eventos@embaixadacarioca.com.br'),'email','eventos@embaixadacarioca.com.br','role','authenticated')::text,true);
- blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision);exception when insufficient_privilege then blocked:=true;end;assert blocked,'Seller cannot reconcile legacy reservation';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',(select id from auth.users where email='financeiro@embaixadacarioca.com.br'),'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);
+ blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision);exception when insufficient_privilege then blocked:=true;end;assert blocked,'Finance role does not grant operational coordination';
  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
  blocked:=false;begin perform public.confirm_event_reservation(p.id,p.revision+1);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Reservation requires reviewed revision';
  update event_commercial_policy set capacity=10 where id;

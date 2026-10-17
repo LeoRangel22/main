@@ -32,7 +32,7 @@ function renderOperationWorkspaceDetail(row){
  const p=row.proposal,data=operationWorkspace.data,blockers=data?.blockers||getOperationalReleaseBlockers(p,getOperationalHandoffData(p));
  return `<h3>${escapeHtml(p.cliente_nome)}</h3><p>${escapeHtml(formatDateFromIso(p.data_evento))} · ${escapeHtml(String(p.horario_evento||'').slice(0,5))} · ${Number(p.convidados)||0} pax · checklist V${row.handoff?.version||'—'}</p>
  ${operationWorkspace.error?`<p role="alert">${escapeHtml(operationWorkspace.error)}</p>`:''}<div class="operation-readiness"><strong>${data?.ready?'Pré-requisitos conferidos; a liberação final exige decisão explícita':'Pendências para liberar execução'}</strong><ul>${blockers.map(b=>`<li>${escapeHtml(b)}</li>`).join('')||'<li>Confira a decisão final registrada na tarefa de liberação.</li>'}</ul></div>
- <div class="operational-doc-actions"><button type="button" class="secondary" data-operation-document="technical-no-finance">Ficha operacional sem valores</button><button type="button" class="secondary" data-operation-document="checklist">Checklist</button><button type="button" class="secondary" data-operation-open>Revisar acordo</button></div>
+ <div class="operational-doc-actions"><button type="button" class="secondary" data-operation-document="technical-no-finance">Ficha operacional sem valores</button><button type="button" class="secondary" data-operation-document="checklist">Checklist</button><button type="button" class="secondary" data-operation-reserve>Conferir reserva</button><button type="button" class="secondary" data-operation-open>Revisar acordo</button></div>
  ${row.handoff?.changes_pending?'<p role="alert">Há alterações pendentes de ciência. Revise o acordo antes de executar.</p>':''}
  ${renderOperationalHandoffTasks(row.tasks.filter(t=>!operationWorkspace.sector||t.sector===operationWorkspace.sector))}`;
 }
@@ -68,6 +68,7 @@ operationRoot?.addEventListener('click',async e=>{const b=e.target.closest('butt
  if(b.hasAttribute('data-handoff-task-ack')){await updateOperationalHandoffTask(b.dataset.handoffTaskAck,false,true,id);await loadOperationWorkspaceDetail(id);return;}
  if(b.hasAttribute('data-handoff-task-start')){await setOperationalTaskState(b.dataset.handoffTaskStart,'in_progress',id);return;}
  if(b.hasAttribute('data-handoff-task-block')){await setOperationalTaskState(b.dataset.handoffTaskBlock,'blocked',id);return;}
+ if(b.hasAttribute('data-operation-reserve')){await showOpsReservationConfirmation(id);return;}
  if(b.hasAttribute('data-operation-open')||b.hasAttribute('data-operation-document')){const ok=await safeOpenSavedProposal(id,'Operação');if(ok===false)return;if(b.dataset.operationDocument)await handleOperationalDocAction(b.dataset.operationDocument);else nodes.operationalChecklist?.scrollIntoView({block:'start'});}
  }catch(error){showToast(error.message);}});
 renderWorkspaceMode();renderOperationWorkspace();
