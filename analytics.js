@@ -222,7 +222,7 @@
     if (!isEnabled() || !ALLOWED_EVENTS.has(eventName)) return false;
     if (hasDedupeKey(options.dedupeKey)) return false;
 
-    const entityHash = options.entityId ? await hashIdentifier(options.entityId) : "";
+    const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
     const safeProperties = sanitizeProperties({
       ...properties,
       ...(entityHash ? { entity_hash: entityHash } : {}),

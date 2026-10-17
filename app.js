@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "embaixada_orcamentos_precos_v1";
+const STORAGE_KEY = "embaixada_orcamentos_precos_v1";
 const PRODUCT_TYPES_KEY = "embaixada_orcamentos_tipos_produto_v1";
 const SELECTED_KEY = "embaixada_orcamentos_selecionados_v1";
 const PRIVATIZATION_KEY = "embaixada_orcamentos_privatizacao_v1";
@@ -666,7 +666,8 @@ UTILIZAÇÃO DA MARCA DO BONDINHO: qualquer uso comercial ou promocional envolve
 
 function loadWorkspaceMode() {
   try {
-    return localStorage.getItem(WORKSPACE_MODE_KEY) === "full" ? "full" : "sales";
+    const saved = localStorage.getItem(WORKSPACE_MODE_KEY);
+    return ["full", "operations"].includes(saved) ? saved : "sales";
   } catch (_) {
     return "sales";
   }
@@ -2632,7 +2633,7 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
   const snapshot = proposal.snapshot || {};
   const clientResponse = proposal.cliente_resposta || snapshot.clienteResposta?.acao || snapshot.clientResponse?.action || "";
   const signal = hasValidatedSignal(snapshot.pagamentoSinal) ? snapshot.pagamentoSinal : null;
-  const remaining = snapshot.pagamentoRestante?.validacaoPendente === true ? null : snapshot.pagamentoRestante;
+  const remaining = hasAuditedPayment(snapshot.pagamentoRestante) ? snapshot.pagamentoRestante : null;
   const responseLabels = {
     confirmar: "Aprovou",
     alteracao: "Pediu ajuste",
@@ -3536,23 +3537,28 @@ function getOperationalHandoffData(proposal) {
 
 function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffData(proposal)) {
   const blockers = [];
-  if (!isSuperAdminSession()) blockers.push("Somente o gestor pode liberar a execução.");
+  if (!(typeof isOperationsCoordinator === "function" ? isOperationsCoordinator() : isSuperAdminSession())) blockers.push("Eventos ou gestor devem conferir e liberar a execução.");
   // The persistent lock preserves a prior agreement; it is not authorization to
   // release a canceled or renegotiating event. Match the server's active stages.
   if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
     blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
   }
   if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Eventos, Financeiro ou gestor devem conferir o crédito e validar o sinal antes da liberação.");
+  const reservation = window.EventOperationsState?.reservations?.find(item => item.opportunity_id === proposal?.oportunidade_id && item.proposal_id === proposal?.id);
+  if (!reservation || reservation.status !== "confirmed" || !reservation.confirmed_by || !reservation.confirmed_at || !reservation.agreement_fingerprint) {
+    blockers.push("Confirme a disponibilidade e a reserva auditada deste acordo.");
+  }
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
+  if (data.tasks.some(task => !task.responsible_name)) blockers.push("Defina uma pessoa responsável para cada tarefa operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
-  if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
+  if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && task.acknowledged_by && task.completed_at && task.completed_by && Number(task.source_version) === Number(data.handoff?.version)))) {
     blockers.push("Conclua e registre a ciência das sete tarefas setoriais antes da liberação final.");
   }
   return blockers;
 }
 
 function getOperationalHandoffProgress(tasks = []) {
-  return { done: tasks.filter((task) => task.status === "done").length, total: tasks.length };
+  return { done: tasks.filter((task) => task.status === "done" && task.acknowledged_at && task.acknowledged_by && task.completed_at && task.completed_by).length, total: tasks.length };
 }
 
 function formatOperationalTaskDue(value) {
@@ -3562,6 +3568,10 @@ function formatOperationalTaskDue(value) {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function operationalSectorLabel(sector) {
+  return ({eventos:"Eventos",financeiro:"Financeiro",cozinha:"Cozinha",bar:"Bar e copa",estoque:"Estoque",salao:"Salão",gerencia:"Gerência"})[sector] || sector;
+}
+
 function renderOperationalHandoffTasks(tasks = []) {
   if (!tasks.length) return `<p class="handoff-loading">Preparando tarefas por setor a partir da proposta e do sinal.</p>`;
   return `<div class="handoff-sector-grid">${tasks.map((task) => `
@@ -3569,11 +3579,12 @@ function renderOperationalHandoffTasks(tasks = []) {
       <label class="handoff-task-main">
         <input type="checkbox" data-handoff-task-id="${escapeHtml(task.id)}" ${task.status === "done" ? "checked" : ""} />
         <span>
-          <small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label)}</small>
+          <small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.responsible_name || "Pessoa responsável a definir")}</small>
           <strong>${escapeHtml(task.label)}</strong>
           <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
         </span>
       </label>
+      <div class="handoff-task-actions"><button class="secondary" type="button" data-handoff-task-plan="${escapeHtml(task.id)}">Responsável e prazo</button><button class="secondary" type="button" data-handoff-task-start="${escapeHtml(task.id)}">Iniciar</button><button class="secondary" type="button" data-handoff-task-block="${escapeHtml(task.id)}">Registrar impedimento</button></div>
       ${!task.acknowledged_at ? `<button class="secondary" type="button" data-handoff-task-ack="${escapeHtml(task.id)}">Revisei e dei ciência desta tarefa</button>` : ""}
       ${task.details || task.notes ? `<details><summary>Orientação e notas</summary>${task.details ? `<p>${escapeHtml(task.details)}</p>` : ""}${task.notes ? `<p>${escapeHtml(task.notes)}</p>` : ""}</details>` : ""}
     </article>
@@ -3617,15 +3628,24 @@ function renderOperationalChecklist(proposal = getActiveProposal()) {
   `;
 }
 
-async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = false) {
-  const proposal = getActiveProposal();
+async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = false, proposalId = null) {
+  const proposal = proposalId ? state.proposals.find(p => p.id === proposalId) : getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal || !runRpc || !state.session) return;
   const handoffData = getOperationalHandoffData(proposal);
   const task = handoffData.tasks.find(item => item.id === taskId);
   if (task?.task_key === "financeiro_saldo" && !isFinanceSession()) { showToast("A ciência financeira é exclusiva do Financeiro ou gestor."); renderOperationalChecklist(proposal); return; }
-  if (task?.task_key === "gerencia_go_no_go" && !isSuperAdminSession()) { showToast("Somente o gestor pode dar ciência ou liberar a execução."); renderOperationalChecklist(proposal); return; }
+  if (task?.task_key === "gerencia_go_no_go" && !(typeof isOperationsCoordinator === "function" ? isOperationsCoordinator() : isSuperAdminSession())) { showToast("Eventos ou gestor devem conferir e liberar a execução."); renderOperationalChecklist(proposal); return; }
   if (task?.task_key === "gerencia_go_no_go" && checked && !acknowledgeOnly) {
+    if (!QA_MODE) {
+      try {
+        const result = await state.supabase.rpc("event_operation_readiness", { target_proposal: proposal.id, expected_revision: proposal.revision });
+        if (result.error || result.data?.proposal_id !== proposal.id || Number(result.data?.revision) !== Number(proposal.revision) || result.data?.ready !== true) {
+          showToast(result.error?.message || result.data?.blockers?.join(" ") || "Não foi possível comprovar a prontidão desta revisão.");
+          renderOperationalChecklist(proposal); return;
+        }
+      } catch (error) { showToast(error.message || "Confira a prontidão antes de liberar."); return; }
+    }
     const blockers = getOperationalReleaseBlockers(proposal, handoffData);
     if (blockers.length) { showToast(blockers.join(" ")); renderOperationalChecklist(proposal); return; }
   }
@@ -3655,8 +3675,8 @@ async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = f
   }
 }
 
-async function acknowledgeOperationalHandoffChanges() {
-  const proposal = getActiveProposal();
+async function acknowledgeOperationalHandoffChanges(proposalId = null) {
+  const proposal = proposalId ? state.proposals.find(p => p.id === proposalId) : getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal?.oportunidade_id || !runRpc || !state.session) return;
   try {
@@ -3938,7 +3958,7 @@ function buildOperationalAdditionalChecklistRows(context, printable = false) {
 function buildOperationalChecklistRows(context, printable = false) {
   const rows = (context.sectorTasks || []).map(task => `<div class="op-check-row${task.status === "done" ? " is-done" : ""}">
     <span>${escapeHtml(task.status === "done" ? "OK" : task.status === "blocked" ? "BLOQUEADO" : task.status === "in_progress" ? "EM EXECUÇÃO" : "PENDENTE")}</span>
-    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
+    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
   </div>`).join("");
   return `${context.changesPending ? '<p class="op-note">Há mudanças pendentes de ciência. Esta ficha não comprova liberação da execução.</p>' : ""}
     ${rows || '<p class="op-note">Checklist setorial indisponível. Atualize o painel antes de distribuir esta ficha; não foi presumida conclusão.</p>'}
@@ -4265,7 +4285,15 @@ function getSignalDefaultAmount(total) {
 }
 
 function hasValidatedSignal(signalInfo) {
-  return signalInfo?.validacaoPendente !== true && toNumber(signalInfo?.valor) > 0;
+  return hasAuditedPayment(signalInfo, true);
+}
+
+function hasAuditedPayment(payment, allowEvents = false) {
+  const actor = String(payment?.validadoEmail || "").toLowerCase();
+  return payment?.validacaoPendente === false && toNumber(payment?.valor) > 0
+    && Boolean(payment?.validadoPor) && Number.isFinite(Date.parse(payment?.validadoEm))
+    && (!actor || ["leorangel@gmail.com", "financeiro@embaixadacarioca.com.br"].includes(actor)
+      || (allowEvents && actor === "eventos@embaixadacarioca.com.br" && payment.bankConferido === true));
 }
 
 function getRemainingDefaultAmount(total, signalInfo) {
@@ -4275,7 +4303,7 @@ function getRemainingDefaultAmount(total, signalInfo) {
 function getPaymentCoverage(total, signalInfo = null, remainingInfo = null) {
   const totalValue = roundCurrency(Number(total) || 0);
   const signalValue = hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0;
-  const remainingValue = remainingInfo?.validacaoPendente === true ? 0 : toNumber(remainingInfo?.valor);
+  const remainingValue = hasAuditedPayment(remainingInfo) ? toNumber(remainingInfo.valor) : 0;
   const paidTotal = roundCurrency(signalValue + remainingValue);
   const remainingDue = Math.max(0, roundCurrency(totalValue - paidTotal));
   const isFullyPaid = totalValue > 0 && paidTotal >= totalValue - 0.01;
@@ -5004,6 +5032,7 @@ function getProposalReviewItems() {
   const commercialApproval = getCommercialApprovalState();
 
   return [
+    ...(typeof proposalQualityIssues === "function" ? proposalQualityIssues() : []),
     {
       id: "contact",
       label: "Contato do cliente",
@@ -5924,7 +5953,7 @@ function refreshReviewSurfaces({ includeSourcePanel = false } = {}) {
 
 function handleFormSourceFieldInput(event, { includeSourcePanel = false } = {}) {
   const field = event.target.closest("[data-source-field]");
-  if (!field) return;
+  if (!field || !nodes.formSourcePanel?.contains(field)) return;
   setCurrentSourceOverride(field.dataset.sourceField, field.value);
   refreshReviewSurfaces({ includeSourcePanel });
 }
@@ -8657,6 +8686,15 @@ function createQaSupabaseClient() {
       const query = { action: args.p_proposal_id ? "update" : "insert",
         payload: { ...args.p_changes, revision: args.p_proposal_id ? Number(source.revision || 1) + 1 : 1 },
         filters: args.p_proposal_id ? [{ column: "id", value: args.p_proposal_id }] : [] };
+      if (query.payload.snapshot) {
+        query.payload.snapshot = structuredClone(query.payload.snapshot);
+        for (const key of ["pagamentoSinal", "pagamentoRestante"]) {
+          const payment = query.payload.snapshot[key];
+          if (payment && JSON.stringify(payment) !== JSON.stringify(source?.snapshot?.[key])) {
+            Object.assign(payment, { validacaoPendente: false, validadoPor: state.session.user.id, validadoEmail: state.session.user.email, validadoEm: new Date().toISOString() });
+          }
+        }
+      }
       return runQuery("propostas", query);
     },
     auth: {
@@ -8900,6 +8938,11 @@ function loadQaFixtures() {
 
   state.quoteRequests = [request];
   state.proposals = [proposalWaiting, proposalChange, confirmed, confirmedFullPayment, remaining, pastOutcomePending];
+  // Only fictitious demo records: mirror server-stamped financial fixtures.
+  state.proposals.forEach(p => ["pagamentoSinal", "pagamentoRestante"].forEach(key => {
+    const payment = p.snapshot?.[key];
+    if (payment && payment.validacaoPendente !== true) Object.assign(payment, { validacaoPendente:false, validadoPor:"qa-user", validadoEmail:QA_USER_EMAIL, validadoEm:createQaTimestamp(-1) });
+  }));
   state.opportunities = [...state.quoteRequests, ...state.proposals].map((row) => ({
     id: row.oportunidade_id,
     status: row.status,
@@ -10220,9 +10263,10 @@ function getActionUrgencyLabel(priority) {
 }
 
 function renderWorkspaceMode() {
-  const mode = state.workspaceMode === "full" ? "full" : "sales";
+  const mode = ["full", "operations"].includes(state.workspaceMode) ? state.workspaceMode : "sales";
   document.body.classList.toggle("workspace-mode-sales", mode === "sales");
   document.body.classList.toggle("workspace-mode-full", mode === "full");
+  document.body.classList.toggle("workspace-mode-operations", mode === "operations");
   nodes.workspaceModeSwitch?.querySelectorAll("[data-workspace-mode]").forEach((button) => {
     const active = button.dataset.workspaceMode === mode;
     button.classList.toggle("is-active", active);
@@ -10230,16 +10274,16 @@ function renderWorkspaceMode() {
   });
   const title = document.querySelector("#workspaceModeTitle");
   const description = document.querySelector("#workspaceModeDescription");
-  if (title) title.textContent = mode === "sales" ? "Modo Vendas" : "Visão completa";
+  if (title) title.textContent = mode === "sales" ? "Modo Vendas" : mode === "operations" ? "Operação" : "Visão completa";
   if (description) {
     description.textContent = mode === "sales"
       ? "Somente ações que ajudam a responder, propor, negociar e fechar."
-      : "Comercial, financeiro, operação, histórico e gestão na mesma visão.";
+      : mode === "operations" ? "Agenda, responsáveis e execução por setor, com a versão atual do acordo." : "Comercial, financeiro, operação, histórico e gestão na mesma visão.";
   }
 }
 
 function setWorkspaceMode(mode) {
-  state.workspaceMode = mode === "full" ? "full" : "sales";
+  state.workspaceMode = ["full", "operations"].includes(mode) ? mode : "sales";
   try {
     localStorage.setItem(WORKSPACE_MODE_KEY, state.workspaceMode);
   } catch (_) {}
@@ -11379,7 +11423,7 @@ function renderOperationsAgenda(items = getPipelineItems()) {
       items: planningQueue.slice(0, 5),
       empty: "Sem fila operacional agora.",
       render: (item) => {
-        const progress = getChecklistProgress(item.snapshot || {});
+        const progress = getOperationalHandoffProgress(getOperationalHandoffData(state.proposals.find(p => p.id === item.id)).tasks);
         return renderAgendaItemCard(item, {
           kicker: getProposalStatusLabel(item.status),
           value: item.total ? formatMoney(item.total) : getAgendaEventLabel(item),
@@ -11863,6 +11907,7 @@ function renderPipelineStage(stage, items) {
 }
 
 function renderPipeline() {
+  if (typeof renderOperationWorkspace === "function") renderOperationWorkspace();
   renderCommercialDiagnostics();
   if (typeof renderEventOperations === "function") renderEventOperations();
   if (typeof renderEventOfferBuilder === "function") renderEventOfferBuilder();
@@ -13959,6 +14004,7 @@ function renderAll() {
   renderIntegrationLogs();
   renderCommunicationTemplateEditor();
   renderSharedSettingStatus();
+  if (typeof renderSalesGuide === "function") renderSalesGuide();
 }
 
 function startNewProposal(options = {}) {
@@ -14113,6 +14159,7 @@ function getPublicProposalUrl(proposal) {
 }
 
 function scrollToReviewTarget(target) {
+  if (typeof salesGuide !== "undefined") { salesGuide.focused = false; renderSalesGuide(); }
   const targets = {
     client: "#clientDataSection",
     source: "#formSourcePanel",
@@ -15988,6 +16035,12 @@ function bindEvents() {
     updateOperationalChecklist(checkbox.dataset.checklistId, checkbox.checked);
   });
   nodes.operationalChecklist?.addEventListener("click", (event) => {
+    const plan = event.target.closest("button[data-handoff-task-plan]");
+    if (plan && typeof planOperationalTask === "function") { planOperationalTask(plan.dataset.handoffTaskPlan); return; }
+    const start = event.target.closest("button[data-handoff-task-start]");
+    if (start && typeof setOperationalTaskState === "function") { setOperationalTaskState(start.dataset.handoffTaskStart, "in_progress", getActiveProposal()?.id); return; }
+    const block = event.target.closest("button[data-handoff-task-block]");
+    if (block && typeof setOperationalTaskState === "function") { setOperationalTaskState(block.dataset.handoffTaskBlock, "blocked", getActiveProposal()?.id); return; }
     const handoffAck = event.target.closest("button[data-handoff-task-ack]");
     if (handoffAck) { updateOperationalHandoffTask(handoffAck.dataset.handoffTaskAck, false, true); return; }
 
