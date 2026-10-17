@@ -13,12 +13,14 @@ Base: main a39589ec1e3f4e524b8da519056e2fd6bdd41022. Pacote independente do adit
 
 ## Testes
 
-CI executa o pacote SQL em bases descartáveis antes das verificações comuns, além de regressões novas de papéis, autoria, limite comercial, reserva, revisão concorrente e ausência de reenvio. Os testes de navegador exercitam item personalizado isolado, descrição após salvar/reabrir, desconto de privatização, sinal pela conta Eventos, etapa direta e coluna sem rolagem em desktop/celular. A política habilitada continua coberta pelos testes existentes; proposta devolvida é coberta no modo autônomo.
+CI instala a migration em bases descartáveis antes das verificações comuns, além de regressões novas de papéis, autoria, limite comercial, reserva, revisão concorrente e ausência de reenvio. Os testes de navegador exercitam item personalizado isolado, descrição após salvar/reabrir, desconto de privatização, sinal pela conta Eventos, etapa direta e coluna sem rolagem em desktop/celular. A política habilitada continua coberta pelos testes existentes; proposta devolvida é coberta no modo autônomo.
 
 ## Publicação
 
 Não alterar produção nem enviar comunicações, conforme a instrução vigente. A preparação deste PR não muda a política nem os dados de produção.
 
-O ambiente local ficou indisponível (exec-server transport disconnected). Por isso o SQL revisável está em supabase/seller_workflow_feedback.sql; nenhum nome de migration foi inventado e nenhuma migration foi aplicada. Antes de publicar: usar supabase migration new seller_workflow_feedback; copiar o SQL para o arquivo criado; validar a instalação versionada e o CI; aplicar a migration somente com autorização para produção; registrar a versão real; então liberar o frontend e conferir o resultado. Não mesclar antes dessa sequência. Não aplicar a migration de aditivos do PR 56 por engano.
+A migration supabase/migrations/20261017162110_seller_workflow_feedback.sql foi gerada com Supabase CLI 2.121.0 no CI 39048990666, após consultar os comandos --help. O CI confirmou instalação nova, atualização, papéis, transações concorrentes e restauração de backup. O passo temporário de geração foi removido; o arquivo versionado é a fonte de instalação.
+
+Antes de qualquer rollout autorizado, aplicar a migration no projeto correto, registrar a versão real e só então publicar o frontend. Este PR não aplica SQL em produção nem envia comunicações. Não aplicar a migration de aditivos do PR 56 por engano.
 
 A regra de sinais neste pacote substitui a função guard_journey_proposal mantendo os demais controles. É compatível com o PR 56: não remove os gatilhos de aditivo nem a capacidade privada de aplicação exata. Confirmar novamente a ordem e o texto das funções se outra mudança alterar o mesmo guard antes do rollout.

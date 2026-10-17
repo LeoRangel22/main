@@ -24,7 +24,6 @@ async function create(name) {
   return c;
 }
 async function checks(c) {
-  await apply(c,'supabase/seller_workflow_feedback.sql');
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
