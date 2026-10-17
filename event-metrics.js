@@ -1,19 +1,20 @@
 /* Read-only cohort reporting; no individual customer values leave the database. */
 const eventCohort={client:null,user:null,data:null,error:'',pending:null,attemptedAt:0};
-function cohortCurrent(c){return eventCohort.client===c&&state.supabase===c&&eventCohort.user===state.session?.user?.id;}
+function cohortCurrent(c,user,request){return eventCohort.client===c&&state.supabase===c&&eventCohort.user===user&&user===state.session?.user?.id&&eventCohort.request===request;}
 async function loadEventCohort({force=false}={}){
  if(!state.session||!state.supabase)return;
  const client=state.supabase,user=state.session.user.id;
  if(eventCohort.client!==client||eventCohort.user!==user)Object.assign(eventCohort,{client,user,data:null,error:'',pending:null,attemptedAt:0});
  if(eventCohort.pending||!force&&Date.now()-eventCohort.attemptedAt<30000)return;
- eventCohort.attemptedAt=Date.now();eventCohort.error='';
+ const request={};eventCohort.request=request;eventCohort.attemptedAt=Date.now();eventCohort.error='';
  const to=EventWorkspace.dateKey(),from=EventWorkspace.addDate(to,-89);
  eventCohort.pending=Promise.resolve().then(async()=>{try{
+  if(!cohortCurrent(client,user,request))return;
   if(QA_MODE){eventCohort.data={total:0,mature:0,pending_window:0,prepared:0,dispatched:0,delivered:0,replied:0,paid:0,conversion:null,from,to,decision_days:30,generated_at:new Date().toISOString()};return;}
-  const r=await readinessAwait(client.rpc('event_sales_cohort',{from_date:from,to_date:to,decision_days:30}));if(!cohortCurrent(client))return;
+  const r=await readinessAwait(client.rpc('event_sales_cohort',{from_date:from,to_date:to,decision_days:30}));if(!cohortCurrent(client,user,request))return;
   if(r.error||!Number.isInteger(r.data?.mature)||!Number.isInteger(r.data?.total)||r.data?.decision_days!==30)throw Error(r.error?.message||'Relatório indisponível.');eventCohort.data=r.data;
- }catch(error){if(cohortCurrent(client)){eventCohort.data=null;eventCohort.error=error.message;}}
- finally{if(cohortCurrent(client)){eventCohort.pending=null;renderEventOperations();}}});return eventCohort.pending;
+ }catch(error){if(cohortCurrent(client,user,request)){eventCohort.data=null;eventCohort.error=error.message;}}
+ finally{if(cohortCurrent(client,user,request)){eventCohort.pending=null;renderEventOperations();}}});return eventCohort.pending;
 }
 function renderOpsMetrics(){
  if(eventCohort.client!==state.supabase||eventCohort.user!==state.session?.user?.id)Object.assign(eventCohort,{client:state.supabase,user:state.session?.user?.id,data:null,error:'',pending:null,attemptedAt:0});

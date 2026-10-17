@@ -5,9 +5,9 @@ function operationWorkspaceRows(){return window.EventWorkspace.agenda(state.prop
 function operationWorkspaceReservation(p){return window.EventOperationsState?.reservations.find(r=>r.proposal_id===p.id&&r.opportunity_id===p.oportunidade_id&&r.status==='confirmed'&&r.confirmed_at&&r.confirmed_by&&r.agreement_fingerprint);}
 function clearOperationWorkspace(){Object.assign(operationWorkspace,{selected:'',data:null,client:state.supabase,user:state.session?.user?.id,pending:null,error:''});}
 async function loadOperationWorkspaceDetail(id){
- const client=state.supabase,user=state.session?.user?.id;operationWorkspace.selected=id;operationWorkspace.data=null;operationWorkspace.error='';
+ const client=state.supabase,user=state.session?.user?.id,request={};operationWorkspace.request=request;operationWorkspace.selected=id;operationWorkspace.data=null;operationWorkspace.error='';
  operationWorkspace.client=client;operationWorkspace.user=user;
- const selected=()=>state.supabase===client&&state.session?.user?.id===user&&operationWorkspace.selected===id;
+ const selected=()=>operationWorkspace.request===request&&state.supabase===client&&state.session?.user?.id===user&&operationWorkspace.selected===id;
  const p=await ensureFullProposal(id);if(!selected())return;
  try{
   if(!QA_MODE){const r=await readinessAwait(client.rpc('event_operation_readiness',{target_proposal:id,expected_revision:p.revision}));if(!selected())return;if(r.error)throw Error(r.error.message);if(r.data?.proposal_id!==id||Number(r.data?.revision)!==Number(p.revision))throw Error('O acordo mudou. Atualize a agenda.');operationWorkspace.data=r.data;}

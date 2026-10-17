@@ -20,7 +20,7 @@ A implementação reúne os cinco pacotes do diagnóstico e inclui o P0 como pr�
 - Referência interna não é cobrança emitida por PSP. O Pix usa os dados oficiais existentes. Não há autorização para movimentar conta bancária por este módulo.
 - A medição de coorte observa evidências registradas na janela. Não mede causalidade, lucro efetivo nem fatos de meses anteriores ausentes do sistema.
 - Estoque e receitas precisam de entrada e conferência da equipe. O módulo não promete saldo em tempo real de um ERP.
-- Alteração do plano reabre tarefas dos setores afetados e a liberação; preserva as assinaturas dos setores não afetados. Mudanças no acordo seguem o versionamento e os aditivos existentes.
+- Alteração do plano reabre tarefas dos setores afetados e a liberação; preserva as assinaturas dos setores não afetados. Atualização somente de pagamento também preserva cozinha, bar, estoque e montagem, reabrindo Financeiro, Eventos e liberação final. Mudanças no acordo seguem o versionamento e os aditivos existentes.
 - Os acessos existentes continuam restritos à equipe autorizada. A indicação nominal de executores não cria contas, convites ou logins setoriais.
 
 ## Homologações que dependem de evidência externa

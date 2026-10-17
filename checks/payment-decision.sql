@@ -1,6 +1,6 @@
 begin;
 do $$
-declare manager uuid; seller uuid; finance uuid; opp uuid; p public.propostas; charge jsonb; replay jsonb; result jsonb; first_key uuid:=gen_random_uuid(); blocked boolean; before_revision bigint;
+declare manager uuid; seller uuid; finance uuid; opp uuid; p public.propostas; charge jsonb; replay jsonb; result jsonb; first_key uuid:=gen_random_uuid(); blocked boolean; before_revision bigint; h public.event_handoffs; t public.event_handoff_tasks;
 begin
  select id into manager from auth.users where email='leorangel@gmail.com';select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';select id into finance from auth.users where email='financeiro@embaixadacarioca.com.br';
  assert not has_function_privilege('anon','public.record_event_bank_payment(uuid,bigint,uuid,text,numeric,date,text,text,boolean,text)','execute');
@@ -22,10 +22,13 @@ begin
  blocked:=false;begin perform record_event_bank_payment(p.id,p.revision,gen_random_uuid(),'sinal',560,((now() at time zone 'America/Sao_Paulo')::date),'fixture-bank','fixture transfer 1',true,'');exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Formatting the bank name or reference differently cannot duplicate a credit';
  blocked:=false;begin perform record_event_bank_payment(p.id,p.revision,gen_random_uuid(),'saldo',280,((now() at time zone 'America/Sao_Paulo')::date),'Fixture Bank','fixture-transfer-2',true,'');exception when insufficient_privilege then blocked:=true;end;assert blocked;
  charge:=prepare_event_payment_request(p.id,p.revision,'saldo');assert (charge->>'amount')::numeric=560;
+ select * into h from event_handoffs where opportunity_id=opp;select * into t from event_handoff_tasks where opportunity_id=opp and task_key='cozinha_cardapio';perform update_event_handoff_task(t.id,'done',null,null,'Synthetic kitchen work already reviewed',h.version);
  reset role;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',finance,'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);set local role authenticated;
  perform record_event_bank_payment(p.id,p.revision,gen_random_uuid(),'saldo',280,((now() at time zone 'America/Sao_Paulo')::date),'Fixture Bank','fixture-transfer-2',true,'');select * into p from propostas where id=p.id;
  assert (p.snapshot#>>'{pagamentoRestante,valor}')::numeric=280;
+ assert (select status='done' and acknowledged_at is not null and completed_at is not null from event_handoff_tasks where opportunity_id=opp and task_key='cozinha_cardapio'),'Payment-only update preserves kitchen execution and acknowledgement';
+ assert (select status='pending' from event_handoff_tasks where opportunity_id=opp and task_key='financeiro_saldo'),'New financial fact requires explicit finance review';
  perform record_event_bank_payment(p.id,p.revision,gen_random_uuid(),'saldo',280,((now() at time zone 'America/Sao_Paulo')::date),'Fixture Bank','fixture-transfer-3',true,'');select * into p from propostas where id=p.id;
  result:=event_payment_history(p.id,p.revision);assert (result->>'paid')::numeric=1120 and (result->>'due')::numeric=0 and jsonb_array_length(result->'operations')=3;
  reset role;

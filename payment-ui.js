@@ -2,19 +2,22 @@
 const paymentWorkspace={client:null,user:null,proposal:null,revision:null,data:null,pending:null,error:''};
 function paymentWorkspaceCurrent(client,user,id){return state.supabase===client&&state.session?.user?.id===user&&paymentWorkspace.proposal===id;}
 async function loadPaymentWorkspace(id){
- const client=state.supabase,user=state.session?.user?.id;const p=await ensureFullProposal(id);if(!p||client!==state.supabase||user!==state.session?.user?.id)return;
- Object.assign(paymentWorkspace,{client,user,proposal:id,revision:readinessRevision(p),data:null,error:''});
+ const client=state.supabase,user=state.session?.user?.id,request={};if(!client||!user)return;
+ Object.assign(paymentWorkspace,{client,user,request,proposal:id,revision:readinessRevision(state.proposals.find(p=>p.id===id)),data:null,error:''});
+ const current=()=>paymentWorkspaceCurrent(client,user,id)&&paymentWorkspace.request===request;
  paymentWorkspace.pending=Promise.resolve().then(async()=>{try{
-  if(QA_MODE){const c=getPaymentCoverage(p.total,p.snapshot?.pagamentoSinal,p.snapshot?.pagamentoRestante);paymentWorkspace.data={proposal_id:p.id,revision:p.revision,paid:c.paidTotal,due:p.status==='cancelado'?0:c.remainingDue,credit:Math.max(0,c.paidTotal-p.total),operations:[],requests:[]};return;}
-  const r=await readinessAwait(client.rpc('event_payment_history',{target_proposal:id,expected_revision:p.revision}));if(!paymentWorkspaceCurrent(client,user,id))return;
-  if(r.error||r.data?.proposal_id!==id||Number(r.data?.revision)!==Number(p.revision))throw Error(r.error?.message||'O histórico não corresponde à revisão atual.');paymentWorkspace.data=r.data;
- }catch(error){if(paymentWorkspaceCurrent(client,user,id))paymentWorkspace.error=error.message;}
- finally{if(paymentWorkspaceCurrent(client,user,id)){paymentWorkspace.pending=null;renderEventOperations();}}});return paymentWorkspace.pending;
+  const p=await ensureFullProposal(id);if(!p||!current())return;const revision=readinessRevision(p);paymentWorkspace.revision=revision;if(!Number.isFinite(revision))throw Error('Revisão indisponível. Atualize o acordo.');
+  if(QA_MODE){const c=getPaymentCoverage(p.total,p.snapshot?.pagamentoSinal,p.snapshot?.pagamentoRestante);paymentWorkspace.data={proposal_id:p.id,revision,paid:c.paidTotal,due:p.status==='cancelado'?0:c.remainingDue,credit:Math.max(0,c.paidTotal-p.total),operations:[],requests:[]};return;}
+  const r=await readinessAwait(client.rpc('event_payment_history',{target_proposal:id,expected_revision:revision}));if(!current())return;
+  if(r.error||r.data?.proposal_id!==id||Number(r.data?.revision)!==revision||readinessRevision(state.proposals.find(p=>p.id===id))!==revision)throw Error(r.error?.message||'O histórico não corresponde à revisão atual.');paymentWorkspace.data=r.data;
+ }catch(error){if(current())paymentWorkspace.error=error.message;}
+ finally{if(current()){paymentWorkspace.pending=null;renderEventOperations();}}});return paymentWorkspace.pending;
 }
+
 function renderOpsPayments(item){
  if(!item||item.kind!=='proposal')return '<p>Escolha uma proposta vigente para conferir pagamentos e referências.</p>';
  const p=state.proposals.find(p=>p.id===item.id);if(!p)return '';
- if(paymentWorkspace.client!==state.supabase||paymentWorkspace.user!==state.session?.user?.id||paymentWorkspace.proposal!==p.id||Number(paymentWorkspace.revision)!==readinessRevision(p)){
+ if(paymentWorkspace.client!==state.supabase||paymentWorkspace.user!==state.session?.user?.id||paymentWorkspace.proposal!==p.id||!Object.is(paymentWorkspace.revision,readinessRevision(p))){
   if(!paymentWorkspace.pending)queueMicrotask(()=>loadPaymentWorkspace(p.id));return '<p>Consultando o histórico da revisão atual…</p>';
  }
  const d=paymentWorkspace.data;
