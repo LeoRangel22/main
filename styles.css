@@ -12885,3 +12885,43 @@ body[data-page="app"] .pipeline-card-bottom-row {
 @media (max-width:600px) { .commercial-status { align-items:flex-start; flex-wrap:wrap; } .commercial-measures-grid { grid-template-columns:1fr; } .commercial-diagnostics { padding:12px; } }
 
 .send-confirm-message { width: 100%; box-sizing: border-box; white-space: pre-wrap; min-height: 180px; max-height: 40vh; resize: vertical; }
+
+/* Follow-up review uses the page scroll, with stable card sizes and visible stage controls. */
+body[data-page="app"] .pipeline-stage-proposta_enviada .pipeline-column-list {
+  max-height: none;
+  height: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding-right: 0;
+}
+body[data-page="app"] .pipeline-card-stage-proposta_enviada { min-height: 250px; align-content: start; }
+.quick-budget-item .quick-item-description { grid-column: 1 / -1; }
+.quick-budget-item textarea { width: 100%; min-height: 88px; resize: vertical; box-sizing: border-box; }
+
+/* The stage control shares the details row; the full-width action row stays intact. */
+body[data-page="app"] .pipeline-card-stage-switch {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  align-self: center;
+}
+body[data-page="app"] .pipeline-card-stage-switch > .pipeline-status-control { margin: 0; }
+body[data-page="app"] .pipeline-card-stage-switch summary {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid rgba(24, 58, 45, .16);
+  border-radius: 7px;
+  font-size: .62rem;
+  text-transform: none;
+  white-space: nowrap;
+}
+body[data-page="app"] .pipeline-card-footer:has(> .pipeline-card-stage-switch) > .pipeline-card-details > summary { max-width: calc(100% - 100px); }
+body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pipeline-status-control[open]) > .pipeline-card-stage-switch {
+  grid-row: 3;
+  justify-self: stretch;
+}
+body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pipeline-status-control[open]) .pipeline-card-details-content { grid-row: 4; }

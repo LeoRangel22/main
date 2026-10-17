@@ -51,7 +51,7 @@ function getOpsExecutionEntries(items=getOpsItems(), now=new Date()) {
     const pending=p?.snapshot?.pagamentoSinal?.validacaoPendente===true;
     const proof=p?.comprovante_sinal||item.hasSignalProof;
     if(p&&(pending||proof&&!hasValidatedSignal(p.snapshot?.pagamentoSinal))){
-      entries.push({key:`finance:${item.id}`,kind:'finance',item,name:item.name,date:item.date||'',score:past?65:130,reason:`Sinal sem validação bancária${past?' · histórico, não cobrar automaticamente':''}`,owner:'Financeiro / gestor'});
+      entries.push({key:`finance:${item.id}`,kind:'finance',item,name:item.name,date:item.date||'',score:past?65:130,reason:`Sinal sem validação bancária${past?' · histórico, não cobrar automaticamente':''}`,owner:'Eventos / Financeiro / gestor'});
     }
     if(item.stage==='desfecho_pendente'){
       entries.push({key:`outcome:${item.id}`,kind:'outcome',item,name:item.name,date:item.date||'',score:40,reason:'Data passada · confirmar o desfecho com a equipe',owner:plan.owner||'Equipe responsável'});continue;
@@ -73,13 +73,14 @@ function getOpsExecutionEntries(items=getOpsItems(), now=new Date()) {
 function renderOpsExecution(items) {
   const cache=opsExecutionState(),entries=getOpsExecutionEntries(items),filter=eventOps.executionFilter||'all';
   const selected=entries.filter(e=>filter==='all'||e.kind===filter),limit=eventOps.executionLimit||20;
-  return `<h3>Executar agora</h3><p>Confira as evidências antes de agir. Pagamento, decisão, ciência e desfecho exigem confirmação da pessoa responsável.</p><p role="status">${escapeHtml(cache.error||(cache.pending?'Atualizando aprovações…':cache.loadedAt?'Aprovações atualizadas em '+formatSavedAt(new Date(cache.loadedAt).toISOString()):QA_MODE?'Ambiente de testes · sem ações externas':'Aprovações ainda não carregadas.'))} <a href="./aprovacoes.html">Abrir Aprovações</a></p><nav aria-label="Filtrar execução">${[['all','Todas'],['approval','Aprovações'],['finance','Sinal'],['operation','Prontidão'],['contact','Contatos'],['outcome','Desfechos']].map(([id,label])=>`<button class="secondary" type="button" data-ops-execution-filter="${id}" aria-pressed="${filter===id}">${label} (${id==='all'?entries.length:entries.filter(e=>e.kind===id).length})</button>`).join('')}</nav><p>${selected.length} pendências · exibindo até ${limit}. A mesma oportunidade pode exigir ações de setores diferentes.</p><div class="event-ops-list">${selected.slice(0,limit).map(e=>`<article class="event-ops-row" data-execution-kind="${e.kind}"><span><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.date||'Sem data')} · ${escapeHtml(e.owner)}</small><small>${escapeHtml(e.reason)}</small>${e.kind==='finance'&&e.item.hasSignalProof?`<button class="secondary" type="button" data-load-proof="${escapeHtml(e.item.id)}" data-proof-type="signal">Ver comprovante</button>`:''}</span>${e.kind==='approval'?`<a class="secondary" href="./aprovacoes.html?id=${encodeURIComponent(e.request.id)}">${new Date(e.request.expires_at)<=new Date()?'Revisar expiração':'Revisar aprovação'}</a>`:e.kind==='outcome'?`<button class="secondary" type="button" data-ops-outcome="${escapeHtml(e.item.id)}" data-kind="${escapeHtml(e.item.kind)}">Registrar desfecho</button>`:e.kind==='finance'&&isFinanceSession()?`<button class="primary" type="button" data-ops-validate-signal="${escapeHtml(e.item.id)}">Conferir sinal no banco</button>`:`<button class="secondary" type="button" data-ops-work="${escapeHtml(e.item.opportunityId)}">Revisar evento</button>`}</article>`).join('')||'<p>Nenhuma pendência neste filtro.</p>'}</div>${selected.length>limit?'<button class="secondary" type="button" data-ops-execution-more>Mostrar mais 20</button>':''}`;
+  return `<h3>Executar agora</h3><p>Confira as evidências antes de agir. Pagamento, decisão, ciência e desfecho exigem confirmação da pessoa responsável.</p><p role="status">${escapeHtml(cache.error||(cache.pending?'Atualizando aprovações…':cache.loadedAt?'Aprovações atualizadas em '+formatSavedAt(new Date(cache.loadedAt).toISOString()):QA_MODE?'Ambiente de testes · sem ações externas':'Aprovações ainda não carregadas.'))} <a href="./aprovacoes.html">Abrir Aprovações</a></p><nav aria-label="Filtrar execução">${[['all','Todas'],['approval','Aprovações'],['finance','Sinal'],['operation','Prontidão'],['contact','Contatos'],['outcome','Desfechos']].map(([id,label])=>`<button class="secondary" type="button" data-ops-execution-filter="${id}" aria-pressed="${filter===id}">${label} (${id==='all'?entries.length:entries.filter(e=>e.kind===id).length})</button>`).join('')}</nav><p>${selected.length} pendências · exibindo até ${limit}. A mesma oportunidade pode exigir ações de setores diferentes.</p><div class="event-ops-list">${selected.slice(0,limit).map(e=>`<article class="event-ops-row" data-execution-kind="${e.kind}"><span><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.date||'Sem data')} · ${escapeHtml(e.owner)}</small><small>${escapeHtml(e.reason)}</small>${e.kind==='finance'&&e.item.hasSignalProof?`<button class="secondary" type="button" data-load-proof="${escapeHtml(e.item.id)}" data-proof-type="signal">Ver comprovante</button>`:''}</span>${e.kind==='approval'?`<a class="secondary" href="./aprovacoes.html?id=${encodeURIComponent(e.request.id)}">${new Date(e.request.expires_at)<=new Date()?'Revisar expiração':'Revisar aprovação'}</a>`:e.kind==='outcome'?`<button class="secondary" type="button" data-ops-outcome="${escapeHtml(e.item.id)}" data-kind="${escapeHtml(e.item.kind)}">Registrar desfecho</button>`:e.kind==='finance'&&isSignalSession()?`<button class="primary" type="button" data-ops-validate-signal="${escapeHtml(e.item.id)}">Conferir sinal no banco</button>`:`<button class="secondary" type="button" data-ops-work="${escapeHtml(e.item.opportunityId)}">Revisar evento</button>`}</article>`).join('')||'<p>Nenhuma pendência neste filtro.</p>'}</div>${selected.length>limit?'<button class="secondary" type="button" data-ops-execution-more>Mostrar mais 20</button>':''}`;
 }
-async function validateOpsSignal(proposalId,{revalidateLegacy=false}={}) {
-  if(!isFinanceSession())throw Error('Validação restrita ao Financeiro ou gestor.');
+async function validateOpsSignal(proposalId,{revalidateLegacy=false,confirmStage=false}={}) {
+  if(!isSignalSession())throw Error('Registro do sinal restrito à equipe autorizada de Eventos, Financeiro ou gestor.');
   if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw Error(commercialRefreshError);}
   const client=state.supabase,userId=state.session?.user?.id,proposal=await ensureFullProposal(proposalId);
   if(!proposal||!proposal.is_current||proposal.snapshot?.amendmentOf)throw Error('Abra o acordo atual antes de validar o sinal.');
+  if(confirmStage){const transition=canMoveProposalStatus(proposal.status,'confirmado');if(!transition.ok)throw Error(transition.message);}
   if(hasValidatedSignal(proposal.snapshot?.pagamentoSinal)&&(!revalidateLegacy||(proposal.snapshot?.pagamentoSinal?.validadoPor&&proposal.snapshot?.pagamentoSinal?.validadoEm))){showToast('O sinal já está validado. Confira o histórico.');return;}
   const source=structuredClone(proposal),previous=source.snapshot?.pagamentoSinal;
   const payment=await showSignalPaymentDialog(source.total,{defaultPreset:'custom',requireBankConfirmation:true,existingPayment:previous});
@@ -87,13 +88,21 @@ async function validateOpsSignal(proposalId,{revalidateLegacy=false}={}) {
   if(state.supabase!==client||state.session?.user?.id!==userId)throw Error('A sessão mudou. Reabra e confira o sinal.');
   if(!QA_MODE){await refreshCommercialDashboard({force:true});if(commercialRefreshError)throw Error(commercialRefreshError);}
   const current=await ensureFullProposal(proposalId);
-  if(state.supabase!==client||state.session?.user?.id!==userId||!isFinanceSession())throw Error("A sessão mudou. Reabra e confira o sinal.");
+  if(state.supabase!==client||state.session?.user?.id!==userId||!isSignalSession())throw Error("A sessão mudou. Reabra e confira o sinal.");
   if(!current||!current.is_current||Number(current.revision)!==Number(source.revision))throw Error('A proposta mudou durante a conferência. Revise novamente antes de validar.');
-  const snapshot=structuredClone(source.snapshot);
+  const history=[];
+  if(confirmStage&&normalizeProposalStatus(source.status)!=='confirmado')history.push(createCommercialHistoryEntry('etapa','Etapa alterada',`${getProposalStatusLabel(source.status)} → ${getProposalStatusLabel('confirmado')}.`));
+  history.push(createCommercialHistoryEntry('sinal','Sinal validado',`${formatMoney(payment.valor)} · ${formatSignalPaymentDate(payment.data)} · ${(payment.bancos||[]).join(', ')}.`));
+  if(payment.comprovante?.nome)history.push(createCommercialHistoryEntry('anexo','Comprovante do sinal anexado',payment.comprovante.nome));
+  const snapshot=withCommercialHistoryEntries(structuredClone(source.snapshot),history);
   snapshot.pagamentoSinal={...payment,...(!payment.comprovante&&previous?.comprovante?{comprovante:previous.comprovante}:{}),validacaoPendente:false};
-  const result=await persistEventProposal(source.id,{snapshot},source);
+  const result=await persistEventProposal(source.id,{snapshot,...(confirmStage?{status:"confirmado"}:{})},source);
   if(result.error)throw Error(result.error.message||'A validação não foi confirmada. Confira o histórico antes de repetir.');
-  upsertProposalState(result.data);showToast('Sinal validado pelo seu usuário. A etapa do evento foi preservada.');
+  upsertProposalState(result.data);
+  if(confirmStage&&source.status!=='confirmado'&&result.data.status==='confirmado'&&typeof captureEventAnalytics==='function'){
+    captureEventAnalytics('event_won',result.data,{previous_status:source.status||'unknown'},{dedupeKey:`event-won:${result.data.oportunidade_id||result.data.id}`});
+  }
+  showToast(confirmStage?'Sinal registrado e etapa atualizada diretamente.':'Sinal validado pelo seu usuário. A etapa do evento foi preservada.');
   await loadEventOperations();renderPipeline();
 }
 async function requestOpsDraftApproval(item, proposal, channel, destination, message) {
