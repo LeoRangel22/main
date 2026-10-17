@@ -138,6 +138,16 @@ begin
  evidence:=public.get_public_event_amendment((select client_token from event_private.event_amendments where id=old_history));
  assert evidence::text not like '%SECRET_FORMULA%';
  assert (select snapshot::text not like '%SECRET_FORMULA%' and snapshot::text not like '%preco1h%' from public.get_public_proposal((select public_token from public.propostas where id=(select base_id from event_private.event_amendments where id=old_history)))),'Existing proposal portal uses the same item privacy projection';
+ -- Ordinary proposal promotion must retain the existing ready-versus-sent behavior.
+ perform set_config('request.jwt.claims','',true);
+ insert into public.oportunidades(cliente_nome,status) values('Ordinary promotion fixture','proposta_pronta') returning id into opp;
+ insert into public.propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,snapshot)
+ values(opp,'Ordinary promotion fixture','proposta_pronta','ready',true,'{}') returning * into p;
+ insert into public.propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,snapshot)
+ values(opp,'Ordinary promotion fixture','proposta_pronta','draft',false,'{}') returning * into d;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com')::text,true);
+ select * into d from public.save_event_proposal(d.id,'{"is_current":true,"publication_status":"ready","status":"proposta_pronta"}',d.revision,null);
+ assert d.is_current and d.publication_status='ready' and d.sent_at is null,'Ordinary ready proposal must not acquire a fictional transport send';
  assert (select count(*)=before_outbox from public.event_outbox),'Amendment lifecycle never creates customer sends';
  assert (select count(*)=0 from event_private.amendment_apply_context),'No application capability survives its transaction';
 end $$;

@@ -42,7 +42,9 @@ begin
  if event_private.amendment_application_allowed(old,new) then return new; end if;
  if new.oportunidade_id is not null and coalesce(new.is_current,false) and not coalesce(old.is_current,false) then
   update public.propostas set is_current=false,superseded_at=now() where oportunidade_id=new.oportunidade_id and id<>new.id and is_current;
-  new.publication_status:='sent';new.sent_at:=coalesce(new.sent_at,now());new.superseded_at:=null;
+  if new.status='proposta_pronta' then new.publication_status:='ready';new.sent_at:=null;
+  else new.publication_status:='sent';new.sent_at:=coalesce(new.sent_at,now());end if;
+  new.superseded_at:=null;
  end if;
  return new;
 end; $$;
