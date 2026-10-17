@@ -17,10 +17,10 @@ CI instala a migration em bases descartáveis antes das verificações comuns, a
 
 ## Publicação
 
-Não alterar produção nem enviar comunicações, conforme a instrução vigente. A preparação deste PR não muda a política nem os dados de produção.
+Publicação autorizada pelo proprietário em 17/10/2026. A migration foi aplicada e conferida no projeto pdgbnpztdnrvrphzdjas às 18:29 UTC, versão real 20261017182928. O arquivo originalmente gerado pelo CLI como 20261017162110 foi renomeado para coincidir com o histórico instalado. A política de aprovação geral está desligada; o operador de sinal continua privado, sem execução por anon/authenticated.
 
-A migration supabase/migrations/20261017162110_seller_workflow_feedback.sql foi gerada com Supabase CLI 2.121.0 no CI 39048990666, após consultar os comandos --help. O CI confirmou instalação nova, atualização, papéis, transações concorrentes e restauração de backup. O passo temporário de geração foi removido; o arquivo versionado é a fonte de instalação.
+A conferência pós-instalação manteve 206 propostas, nenhuma reserva e 19 envios já aceitos, sem criação de pagamentos, decisões ou comunicações. O frontend só segue para publicação após o CI completo.
 
-Antes de qualquer rollout autorizado, aplicar a migration no projeto correto, registrar a versão real e só então publicar o frontend. Este PR não aplica SQL em produção nem envia comunicações. Não aplicar a migration de aditivos do PR 56 por engano.
+A revisão adicional bloqueia a confirmação de proposta cancelada no navegador e no banco, registra etapa e conferência bancária no histórico e exige descrição em itens personalizados, inclusive na revisão de itens antigos.
 
-A regra de sinais neste pacote substitui a função guard_journey_proposal mantendo os demais controles. É compatível com o PR 56: não remove os gatilhos de aditivo nem a capacidade privada de aplicação exata. Confirmar novamente a ordem e o texto das funções se outra mudança alterar o mesmo guard antes do rollout.
+A regra de sinais substitui guard_journey_proposal mantendo os demais controles e é compatível com o ciclo de aditivos do PR 56. A aplicação dos dois pacotes exige nova verificação integrada. Testes isolados não substituem conferência de extrato e piloto da equipe.
