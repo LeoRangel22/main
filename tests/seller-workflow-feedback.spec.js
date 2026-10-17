@@ -77,7 +77,7 @@ for(const width of [1440,390])test('Sem resposta has page scrolling and an acces
  expect(styles.max).toBe('none');expect(styles.overflow).toBe('visible');
  const card=column.locator('.pipeline-card').first();
  await expect(card.locator('.pipeline-card-details')).not.toHaveAttribute('open','');
- const control=card.locator('.pipeline-card-bottom-row > .pipeline-status-control');
+ const control=card.locator('.pipeline-card-stage-switch > .pipeline-status-control');
  await control.locator('summary').click();
  await expect(control.locator('select option[value="confirmado"]')).toHaveCount(1);
  await expect(control.locator('select')).toBeVisible();
