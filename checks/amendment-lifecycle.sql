@@ -132,8 +132,8 @@ begin
  from event_private.event_amendments a cross join generate_series(1,205) g(seq) where a.id=old_active;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',manager,'email','leorangel@gmail.com')::text,true);
  evidence:=public.list_event_amendments();
- assert (select count(*)=1 from jsonb_array_elements(evidence->'requests') a where a->>'id'=old_active::text),'Old active request stays accessible after more than 200 newer closed rows';
- assert (select count(*)=0 from jsonb_array_elements(evidence->'requests') a where a->>'id'=old_history::text),'Old history is outside the capped listing';
+ assert (select count(*)=1 from jsonb_array_elements(evidence->'requests') jr(value) where jr.value->>'id'=old_active::text),'Old active request stays accessible after more than 200 newer closed rows';
+ assert (select count(*)=0 from jsonb_array_elements(evidence->'requests') jr(value) where jr.value->>'id'=old_history::text),'Old history is outside the capped listing';
  assert public.get_event_amendment(old_history)->>'id'=old_history::text,'Direct authenticated link retrieves history outside the cap';
  evidence:=public.get_public_event_amendment((select client_token from event_private.event_amendments where id=old_history));
  assert evidence::text not like '%SECRET_FORMULA%';
