@@ -51,7 +51,7 @@ test('watch deploy configuration permits custom cron authentication and rejects 
  const valid=fixture();assert.equal((await valid.run()).status,200);assert.equal(valid.sent.length,2);
 });
 test('watch uses the same delivery attention predicate for detection and revalidation',()=>{
- const sql=fs.readFileSync(root+'/supabase/migrations/20261013183019_approval_closure.sql','utf8');
+ const sql=fs.readFileSync(root+'/supabase/migrations/20261015093644_approval_closure.sql','utf8');
  assert.match(sql,/elsif event_private\.approval_dispatch_needs_attention\(a\.send_row,a\.decided_at\)/);
  assert.match(sql,/when 'dispatch_attention' then q\.status='approved' and event_private\.approval_dispatch_needs_attention/);
 });

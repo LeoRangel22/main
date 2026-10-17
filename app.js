@@ -2633,7 +2633,7 @@ function getTimelineSummaryCards(proposal, compactHistory, lastRelevantEntry) {
   const snapshot = proposal.snapshot || {};
   const clientResponse = proposal.cliente_resposta || snapshot.clienteResposta?.acao || snapshot.clientResponse?.action || "";
   const signal = hasValidatedSignal(snapshot.pagamentoSinal) ? snapshot.pagamentoSinal : null;
-  const remaining = snapshot.pagamentoRestante?.validacaoPendente === true ? null : snapshot.pagamentoRestante;
+  const remaining = hasAuditedPayment(snapshot.pagamentoRestante) ? snapshot.pagamentoRestante : null;
   const responseLabels = {
     confirmar: "Aprovou",
     alteracao: "Pediu ajuste",
@@ -4285,15 +4285,15 @@ function getSignalDefaultAmount(total) {
 }
 
 function hasValidatedSignal(signalInfo) {
-  return hasAuditedPayment(signalInfo);
+  return hasAuditedPayment(signalInfo, true);
 }
 
-function hasAuditedPayment(payment) {
+function hasAuditedPayment(payment, allowEvents = false) {
   const actor = String(payment?.validadoEmail || "").toLowerCase();
   return payment?.validacaoPendente === false && toNumber(payment?.valor) > 0
     && Boolean(payment?.validadoPor) && Number.isFinite(Date.parse(payment?.validadoEm))
     && (!actor || ["leorangel@gmail.com", "financeiro@embaixadacarioca.com.br"].includes(actor)
-      || (actor === "eventos@embaixadacarioca.com.br" && payment.bankConferido === true));
+      || (allowEvents && actor === "eventos@embaixadacarioca.com.br" && payment.bankConferido === true));
 }
 
 function getRemainingDefaultAmount(total, signalInfo) {
@@ -4303,7 +4303,7 @@ function getRemainingDefaultAmount(total, signalInfo) {
 function getPaymentCoverage(total, signalInfo = null, remainingInfo = null) {
   const totalValue = roundCurrency(Number(total) || 0);
   const signalValue = hasValidatedSignal(signalInfo) ? toNumber(signalInfo.valor) : 0;
-  const remainingValue = remainingInfo?.validacaoPendente === true ? 0 : toNumber(remainingInfo?.valor);
+  const remainingValue = hasAuditedPayment(remainingInfo) ? toNumber(remainingInfo.valor) : 0;
   const paidTotal = roundCurrency(signalValue + remainingValue);
   const remainingDue = Math.max(0, roundCurrency(totalValue - paidTotal));
   const isFullyPaid = totalValue > 0 && paidTotal >= totalValue - 0.01;

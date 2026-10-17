@@ -34,3 +34,7 @@ A implementação reúne os cinco pacotes do diagnóstico e inclui o P0 como pr�
 ## Verificação
 
 Regressões de lógica, navegador, banco novo, upgrade, permissões, concorrência e restauração. O relatório final da entrega registra os resultados e a versão efetivamente publicada.
+
+## Histórico de instalação
+
+As seis migrações desta entrega foram instaladas e conferidas por hash com o ledger. Os nomes locais refletem a versão efetivamente instalada. Dois arquivos históricos de conteúdo já idêntico ao ledger também tiveram seus prefixos alinhados, sem reaplicação. Ajustes antigos de bootstrap e formatação são tratados pelas regressões de instalação nova e upgrade; não foram reaplicados em produção.
