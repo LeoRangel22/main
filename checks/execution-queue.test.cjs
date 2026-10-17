@@ -34,3 +34,10 @@ for(const scenario of ['cancel','revision','session','success'])test(`bank valid
  if(scenario==='success'){assert.equal(write.changes.status,undefined);assert.equal(write.source.revision,3);assert.equal(write.changes.snapshot.pagamentoSinal.validacaoPendente,false);assert.equal(write.changes.snapshot.pagamentoSinal.comprovante.nome,'original.pdf');}else assert.equal(write,undefined);
 });
 test('synchronous read failure releases loading ownership and can be retried',async()=>{const f=fixture();f.state.supabase.from=()=>{throw Error('offline')};await f.c.loadOpsExecution();assert.equal(f.c.opsExecutionState().pending,null);f.state.supabase.from=()=>queryPages([{data:[{id:'recovered'}]}]);await f.c.loadOpsExecution({force:true});assert.equal(f.c.opsExecutionState().rows[0].id,'recovered');assert.equal(f.c.opsExecutionState().error,'');});
+test('legacy signal may be rechecked explicitly without treating an existing amount as a fresh validation',async()=>{
+ const f=fixture({qa:true}),p={id:'p',revision:1,is_current:true,total:100,status:'planejamento',snapshot:{pagamentoSinal:{valor:50,data:'2026-10-12',comprovante:{nome:'original.pdf'}}}};f.state.proposals=[p];let dialogs=0,writes=0;
+ f.c.isFinanceSession=()=>true;f.c.ensureFullProposal=async()=>p;f.c.showToast=()=>{};f.c.showSignalPaymentDialog=async(total,options)=>{dialogs++;assert.equal(options.requireBankConfirmation,true);return {valor:50,data:'2026-10-12',bancos:['Fixture']}};
+ f.c.persistEventProposal=async(id,changes,source)=>{writes++;assert.equal(changes.status,undefined);assert.equal(source.revision,1);assert.equal(changes.snapshot.pagamentoSinal.comprovante.nome,'original.pdf');return {data:{...p,snapshot:changes.snapshot}}};f.c.upsertProposalState=()=>{};f.c.loadEventOperations=async()=>{};f.c.renderPipeline=()=>{};
+ await f.c.validateOpsSignal('p');assert.equal(dialogs,0);assert.equal(writes,0);
+ await f.c.validateOpsSignal('p',{revalidateLegacy:true});assert.equal(dialogs,1);assert.equal(writes,1);
+});

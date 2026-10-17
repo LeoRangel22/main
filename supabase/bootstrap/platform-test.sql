@@ -17,6 +17,7 @@ grant usage on schema public,extensions to anon,authenticated,service_role;
 alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
 alter default privileges in schema public grant all on sequences to anon,authenticated,service_role;
 create schema net;
+create table net._http_response(id bigint,status_code integer,content_type text,headers jsonb,content text,timed_out boolean,error_msg text,created timestamptz default now());
 create function net.http_post(url text,body jsonb default '{}',params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 5000) returns bigint language plpgsql as $$ begin raise exception 'External HTTP prohibited in DB tests'; end $$;
 create schema cron;
 create table cron.job(jobid bigserial primary key,jobname text unique,schedule text,command text);
