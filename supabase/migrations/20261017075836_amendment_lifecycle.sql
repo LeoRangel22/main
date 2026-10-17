@@ -200,7 +200,7 @@ language plpgsql stable security definer set search_path='' as $$
 declare a event_private.event_amendments;
 begin
  select * into a from event_private.event_amendments where client_token=amendment_token and status in ('awaiting_client','client_accepted','changes_requested','applied') and decided_by is not null;
- if not found or a.expires_at<=now() then return null; end if;
+ if not found or a.expires_at is null or a.expires_at<=now() then return null; end if;
  if a.status<>'applied' then perform event_private.assert_amendment_current(a); end if;
  return jsonb_build_object('id',a.id,'hash',a.content_hash,'summary',a.summary,'status',a.status,'expires_at',a.expires_at,
  'before',event_private.amendment_public_record(jsonb_populate_record(null::public.propostas,a.before_record)),
@@ -220,7 +220,7 @@ begin
  if opp is null then raise exception 'Link de aditivo indisponível'; end if;
  perform event_private.lock_proposal_group(opp);
  select * into a from event_private.event_amendments where client_token=amendment_token for update;
- if not found or a.content_hash is distinct from expected_hash or a.decided_by is null or a.expires_at<=now() then raise exception 'Link expirado ou conteúdo alterado. Solicite uma nova revisão.'; end if;
+ if not found or a.content_hash is distinct from expected_hash or a.decided_by is null or a.decided_at is null or a.expires_at is null or a.expires_at<=now() then raise exception 'Link expirado ou conteúdo alterado. Solicite uma nova revisão.'; end if;
  if a.client_request_id=request_id and a.client_action=action then return jsonb_build_object('id',a.id,'status',a.status); end if;
  if a.status<>'awaiting_client' then raise exception using errcode='PT409',message='Já existe uma resposta para este aditivo. Atualize a página para conferir.'; end if;
  perform event_private.assert_amendment_current(a);
@@ -246,7 +246,7 @@ begin
  select * into a from event_private.event_amendments where id=target_amendment for update;
  if a.base_revision is distinct from expected_base_revision or a.draft_revision is distinct from expected_draft_revision then raise exception using errcode='PT409',message='Revise as versões do aditivo antes de aplicar'; end if;
  if a.status='applied' then return jsonb_build_object('id',a.id,'status',a.status,'proposal_id',a.draft_id,'existing',true); end if;
- if a.status<>'client_accepted' or a.decided_by is null or a.client_action<>'accept' or a.client_response_at is null or a.expires_at<=now() then raise exception 'A aplicação exige aprovação do gestor e aceite vigente do cliente'; end if;
+ if a.status<>'client_accepted' or a.decided_by is null or a.decided_at is null or a.expires_at is null or a.client_action<>'accept' or a.client_response_at is null or a.expires_at<=now() then raise exception 'A aplicação exige aprovação do gestor e aceite vigente do cliente'; end if;
  perform event_private.assert_amendment_current(a);
  select * into base from public.propostas where id=a.base_id for update;
  select * into draft from public.propostas where id=a.draft_id for update;
@@ -476,42 +476,25 @@ $function$
 ;
 
 -- Preserve customer-history behavior while removing the same internal item metadata.
-CREATE OR REPLACE FUNCTION public.get_my_event_history()
- RETURNS TABLE(proposal_id uuid, oportunidade_id uuid, versao integer, status text, cliente_nome text, tipo_evento text, data_evento date, horario_evento time without time zone, convidados integer, total numeric, public_token uuid, snapshot jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO ''
-AS $function$
-  with me as (
-    select lower(nullif(trim(coalesce(auth.jwt() ->> 'email','')), '')) as email
-  )
-  select
-    p.id,
-    p.oportunidade_id,
-    p.versao,
-    p.status,
-    p.cliente_nome,
-    p.tipo_evento,
-    p.data_evento,
-    p.horario_evento,
-    p.convidados,
-    p.total,
-    p.public_token,
-    jsonb_strip_nulls(jsonb_build_object(
-      'client', p.snapshot -> 'client',
-      'event', p.snapshot -> 'event',
-      'selectedItems', event_private.public_proposal_items(p.snapshot),
-      'qualificacao', p.snapshot -> 'qualificacao',
-      'sourceRequestSnapshot', p.snapshot -> 'sourceRequestSnapshot'
-    )),
-    p.created_at,
-    p.updated_at
-  from public.propostas p, me
-  where me.email is not null
-    and lower(coalesce(p.cliente_email,'')) = me.email
-    and coalesce(p.is_current, true) = true
-    and p.publication_status <> 'draft'
+-- Keep one customer-visible version per opportunity while its replacement awaits approval.
+create or replace function public.get_my_event_history()
+returns table(proposal_id uuid, oportunidade_id uuid, versao integer, status text, cliente_nome text, tipo_evento text, data_evento date, horario_evento time without time zone, convidados integer, total numeric, public_token uuid, snapshot jsonb, created_at timestamptz, updated_at timestamptz)
+language sql stable security definer set search_path='' as $$
+with me as (
+  select lower(nullif(trim(coalesce(auth.jwt()->>'email','')),'')) as email
+), visible as (
+  select distinct on (coalesce(p.oportunidade_id,p.id)) p.*
+  from public.propostas p,me
+  where me.email is not null and lower(coalesce(p.cliente_email,''))=me.email
+    and p.publication_status<>'draft' and p.public_token_revoked_at is null
     and event_private.remote_proposal_is_public(p)
-  order by coalesce(p.data_evento, p.created_at::date) desc, p.updated_at desc
-  limit 12;
-$function$;
+  order by coalesce(p.oportunidade_id,p.id),coalesce(p.is_current,false) desc,p.versao desc nulls last,p.updated_at desc,p.id
+)
+select p.id,p.oportunidade_id,p.versao,p.status,p.cliente_nome,p.tipo_evento,p.data_evento,p.horario_evento,p.convidados,p.total,p.public_token,
+  jsonb_strip_nulls(jsonb_build_object('client',p.snapshot->'client','event',p.snapshot->'event','selectedItems',event_private.public_proposal_items(p.snapshot),'qualificacao',p.snapshot->'qualificacao','sourceRequestSnapshot',p.snapshot->'sourceRequestSnapshot')),
+  p.created_at,p.updated_at
+from visible p
+order by coalesce(p.data_evento,p.created_at::date) desc,p.updated_at desc limit 12;
+$$;
+revoke all on function public.get_my_event_history() from public,anon;
+grant execute on function public.get_my_event_history() to authenticated;
