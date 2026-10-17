@@ -69,6 +69,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(typeof QA_MODE!=='undefined' && QA_MODE) return;
   const bar=document.querySelector('.topbar-actions') || document.querySelector('header') || document.body;
   const link=document.createElement('a');link.href='./aprovacoes.html';link.textContent='Aprovações de propostas';link.className='secondary';link.style.margin='8px';bar.append(link);
-  const labels={whatsappBtn:'Solicitar aprovação · WhatsApp',emailBtn:'Solicitar aprovação · e-mail'};
+  const labels={whatsappBtn:'Revisar e enviar · WhatsApp',emailBtn:'Revisar e enviar · e-mail'};
   for(const [id,label] of Object.entries(labels)){const el=document.getElementById(id);if(el)el.textContent=label;}
 });

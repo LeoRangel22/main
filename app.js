@@ -756,6 +756,7 @@ const fields = {
   searchPrice: document.querySelector("#searchPrice"),
   categoryFilter: document.querySelector("#categoryFilter"),
   quickItemName: document.querySelector("#quickItemName"),
+  quickItemDescription: document.querySelector("#quickItemDescription"),
   quickItemValue: document.querySelector("#quickItemValue"),
   quickItemCategory: document.querySelector("#quickItemCategory"),
   newCodigo: document.querySelector("#newCodigo"),
@@ -1761,7 +1762,7 @@ function getProposalNextStepConfig() {
 
     if (proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
       return {tone: "warning", title: "Validar o comprovante antes de liberar a operação",
-        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Financeiro ou gestor devem conferir o sinal.",
+        note: "Há comprovante pendente. A etapa registrada não comprova recebimento bancário. Eventos, Financeiro ou gestor devem conferir o sinal.",
         action: "mark_signal", actionLabel: "Validar sinal"};
     }
 
@@ -2784,7 +2785,9 @@ async function persistEventProposal(proposalId, changes, source = null) {
     if (changes.snapshot && !isFinanceSession()) {
       for (const key of ["pagamentoSinal", "pagamentoRestante"]) {
         const before = existing?.snapshot?.[key] ?? null, after = changes.snapshot[key] ?? null;
-        if (JSON.stringify(proposalSendContent(before)) !== JSON.stringify(proposalSendContent(after)) && (proposalId || after !== null)) {
+        const mayRecordSignal = key === "pagamentoSinal" && isSignalSession() && after?.bankConferido === true &&
+          (!before || before.validacaoPendente === true || !before.validadoPor);
+        if (!mayRecordSignal && JSON.stringify(proposalSendContent(before)) !== JSON.stringify(proposalSendContent(after)) && (proposalId || after !== null)) {
           return {data: null, error: {code: "42501", message: "Somente Financeiro ou gestor podem validar pagamentos. Anexe a informação para conferência, sem confirmar o recebimento."}};
         }
       }
@@ -3539,7 +3542,7 @@ function getOperationalReleaseBlockers(proposal, data = getOperationalHandoffDat
   if (!proposal?.is_current || !["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(normalizeProposalStatus(proposal?.status))) {
     blockers.push("Confira o acordo confirmado atual; um evento em renegociação não está liberado para execução.");
   }
-  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Financeiro ou gestor devem validar o sinal antes da liberação.");
+  if (!hasValidatedSignal(proposal.snapshot?.pagamentoSinal)) blockers.push("Eventos, Financeiro ou gestor devem conferir o crédito e validar o sinal antes da liberação.");
   if (!data.handoff || data.handoff.proposal_id !== proposal.id || data.handoff.changes_pending) blockers.push("Revise as mudanças da versão operacional.");
   const requirements = ["eventos_briefing", "financeiro_saldo", "cozinha_cardapio", "bar_bebidas", "estoque_insumos", "salao_montagem", "gerencia_infra"];
   if (requirements.some(key => !data.tasks.some(task => task.task_key === key && task.status === "done" && task.acknowledged_at && Number(task.source_version) === Number(data.handoff?.version)))) {
@@ -3883,7 +3886,7 @@ function buildOperationalPaymentStatusBlock(context) {
   const total = Number(context.totals.total || 0);
   const {isFullyPaid} = getPaymentCoverage(total, context.signal, context.remaining);
   return buildOperationalRows([
-    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado pelo Financeiro ou gestor." : "Pendente. Cobrar sinal antes de confirmar operação." },
+    { label: "Sinal de reserva", value: context.signal?.validacaoPendente === true ? "Comprovante pendente de validação. Não comprova sinal recebido." : hasValidatedSignal(context.signal) ? "Registrado por usuário autorizado; confira o histórico." : "Pendente. Cobrar sinal antes de confirmar operação." },
     {
       label: "Pagamento restante",
       value: isFullyPaid
@@ -4329,8 +4332,9 @@ function readSignalProofFile(file) {
 }
 
 function showSignalPaymentDialog(total = 0, options = {}) {
-  if (!isFinanceSession()) {
-    showToast("Validação do sinal restrita ao Financeiro ou gestor. O comprovante pode ser anexado para conferência.");
+  const requireBankConfirmation = options.requireBankConfirmation || !isFinanceSession();
+  if (!isSignalSession()) {
+    showToast("Entre com a conta autorizada de Eventos, Financeiro ou gestor para registrar o sinal.");
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
@@ -4416,7 +4420,7 @@ function showSignalPaymentDialog(total = 0, options = {}) {
         <label>Justificativa da condição aprovada para sinal abaixo de 50% (somente gestor)
           <textarea name="exceptionReason" maxlength="1000" placeholder="Indique o motivo e a referência da condição negociada"></textarea>
         </label>
-        ${options.requireBankConfirmation ? '<label class="event-ops-check"><input name="bankConfirmed" type="checkbox" /> Conferi o crédito efetivo no extrato bancário. O comprovante sozinho não confirma recebimento.</label>' : ""}
+        ${requireBankConfirmation ? '<label class="event-ops-check"><input name="bankConfirmed" type="checkbox" /> Conferi o crédito efetivo no extrato bancário. O comprovante sozinho não confirma recebimento.</label>' : ""}
         <small class="signal-error" aria-live="polite"></small>
         <div class="signal-modal-actions">
           <button class="secondary" type="button" data-signal-cancel>Cancelar</button>
@@ -4473,7 +4477,7 @@ function showSignalPaymentDialog(total = 0, options = {}) {
       const banks = [...form.querySelectorAll('input[name="bank"]:checked')].map((input) => input.value);
       const preset = form.querySelector('input[name="paymentPreset"]:checked')?.value || "custom";
 
-      if (options.requireBankConfirmation && !form.elements.bankConfirmed.checked) {
+      if (requireBankConfirmation && !form.elements.bankConfirmed.checked) {
         errorNode.textContent = "Confira o crédito no extrato e marque a confirmação bancária.";
         return;
       }
@@ -4514,6 +4518,7 @@ function showSignalPaymentDialog(total = 0, options = {}) {
           valorTotalEvento: totalValue,
           saldoEstimado: coverage.remainingDue,
         });
+        if (requireBankConfirmation) info.bankConferido = true;
         if (proof) info.comprovante = proof;
         close(info);
       } catch (error) {
@@ -4979,11 +4984,14 @@ function getProposalReviewItems() {
     context.snapshot?.client?.groupName ||
     context.snapshot?.nomeGrupo ||
     getGroupNameFromSnapshot(context.snapshot);
+  // Bespoke items can form the whole offer; a catalog package is optional.
+  const missingCustomDescription = selected.some((item) => (item.custom || item.quoteOnly) && !String(item.commercialSummary || item.descricao || "").trim());
+  const catalogSelected = selected.filter((item) => !item.custom && !item.quoteOnly);
   const hasCategoryMismatch =
     allowedCategories.length > 0 &&
-    selected.length > 0 &&
-    !selected.some((item) => allowedCategories.includes(item.tipoEvento));
-  const missingBaseCategory = requiredCategory && selected.length > 0 && !selected.some((item) => item.tipoEvento === requiredCategory);
+    catalogSelected.length > 0 &&
+    !catalogSelected.some((item) => allowedCategories.includes(item.tipoEvento));
+  const missingBaseCategory = requiredCategory && selected.length > 0 && !selected.some((item) => item.custom || item.quoteOnly || item.tipoEvento === requiredCategory);
   const minimumWarnings = selected.filter((item) => guests < (toNumber(item.minimo) || 0));
   const hasNotes =
     fields.notes.value.trim() ||
@@ -5067,9 +5075,11 @@ function getProposalReviewItems() {
     {
       id: "items",
       label: "Cardápio",
-      status: selected.length ? (hasCategoryMismatch ? "error" : missingBaseCategory ? "warning" : "ok") : "error",
+      status: selected.length ? (hasCategoryMismatch || missingCustomDescription ? "error" : missingBaseCategory ? "warning" : "ok") : "error",
       detail: selected.length
-        ? hasCategoryMismatch
+        ? missingCustomDescription
+          ? "Preencha a descrição dos itens personalizados antes de enviar."
+        : hasCategoryMismatch
           ? `Pedido: ${eventType || "evento"}. Troque itens ou formato: a categoria escolhida não combina.`
           : missingBaseCategory
             ? `Confira o produto base de ${requiredCategory}. Há complementos, mas falta o item principal.`
@@ -6554,7 +6564,7 @@ function getManualAdjustmentLabel() {
 
 function getCommercialApprovalRequirement() {
   const adjustment = getManualAdjustment();
-  const discount = Math.max(0, -adjustment) + Math.max(0, -getPrivatizationAdjustment());
+  const discount = Math.max(0, -adjustment);
   const subtotal = Math.max(0, getSubtotal());
   const percent = subtotal > 0 ? discount / subtotal : 0;
   const required = discount > COMMERCIAL_APPROVAL_ABSOLUTE_LIMIT || percent > COMMERCIAL_APPROVAL_PERCENT_LIMIT;
@@ -7517,10 +7527,17 @@ function createQuickBudgetItem() {
   const name = fields.quickItemName?.value.trim() || "";
   const amount = toNumber(fields.quickItemValue?.value);
   const category = fields.quickItemCategory?.value.trim() || "Extra do evento";
+  const description = fields.quickItemDescription?.value.trim() || "";
 
   if (!name || name.length < 3) {
     showToast("Digite o nome do item pontual.");
     fields.quickItemName?.focus();
+    return;
+  }
+
+  if (!description) {
+    showToast("Descreva o que está incluído no item pontual.");
+    fields.quickItemDescription?.focus();
     return;
   }
 
@@ -7535,8 +7552,8 @@ function createQuickBudgetItem() {
     codigo: "EXTRA",
     tipoEvento: category,
     nome: name,
-    descricao: "Item pontual adicionado diretamente nesta proposta.",
-    commercialSummary: "Item pontual desta proposta.",
+    descricao: description,
+    commercialSummary: description,
     priority: "media",
     recommendedWindows: "Conforme briefing",
     formula: "fixedTotal",
@@ -7557,6 +7574,7 @@ function createQuickBudgetItem() {
   if (fields.searchPrice) fields.searchPrice.value = "";
   if (fields.categoryFilter) fields.categoryFilter.value = "";
   if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemDescription) fields.quickItemDescription.value = "";
   if (fields.quickItemValue) fields.quickItemValue.value = "";
   if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
   saveSelectedIds();
@@ -9121,6 +9139,10 @@ function isSuperAdminEmail(email) {
 
 function isSuperAdminSession() {
   return Boolean(state.session?.user?.email && isSuperAdminEmail(state.session.user.email));
+}
+
+function isSignalSession() {
+  return Boolean(state.session?.user?.email && isTeamEmail(state.session.user.email));
 }
 
 function isFinanceSession() {
@@ -11707,7 +11729,8 @@ function renderPipelineCard(item) {
   const outcomeButton = needsOutcome
     ? `<button class="primary pipeline-outcome-chip" type="button" data-outcome-kind="${escapeHtml(item.kind)}" data-outcome-id="${escapeHtml(item.id)}">Classificar desfecho</button>`
     : "";
-  const managementActionButtons = `${needsOutcome ? "" : cancelButton}${needsOutcome ? "" : renderStatusSelect(item)}${deleteTestButton}`;
+  const managementActionButtons = `${needsOutcome ? "" : cancelButton}${deleteTestButton}`;
+  const stageControl = needsOutcome ? "" : renderStatusSelect(item);
   const managementActions = managementActionButtons.trim()
     ? `<span class="pipeline-card-management-actions" aria-label="Opções administrativas">${managementActionButtons}</span>`
     : "";
@@ -11780,6 +11803,7 @@ function renderPipelineCard(item) {
       <div class="pipeline-card-bottom-row">
         ${actionButtons}
       </div>
+      ${stageControl ? `<div class="pipeline-card-stage-switch">${stageControl}</div>` : ""}
       </div>
       ${cancelInfo}
     </article>
@@ -12002,6 +12026,7 @@ function resetProposalDraftState() {
   if (fields.privatizationAdjustment) fields.privatizationAdjustment.value = "0";
   if (fields.privatizationAdjustmentLabel) fields.privatizationAdjustmentLabel.value = "";
   if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemDescription) fields.quickItemDescription.value = "";
   if (fields.quickItemValue) fields.quickItemValue.value = "";
   if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
   fields.searchPrice.value = "";
@@ -12572,19 +12597,20 @@ async function updateProposalStatus(proposalId, nextStatus, signalInfo = null, o
   if (!(await ensureFullProposal(proposalId))) return;
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (!proposal) return;
-  if (normalizeProposalStatus(nextStatus) === "confirmado" && proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
-    try {
-      if (typeof validateOpsSignal !== "function") throw new Error("A conferência bancária não carregou. Atualize a página antes de validar.");
-      await validateOpsSignal(proposal.id);
-    } catch (error) { showToast(error.message); }
-    return;
-  }
   const validation = canMoveProposalStatus(proposal.status, nextStatus);
   if (!validation.ok) {
     showToast(validation.message);
     renderPipeline();
     return;
   }
+  if (normalizeProposalStatus(nextStatus) === "confirmado" && proposal.snapshot?.pagamentoSinal?.validacaoPendente === true) {
+    try {
+      if (typeof validateOpsSignal !== "function") throw new Error("A conferência bancária não carregou. Atualize a página antes de validar.");
+      await validateOpsSignal(proposal.id, {confirmStage: true});
+    } catch (error) { showToast(error.message); }
+    return;
+  }
+
 
   const normalizedNext = normalizeProposalStatus(nextStatus);
   const wasCanceled = normalizeProposalStatus(proposal.status) === "cancelado" && normalizedNext !== "cancelado";
@@ -13985,6 +14011,7 @@ function startNewProposal(options = {}) {
   if (fields.privatizationAdjustment) fields.privatizationAdjustment.value = "0";
   if (fields.privatizationAdjustmentLabel) fields.privatizationAdjustmentLabel.value = "";
   if (fields.quickItemName) fields.quickItemName.value = "";
+  if (fields.quickItemDescription) fields.quickItemDescription.value = "";
   if (fields.quickItemValue) fields.quickItemValue.value = "";
   if (fields.quickItemCategory) fields.quickItemCategory.value = "Extra do evento";
   fields.eventReason.value = "";
