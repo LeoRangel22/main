@@ -77,6 +77,7 @@ create function event_private.amendment_public_record(p public.propostas) return
 language sql immutable set search_path='' as $$
  select jsonb_build_object('version',p.versao,'client',p.cliente_nome,'type',p.tipo_evento,'date',p.data_evento,'time',p.horario_evento,
  'guests',p.convidados,'duration',p.duracao,'subtotal',p.subtotal,'service',p.taxa_servico,'private',p.privatizacao,'total',p.total,
+ 'adjustment',p.snapshot#>'{totals,adjustment}','private_adjustment',p.snapshot#>'{totals,privatizationAdjustment}',
  'items',p.snapshot->'selectedItems','terms',p.snapshot->'generalTerms','payment_terms',p.snapshot->'paymentTerms');
 $$;
 revoke all on function event_private.amendment_public_record(public.propostas) from public,anon,authenticated;
@@ -253,7 +254,7 @@ begin
  if paid>draft.total+0.01 then raise exception 'Os pagamentos superam o novo total. Resolva o crédito ou estorno com o Financeiro antes de aplicar; nenhum valor foi compensado automaticamente.'; end if;
  payment:=base.snapshot->'pagamentoSinal';
  if (payment->>'valor')::numeric+0.01<draft.total*0.5 then
-  if length(exception_reason)<10 then raise exception 'O sinal ficou abaixo de 50% do novo total. Confira o complemento com o Financeiro ou autorize uma exceção justificada de pelo menos 10 caracteres.'; end if;
+  if length(exception_reason)<10 then raise exception 'O sinal ficou abaixo de 50%% do novo total. Confira o complemento com o Financeiro ou autorize uma exceção justificada de pelo menos 10 caracteres.'; end if;
   payment:=payment||jsonb_build_object('motivoExcecao',exception_reason,'excecaoAutorizadaPor',auth.uid(),'excecaoAutorizadaEm',now());
  end if;
  next_base:=base;next_base.is_current:=false;next_base.superseded_at:=now();
