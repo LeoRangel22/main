@@ -33,3 +33,7 @@ O Financeiro ou gestor também pode conferir um sinal legado sem validação aud
 5. Escolher um evento futuro real para o piloto. Gestor decide; Financeiro confere o crédito; cada setor registra sua ciência e execução; o desfecho só é registrado quando conhecido pela equipe. A trilha mostra as evidências e as lacunas.
 
 A publicação desta entrega não encerra esses passos nem declara os canais homologados. Aditivos completos continuam como próxima lacuna de desenvolvimento após este pacote.
+
+## Validação técnica
+
+257 verificações Node passaram. O CI confirmou banco novo, atualização, permissões, concorrência e restauração de backup no PostgreSQL 17. A migração foi registrada no ambiente com a versão `20261017070555`; o nome no repositório acompanha esse registro. A função `event-email-delivery` foi publicada na versão 4, mantendo a autenticação por chave do agendador.

@@ -1,4 +1,4 @@
-/* Evidence readers. No approval, send, payment, reservation or task writes. */
+/* Evidence readers and explicit, separately confirmed Finance/manager actions. */
 const eventReadiness={client:null,userId:null,channels:null,journey:null};
 window.EventReadinessState=eventReadiness;
 function resetEventReadiness(){Object.assign(eventReadiness,{client:state.supabase,userId:state.session?.user?.id,channels:null,journey:null});}
