@@ -44,7 +44,7 @@ create function public.record_event_bank_payment(target_proposal uuid,expected_r
  payment_kind text,payment_amount numeric,receipt_date date,bank_name text,bank_reference text,credit_confirmed boolean,reason text default '') returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare p public.propostas; next_p public.propostas; prior event_private.payment_operations;
- fp text; ref_hash text; snap jsonb; value jsonb; signal numeric:=0; remaining numeric:=0; refund numeric; result jsonb;
+ fp text; ref_hash text; canonical_bank text; canonical_reference text; snap jsonb; value jsonb; signal numeric:=0; remaining numeric:=0; refund numeric; result jsonb;
 begin
  perform event_private.require_team();
  if payment_kind='estorno' and not public.is_super_admin() then raise insufficient_privilege using message='Estorno exige gestor e conferência da saída bancária.';end if;
@@ -55,7 +55,11 @@ begin
   or length(trim(coalesce(bank_name,''))) not between 2 and 80 or length(trim(coalesce(bank_reference,''))) not between 3 and 160 then
   raise exception 'Informe valor, data efetiva, banco, identificação do extrato e confirmação da movimentação.';end if;
  fp:=encode(extensions.digest(jsonb_build_array(target_proposal,payment_kind,payment_amount,receipt_date,trim(bank_name),trim(bank_reference),trim(reason))::text,'sha256'),'hex');
- ref_hash:=encode(extensions.digest(upper(trim(bank_name))||':'||upper(trim(bank_reference)),'sha256'),'hex');
+ canonical_bank:=regexp_replace(translate(upper(trim(bank_name)),'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ','AAAAAEEEEIIIIOOOOOUUUUC'),'[^A-Z0-9]','','g');
+ if canonical_bank like 'ITAU%' then canonical_bank:='ITAU';elsif canonical_bank like 'SANTANDER%' then canonical_bank:='SANTANDER';elsif canonical_bank like 'NUBANK%' then canonical_bank:='NUBANK';elsif canonical_bank like 'STONE%' then canonical_bank:='STONE';end if;
+ canonical_reference:=regexp_replace(upper(trim(bank_reference)),'[^A-Z0-9]','','g');
+ if length(canonical_bank)<2 or length(canonical_reference)<3 then raise exception 'Use a identificação bancária real, com letras ou números, e o nome do banco.';end if;
+ ref_hash:=encode(extensions.digest(canonical_bank||':'||canonical_reference,'sha256'),'hex');
  perform pg_advisory_xact_lock(hashtextextended(request_key::text,0));
  select * into prior from event_private.payment_operations where request_id=request_key;
  if found then

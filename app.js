@@ -3675,8 +3675,8 @@ async function updateOperationalHandoffTask(taskId, checked, acknowledgeOnly = f
   }
 }
 
-async function acknowledgeOperationalHandoffChanges() {
-  const proposal = getActiveProposal();
+async function acknowledgeOperationalHandoffChanges(proposalId = null) {
+  const proposal = proposalId ? state.proposals.find(p => p.id === proposalId) : getActiveProposal();
   const runRpc = window.runEventOperationsRpc;
   if (!proposal?.oportunidade_id || !runRpc || !state.session) return;
   try {
@@ -5953,7 +5953,7 @@ function refreshReviewSurfaces({ includeSourcePanel = false } = {}) {
 
 function handleFormSourceFieldInput(event, { includeSourcePanel = false } = {}) {
   const field = event.target.closest("[data-source-field]");
-  if (!field) return;
+  if (!field || !nodes.formSourcePanel?.contains(field)) return;
   setCurrentSourceOverride(field.dataset.sourceField, field.value);
   refreshReviewSurfaces({ includeSourcePanel });
 }

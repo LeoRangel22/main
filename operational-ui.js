@@ -29,11 +29,11 @@ function renderOperationWorkspace(){
  <section class="operation-detail" aria-label="Detalhes operacionais">${selected?renderOperationWorkspaceDetail(selected):'<h3>Escolha um evento</h3><p>Consulte a ficha, distribua as tarefas e registre a execução do setor.</p>'}</section></div>`;
 }
 function renderOperationWorkspaceDetail(row){
- const p=row.proposal,data=operationWorkspace.data,blockers=data?.blockers||getOperationalReleaseBlockers(p,getOperationalHandoffData(p));
+ const p=row.proposal,cached=operationWorkspace.data,data=cached&&Number(cached.revision)===Number(p.revision)&&Number(cached.handoff_version)===Number(row.handoff?.version)&&Date.now()-Date.parse(cached.generated_at)<30000?cached:null,blockers=data?.blockers||getOperationalReleaseBlockers(p,getOperationalHandoffData(p));
  return `<h3>${escapeHtml(p.cliente_nome)}</h3><p>${escapeHtml(formatDateFromIso(p.data_evento))} · ${escapeHtml(String(p.horario_evento||'').slice(0,5))} · ${Number(p.convidados)||0} pax · checklist V${row.handoff?.version||'—'}</p>
  ${operationWorkspace.error?`<p role="alert">${escapeHtml(operationWorkspace.error)}</p>`:''}<div class="operation-readiness"><strong>${data?.ready?'Pré-requisitos conferidos; a liberação final exige decisão explícita':'Pendências para liberar execução'}</strong><ul>${blockers.map(b=>`<li>${escapeHtml(b)}</li>`).join('')||'<li>Confira a decisão final registrada na tarefa de liberação.</li>'}</ul></div>
  <div class="operational-doc-actions"><button type="button" class="secondary" data-operation-document="technical-no-finance">Ficha operacional sem valores</button><button type="button" class="secondary" data-operation-document="checklist">Checklist</button><button type="button" class="secondary" data-operation-reserve>Conferir reserva</button><button type="button" class="secondary" data-operation-open>Revisar acordo</button></div>
- ${row.handoff?.changes_pending?'<p role="alert">Há alterações pendentes de ciência. Revise o acordo antes de executar.</p>':''}
+ ${row.handoff?.changes_pending?'<p role="alert">Há alterações pendentes de ciência. Revise o acordo e o plano antes de executar.</p><button type="button" class="secondary" data-operation-ack>Revisei as mudanças deste checklist</button>':''}
  ${typeof renderOpsProduction==='function'?renderOpsProduction({kind:'proposal',id:p.id}):''}
  ${renderOperationalHandoffTasks(row.tasks.filter(t=>!operationWorkspace.sector||t.sector===operationWorkspace.sector))}`;
 }
@@ -69,6 +69,7 @@ operationRoot?.addEventListener('click',async e=>{const b=e.target.closest('butt
  if(b.hasAttribute('data-handoff-task-ack')){await updateOperationalHandoffTask(b.dataset.handoffTaskAck,false,true,id);await loadOperationWorkspaceDetail(id);return;}
  if(b.hasAttribute('data-handoff-task-start')){await setOperationalTaskState(b.dataset.handoffTaskStart,'in_progress',id);return;}
  if(b.hasAttribute('data-handoff-task-block')){await setOperationalTaskState(b.dataset.handoffTaskBlock,'blocked',id);return;}
+ if(b.hasAttribute('data-operation-ack')){await acknowledgeOperationalHandoffChanges(id);await loadOperationWorkspaceDetail(id);return;}
  if(b.hasAttribute('data-operation-reserve')){await showOpsReservationConfirmation(id);return;}
  if(b.hasAttribute('data-operation-open')||b.hasAttribute('data-operation-document')){const ok=await safeOpenSavedProposal(id,'Operação');if(ok===false)return;if(b.dataset.operationDocument)await handleOperationalDocAction(b.dataset.operationDocument);else nodes.operationalChecklist?.scrollIntoView({block:'start'});}
  }catch(error){showToast(error.message);}});

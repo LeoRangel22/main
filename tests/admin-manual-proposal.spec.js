@@ -257,7 +257,6 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
-    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await expect(page.locator('[data-source-field="reason"]')).toBeVisible();
     await expect(page.locator('[data-source-field="preferences"]')).toBeVisible();
@@ -270,6 +269,7 @@ test.describe("Proposta manual no admin", () => {
     await page.locator('[data-source-field="origin"]').selectOption({ index: 1 });
     await page.locator('[data-source-field="moment"]').selectOption({ index: 3 });
     await page.locator('[data-source-field="occasion"]').fill("Relacionamento com clientes");
+    await expect(page.locator('[data-source-field="occasion"]')).toHaveValue("Relacionamento com clientes");
     await page.locator('[data-source-field="reason"]').fill("Receber parceiros estratégicos com vista e serviço ágil.");
     await page.locator('[data-source-field="preferences"]').fill("Open bar, opções vegetarianas e café ao final.");
     await page.locator('[data-source-field="extras"]').fill("Som ambiente e foto.");
@@ -286,7 +286,7 @@ test.describe("Proposta manual no admin", () => {
       snapshot: window.getProposalSnapshot(),
     }));
 
-    expect(mirrored.sourceGaps).toEqual([]);
+    expect(mirrored.sourceGaps, JSON.stringify(mirrored.source)).toEqual([]);
     expect(mirrored.source.reason).toContain("Receber parceiros");
     expect(mirrored.source.preferences).toContain("Open bar");
     expect(mirrored.source.extras).toContain("Som ambiente");

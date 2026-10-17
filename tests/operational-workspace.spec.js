@@ -5,7 +5,7 @@ async function open(page){await page.route('https://**',r=>r.abort());await page
 test('dedicated operation agenda opens the current eight tasks without creating another checklist',async({page})=>{
  const errors=collectBrowserErrors(page);await open(page);await page.locator('[data-operation-select="ops-fixture"]').click();
  await expect(page.locator('#operationWorkspace')).toBeVisible();await expect(page.locator('.operation-detail [data-handoff-task-id]')).toHaveCount(8);
- await expect(page.locator('.operation-detail')).toContainText('Reserva');await expect(page.locator('#salesPipeline')).toBeHidden();await expectNoBrowserErrors(errors);
+ await expect(page.locator('.operation-detail')).toContainText(/reserva/i);await expect(page.locator('#salesPipeline')).toBeHidden();await expectNoBrowserErrors(errors);
 });
 test('planning a named owner does not acknowledge or complete the task; block records a reason',async({page})=>{
  await open(page);await page.locator('[data-operation-select="ops-fixture"]').click();const root=page.locator('.operation-detail');

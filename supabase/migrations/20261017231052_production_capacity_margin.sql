@@ -94,12 +94,13 @@ begin
    or jsonb_typeof(r->'loss') is distinct from 'number' or (r->>'loss')::numeric<0 or (r->>'loss')::numeric>=100
    or (r->'stock'<>'null'::jsonb and (jsonb_typeof(r->'stock') is distinct from 'number' or (r->>'stock')::numeric<0)) then raise exception 'Confira item, insumo, unidade, quantidade, rendimento, perda e estoque.';end if;
  end loop;
- if (select count(*)<>count(distinct r->>'id') from jsonb_array_elements(plan_data->'rows') r) then raise exception 'Cada linha de produção precisa de identificação própria.';end if;
+ if (select count(*)<>count(distinct entry->>'id') from jsonb_array_elements(plan_data->'rows') entry) then raise exception 'Cada linha de produção precisa de identificação própria.';end if;
  for c in select * from jsonb_array_elements(plan_data->'crew') loop
   if coalesce(c->>'id','') !~ '^[a-f0-9-]{36}$' or length(trim(coalesce(c->>'lead',''))) not between 2 and 120
    or coalesce(c->>'sector','') not in ('cozinha','bar','estoque','salao','gerencia','eventos') or jsonb_typeof(c->'people') is distinct from 'number'
    or (c->>'people')::integer not between 1 and 200 or jsonb_typeof(c->'hours') is distinct from 'number' or (c->>'hours')::numeric<=0 or (c->>'hours')::numeric>72 then raise exception 'Confira setor, responsável, pessoas e horas da equipe.';end if;
  end loop;
+ if (select count(*)<>count(distinct x->>'id') from jsonb_array_elements((plan_data->'rows')||(plan_data->'crew')) x) then raise exception 'Insumos e equipes precisam de identificações distintas.';end if;
  r:=plan_data->'logistics';
  if length(coalesce(r->>'space',''))>120 or jsonb_typeof(r->'setup') is distinct from 'number' or jsonb_typeof(r->'teardown') is distinct from 'number' or (r->>'setup')::integer not between 0 and 720 or (r->>'teardown')::integer not between 0 and 720 then raise exception 'Montagem e desmontagem devem estar entre 0 e 720 minutos.';end if;
  if coalesce(r->>'authorization','') not in ('pending','confirmed','not_required') then raise exception 'Informe a situação da autorização do Parque.';end if;
@@ -111,9 +112,9 @@ begin
  sectors:=array['eventos','gerencia'];
  if prior.data->'stock_checked_at' is distinct from plan_data->'stock_checked_at' then sectors:=array_append(sectors,'estoque');end if;
  if changed_rows then
-  for sector_name in select distinct r->>'sector' from jsonb_array_elements(coalesce(prior.data->'rows','[]')||(plan_data->'rows')) r loop
-   if (select jsonb_agg(r order by r->>'id') from jsonb_array_elements(coalesce(prior.data->'rows','[]')) r where r->>'sector'=sector_name)
-    is distinct from (select jsonb_agg(r order by r->>'id') from jsonb_array_elements(plan_data->'rows') r where r->>'sector'=sector_name) then sectors:=array_append(sectors,sector_name);end if;
+  for sector_name in select distinct entry->>'sector' from jsonb_array_elements(coalesce(prior.data->'rows','[]')||(plan_data->'rows')) entry loop
+   if (select jsonb_agg(entry order by entry->>'id') from jsonb_array_elements(coalesce(prior.data->'rows','[]')) entry where entry->>'sector'=sector_name)
+    is distinct from (select jsonb_agg(entry order by entry->>'id') from jsonb_array_elements(plan_data->'rows') entry where entry->>'sector'=sector_name) then sectors:=array_append(sectors,sector_name);end if;
   end loop;
   if cardinality(sectors)>2 then sectors:=array_append(sectors,'estoque');end if;
  end if;
@@ -198,8 +199,8 @@ begin
    union all select r->>'id',(r->>'people')::numeric*(r->>'hours')::numeric from jsonb_array_elements(plan.data->'crew') r
    union all select 'fixed',1
   ) select sum(multiplier*(costs->>key)::numeric),count(*) filter(where not costs ? key) into estimate,missing from lines;
-  financial:=jsonb_build_object('complete',missing=0,'missing',missing,'estimated_cost',case when missing=0 then estimate end,
-   'net_revenue',p.total-coalesce(p.taxa_servico,0),'estimated_contribution',case when missing=0 then p.total-coalesce(p.taxa_servico,0)-estimate end,
+  financial:=jsonb_build_object('complete',missing=0 and plan.reviewed_at is not null and plan.agreement_fingerprint=event_private.proposal_fingerprint(p),'missing',missing,'estimated_cost',case when missing=0 and plan.reviewed_at is not null and plan.agreement_fingerprint=event_private.proposal_fingerprint(p) then estimate end,
+   'net_revenue',p.total-coalesce(p.taxa_servico,0),'estimated_contribution',case when missing=0 and plan.reviewed_at is not null and plan.agreement_fingerprint=event_private.proposal_fingerprint(p) then p.total-coalesce(p.taxa_servico,0)-estimate end,
    'label','Estimativa antes de impostos e custos não cadastrados; receita sem taxa de serviço.');
  end if;
  return jsonb_build_object('proposal_id',p.id,'revision',p.revision,'plan',to_jsonb(plan)-'agreement_fingerprint',

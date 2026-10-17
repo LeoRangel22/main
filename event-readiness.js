@@ -109,7 +109,7 @@ async function showOpsReservationConfirmation(proposalId){
   const {data,error}=await identity.client.rpc('confirm_event_reservation',{target_proposal:proposalId,expected_revision:revision});
   if(identity.client!==state.supabase||identity.userId!==state.session?.user?.id)return;
   if(error||data?.proposal_id!==proposalId||Number(data.revision)!==revision||data.reservation?.status!=='confirmed')throw Error(error?.message||'A reserva não foi confirmada. Atualize as evidências antes de repetir.');
-  invalidateCommercialDashboard();await loadEventOperations();await loadOpsJourneyEvidence(proposalId,{force:true});showToast(data.already_confirmed?'A reserva já estava confirmada; não foi criado outro registro.':'Disponibilidade conferida e reserva registrada pelo seu usuário.');
+  invalidateCommercialDashboard();await loadEventOperations();await loadOpsJourneyEvidence(proposalId,{force:true});if(typeof operationWorkspace!=='undefined'&&operationWorkspace.selected===proposalId)await loadOperationWorkspaceDetail(proposalId);showToast(data.already_confirmed?'A reserva já estava confirmada; não foi criado outro registro.':'Disponibilidade conferida e reserva registrada pelo seu usuário.');
  });
 }
 
