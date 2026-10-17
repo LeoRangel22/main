@@ -4,6 +4,7 @@ declare manager uuid; seller uuid; finance uuid; opp uuid; p public.propostas; c
 begin
  select id into manager from auth.users where email='leorangel@gmail.com';select id into seller from auth.users where email='eventos@embaixadacarioca.com.br';select id into finance from auth.users where email='financeiro@embaixadacarioca.com.br';
  assert not has_function_privilege('anon','public.record_event_bank_payment(uuid,bigint,uuid,text,numeric,date,text,text,boolean,text)','execute');
+ assert not has_function_privilege('anon','event_private.public_payment_summary(public.propostas)','execute');
  assert not has_table_privilege('authenticated','event_private.payment_operations','select');
  perform set_config('request.jwt.claims','',true);
  insert into oportunidades(cliente_nome,status) values('Payment reference fixture','proposta_pronta') returning id into opp;

@@ -58,6 +58,7 @@ test.describe("Proposta manual no admin", () => {
     await expect(page.locator("#startManualProposalBtn")).toBeVisible();
 
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
     await expect(page.locator("#clientDataSection")).toBeVisible();
     await expect(page.locator("#manualAdjustment")).toHaveValue("0");
     await expect(page.locator("#formSourcePanel")).toContainText("Dados comerciais da proposta");
@@ -115,6 +116,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     const initialReview = await page.evaluate(() =>
       window.getProposalReviewItems().filter((item) => item.status === "error").map((item) => item.id),
@@ -166,6 +168,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
@@ -209,6 +212,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await page.locator("#clientName").fill("Mariana Costa");
     await page.locator("#clientEmail").fill("mariana.costa@example.com");
@@ -253,6 +257,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await expect(page.locator('[data-source-field="reason"]')).toBeVisible();
     await expect(page.locator('[data-source-field="preferences"]')).toBeVisible();
@@ -307,6 +312,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await humanFill(source("observations"), "Observacao livre preenchida antes de tudo para testar persistencia.");
     await humanFill(source("reason"), "Receber diretores internacionais com uma experiencia objetiva no Morro da Urca.");
@@ -380,6 +386,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await page.locator("#clientName").fill("Leonardo Rangel");
     await page.locator("#clientEmail").fill("leorangel@gmail.com");
@@ -454,6 +461,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await page.locator("#clientName").fill("Leonardo Rangel");
     await page.locator("#clientEmail").fill("leorangel@gmail.com");
@@ -522,6 +530,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await expect(page.locator("#eventDate")).toBeVisible();
     await expect(page.locator("#eventTime")).toBeVisible();
@@ -542,6 +551,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
     await page.locator("#clientName").fill("Leonardo Rangel");
 
     const message = await page.evaluate(() => {
@@ -561,6 +571,7 @@ test.describe("Proposta manual no admin", () => {
 
     await page.goto("/index.html?qa=1");
     await page.locator("#startManualProposalBtn").click();
+    await page.locator("#generalTerms").fill("VALIDADE: condições fictícias revisadas para eventos até 31/12/2099.");
 
     await page.locator("#clientName").fill("Renata Azevedo");
     await page.locator("#clientEmail").fill("renata.azevedo@example.com");

@@ -3568,6 +3568,10 @@ function formatOperationalTaskDue(value) {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function operationalSectorLabel(sector) {
+  return ({eventos:"Eventos",financeiro:"Financeiro",cozinha:"Cozinha",bar:"Bar e copa",estoque:"Estoque",salao:"Salão",gerencia:"Gerência"})[sector] || sector;
+}
+
 function renderOperationalHandoffTasks(tasks = []) {
   if (!tasks.length) return `<p class="handoff-loading">Preparando tarefas por setor a partir da proposta e do sinal.</p>`;
   return `<div class="handoff-sector-grid">${tasks.map((task) => `
@@ -3575,7 +3579,7 @@ function renderOperationalHandoffTasks(tasks = []) {
       <label class="handoff-task-main">
         <input type="checkbox" data-handoff-task-id="${escapeHtml(task.id)}" ${task.status === "done" ? "checked" : ""} />
         <span>
-          <small>${escapeHtml(task.sector)} · ${escapeHtml(task.responsible_name || "Pessoa responsável a definir")}</small>
+          <small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.responsible_name || "Pessoa responsável a definir")}</small>
           <strong>${escapeHtml(task.label)}</strong>
           <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
         </span>
@@ -3954,7 +3958,7 @@ function buildOperationalAdditionalChecklistRows(context, printable = false) {
 function buildOperationalChecklistRows(context, printable = false) {
   const rows = (context.sectorTasks || []).map(task => `<div class="op-check-row${task.status === "done" ? " is-done" : ""}">
     <span>${escapeHtml(task.status === "done" ? "OK" : task.status === "blocked" ? "BLOQUEADO" : task.status === "in_progress" ? "EM EXECUÇÃO" : "PENDENTE")}</span>
-    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(task.sector)} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
+    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
   </div>`).join("");
   return `${context.changesPending ? '<p class="op-note">Há mudanças pendentes de ciência. Esta ficha não comprova liberação da execução.</p>' : ""}
     ${rows || '<p class="op-note">Checklist setorial indisponível. Atualize o painel antes de distribuir esta ficha; não foi presumida conclusão.</p>'}

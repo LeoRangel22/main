@@ -12962,3 +12962,11 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .sales-guide-controls input[type="checkbox"] { width:18px; min-height:18px; }
 .sales-quality-message { margin:0; font-size:.9rem; line-height:1.5; color:#5a512d; }
 .sales-step-hidden { display:none !important; }
+.production-summary { margin:20px 0; border-top:1px solid #d6e4dc; padding-top:18px; }
+.production-requirements { display:grid; gap:10px; margin:14px 0; }
+.production-requirements article { display:grid; gap:5px; border:1px solid #d1dfd6; border-radius:10px; padding:12px; background:#f5faf6; }
+.production-line { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:16px; border:1px solid #cbdcd1; border-radius:12px; margin:16px 0; min-width:0; }
+.production-line legend { font-weight:700; padding:0 8px; }
+.production-line label { min-width:0; }
+.production-line input,.production-line select { width:100%; min-width:0; }
+@media(max-width:500px){.production-line {grid-template-columns:minmax(0,1fr);} }

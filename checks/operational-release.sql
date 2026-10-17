@@ -35,6 +35,10 @@ begin
  for t in select * from event_handoff_tasks where opportunity_id=opp and task_key<>'gerencia_go_no_go' order by sort_order loop
   perform update_event_handoff_task(t.id,'done',null,null,'Reviewed current prerequisites',h.version);
  end loop;
+ reset role;
+ insert into event_private.production_plans(opportunity_id,proposal_id,agreement_fingerprint,data,reviewed_by,reviewed_at,updated_by)
+ values(p.oportunidade_id,p.id,event_private.proposal_fingerprint(p),jsonb_build_object('rows','[]'::jsonb,'crew','[]'::jsonb,'stock_checked_at',now(),'logistics',jsonb_build_object('setup',0,'teardown',0)),manager,now(),manager);
+ set local role authenticated;
  ready:=event_operation_readiness(p.id,p.revision);assert ready->'ready'='true',ready::text;
  select * into t from event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go';
  perform update_event_handoff_task(t.id,'done',null,null,'Audited synthetic release',h.version);

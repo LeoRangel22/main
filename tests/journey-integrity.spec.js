@@ -80,7 +80,7 @@ test('status change in another editor cannot advance the current editing base',a
 test('print, summary and screen reflect the same eight sector tasks, additional controls stay separate',async({page})=>{
   await fixture(page,true);const r=await page.evaluate(()=>{
     const p=getActiveProposal(),data=getOperationalHandoffData(p);
-    for(const t of data.tasks){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';}
+    for(const t of data.tasks){t.status='done';t.acknowledged_at='2026-10-14T08:00:00Z';t.acknowledged_by=state.session.user.id;t.completed_at=t.acknowledged_at;t.completed_by=state.session.user.id;}
     renderOperationalChecklist(p);
     return {screen:nodes.operationalChecklist.textContent,html:buildOperationalChecklistHtml(p),summary:buildOperationalSummaryText(p),total:getOperationalDocContext(p).progress.total};
   });expect(r.total).toBe(8);expect(r.screen).toContain('8/8');expect(r.html).toContain('8/8');expect(r.summary).toContain('8/8');expect(r.html).toContain('Controles adicionais');expect(r.summary).toContain('Controles adicionais');

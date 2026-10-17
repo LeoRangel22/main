@@ -10,7 +10,7 @@ for(const page of ['index.html','clientes.html','comunicacao.html','valores.html
 for(const [page,asset,release] of [
   ['aprovacoes.html','aprovacoes.js','20261015-approval-evidence'],
   ['formulario.html','formulario.js','20261015-approval-closure'],
-  ['proposta.html','proposta.js','20261015-approval-closure']
+  ['proposta.html','proposta.js','20261018-synergy']
 ])test(`approval public cache rollout: ${page}`,()=>{
   const html=fs.readFileSync(`${__dirname}/../${page}`,'utf8');
   assert.ok(html.includes(asset+'?v='+release));

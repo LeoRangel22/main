@@ -1,4 +1,27 @@
 -- Human-reviewed bank reconciliation with explicit references and idempotent retries.
+create function event_private.deposit_fraction(p public.propostas) returns numeric
+language plpgsql immutable set search_path='' as $$
+declare first_term text; parts text[]; fraction numeric;
+begin
+ first_term:=p.snapshot#>>'{paymentTerms,0}';if first_term is null then return 0.5;end if;
+ parts:=regexp_match(first_term,'^\s*([0-9]+([.,][0-9]+)?)\s*%');
+ if parts is null then return null;end if;
+ fraction:=replace(parts[1],',','.')::numeric/100;
+ return case when fraction>0 and fraction<=1 then fraction end;
+end; $$;
+revoke all on function event_private.deposit_fraction(public.propostas) from public,anon,authenticated;
+create function event_private.public_payment_summary(p public.propostas) returns jsonb
+language plpgsql stable security definer set search_path='' as $$
+declare r jsonb;
+begin
+ r:=event_private.operation_readiness(p);
+ return jsonb_build_object('signalAudited',r->'signal_audited','reservationAudited',r->'reservation_audited',
+  'paidAmount',r->'paid_audited','balanceDue',r->'balance_due',
+  'depositDueAmount',case when (r->>'signal_audited')::boolean then 0 else round(p.total*event_private.deposit_fraction(p),2) end,
+  'paymentReviewRequired',coalesce(p.snapshot#>>'{pagamentoSinal,valor}','0')::numeric>0 and not (r->>'signal_audited')::boolean);
+end; $$;
+revoke all on function event_private.public_payment_summary(public.propostas) from public,anon,authenticated;
+
 create table event_private.payment_operations(
  request_id uuid primary key, proposal_id uuid not null references public.propostas(id),
  fingerprint text not null, kind text not null check(kind in ('sinal','saldo','estorno')),
@@ -90,10 +113,11 @@ begin
  if p.is_current is distinct from true or p.publication_status='draft' or p.snapshot ? 'amendmentOf' or p.status in ('cancelado','pos_venda') or payment_purpose not in ('sinal','saldo') then raise exception 'Use um acordo vigente aberto e escolha sinal ou saldo.';end if;
  if event_private.audited_payment(p) then paid:=(p.snapshot#>>'{pagamentoSinal,valor}')::numeric;end if;
  if event_private.audited_payment(p,'pagamentoRestante') then paid:=paid+(p.snapshot#>>'{pagamentoRestante,valor}')::numeric;end if;
- amount_due:=case when payment_purpose='sinal' then case when paid>0 then 0 else round(p.total*0.5,2) end else greatest(0,p.total-paid) end;
+ amount_due:=case when payment_purpose='sinal' then case when paid>0 then 0 else round(p.total*event_private.deposit_fraction(p),2) end else greatest(0,p.total-paid) end;
+ if amount_due is null then raise exception 'Condições de sinal personalizadas: revise o valor acordado antes de preparar a referência.';end if;
  if amount_due<=0 then raise exception 'Não há valor pendente para esta finalidade.';end if;
  if coalesce(p.snapshot#>>'{pagamentoSinal,valor}','0')::numeric>0 and not event_private.audited_payment(p) then raise exception 'Há sinal informado sem auditoria. Confira o banco antes de preparar outra solicitação de pagamento.';end if;
- fp:=event_private.proposal_fingerprint(p);
+ fp:=event_private.public_proposal_fingerprint(p);
  insert into event_private.payment_requests(proposal_id,fingerprint,purpose,amount,created_by) values(p.id,fp,payment_purpose,amount_due,auth.uid())
   on conflict(proposal_id,fingerprint,purpose) do update set amount=excluded.amount returning * into charge;
  return jsonb_build_object('id',charge.id,'reference','EC-'||upper(replace(charge.id::text,'-','')),'amount',charge.amount,'purpose',charge.purpose,'provider_charge',false);
@@ -111,7 +135,7 @@ begin
  if event_private.audited_payment(p,'pagamentoRestante') then paid:=paid+(p.snapshot#>>'{pagamentoRestante,valor}')::numeric;end if;
  return jsonb_build_object('proposal_id',p.id,'revision',p.revision,'paid',paid,'due',case when p.status='cancelado' then 0 else greatest(0,p.total-paid) end,'credit',greatest(0,paid-p.total),
   'operations',coalesce((select jsonb_agg(jsonb_build_object('id',request_id,'kind',kind,'amount',amount,'bank',bank,'bank_reference',bank_reference,'date',receipt_date,'at',recorded_at) order by recorded_at) from event_private.payment_operations where proposal_id=p.id),'[]'),
-  'requests',coalesce((select jsonb_agg(jsonb_build_object('reference','EC-'||upper(replace(id::text,'-','')),'purpose',purpose,'amount',amount,'at',created_at)) from event_private.payment_requests where proposal_id=p.id and fingerprint=event_private.proposal_fingerprint(p)),'[]'));
+  'requests',coalesce((select jsonb_agg(jsonb_build_object('reference','EC-'||upper(replace(id::text,'-','')),'purpose',purpose,'amount',amount,'at',created_at)) from event_private.payment_requests where proposal_id=p.id and fingerprint=event_private.public_proposal_fingerprint(p)),'[]'));
 end; $$;
 revoke all on function public.event_payment_history(uuid,bigint) from public,anon;
 grant execute on function public.event_payment_history(uuid,bigint) to authenticated;
@@ -125,11 +149,11 @@ begin
  select * into p from public.propostas where id=resolved;
  if p.is_current is distinct from true or p.status in ('cancelado','pos_venda') then return null;end if;
  signal_ok:=event_private.audited_payment(p);
- if coalesce(p.snapshot#>>'{pagamentoSinal,valor}','0')::numeric>0 and not signal_ok then return jsonb_build_object('proposal_id',p.id,'requests','[]'::jsonb);end if;
+ if coalesce(p.snapshot#>>'{pagamentoSinal,valor}','0')::numeric>0 and not signal_ok then return jsonb_build_object('proposal_id',p.id,'revision',p.revision,'requests','[]'::jsonb);end if;
  if signal_ok then paid:=(p.snapshot#>>'{pagamentoSinal,valor}')::numeric;end if;
  if event_private.audited_payment(p,'pagamentoRestante') then paid:=paid+(p.snapshot#>>'{pagamentoRestante,valor}')::numeric;end if;
- return jsonb_build_object('proposal_id',p.id,'requests',coalesce((select jsonb_agg(jsonb_build_object('reference','EC-'||upper(replace(id::text,'-','')),'purpose',purpose,'amount',least(amount,case when purpose='sinal' then round(p.total*0.5,2) else greatest(0,p.total-paid) end)))
- from event_private.payment_requests where proposal_id=p.id and fingerprint=event_private.proposal_fingerprint(p) and (purpose<>'sinal' or not signal_ok) and p.total-paid>0),'[]'));
+ return jsonb_build_object('proposal_id',p.id,'revision',p.revision,'requests',coalesce((select jsonb_agg(jsonb_build_object('reference','EC-'||upper(replace(id::text,'-','')),'purpose',purpose,'amount',least(amount,case when purpose='sinal' then round(p.total*event_private.deposit_fraction(p),2) else greatest(0,p.total-paid) end)))
+ from event_private.payment_requests where proposal_id=p.id and fingerprint=event_private.public_proposal_fingerprint(p) and (purpose<>'sinal' or not signal_ok) and p.total-paid>0),'[]'));
 end; $$;
 revoke all on function public.get_public_event_payment_requests(uuid) from public;
 grant execute on function public.get_public_event_payment_requests(uuid) to anon,authenticated;
@@ -174,6 +198,7 @@ AS $function$
     p.total,
     p.status,
     jsonb_strip_nulls(jsonb_build_object(
+      'paymentSummary', event_private.public_payment_summary(p),
       'analyticsEntityHash', left(encode(extensions.digest('ec-events:v1:'||p.oportunidade_id::text,'sha256'),'hex'),24),
       'event', jsonb_build_object(
         'type', p.snapshot #> '{event,type}',

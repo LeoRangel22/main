@@ -28,12 +28,12 @@ function fixture(options={}){
  }};
 }
 for(const page of ['index.html','clientes.html','comunicacao.html','valores.html'])test(`cache: ${page} loads new approval app and helper`,()=>{
- const html=fs.readFileSync(root+'/'+page,'utf8');assert.match(html,/app\.js\?v=20261017-seller-feedback/);assert.match(html,/remote-approval-ui\.js\?v=20261017-seller-feedback/);assert.doesNotMatch(html,/app\.js\?v=20261012/);
+ const html=fs.readFileSync(root+'/'+page,'utf8');assert.match(html,/app\.js\?v=20261018-synergy/);assert.match(html,/remote-approval-ui\.js\?v=20261018-synergy/);assert.doesNotMatch(html,/app\.js\?v=20261012/);
 });
 for(const [page,asset,release] of [
  ['aprovacoes.html','aprovacoes.js','20261015-approval-evidence'],
  ['formulario.html','formulario.js','20261015-approval-closure'],
- ['proposta.html','proposta.js','20261015-approval-closure']
+ ['proposta.html','proposta.js','20261018-synergy']
 ])test(`cache: ${page} invalidates changed public script`,()=>{assert.ok(fs.readFileSync(root+'/'+page,'utf8').includes(asset+'?v='+release));});
 test('watch: GET and missing key cannot read or notify',async()=>{for(const input of [{method:'GET'},{key:''}]){const f=fixture();assert.ok((await f.run(input)).status>=400);assert.equal(f.calls.length,0);assert.equal(f.sent.length,0);}});
 test('watch: incorrect valid-shaped key cannot claim work',async()=>{const f=fixture({badKey:true});assert.equal((await f.run()).status,403);assert.equal(f.sent.length,0);assert.equal(f.calls.length,1);});

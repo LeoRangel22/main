@@ -152,7 +152,11 @@ function getSignalDeadlineLabel(proposal = currentProposal) {
 
 function getSignalAmount(proposal = currentProposal) {
   const total = Number(proposal?.total || proposal?.snapshot?.totals?.total || 0);
-  return total > 0 ? total * 0.5 : 0;
+  const summary = proposal?.snapshot?.paymentSummary;
+  if (summary && Object.hasOwn(summary, "depositDueAmount")) return Number(summary.depositDueAmount) || 0;
+  const firstTerm = proposal?.snapshot?.paymentTerms?.[0];
+  const percentage = firstTerm?.match(/^\s*(\d+(?:[.,]\d+)?)\s*%/);
+  return total > 0 ? total * (percentage ? Number(percentage[1].replace(",", ".")) / 100 : firstTerm ? 0 : 0.5) : 0;
 }
 
 function renderDeadlineCard(proposal = currentProposal) {
@@ -291,9 +295,11 @@ function getActionLabel(value) {
 
 function getDecisionCopy(proposal, response) {
   const status = proposal.status || "";
+  const payment = proposal.snapshot?.paymentSummary;
+  if (payment?.paymentReviewRequired) return { title: tr("Pagamento informado em conferência", "Reported payment under review"), note: tr("A equipe está conferindo o registro e a disponibilidade. Se já pagou, aguarde a validação antes de repetir.", "Our team is reviewing payment and availability. If you already paid, wait for verification before paying again.") };
   if (status === "confirmado") {
     return {
-      title: tr("Sinal recebido e reserva confirmada", "Deposit confirmed and date reserved"),
+      title: payment?.signalAudited && payment?.reservationAudited ? tr("Sinal recebido e reserva confirmada", "Deposit confirmed and date reserved") : payment?.signalAudited ? tr("Sinal validado; disponibilidade em conferência", "Deposit verified; availability under review") : tr("Confirmação em conferência pela equipe", "Confirmation under team review"),
       note: tr("A equipe seguirá com os detalhes do evento.", "Our team will follow up on the event details."),
     };
   }
@@ -370,24 +376,28 @@ function publicPaymentReferencesHtml() {
 async function loadPublicPaymentReferences(proposalId) {
   try {
     const result = await supabaseClient.rpc("get_public_event_payment_requests", { proposal_token: token });
-    if (result.error || currentProposal?.id !== proposalId || result.data?.proposal_id !== proposalId || !Array.isArray(result.data.requests)) return;
+    if (result.error || currentProposal?.id !== proposalId || result.data?.proposal_id !== proposalId || Number(result.data?.revision) !== Number(currentProposal.snapshot?.publicRevision) || !Array.isArray(result.data.requests)) return;
     publicPaymentRequests = result.data.requests.filter(q => /^EC-[A-F0-9]{32}$/.test(q.reference) && Number(q.amount) > 0 && ["sinal", "saldo"].includes(q.purpose));
     document.querySelectorAll("[data-public-payment-references]").forEach(n => { n.innerHTML = publicPaymentReferencesHtml(); });
   } catch (_) { /* Bank details and the customer's work stay available if this optional read fails. */ }
 }
 function renderPaymentInfo({ proof = null } = {}) {
-  const signalAmount = getSignalAmount();
+  const summary = currentProposal?.snapshot?.paymentSummary;
+  if ((summary?.paymentReviewRequired || proof) && !summary?.signalAudited) return `<section class="public-payment-info"><h3>${tr("Pagamento em conferência", "Payment under review")}</h3><p>${tr("Se já pagou, não repita o pagamento. A equipe vai conferir o crédito e a reserva.", "If you already paid, do not pay again. Our team will verify the credit and booking.")}</p>${renderProofSummary(proof)}</section>`;
+  if (summary?.signalAudited && Number(summary.balanceDue) <= 0.01) return `<section class="public-payment-info"><h3>${tr("Pagamento completo validado", "Full payment verified")}</h3><p>${summary.reservationAudited ? tr("Reserva conferida pela equipe.", "Booking verified by the team.") : tr("A equipe está conferindo a disponibilidade da reserva.", "Our team is reviewing booking availability.")}</p></section>`;
+  const balance = Boolean(summary?.signalAudited);
+  const signalAmount = balance ? Number(summary.balanceDue) : getSignalAmount();
   return `
     <section class="public-payment-info" aria-label="${tr("Dados bancários para sinal de reserva", "Bank details for deposit")}">
       <div data-public-payment-references>${publicPaymentReferencesHtml()}</div>
       <div class="public-payment-heading">
-        <span>${tr("Sinal de reserva", "Booking deposit")}</span>
-        <h3>${tr("Dados para pagamento do sinal", "Deposit payment details")}</h3>
+        <span>${balance ? tr("Saldo do acordo", "Agreement balance") : tr("Sinal de reserva", "Booking deposit")}</span>
+        <h3>${balance ? tr("Dados para pagamento do saldo", "Balance payment details") : tr("Dados para pagamento do sinal", "Deposit payment details")}</h3>
         <p>${tr("A reserva fica confirmada após validação da equipe e pagamento do sinal.", "The booking is confirmed after our team verifies the deposit.")}</p>
       </div>
-      ${renderDeadlineCard()}
+      ${balance ? `<p>${(currentProposal?.snapshot?.paymentTerms || []).map(escapeHtml).join("<br/>")}</p>` : renderDeadlineCard()}
       <div class="public-payment-grid">
-        ${signalAmount ? `<div class="public-payment-highlight"><span>${tr("Valor do sinal", "Deposit amount")}</span><strong>${formatMoney(signalAmount)}</strong></div>` : ""}
+        ${signalAmount ? `<div class="public-payment-highlight"><span>${balance ? tr("Saldo pendente", "Remaining balance") : tr("Valor do sinal", "Deposit amount")}</span><strong>${formatMoney(signalAmount)}</strong></div>` : ""}
         <div><span>${tr("Banco", "Bank")}</span><strong>${escapeHtml(PAYMENT_INFO.bank)}</strong></div>
         <div><span>${tr("Agência", "Branch")}</span><strong>${escapeHtml(PAYMENT_INFO.agency)}</strong></div>
         <div><span>${tr("Conta corrente", "Account")}</span><strong>${escapeHtml(PAYMENT_INFO.account)}</strong></div>

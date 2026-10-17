@@ -201,3 +201,12 @@ test("resposta com conflito exige revisar proposta atualizada", async ({ page })
   await page.locator("#publicSubmitResponse").click();
   await expect(page.locator("#publicProposalStatus")).toContainText(/Recarregue/);
 });
+
+test('legacy confirmed status does not claim audited payment or ask an already-paying client to pay again',async({page})=>{
+ const fixture=structuredClone(proposal);fixture.status='confirmado';fixture.cliente_resposta='confirmar';fixture.snapshot.paymentSummary={signalAudited:false,reservationAudited:false,paidAmount:0,balanceDue:2240,paymentReviewRequired:true,depositDueAmount:1120};
+ await openProposal(page,fixture);await expect(page.getByText('Sinal recebido e reserva confirmada')).toHaveCount(0);await expect(page.locator('.public-payment-info')).toContainText('não repita o pagamento');await expect(page.locator('[data-copy-pix]')).toHaveCount(0);
+});
+test('fully paid agreement hides deposit instructions and keeps availability distinct',async({page})=>{
+ const fixture=structuredClone(proposal);fixture.status='confirmado';fixture.cliente_resposta='confirmar';fixture.snapshot.paymentSummary={signalAudited:true,reservationAudited:false,paidAmount:2240,balanceDue:0,paymentReviewRequired:false,depositDueAmount:0};
+ await openProposal(page,fixture);await expect(page.locator('.public-payment-info')).toContainText('Pagamento completo validado');await expect(page.locator('[data-copy-pix]')).toHaveCount(0);await expect(page.getByText('Sinal recebido e reserva confirmada')).toHaveCount(0);
+});

@@ -34,6 +34,7 @@ function renderOperationWorkspaceDetail(row){
  ${operationWorkspace.error?`<p role="alert">${escapeHtml(operationWorkspace.error)}</p>`:''}<div class="operation-readiness"><strong>${data?.ready?'Pré-requisitos conferidos; a liberação final exige decisão explícita':'Pendências para liberar execução'}</strong><ul>${blockers.map(b=>`<li>${escapeHtml(b)}</li>`).join('')||'<li>Confira a decisão final registrada na tarefa de liberação.</li>'}</ul></div>
  <div class="operational-doc-actions"><button type="button" class="secondary" data-operation-document="technical-no-finance">Ficha operacional sem valores</button><button type="button" class="secondary" data-operation-document="checklist">Checklist</button><button type="button" class="secondary" data-operation-reserve>Conferir reserva</button><button type="button" class="secondary" data-operation-open>Revisar acordo</button></div>
  ${row.handoff?.changes_pending?'<p role="alert">Há alterações pendentes de ciência. Revise o acordo antes de executar.</p>':''}
+ ${typeof renderOpsProduction==='function'?renderOpsProduction({kind:'proposal',id:p.id}):''}
  ${renderOperationalHandoffTasks(row.tasks.filter(t=>!operationWorkspace.sector||t.sector===operationWorkspace.sector))}`;
 }
 async function planOperationalTask(taskId,proposalId=getActiveProposal()?.id){
