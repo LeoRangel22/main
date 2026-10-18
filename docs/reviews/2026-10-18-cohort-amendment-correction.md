@@ -1,0 +1,9 @@
+# Aditivos históricos não são novas propostas preparadas
+
+A revisão final identificou uma diferença entre o backfill inicial e o trigger contínuo: aditivos já aplicados têm appliedAmendment, não amendmentOf. A correção é aditiva para preservar os bytes das migrações já instaladas. Remove somente observações derivadas de preparação cuja proposta ou aprovação congelada identifique um aditivo; contempla tanto approval_snapshot quanto accepted_send e não altera propostas, pagamentos, decisões, reservas ou mensagens.
+
+A regressão usa o SQL verdadeiro do backfill antigo em banco isolado. Cinco fixtures incluem aditivo na proposta, aditivo somente na aprovação congelada e duas preparações originais legítimas. O backfill original reproduz cinco observações; a correção é aplicada duas vezes e deve deixar somente as duas originais, com seus horários e conteúdo comercial exatos preservados. O relatório da coorte deve contar somente dois preparados. O teste é parte de npm run test:db e executa nos cenários de instalação nova, atualização histórica e instalação tardia da aprovação, em transação desfeita.
+
+A etapa database da execução 39164672033 passou antes da instalação. A migração foi instalada pelo Supabase.apply_migration normal, versão 20261018204551. SHA Git do SQL instalado: 5a1e60328d26192905b4e9a3832be313f4c6c264. Arquivo renomeado para esse identificador sem alterar os bytes. Leitura de 18/10/2026 às 20:46:11 UTC confirmou 23 observações legítimas e nenhuma observação de aditivo; os hashes completos de propostas e envios permanecem iguais ao início. Nenhum registro comercial foi corrigido por presunção.
+
+O head com esta documentação e identificador alinhado deve passar pela suíte completa antes da integração. Instalação de banco, merge e publicação verificada são evidências distintas; os bloqueios externos dos canais não foram removidos por esta correção.
