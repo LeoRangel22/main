@@ -19,6 +19,25 @@ for(const file of publicFiles) {
   fs.copyFileSync(path.join(root,file),target);
 }
 esbuild.buildSync({entryPoints:[path.join(root,'node_modules/@supabase/supabase-js/dist/module/index.js')],bundle:true,format:'iife',globalName:'supabase',platform:'browser',target:['es2020'],minify:true,outfile:path.join(dest,'vendor/supabase.js')});
+// Preserve the human-readable rollout tag while making every already-versioned
+// local script/style URL change whenever its bytes change. No source files,
+// external URLs, credentials or unversioned SDK paths are rewritten.
+const allowedAssets=new Set(publicFiles);
+for(const file of publicFiles.filter(f=>f.endsWith('.html'))) {
+  const target=path.join(dest,file);
+  const html=fs.readFileSync(target,'utf8').replace(/\b(src|href)="([^"]+\.(?:js|css)\?v=[^"]+)"/g,(match,attribute,reference)=>{
+    const decoded=reference.replaceAll('&amp;','&');
+    if(/^(?:[a-z]+:|\/\/|\/)/i.test(decoded)) return match;
+    const url=new URL(decoded,'https://public-build.invalid/'+file);
+    const relative=path.posix.normalize(url.pathname.slice(1));
+    if(!allowedAssets.has(relative)) throw Error(`Unlisted versioned asset in ${file}: ${relative}`);
+    const hash=crypto.createHash('sha256').update(fs.readFileSync(path.join(dest,relative))).digest('hex').slice(0,16);
+    url.searchParams.set('h',hash);
+    const originalPath=decoded.split(/[?#]/)[0];
+    return `${attribute}="${originalPath}?${url.searchParams.toString().replaceAll('&','&amp;')}${url.hash}"`;
+  });
+  fs.writeFileSync(target,html);
+}
 fs.writeFileSync(path.join(dest,'.nojekyll'),'');
 let commit='local'; try { commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(); } catch {}
 const migrations=fs.readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();

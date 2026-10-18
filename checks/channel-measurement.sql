@@ -10,6 +10,9 @@ begin
  insert into oportunidades(cliente_nome,status,created_at,metadata) values('Cohort test excluded','negociacao',now()-interval '200 days','{"is_test":true}') returning id into o2;
  insert into propostas(oportunidade_id,cliente_nome,status,publication_status,created_at,snapshot)
  values(o,'Cohort fixture','negociacao','ready',now()-interval '199 days','{"pagamentoSinal":{"valor":100,"validacaoPendente":false,"validadoEm":"bad"}}') returning * into p;
+ -- Synthetic preparation evidence belongs inside this fixture's window. The
+ -- production trigger intentionally records today's transition, not created_at.
+ update event_private.proposal_preparation_evidence set observed_at=now()-interval '199 days' where proposal_id=p.id;
  insert into event_outbox(opportunity_id,proposal_id,fingerprint,channel,destination,body,status,approved_by,created_at)
  values(o,p.id,'cohort-isolated','email','fixture@example.test','Fixture','accepted',actor,now()-interval '198 days') returning id into b;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);

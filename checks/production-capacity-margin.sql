@@ -23,7 +23,7 @@ begin
  reset role;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',finance,'email','financeiro@embaixadacarioca.com.br','role','authenticated')::text,true);set local role authenticated;
  result:=get_event_production_plan(p.id,p.revision);assert result#>'{financial,complete}'='false' and result#>'{financial,estimated_contribution}'='null';
- perform set_event_production_costs(p.id,plan_revision,jsonb_build_array(jsonb_build_object('key',line_id,'value',10),jsonb_build_object('key','fixed','value',0)));
+ perform set_event_production_costs(p.id,plan_revision,jsonb_build_array(jsonb_build_object('key',line_id,'value',10),jsonb_build_object('key','fixed','value',0)));plan_revision:=plan_revision+1;
  result:=get_event_production_plan(p.id,p.revision);assert result#>'{financial,complete}'='true' and abs((result#>>'{financial,estimated_cost}')::numeric-27.777778)<0.00001;
  select * into h from event_handoffs where opportunity_id=o;
  select * into t from event_handoff_tasks where opportunity_id=o and task_key='financeiro_saldo';perform update_event_handoff_task(t.id,'done',null,null,'Finance reviewed fixture',h.version);

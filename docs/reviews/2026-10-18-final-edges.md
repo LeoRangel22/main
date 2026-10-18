@@ -1,0 +1,12 @@
+# Fechamento dos dois apontamentos adicionais — 18/10/2026
+
+A revisão do head ee6e024 identificou dois casos-limite adicionais. Ambos foram corrigidos por migração aditiva, preservando as migrações já instaladas.
+
+1. Condição de sinal não interpretável: o resumo público passa a exigir revisão quando deposit_fraction é NULL. Não informa valor nem convida ao Pix sem condição definida. Registros bancários auditados continuam prevalecendo; não se solicita novamente o que já está confirmado. Regressões SQL cobrem cinco condições inválidas/personalizadas, ausência de referência e precedência do pagamento validado. Duas regressões do renderizador público cobrem PT/EN sem instruções de pagamento.
+2. Evidência de preparação em registro legado: um envio real aceito passa a produzir observação mesmo quando a proposta já estava sent. Exige outbox com ID do provedor e mensagem outbound/provider exatamente vinculada, usando occurred_at real; falha, incerteza, aceitação sem ID ou mera alteração de sent_at não servem. A primeira observação é preservada, sem retroagir para a criação do rascunho. Aditivos aplicados não viram nova preparação comercial. Teste isolado exerce finish_event_send e repetição do resultado.
+
+Banco fresh/upgrade/permissões/concorrência/reversão/restauração do head 5a99bf32: execução 39163114110, etapa database concluída com sucesso antes da instalação. Migração final_review_edges instalada pelo conector e lida de volta: versão 20261018202614, blob Git 7b94b49093f21f37c08a993c597b33405dc31936. O arquivo versionado foi renomeado para coincidir com o identificador registrado, sem alterar os bytes. Consulta às 20:26:28 UTC confirmou o resumo corrigido com entrada sintética em memória e digests de propostas/envios preservados.
+
+A verificação complementar leu uma notificação comercial real na caixa do proprietário e cruzou sua solicitação com a decisão e envio existentes. Nas 13 decisões aprovadas: identidade do aprovador corresponde ao proprietário designado, todos têm envio aceito, destino e canal iguais aos aprovados; nenhum tem recibo de entrega registrado. Isso é evidência de utilização real anterior, não um novo envio de homologação ou comprovação de entrega final.
+
+Todas as alterações ainda exigem CI do head final, revisão dos apontamentos e verificação pública após integração. Não houve mensagem, cobrança, aceite de cliente, pagamento, reserva ou ciência operacional produzida pela implantação. Os bloqueios externos dos canais continuam documentados no registro principal.
