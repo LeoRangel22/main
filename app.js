@@ -3572,6 +3572,10 @@ function operationalSectorLabel(sector) {
   return ({eventos:"Eventos",financeiro:"Financeiro",cozinha:"Cozinha",bar:"Bar e copa",estoque:"Estoque",salao:"Salão",gerencia:"Gerência"})[sector] || sector;
 }
 
+function operationalTaskResponsibleLabel(task) {
+  return String(task.responsible_name || "").trim() || "Pessoa responsável a definir";
+}
+
 function renderOperationalHandoffTasks(tasks = []) {
   if (!tasks.length) return `<p class="handoff-loading">Preparando tarefas por setor a partir da proposta e do sinal.</p>`;
   return `<div class="handoff-sector-grid">${tasks.map((task) => `
@@ -3579,7 +3583,7 @@ function renderOperationalHandoffTasks(tasks = []) {
       <label class="handoff-task-main">
         <input type="checkbox" data-handoff-task-id="${escapeHtml(task.id)}" ${task.status === "done" ? "checked" : ""} />
         <span>
-          <small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.responsible_name || "Pessoa responsável a definir")}</small>
+          <small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(operationalTaskResponsibleLabel(task))}</small>
           <strong>${escapeHtml(task.label)}</strong>
           <em>${escapeHtml(formatOperationalTaskDue(task.due_at))}${task.acknowledged_at ? " · ciência registrada" : " · aguardando ciência"}</em>
         </span>
@@ -3958,7 +3962,7 @@ function buildOperationalAdditionalChecklistRows(context, printable = false) {
 function buildOperationalChecklistRows(context, printable = false) {
   const rows = (context.sectorTasks || []).map(task => `<div class="op-check-row${task.status === "done" ? " is-done" : ""}">
     <span>${escapeHtml(task.status === "done" ? "OK" : task.status === "blocked" ? "BLOQUEADO" : task.status === "in_progress" ? "EM EXECUÇÃO" : "PENDENTE")}</span>
-    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(task.owner_label || "Responsável a definir")} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
+    <div><strong>${escapeHtml(task.label)}</strong><br><small>${escapeHtml(operationalSectorLabel(task.sector))} · ${escapeHtml(operationalTaskResponsibleLabel(task))} · ${escapeHtml(formatOperationalTaskDue(task.due_at))} · ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}</small></div>
   </div>`).join("");
   return `${context.changesPending ? '<p class="op-note">Há mudanças pendentes de ciência. Esta ficha não comprova liberação da execução.</p>' : ""}
     ${rows || '<p class="op-note">Checklist setorial indisponível. Atualize o painel antes de distribuir esta ficha; não foi presumida conclusão.</p>'}
@@ -4136,7 +4140,7 @@ function buildOperationalChecklistHtml(proposal = getActiveProposal()) {
 
 function buildOperationalSummaryText(proposal = getActiveProposal()) {
   const context = getOperationalDocContext(proposal);
-  const checklist = context.sectorTasks.map(task => `${task.status === "done" ? "OK" : "PENDENTE"} - ${task.label} | ${task.owner_label || "a definir"} | ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}`).join("\n") || "Checklist setorial indisponível; atualize o painel.";
+  const checklist = context.sectorTasks.map(task => `${task.status === "done" ? "OK" : "PENDENTE"} - ${task.label} | ${operationalTaskResponsibleLabel(task)} | ${operationalSectorLabel(task.sector)} | ${task.acknowledged_at ? "ciência registrada" : "sem ciência"}`).join("\n") || "Checklist setorial indisponível; atualize o painel.";
   const additional = operationalChecklistItems.map(item => `${context.checklist[item.id] ? "OK" : "PENDENTE"} - ${item.label}`).join("\n");
   const items = context.selectedItems.map((item) => `- ${item.nome} (${item.tipoEvento || "item"})`).join("\n") || "- Sem itens selecionados";
   const supplies =
