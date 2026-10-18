@@ -1,5 +1,18 @@
 const productionWorkspace={client:null,user:null,id:null,revision:null,data:null,error:'',pending:null};
 const productionQa=new Map();
+// QA mirrors the server's cost basis; stock observations do not change a unit price.
+function productionCostBasis(data,key){
+ const row=(data.rows||[]).find(r=>r.id===key),crew=(data.crew||[]).find(c=>c.id===key);
+ let basis=null;
+ if(row){const {stock,...line}=row;basis={kind:'row',line};}
+ else if(crew)basis={kind:'crew',line:crew};
+ else if(key==='fixed')basis={kind:'fixed',logistics:data.logistics??null,crew_reason:data.crew_reason??null};
+ if(!basis)return null;
+ const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
+ return JSON.stringify(canonical(basis));
+}
+function productionRetainedCosts(prior,next){return Object.fromEntries(Object.entries(prior?.costs||{}).filter(([key])=>{const basis=productionCostBasis(next,key);return basis!==null&&basis===productionCostBasis(prior.data,key);}));}
+
 function productionCurrent(client,user,id){return state.supabase===client&&state.session?.user?.id===user&&productionWorkspace.id===id;}
 async function loadProductionWorkspace(id){
  const client=state.supabase,user=state.session?.user?.id,request={};if(!client||!user)return;
@@ -28,7 +41,7 @@ function productionLineHtml(p,r={}){return `<fieldset class="production-line" da
 function productionCrewHtml(c={}){return `<fieldset class="production-line" data-production-crew data-row-id="${escapeHtml(c.id||crypto.randomUUID())}"><legend>Equipe</legend><label>Setor<select data-field="sector">${productionSectors.concat([['eventos','Eventos']]).map(([v,l])=>`<option value="${v}" ${c.sector===v?'selected':''}>${l}</option>`).join('')}</select></label><label>Responsável da escala<input data-field="lead" required maxlength="120" value="${escapeHtml(c.lead||'')}"/></label><label>Pessoas<input data-field="people" required type="number" min="1" max="200" step="1" value="${c.people??''}"/></label><label>Horas por pessoa<input data-field="hours" required type="number" min="0.01" max="72" step="any" value="${c.hours??''}"/></label><button type="button" class="secondary" data-production-remove>Remover equipe</button></fieldset>`;}
 async function editProductionPlan(id){
  const p=await ensureFullProposal(id);if(!p||!isOperationsCoordinator())throw Error('Eventos ou gestor deve planejar a produção.');if(productionWorkspace.id!==id||!productionWorkspace.data)await loadProductionWorkspace(id);
- const client=state.supabase,user=state.session?.user?.id,prior=productionWorkspace.data?.plan,data=prior?.data||{rows:[],crew:[],logistics:{}},l=data.logistics||{};
+ const client=state.supabase,user=state.session?.user?.id,prior=productionWorkspace.data?.plan,priorRevision=prior?.revision||0,data=prior?.data||{rows:[],crew:[],logistics:{}},l=data.logistics||{};
  const stock=data.stock_checked_at?new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(data.stock_checked_at)).replace(' ','T'):'';
  const dialog=opsDialog('Planejar produção e logística',`<p>${escapeHtml(p.cliente_nome)} · ${Number(p.convidados)} convidados. Os padrões de rendimento e perda devem ser conferidos antes da revisão.</p><div data-production-lines>${data.rows.map(r=>productionLineHtml(p,r)).join('')}</div><button type="button" class="secondary" data-production-add>Adicionar insumo ou serviço</button><label>Estoque conferido em Brasília<input name="stockDate" type="datetime-local" value="${escapeHtml(stock)}"/></label><div data-production-crew-lines>${data.crew.map(productionCrewHtml).join('')}</div><button type="button" class="secondary" data-production-add-crew>Adicionar equipe</button><label>Se não houver equipe adicional, justifique a escala regular<textarea name="crewReason" maxlength="2000">${escapeHtml(data.crew_reason||'')}</textarea></label><label>Espaço e montagem<input name="space" maxlength="120" value="${escapeHtml(l.space||'')}"/></label><div class="fields-grid"><label>Montagem antes do evento (min)<input name="setup" type="number" min="0" max="720" step="1" required value="${l.setup??''}"/></label><label>Desmontagem após o evento (min)<input name="teardown" type="number" min="0" max="720" step="1" required value="${l.teardown??''}"/></label></div><label>Acesso de fornecedores e equipe<textarea name="access" maxlength="2000">${escapeHtml(l.access||'')}</textarea></label><label>Ingressos e chegada do grupo<textarea name="tickets" maxlength="2000">${escapeHtml(l.tickets||'')}</textarea></label><label>Autorização do Parque<select name="authorization">${[['pending','Pendente de conferência'],['confirmed','Autorização conferida pela equipe'],['not_required','Não exigida para este escopo']].map(([v,label])=>`<option value="${v}" ${l.authorization===v?'selected':''}>${label}</option>`).join('')}</select></label><label>Evidência ou justificativa da autorização<textarea name="authorizationNotes" maxlength="2000">${escapeHtml(l.authorization_notes||'')}</textarea></label><label>Contingência de clima e teleférico<textarea name="weather" maxlength="2000">${escapeHtml(l.weather||'')}</textarea></label>`,'Salvar planejamento',async form=>{
   if(client!==state.supabase||user!==state.session?.user?.id)throw Error('A sessão mudou. Reabra o plano.');
@@ -36,8 +49,8 @@ async function editProductionPlan(id){
   const rows=[...form.querySelectorAll('[data-production-row]')].map(n=>({id:n.dataset.rowId,item:Number(read(n,'item')),ingredient:read(n,'ingredient'),sector:read(n,'sector'),unit:read(n,'unit'),basis:read(n,'basis'),quantity:Number(read(n,'quantity')),yield:Number(read(n,'yield')),loss:Number(read(n,'loss')),stock:read(n,'stock')===''?null:Number(read(n,'stock'))}));
   const crew=[...form.querySelectorAll('[data-production-crew]')].map(n=>({id:n.dataset.rowId,sector:read(n,'sector'),lead:read(n,'lead'),people:Number(read(n,'people')),hours:Number(read(n,'hours'))}));
   const e=form.elements,next={rows,crew,crew_reason:e.crewReason.value,stock_checked_at:e.stockDate.value?new Date(e.stockDate.value+'-03:00').toISOString():null,logistics:{space:e.space.value,setup:Number(e.setup.value),teardown:Number(e.teardown.value),access:e.access.value,tickets:e.tickets.value,authorization:e.authorization.value,authorization_notes:e.authorizationNotes.value,weather:e.weather.value}};
-  if(QA_MODE)productionQa.set(id,{revision:(prior?.revision||0)+1,data:next,reviewed_at:null,costs:prior?.costs||{}});
-  else{const r=await readinessAwait(client.rpc('save_event_production_plan',{target_proposal:id,expected_revision:p.revision,expected_plan_revision:prior?.revision||0,plan_data:next}));if(r.error)throw Error(r.error.message);invalidateCommercialDashboard();await refreshCommercialDashboard({force:true});}
+  if(QA_MODE){if((productionQa.get(id)?.revision||0)!==priorRevision)throw Error('O plano foi atualizado por outra pessoa. Recarregue antes de salvar.');productionQa.set(id,{revision:priorRevision+1,data:next,reviewed_at:null,costs:productionRetainedCosts(prior,next)});}
+  else{const r=await readinessAwait(client.rpc('save_event_production_plan',{target_proposal:id,expected_revision:p.revision,expected_plan_revision:priorRevision,plan_data:next}));if(r.error)throw Error(r.error.message);invalidateCommercialDashboard();await refreshCommercialDashboard({force:true});}
   if(client!==state.supabase||user!==state.session?.user?.id)return;await loadProductionWorkspace(id);if(operationWorkspace.selected===id)await loadOperationWorkspaceDetail(id);showToast('Plano salvo. Revise o conteúdo e dê ciência às tarefas afetadas.');
  });
  dialog.addEventListener('click',e=>{if(e.target.closest('[data-production-add]'))dialog.querySelector('[data-production-lines]').insertAdjacentHTML('beforeend',productionLineHtml(p));if(e.target.closest('[data-production-add-crew]'))dialog.querySelector('[data-production-crew-lines]').insertAdjacentHTML('beforeend',productionCrewHtml());if(e.target.closest('[data-production-remove]'))e.target.closest('fieldset').remove();});
@@ -51,12 +64,12 @@ async function reviewProductionPlan(id){
 }
 async function editProductionCosts(id){
  if(!isFinanceSession())throw Error('Custos exigem Financeiro ou gestor.');const d=productionWorkspace.data,plan=d?.plan;if(!plan)return;
- const costs=d.costs||{},lines=plan.data.rows.map(r=>({id:r.id,label:`${r.ingredient} · custo por ${r.unit}`})).concat(plan.data.crew.map(c=>({id:c.id,label:`${c.sector} · custo por pessoa/hora`})),[{id:'fixed',label:'Outros custos estimados do evento'}]);
+ const planRevision=plan.revision,costs=d.costs||{},lines=plan.data.rows.map(r=>({id:r.id,label:`${r.ingredient} · custo por ${r.unit}`})).concat(plan.data.crew.map(c=>({id:c.id,label:`${c.sector} · custo por pessoa/hora`})),[{id:'fixed',label:'Outros custos estimados do evento'}]);
  const client=state.supabase,user=state.session?.user?.id;
- opsDialog('Custos estimados',`<p>Deixe vazio quando desconhecido. Zero deve significar custo conhecido igual a zero.</p>${lines.map(l=>`<label>${escapeHtml(l.label)}<input type="number" min="0" step="any" data-cost-key="${escapeHtml(l.id)}" value="${costs[l.id]??''}"/></label>`).join('')}`,'Salvar custos conhecidos',async form=>{
-  if(client!==state.supabase||user!==state.session?.user?.id)throw Error('A sessão mudou. Reabra os custos.');const entries=[...form.querySelectorAll('[data-cost-key]')].filter(n=>n.value!=='').map(n=>({key:n.dataset.costKey,value:Number(n.value)}));
-  if(QA_MODE){plan.costs={...costs,...Object.fromEntries(entries.map(c=>[c.key,c.value]))};productionQa.set(id,plan);}
-  else{const r=await readinessAwait(client.rpc('set_event_production_costs',{target_proposal:id,expected_plan_revision:plan.revision,costs:entries}));if(r.error)throw Error(r.error.message);}
+ opsDialog('Custos estimados',`<p>Deixe vazio quando desconhecido; salvar um campo vazio remove o custo anterior. Zero deve significar custo conhecido igual a zero. Mudanças no insumo, unidade, base ou equipe exigem nova conferência do custo.</p>${lines.map(l=>`<label>${escapeHtml(l.label)}<input type="number" min="0" step="any" data-cost-key="${escapeHtml(l.id)}" value="${costs[l.id]??''}"/></label>`).join('')}`,'Salvar custos conhecidos',async form=>{
+  if(client!==state.supabase||user!==state.session?.user?.id)throw Error('A sessão mudou. Reabra os custos.');const entries=[...form.querySelectorAll('[data-cost-key]')].map(n=>({key:n.dataset.costKey,value:n.value===''?null:Number(n.value)}));
+  if(QA_MODE){if(productionQa.get(id)?.revision!==planRevision)throw Error('O plano ou acordo mudou. Atualize os custos.');plan.costs=Object.fromEntries(entries.filter(c=>c.value!==null).map(c=>[c.key,c.value]));if(entries.length)plan.revision++;productionQa.set(id,plan);}
+  else{const r=await readinessAwait(client.rpc('set_event_production_costs',{target_proposal:id,expected_plan_revision:planRevision,costs:entries}));if(r.error)throw Error(r.error.message);}
   await loadProductionWorkspace(id);
  });
 }

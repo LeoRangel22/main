@@ -38,3 +38,16 @@ Regressões de lógica, navegador, banco novo, upgrade, permissões, concorrênc
 ## Histórico de instalação
 
 As seis migrações desta entrega foram instaladas e conferidas por hash com o ledger. Os nomes locais refletem a versão efetivamente instalada. Dois arquivos históricos de conteúdo já idêntico ao ledger também tiveram seus prefixos alinhados, sem reaplicação. Ajustes antigos de bootstrap e formatação são tratados pelas regressões de instalação nova e upgrade; não foram reaplicados em produção.
+
+## Revisão final dos pacotes — 18/10/2026
+
+A revisão posterior à integração acrescenta regressões para os seguintes contratos:
+
+- **Pagamento e reserva:** a auditoria exige valor numérico positivo, validação explicitamente concluída, data válida/finita e autor habilitado. Reserva e aplicação de aditivos reutilizam esse contrato. Repetir a confirmação de uma reserva inalterada preserva autoria e data originais.
+- **Sinal especial:** condição abaixo de 50% não gera referência automática nem orientação de pagamento antes da revisão do gestor. O fluxo existente de exceção continua disponível para conferir um recebimento real. Nenhum crédito é criado para simular aprovação prévia.
+- **Proteção contra pagamento repetido:** qualquer sinal ou saldo informado sem auditoria coloca o portal em conferência e suspende as referências até a validação. Um sinal já validado não torna o saldo legado validado.
+- **Custos:** o custo é associado ao conteúdo revisado da linha/equipe, além do acordo. Alteração de significado, remoção ou reutilização do identificador exige nova conferência financeira. Campo vazio remove o custo; zero é um custo conhecido. Edições concorrentes são rejeitadas por revisão, sem apagar silenciosamente dados recentes. Custos anteriores sem evidência da base revisada não geram margem.
+- **Coortes:** preparação usa a transição observada para pronta/enviada. Histórico só é preenchido por evidência comprovada de aprovação/envio; criação do rascunho e status atual não inventam a data do marco.
+- **Operação:** checklist, ficha e resumo mostram a pessoa nominal cadastrada. Sem atribuição, mostram explicitamente que falta definir uma pessoa, além do setor.
+
+A implementação técnica não substitui conciliação bancária, definição de responsáveis, revisão da produção, execução dos checklists ou homologação dos canais. Testes isolados não constituem fatos operacionais reais.

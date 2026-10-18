@@ -210,3 +210,20 @@ test('fully paid agreement hides deposit instructions and keeps availability dis
  const fixture=structuredClone(proposal);fixture.status='confirmado';fixture.cliente_resposta='confirmar';fixture.snapshot.paymentSummary={signalAudited:true,reservationAudited:false,paidAmount:2240,balanceDue:0,paymentReviewRequired:false,depositDueAmount:0};
  await openProposal(page,fixture);await expect(page.locator('.public-payment-info')).toContainText('Pagamento completo validado');await expect(page.locator('[data-copy-pix]')).toHaveCount(0);await expect(page.getByText('Sinal recebido e reserva confirmada')).toHaveCount(0);
 });
+
+test('legacy balance under review does not request a duplicate payment after the audited deposit',async({page})=>{
+ const fixture=structuredClone(proposal);fixture.status='confirmado';fixture.cliente_resposta='confirmar';
+ fixture.snapshot.paymentSummary={signalAudited:true,reservationAudited:true,paidAmount:1120,balanceDue:1120,paymentReviewRequired:true,depositDueAmount:0};
+ await openProposal(page,fixture);
+ await expect(page.locator('.public-payment-info')).toContainText('não repita o pagamento');
+ await expect(page.locator('[data-copy-pix]')).toHaveCount(0);
+ await expect(page.getByText('Dados para pagamento do saldo',{exact:true})).toHaveCount(0);
+});
+test('reduced deposit awaiting manager review has no automatic bank instructions',async({page})=>{
+ const fixture=structuredClone(proposal);fixture.cliente_resposta='confirmar';
+ fixture.snapshot.paymentTerms=['30% na reserva','70% antes do evento'];
+ fixture.snapshot.paymentSummary={signalAudited:false,reservationAudited:false,paidAmount:0,balanceDue:2240,paymentReviewRequired:false,depositApprovalRequired:true,depositDueAmount:null};
+ await openProposal(page,fixture);
+ await expect(page.locator('.public-payment-info')).toContainText('Condição de sinal em revisão');
+ await expect(page.locator('[data-copy-pix]')).toHaveCount(0);
+});
