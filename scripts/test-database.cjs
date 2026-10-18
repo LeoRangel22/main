@@ -34,6 +34,7 @@ async function checks(c) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
+  await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
