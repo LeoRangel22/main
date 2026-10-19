@@ -9,6 +9,16 @@ test('English preserves the client language and original preferences',()=>{const
 test('no private notes, prices, margins or payment evidence in the prepared greeting',()=>{const c=fixture();const text=c.buildConsultativeReply({...model,internalMarker:'segredo interno',notes:'margem 50%',cost:100,pagamentoSinal:{valor:500},observations:'Não encaminhar observação livre'});for(const v of ['segredo interno','margem','500','Não encaminhar'])assert.ok(!text.includes(v));});
 test('array preferences are preserved in a readable format',()=>{const c=fixture();const text=c.buildConsultativeReply({...model,preferences:['Vegetariano','Sem amendoim']});assert.match(text,/Vegetariano; Sem amendoim/);assert.doesNotMatch(text,/\[object Object\]/);});
 test('oversized details are not silently truncated into a purported complete response',()=>{const c=fixture();assert.throws(()=>c.buildConsultativeReply({...model,extras:'x'.repeat(13000)}),/Escreva uma resposta objetiva manualmente/);});
-test('zero and invalid guest values are not presented as a supplied headcount',()=>{const c=fixture();for(const guests of [0,'','abc',-1]){const m={...model,guests};assert.ok(c.consultativeMissing(m).some(x=>x[0]==='guests'));assert.doesNotMatch(c.buildConsultativeReply(m),/0 pessoas|abc pessoas|-1 pessoas/);}});
+test('zero and invalid guest values are not presented as a supplied headcount',()=>{const c=fixture();for(const guests of [0,'','abc',-1,Infinity,'Infinity',1.5]){const m={...model,guests};assert.ok(c.consultativeMissing(m).some(x=>x[0]==='guests'));assert.doesNotMatch(c.buildConsultativeReply(m),/0 pessoas|abc pessoas|-1 pessoas/);}});
 test('guide uses existing actions and does not create another save or messaging API',()=>{assert.match(script,/getElementById\('saveDraftBtn'\)/);assert.match(script,/getElementById\('topbarNewProposalBtn'\)/);assert.match(script,/#sendReviewPanel/);assert.doesNotMatch(script,/\.rpc\(|\.from\(|functions\.invoke|fetch\(|localStorage|sessionStorage/);});
 test('existing quality warnings are retained unchanged',()=>{const c=fixture();const issues=c.proposalQualityIssues({event:{date:'2099-11-20',notes:'Café da manhã'},generalTerms:'VALIDADE 31/12/2098',selectedItems:[{nome:'Almoço'}]});assert.deepEqual(JSON.parse(JSON.stringify(issues.map(x=>x.id))),['tariff_expired','scope_conflict']);});
+test('default editor values are not stated as supplied customer facts',()=>{const c=fixture();const m={...model,time:'18:00',guests:30,knownTime:false,knownGuests:false};const text=c.buildConsultativeReply(m);assert.doesNotMatch(text,/18:00|30 pessoas/);assert.match(text,/confirmar horário e número de pessoas/);});
+test('same-editor save migration preserves text only for the same source and user',()=>{
+ const c=fixture(),a={user:'staff',context:1,proposalId:'',requestId:'',manualKey:'manual:draft'},b={...a,proposalId:'saved'};
+ assert.equal(c.sameConsultativeSave(a,b),true);
+ for(const patch of [{user:'other'},{context:2},{requestId:'other'},{manualKey:'other'},{proposalId:''}])assert.equal(c.sameConsultativeSave(a,{...b,...patch}),false);
+});
+test('save metadata alone does not invalidate a reviewed greeting',()=>{
+ const c=fixture();assert.equal(c.consultativeFingerprint({...model,key:'manual',revision:null,source:'manual',proposalId:''}),c.consultativeFingerprint({...model,key:'saved',revision:1,source:'manual',proposalId:'saved'}));
+ assert.notEqual(c.consultativeFingerprint(model),c.consultativeFingerprint({...model,reason:'Outro objetivo'}));
+});
