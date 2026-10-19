@@ -1,6 +1,7 @@
 const {test,expect}=require('@playwright/test');
 async function setup(page){
- await page.route('https://**',route=>route.abort());
+ // QA uses synthetic data; keep the browser library available, block provider writes.
+ await page.route('**/functions/v1/**',route=>route.abort());
  await page.goto('/index.html?qa=1');
  await expect(page.locator('body')).not.toHaveClass(/auth-locked/);
  await expect(page.locator('[data-sales-mode="manual"]')).toBeVisible();
@@ -103,4 +104,36 @@ test('manual guidance and expanded intake fit 320px without horizontal overflow'
  await page.setViewportSize({width:320,height:850});await setup(page);await manual(page);await openPanel(page);
  await page.locator('#clientName').fill('Cliente com um nome extenso para teste de interface');await page.locator('[data-consultative-action="suggest"]').click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+});
+test('manual initial defaults require review before they enter the suggested response',async({page})=>{
+ await setup(page);await manual(page);await openPanel(page);await page.locator('#clientName').fill('Ana');await page.locator('#eventDate').fill('2099-11-20');
+ await page.locator('[data-consultative-action="suggest"]').click();const first=await page.locator('#consultativeReply').inputValue();expect(first).not.toContain('30 pessoas');expect(first).not.toContain('18:00');expect(first).toContain('confirmar horário e número de pessoas');
+ await page.evaluate(()=>{fields.eventTime.value='17:30';fields.eventTime.dispatchEvent(new Event('input',{bubbles:true}));fields.eventTime.dispatchEvent(new Event('change',{bubbles:true}));});await page.locator('#guestCount').fill('40');await page.locator('[data-consultative-action="suggest"]').click();
+ const final=await page.locator('#consultativeReply').inputValue();expect(final).toContain('40 pessoas');expect(final).toContain('17:30');
+});
+test('missing form time and headcount are not replaced by editor defaults in a client reply',async({page})=>{
+ await setup(page);await page.evaluate(async()=>{const r=state.quoteRequests[0];r.horario_evento=null;r.convidados=null;r.snapshot={cliente:{idioma:'pt'},evento:{}};await applyQuoteRequest(r.id);});await openPanel(page);await page.locator('[data-consultative-action="suggest"]').click();
+ const text=await page.locator('#consultativeReply').inputValue();expect(text).not.toContain('30 pessoas');expect(text).not.toContain('18:00');
+});
+test('manual reply survives first save',async({page})=>{
+ await setup(page);await manual(page);await openPanel(page);
+ await page.locator('#clientName').fill('Mensagem durante gravação');await page.locator('#consultativeReply').fill('Resposta escrita pela gerente, preservar ao salvar.');
+ await page.locator('[data-consultative-action="draft"]').click();
+ await expect.poll(()=>page.evaluate(()=>getActiveProposal()?.cliente_nome)).toBe('Mensagem durante gravação');
+ await expect(page.locator('#consultativeReply')).toHaveValue('Resposta escrita pela gerente, preservar ao salvar.');
+});
+test('edited source reason is acknowledged instead of the old main field',async({page})=>{
+ await setup(page);await form(page);
+ await page.evaluate(()=>{const node=document.querySelector('[data-source-field="reason"]');if(!node)throw Error('Campo de motivo não encontrado');node.value='Celebração dos 25 anos da empresa';node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));renderSalesGuide();});
+ await page.locator('[data-consultative-action="suggest"]').click();
+ await expect(page.locator('#consultativeReply')).toHaveValue(/Celebração dos 25 anos da empresa/);
+});
+test('clipboard result identifies an older text if the operator edits during copy',async({page})=>{
+ await setup(page);await manual(page);await openPanel(page);
+ await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:text=>{window.copiedText=text;return new Promise(r=>window.finishCopy=r);}},configurable:true}));
+ await page.locator('#consultativeReply').fill('Versão antes da cópia');await page.locator('[data-consultative-action="copy"]').click();
+ await page.locator('#consultativeReply').fill('Versão ajustada durante a cópia');await page.evaluate(()=>window.finishCopy());
+ await expect(page.locator('#consultativeStatus')).toContainText('versão anterior');
+ expect(await page.evaluate(()=>window.copiedText)).toBe('Versão antes da cópia');
+ await expect(page.locator('#consultativeReply')).toHaveValue('Versão ajustada durante a cópia');
 });
