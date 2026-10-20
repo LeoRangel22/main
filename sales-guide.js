@@ -36,18 +36,24 @@ function buildConsultativeReply(model){
  if(text.length>12000)throw Error('Os detalhes excedem o tamanho do rascunho. Escreva uma resposta objetiva manualmente; o briefing original não foi alterado.');
  return text;
 }
-const consultativeContexts=new WeakMap();
+// An editor session survives persistence, but never switching/reopening an event.
 let consultativeContextNumber=0;
-function consultativeContextId(){const context=state.activeEditorContext;if(!context||typeof context!=='object')return '';if(!consultativeContexts.has(context))consultativeContexts.set(context,++consultativeContextNumber);return consultativeContexts.get(context);}
-const consultativeTouches={key:'',fields:new Set()};
-let consultativeLastModel=null;
-let consultativeSaveIdentity=null;
+function resetConsultativeEditor(){
+ consultativeContextNumber++;
+ consultativeTouches.key='';consultativeTouches.fields.clear();clearConsultativeDraft();
+}
+const consultativeTouches={key:'',fields:new Map()};
 const consultativeDraft={key:'',fingerprint:'',text:'',edited:false,busy:false,generation:0,briefFingerprint:''};
 function consultativeAccess(){
  return typeof state!=='undefined'&&Boolean(state.session?.user?.email)&&!document.body.classList.contains('auth-locked');
 }
-function sameConsultativeSave(previous,next){
- return Boolean(previous&&next&&next.proposalId&&previous.user===next.user&&previous.context===next.context&&previous.requestId===next.requestId&&previous.manualKey===next.manualKey);
+function getConsultativeBriefingConfirmation(){
+ const model=getConsultativeModel();
+ return {type:model.knownType,time:model.knownTime,guests:model.knownGuests};
+}
+function confirmConsultativeField(key,value){
+ getConsultativeModel();
+ consultativeTouches.fields.set(key,consultativeText(value));
 }
 function consultativeMeaning(model){
  const {key,revision,source,context,touchKey,user,proposalId,requestId,manualKey,...content}=model;
@@ -57,16 +63,23 @@ function getConsultativeModel(){
  const p=getActiveProposal(),r=typeof getActiveQuoteRequest==='function'?getActiveQuoteRequest():null;
  const source=p?.snapshot||{},event=r?.snapshot?.evento||{};
  const overrides={...(typeof getCurrentSourceOverrides==='function'?getCurrentSourceOverrides():{}),...(typeof collectLiveSourcePanelValues==='function'?collectLiveSourcePanelValues({includeEmpty:true}):{})};
- const identity=JSON.stringify([state.session?.user?.id||state.session?.user?.email,state.activeProposalId||'',state.activeQuoteRequestId||'',state.manualSourceKey||'',state.activeProposalId||state.activeQuoteRequestId?'':consultativeContextId()]);
- const context=consultativeContextId();
- const currentIdentity={key:identity,context,user:state.session?.user?.id||state.session?.user?.email,proposalId:state.activeProposalId||'',requestId:state.activeQuoteRequestId||'',manualKey:state.manualSourceKey||''};
- const ownSave=Boolean(state.proposalSaveInProgress&&sameConsultativeSave(consultativeLastModel,currentIdentity));
- const touchKey=JSON.stringify([identity,context]);
- if(consultativeTouches.key!==touchKey){consultativeTouches.key=touchKey;if(!ownSave)consultativeTouches.fields.clear();}
- if(ownSave&&consultativeDraft.key!==identity)consultativeSaveIdentity={from:consultativeDraft.key,to:identity};
- const knownType=Boolean(r?.tipo_evento||event.tipo||p?.tipo_evento||consultativeTouches.fields.has('type'));
- const knownTime=Boolean(r?.horario_evento||event.horario||p?.horario_evento||consultativeTouches.fields.has('time'));
- const knownGuests=Boolean(consultativeGuestCount(r?.convidados||event.convidados||p?.convidados)||consultativeTouches.fields.has('guests'));
+ const user=state.session?.user?.id||state.session?.user?.email;
+ const identity=JSON.stringify([user,consultativeContextNumber]);
+ const currentIdentity={key:identity,context:consultativeContextNumber,user,proposalId:state.activeProposalId||'',requestId:state.activeQuoteRequestId||'',manualKey:state.manualSourceKey||''};
+ if(consultativeTouches.key!==identity){consultativeTouches.key=identity;consultativeTouches.fields.clear();}
+ const normalize=(key,value)=>key==='guests'?String(consultativeGuestCount(value)||''):key==='time'?consultativeText(value).slice(0,5):consultativeText(value);
+ const known=(key,value,requestValue,savedValue)=>{
+  const current=normalize(key,value);if(!current)return false;
+  if(consultativeTouches.fields.has(key))return normalize(key,consultativeTouches.fields.get(key))===current;
+  const confirmation=source.briefingConfirmation;
+  if(typeof confirmation?.[key]==='boolean')return confirmation[key]&&normalize(key,savedValue)===current;
+  if(normalize(key,requestValue)===current)return true;
+  // Legacy draft values have no provenance; saving alone was never confirmation.
+  return Boolean(p&&(key==='type'||p.publication_status!=='draft')&&normalize(key,savedValue)===current);
+ };
+ const knownType=known('type',fields.eventType?.value,r?.tipo_evento||event.tipo,source.event?.type||p?.tipo_evento);
+ const knownTime=known('time',fields.eventTime?.value,r?.horario_evento||event.horario,source.event?.time||p?.horario_evento);
+ const knownGuests=known('guests',fields.guestCount?.value,r?.convidados||event.convidados,source.event?.guests||p?.convidados);
  const explicit=(key,fallback)=>Object.prototype.hasOwnProperty.call(overrides,key)?overrides[key]:fallback;
  return {name:fields.clientName?.value||'',type:fields.eventType?.value||'',date:fields.eventDate?.value||'',time:fields.eventTime?.value||'',guests:fields.guestCount?.value||'',
   reason:consultativeText(explicit('reason',fields.eventReason?.value||'')),preferences:consultativeText(explicit('preferences',r?.preferencias||event.preferencias||source.event?.preferences)),
@@ -74,12 +87,11 @@ function getConsultativeModel(){
   observations:consultativeText(explicit('observations',r?.observacoes||event.observacoes||source.event?.sourceNotes)),
   language:r?.snapshot?.cliente?.idioma||source.event?.clientLanguage||'pt',
   source:r||p?.solicitacao_id?'Solicitação vinculada':state.manualSourceKey==='manual:realized'?'Registro manual de evento realizado':'Cadastro manual pela equipe',
-  ...currentIdentity,touchKey,knownType,knownTime,knownGuests,
+  ...currentIdentity,knownType,knownTime,knownGuests,
   revision:p?.revision||null,internalMarker:fields.notes?.value||''};
 }
 function consultativeFingerprint(model){return consultativeMeaning(model);}
 function clearConsultativeDraft(key=''){
- consultativeLastModel=null;consultativeSaveIdentity=null;
  consultativeDraft.key=key;consultativeDraft.fingerprint='';consultativeDraft.text='';consultativeDraft.edited=false;consultativeDraft.busy=false;consultativeDraft.generation++;consultativeDraft.briefFingerprint='';
  const text=document.getElementById('consultativeReply');if(text)text.value='';
  const preview=document.getElementById('consultativeBrief');if(preview)preview.replaceChildren();
@@ -113,11 +125,7 @@ function renderConsultativePanel(){
  const panel=ensureConsultativePanel(nav);panel.hidden=!consultativeAccess();
  if(panel.hidden){clearConsultativeDraft();return;}
  const model=getConsultativeModel(),fingerprint=consultativeFingerprint(model);
- if(consultativeDraft.key!==model.key){
-  if(consultativeSaveIdentity?.from===consultativeDraft.key&&consultativeSaveIdentity?.to===model.key){consultativeDraft.key=model.key;consultativeSaveIdentity=null;}
-  else clearConsultativeDraft(model.key);
- }
- consultativeLastModel=model;
+ if(consultativeDraft.key!==model.key)clearConsultativeDraft(model.key);
  if(consultativeDraft.briefFingerprint!==fingerprint){
   consultativeDraft.briefFingerprint=fingerprint;document.getElementById('consultativeOrigin').textContent=`Origem do trabalho: ${model.source}. Alternar a forma de preencher não altera o vínculo ou o histórico.`;
   const brief=document.getElementById('consultativeBrief');brief.replaceChildren();
@@ -195,9 +203,9 @@ function trackConsultativeInput(e){
  if(e.target.matches('[data-sales-focus]')){salesGuide.focused=e.target.checked;renderSalesGuide();return;}
  if(!consultativeAccess()||e.target.closest('#consultativePanel'))return;
  getConsultativeModel();
- if(e.target===fields.eventTime||e.target===fields.eventDateTime)consultativeTouches.fields.add('time');
- if(e.target===fields.eventType)consultativeTouches.fields.add('type');
- if(e.target===fields.guestCount)consultativeTouches.fields.add('guests');
+ if(e.target===fields.eventTime||e.target===fields.eventDateTime)confirmConsultativeField('time',e.target===fields.eventDateTime&&!e.target.value?'':fields.eventTime?.value);
+ if(e.target===fields.eventType)confirmConsultativeField('type',fields.eventType?.value);
+ if(e.target===fields.guestCount)confirmConsultativeField('guests',fields.guestCount?.value);
  queueConsultativeRefresh();
 }
 function queueConsultativeRefresh(){if(consultativeRefreshPending)return;consultativeRefreshPending=true;queueMicrotask(()=>{consultativeRefreshPending=false;renderSalesGuide();});}

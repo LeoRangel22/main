@@ -137,3 +137,77 @@ test('clipboard result identifies an older text if the operator edits during cop
  expect(await page.evaluate(()=>window.copiedText)).toBe('Versão antes da cópia');
  await expect(page.locator('#consultativeReply')).toHaveValue('Versão ajustada durante a cópia');
 });
+
+test('guided format is acknowledged without certifying an automatic lunch time',async({page})=>{
+ await setup(page);await manual(page);
+ await page.locator('[data-flow-event="almoco"]').click();await openPanel(page);
+ await page.locator('[data-consultative-action="suggest"]').click();
+ const text=await page.locator('#consultativeReply').inputValue();
+ expect(text).toContain('Almoço');expect(text).not.toContain('11:30');
+ expect(await page.evaluate(()=>getConsultativeModel().knownType)).toBe(true);
+});
+for(const source of ['manual','form'])test(`unconfirmed ${source} defaults remain missing after saving and reopening`,async({page})=>{
+ await setup(page);
+ if(source==='manual')await manual(page);
+ else await page.evaluate(async()=>{const r=state.quoteRequests[0];r.horario_evento=null;r.convidados=null;r.snapshot={cliente:{idioma:'en'},evento:{}};await applyQuoteRequest(r.id);});
+ await page.locator('#clientName').fill('Briefing parcial');
+ const saved=await page.evaluate(async()=>{const p=await saveCurrentProposal('proposta_pronta',null,{asDraft:true});if(!p)throw Error(state.lastProposalSaveError);openSavedProposal(p.id);return p;});
+ expect(saved.snapshot.briefingConfirmation.time).toBe(false);expect(saved.snapshot.briefingConfirmation.guests).toBe(false);
+ await openPanel(page);await page.locator('[data-consultative-action="suggest"]').click();
+ const text=await page.locator('#consultativeReply').inputValue();expect(text).not.toContain('18:00');expect(text).not.toMatch(/30 (pessoas|guests)/);
+ expect(await page.evaluate(()=>getConsultativeModel().knownTime)).toBe(false);
+ expect(await page.evaluate(()=>getConsultativeModel().knownGuests)).toBe(false);
+});
+test('explicit confirmation of unchanged defaults persists on reopening',async({page})=>{
+ await setup(page);await manual(page);await page.locator('#clientName').fill('Dados confirmados');
+ await page.evaluate(()=>{for(const field of [fields.eventTime,fields.guestCount])field.dispatchEvent(new Event('input',{bubbles:true}));});
+ const saved=await page.evaluate(async()=>{const p=await saveCurrentProposal('proposta_pronta',null,{asDraft:true});if(!p)throw Error(state.lastProposalSaveError);openSavedProposal(p.id);return p;});
+ expect(saved.snapshot.briefingConfirmation.time).toBe(true);expect(saved.snapshot.briefingConfirmation.guests).toBe(true);
+ await openPanel(page);await page.locator('[data-consultative-action="suggest"]').click();
+ await expect(page.locator('#consultativeReply')).toHaveValue(/18:00 · 30 pessoas/);
+});
+test('linked request reply remains editable and copyable after its first save',async({page})=>{
+ await setup(page);await form(page);await page.locator('#consultativeReply').fill('Resposta personalizada que deve permanecer.');
+ await page.locator('[data-consultative-action="draft"]').click();
+ await expect.poll(()=>page.evaluate(()=>Boolean(getActiveProposal()))).toBe(true);
+ await expect(page.locator('#consultativeReply')).toHaveValue('Resposta personalizada que deve permanecer.');
+ await expect(page.locator('[data-consultative-action="copy"]')).toBeEnabled();
+});
+test('cleared source details never return when the editor rerenders or reopens',async({page})=>{
+ await setup(page);await form(page);
+ for(const key of ['reason','preferences','extras'])await page.locator(`[data-source-field="${key}"]`).fill('');
+ await page.locator('#guestCount').fill('45');
+ for(const key of ['reason','preferences','extras'])await expect(page.locator(`[data-source-field="${key}"]`)).toHaveValue('');
+ await page.locator('[data-consultative-action="suggest"]').click();
+ await expect(page.locator('#consultativeReply')).not.toHaveValue(/Aniversário|Vegetarianos|DJ sujeito a consulta/);
+ await page.evaluate(async()=>{const p=await saveCurrentProposal('proposta_pronta',null,{asDraft:true});if(!p)throw Error(state.lastProposalSaveError);state.sourceOverrides={};openSavedProposal(p.id);});
+ for(const key of ['reason','preferences','extras'])await expect(page.locator(`[data-source-field="${key}"]`)).toHaveValue('');
+});
+test('new manual action waits for pending save and cannot attach the old event to a blank editor',async({page})=>{
+ await setup(page);await manual(page);await page.locator('#clientName').fill('Evento em gravação');await openPanel(page);await page.locator('#consultativeReply').fill('Resposta do evento em gravação.');
+ await page.evaluate(()=>{
+  const original=state.supabase.rpc.bind(state.supabase);
+  state.supabase.rpc=async(name,args)=>{if(name==='save_event_proposal')await new Promise(resolve=>window.releaseConsultativeSave=resolve);return original(name,args);};
+  window.pendingConsultativeSave=saveCurrentProposal('proposta_pronta',null,{asDraft:true});
+ });
+ await expect.poll(()=>page.evaluate(()=>Boolean(window.releaseConsultativeSave))).toBe(true);
+ await page.locator('[data-consultative-action="new"]').click();
+ await expect(page.locator('#clientName')).toHaveValue('Evento em gravação');
+ await page.evaluate(async()=>{window.releaseConsultativeSave();await window.pendingConsultativeSave;});
+ await expect(page.locator('#consultativeReply')).toHaveValue('Resposta do evento em gravação.');
+ await page.locator('[data-consultative-action="new"]').click();
+ await expect(page.locator('#clientName')).toHaveValue('');await expect(page.locator('#consultativeReply')).toHaveValue('');
+ expect(await page.evaluate(()=>state.activeProposalId)).toBe('');
+});
+test('briefing confirmation is private metadata, not a changed commercial agreement',async({page})=>{
+ await setup(page);await manual(page);await page.locator('#clientName').fill('Conferência sem alteração comercial');
+ const result=await page.evaluate(async()=>{
+  const before=await saveCurrentProposal('proposta_pronta',null,{asDraft:true});if(!before)throw Error(state.lastProposalSaveError);
+  for(const field of [fields.eventTime,fields.guestCount])field.dispatchEvent(new Event('input',{bubbles:true}));
+  const dirty=hasUnsavedEditorChanges(),commercial=hasCommercialEditorInputChanges();
+  const after=await saveCurrentProposal('proposta_pronta',null,{asDraft:true});if(!after)throw Error(state.lastProposalSaveError);
+  return {dirty,commercial,beforeEvent:before.snapshot.event,afterEvent:after.snapshot.event,known:after.snapshot.briefingConfirmation,changes:getProposalChangeList(before.snapshot,after.snapshot)};
+ });
+ expect(result.dirty).toBe(true);expect(result.commercial).toBe(false);
+ expect(result.afterEvent).toEqual(result.beforeEvent);expect(result.known.time).toBe(true);expect(result.known.guests).toBe(true);expect(result.changes).toEqual([]);
+});
