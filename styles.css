@@ -12977,3 +12977,4 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
    e o laranja #f59b1e (2,2:1) ficam só no painel interno. */
 .public-form-body { --cinza-2: #5b6265; --muted: #5b6265; }
 .public-form-body .section-heading span { color: #8a4f00; }
+.public-form-body .contact-assurance a { color: #183a2d; font-weight: 700; text-decoration: underline; }
