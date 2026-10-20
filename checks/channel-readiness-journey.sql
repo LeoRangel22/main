@@ -52,7 +52,8 @@ begin
  result:=public.event_journey_evidence(p.id,p.revision);
  assert jsonb_array_length(result->'steps')=10;
  assert (select s->>'state'='confirmed' from jsonb_array_elements(result->'steps') s where s->>'key'='proposal');
- assert (select bool_and(s->>'state'='pending') from jsonb_array_elements(result->'steps') s where s->>'key'<>'proposal');
+ assert (select s->>'state'='not_required' from jsonb_array_elements(result->'steps') s where s->>'key'='approval');
+ assert (select bool_and(s->>'state'='pending') from jsonb_array_elements(result->'steps') s where s->>'key' not in ('proposal','approval'));
  assert (select count(*)=before_rows from event_outbox),'Reading journey cannot send';
  blocked:=false;begin perform public.event_journey_evidence(p.id,p.revision+1);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Stale revision must be rejected';
  insert into event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,provider_id,approved_by)

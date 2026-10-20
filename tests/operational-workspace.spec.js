@@ -27,3 +27,28 @@ test('production requires declared quantities and stock and never fabricates mar
  const d=page.locator('dialog');await d.locator('[data-production-add]').click();await d.locator('[data-field="ingredient"]').fill('Insumo fixture');await d.locator('[data-field="quantity"]').fill('0.1');await d.locator('[name="setup"]').fill('30');await d.locator('[name="teardown"]').fill('15');await d.getByRole('button',{name:'Salvar planejamento',exact:true}).click();
  await expect(d).toHaveCount(0);await expect(page.locator('.operation-detail')).toContainText('comprar: a conferir');await expect(page.locator('.operation-detail')).toContainText('Custos incompletos');
 });
+
+test('switching events removes old actions immediately, and a failed read never targets the new event',async({page})=>{
+ await open(page);await page.locator('[data-operation-select="ops-fixture"]').click();
+ await page.evaluate(()=>{
+  const p=structuredClone(state.proposals.find(p=>p.id==='ops-fixture'));Object.assign(p,{id:'ops-second',oportunidade_id:'ops-second-opp',cliente_nome:'Segundo evento'});state.proposals.push(p);getOperationalHandoffData(p);renderOperationWorkspace();
+  const original=ensureFullProposal;ensureFullProposal=async id=>id==='ops-second'?await new Promise((resolve,reject)=>window.finishSecondRead={resolve,reject}):original(id);
+ });
+ await page.locator('[data-operation-select="ops-second"]').click();await expect(page.locator('.operation-detail')).toContainText('Consultando o acordo escolhido');
+ await expect(page.locator('.operation-detail button')).toHaveCount(0);await expect(page.locator('.operation-detail [data-handoff-task-id]')).toHaveCount(0);
+ await page.evaluate(()=>window.finishSecondRead.reject(Error('Fixture unavailable')));await expect(page.locator('.operation-detail')).toContainText('Fixture unavailable');await expect(page.locator('.operation-detail button')).toHaveCount(0);
+ const untouched=await page.evaluate(()=>getOperationalHandoffData(state.proposals.find(p=>p.id==='ops-second')).tasks.every(t=>!t.acknowledged_at&&!t.completed_at));expect(untouched).toBe(true);
+ await page.locator('[data-operation-select="ops-fixture"]').click();await expect(page.locator('.operation-detail [data-handoff-task-id]')).toHaveCount(8);
+});
+
+test('agenda exposes unnamed people and unacknowledged tasks without implying completion',async({page})=>{
+ await open(page);const card=page.locator('[data-operation-select="ops-fixture"]');await expect(card).toContainText('8 sem pessoa responsável');await expect(card).toContainText('8 sem ciência registrada');await expect(card).toContainText('0/8 tarefas');
+});
+
+test('discount decision remains bound to reviewed revision and cancel creates no approval',async({page})=>{
+ await open(page);await page.evaluate(()=>{const p=state.proposals.find(p=>p.id==='ops-fixture');p.revision=1;p.snapshot.totals={...p.snapshot.totals,adjustment:-2000};return showOpsDiscountApproval(p.id);});
+ let d=page.locator('dialog');await expect(d).toContainText('revisão 1');await expect(d).toContainText('Desconto comercial: R$');await expect(d).toContainText('privatização tem alçada própria');
+ await page.evaluate(()=>{state.proposals.find(p=>p.id==='ops-fixture').revision=2;});await d.locator('input[type=checkbox]').check();await d.getByRole('button',{name:'Aprovar esta versão',exact:true}).click();await expect(d.locator('[role=alert]')).toContainText('proposta mudou');
+ await d.getByRole('button',{name:'Voltar',exact:true}).click();expect(await page.evaluate(()=>window.EventOperationsState.approvals.some(a=>a.proposal_id==='ops-fixture'))).toBe(false);
+ await page.evaluate(()=>showOpsDiscountApproval('ops-fixture'));d=page.locator('dialog');await expect(d).toContainText('revisão 2');await expect(d.locator('input[type=checkbox]')).not.toBeChecked();await d.getByRole('button',{name:'Voltar',exact:true}).click();
+});

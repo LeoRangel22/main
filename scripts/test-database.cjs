@@ -30,7 +30,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }

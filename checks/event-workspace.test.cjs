@@ -11,3 +11,13 @@ test('progress and sector selection use only the current handoff, with genuine a
  const row=W.agenda([p],h,tasks,{now:new Date('2026-10-18T12:00Z'),sector:'bar'})[0];assert.equal(row.progress.total,2);assert.equal(row.progress.done,1);
  assert.equal(W.agenda([p],h,tasks,{now:new Date('2026-10-18T12:00Z'),sector:'estoque'}).length,0);
 });
+
+test('agenda exposes missing responsibility, acknowledgement and overdue unproven completions without altering tasks',()=>{
+ const now=new Date('2026-10-20T12:00:00Z'),p={id:'p',oportunidade_id:'o',status:'confirmado',data_evento:'2026-10-21'},h=[{opportunity_id:'o',proposal_id:'p',version:2}];
+ const tasks=[{opportunity_id:'o',source_version:2,status:'done',responsible_name:' ',due_at:'2026-10-19T12:00:00Z'},
+ {opportunity_id:'o',source_version:2,status:'blocked',responsible_name:'Ana',acknowledged_at:'2026-10-20T10:00:00Z',acknowledged_by:'u',due_at:'2026-10-22T12:00:00Z'},
+ {opportunity_id:'o',source_version:1,status:'pending',due_at:'2026-10-18T12:00:00Z'}];
+ const before=JSON.stringify(tasks),r=W.agenda([p],h,tasks,{now})[0];
+ assert.deepEqual({total:r.progress.total,done:r.progress.done,unassigned:r.unassigned,awaiting:r.awaitingAcknowledgement,overdue:r.overdue,blocked:r.blocked},{total:2,done:0,unassigned:1,awaiting:1,overdue:1,blocked:1});
+ assert.equal(JSON.stringify(tasks),before);
+});

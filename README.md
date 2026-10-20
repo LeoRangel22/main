@@ -166,9 +166,9 @@ Propostas e PDFs antigos são imutáveis. Para refletir uma correção, duplique
 
 ## Central comercial P0/P1
 
-O Sistema de Eventos opera de forma independente. A futura integração deve consultar informações do Bot; não há sincronização automática neste pacote.
+O Sistema de Eventos preserva o Bot como único dono dos callbacks do WhatsApp e consulta seu ledger pela ponte de leitura. Não há callback paralelo. Ativação e homologação reais dos canais são verificações separadas da publicação do código.
 
-A central reúne pendências, conversas registradas, envios e reservas. Planejamento em lote não registra contato. Respostas externas podem ser registradas manualmente; recebimento automático e callbacks de entrega dependem de configuração futura. Copiar um rascunho também não registra envio.
+A central reúne pendências, conversas registradas, envios e reservas. Planejamento em lote não registra contato. Respostas externas podem ser registradas manualmente; recebimento integrado e comprovantes de entrega exigem configuração verificada. O adaptador Zoho Mail nasce desativado, sem OAuth ou importação histórica automáticos. Copiar um rascunho também não registra envio.
 
 O gestor configura a capacidade simultânea autorizada em Central comercial → Reservas. Nenhum valor foi presumido. O responsável padrão vale para novas oportunidades; os registros antigos continuam sujeitos à triagem. Confirmações futuras exigem capacidade, disponibilidade e valor do sinal registrado. Pré-reservas têm validade máxima de 30 dias.
 

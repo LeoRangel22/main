@@ -1,7 +1,9 @@
 # Recebimento e comprovantes de entrega dos canais
 
 O Sistema de Eventos recebe mensagens e retornos por `event-channel-webhook`.
-Enviar uma proposta continua exigindo login da equipe e aprovação humana.
+Enviar uma proposta exige login e revisão explícita do vendedor. A fila geral do
+gestor é opcional conforme a política vigente; descontos fora da alçada e aditivos
+preservam suas decisões próprias.
 Callbacks de entrega nunca disparam novo envio. Capacidade operacional: 200 pessoas,
 configurada por Leo em 06/10/2026; não é alterada pelas migrações deste pacote.
 
@@ -105,10 +107,13 @@ O job usa chave própria privada; sua autenticação não é a chave do webhook.
 ### Respostas de e-mail / caixa de entrada
 
 ZeptoMail envia e-mails e informa eventos de envio. Ele não é a caixa que recebe
-respostas. A origem da caixa `eventos@embaixadacarioca.com.br` precisa ser confirmada
-para construir e conectar seu adaptador (Zoho Mail, Gmail, IMAP ou outro).
-Este pacote fornece o endpoint autenticado e contrato de ingestão; não afirma
-que o adaptador do provedor da caixa já foi instalado.
+respostas. O domínio de `eventos@embaixadacarioca.com.br` usa MX do Zoho Mail (consulta pública
+em 20/10/2026). O [adaptador único Zoho Mail](zoho-mailbox-adapter.md) usa leitura
+limitada, valida a conta e o endereço confirmado e mantém a ingestão canônica.
+A existência do código ou do MX não comprova acesso à caixa: conta, centro de dados,
+OAuth e ativação precisam de verificação e autorização próprias. O adaptador nasce
+desativado, sem agendamento ou importação histórica. ZeptoMail continua apenas
+como transporte de saída/entrega; não é usado como caixa de entrada.
 
 O adaptador de confiança deve validar a origem, autenticar notificações/conta,
 deduplicar pelo Message-ID, extrair texto e headers de reply, e enviar:
