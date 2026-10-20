@@ -24,3 +24,9 @@ test('reservation review requires a manager decision and QA cannot create a real
 });
 
 test('built-in QA can inspect a proposal journey without external RPCs or manual test patching',async({page})=>{await start(page);await page.evaluate(()=>{window.qaJourneyRpcCalls=0;state.supabase.rpc=async()=>{window.qaJourneyRpcCalls++;throw Error('Unexpected external call')};});await page.locator('[data-ops-tab="journey"]').click();await page.locator('[data-ops-selector]').selectOption('qa-opp-qa-proposal-sem-resposta');await expect(page.locator('[data-journey-step]')).toHaveCount(10);await expect(page.locator('#eventOperations')).toContainText('Dados fictícios do modo QA');expect(await page.evaluate(()=>window.qaJourneyRpcCalls)).toBe(0);});
+
+test('ordinary seller autonomy is explicit and never disguises a commercial discount exception',async({page})=>{
+ await start(page);await page.locator('[data-ops-tab="journey"]').click();await page.locator('[data-ops-selector]').selectOption('qa-opp-qa-proposal-sem-resposta');
+ await expect(page.locator('[data-journey-step="approval"]')).toContainText('Não exigida pela política atual');
+ await page.evaluate(()=>{const p=state.proposals.find(p=>p.id==='qa-proposal-sem-resposta');p.snapshot.totals={...p.snapshot.totals,adjustment:-2000};});await page.locator('[data-ops-journey-refresh]').click();await expect(page.locator('[data-journey-step="approval"]')).toContainText('Pendente');
+});

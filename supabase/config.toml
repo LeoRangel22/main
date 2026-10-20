@@ -27,3 +27,7 @@ verify_jwt = true
 # Private cron key is validated in a service-only RPC before any work is read.
 [functions.event-approval-monitor]
 verify_jwt = false
+
+# Dormant mailbox pull worker. Private job key, not a public inbox or OAuth endpoint.
+[functions.event-mailbox-sync]
+verify_jwt = false

@@ -20,3 +20,15 @@ for(const page of ['index.html','clientes.html','comunicacao.html','valores.html
 test('diagnostics keep polling past 24 seconds to observe a late valid response',async()=>{let statuses=0;const f=fixture({fastPoll:true,rpc:async name=>({data:name==='event_request_channel_diagnostics'?'batch':{id:'batch',requested_at:new Date().toISOString(),bridge:{state:++statuses<=15?'pending':'observed',bridge_reachable:statuses>15},delivery:{state:'observed',email_oauth:false}}})});await f.c.loadOpsChannelDiagnostics({request:true});assert.equal(statuses,16);assert.equal(f.getCache('channels').data.bridge.bridge_reachable,true);});
 
 test('missing production revision fails closed without restarting an endless read loop',async()=>{let calls=0;const f=fixture({rpc:async()=>{calls++;return {data:evidence()}}});delete f.state.proposals[0].revision;const cache=f.c.readinessCache('journey','p');await f.c.loadOpsJourneyEvidence('p');assert.equal(f.c.readinessCache('journey','p'),cache);assert.equal(cache.data,null);assert.ok(cache.error);assert.equal(calls,0);});
+
+test('optional manager step is valid only for approval, never for finance or execution',()=>{
+ const {c}=fixture();const d=evidence();d.steps.find(s=>s.key==='approval').state='not_required';assert.equal(c.validJourneyEvidence(d,'p',1),true);
+ d.steps.find(s=>s.key==='payment').state='not_required';assert.equal(c.validJourneyEvidence(d,'p',1),false);
+});
+test('QA distinguishes ordinary seller autonomy from discount exceptions and amendments',()=>{
+ const {c}=fixture();const step=p=>c.buildQaJourneyEvidence({id:'p',revision:1,subtotal:10000,...p}).steps.find(s=>s.key==='approval').state;
+ assert.equal(step({snapshot:{totals:{adjustment:0,privatizationAdjustment:-6000}}}),'not_required');
+ assert.equal(step({snapshot:{totals:{adjustment:-2000}}}),'pending');
+ assert.equal(step({subtotal:1000,snapshot:{totals:{adjustment:-101}}}),'pending');
+ assert.equal(step({snapshot:{amendmentOf:{id:'original'}}}),'pending');
+});
