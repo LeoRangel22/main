@@ -1485,6 +1485,7 @@ function hasCommercialEditorInputChanges() {
   try {
     const before = JSON.parse(state.loadedEditorSignature), after = JSON.parse(getCurrentEditorSignature());
     delete before.notes; delete after.notes;
+    delete before.briefingConfirmation; delete after.briefingConfirmation;
     return JSON.stringify(proposalSendContent(before)) !== JSON.stringify(proposalSendContent(after));
   } catch (_) { return true; }
 }
@@ -5560,7 +5561,8 @@ function getSourceOverrideKey() {
 
 function getCurrentSourceOverrides() {
   const key = getSourceOverrideKey();
-  return key ? state.sourceOverrides[key] || {} : {};
+  const saved = getActiveProposal()?.snapshot?.sourceOverrides || {};
+  return key ? { ...saved, ...(state.sourceOverrides[key] || {}) } : {};
 }
 
 function collectLiveSourcePanelValues({ includeEmpty = false } = {}) {
@@ -5747,10 +5749,10 @@ function getFormSourceData() {
     arrivalTime: normalizeSourceValue(event.horario || event.time || parsed.arrivalTime),
     guests: normalizeSourceValue(event.convidados || event.guests || request?.convidados || parsed.guests),
     duration: normalizeSourceValue(event.duracaoTexto || event.durationLabel || (event.duracao ? `${event.duracao}h` : "") || parsed.duration),
-    extras: normalizeSourceValue(overrides.extras || event.extras || parsed.extras),
-    preferences: normalizeSourceValue(overrides.preferences || request?.preferencias || event.preferencias || event.preferences || parsed.preferences),
-    observations: normalizeSourceValue(overrides.observations || cleanClientObservationText(request, snapshot)),
-    reason: normalizeSourceValue(overrides.reason || request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value || parsed.reason),
+    extras: normalizeSourceValue(Object.prototype.hasOwnProperty.call(overrides, "extras") ? overrides.extras : event.extras || parsed.extras),
+    preferences: normalizeSourceValue(Object.prototype.hasOwnProperty.call(overrides, "preferences") ? overrides.preferences : request?.preferencias || event.preferencias || event.preferences || parsed.preferences),
+    observations: normalizeSourceValue(Object.prototype.hasOwnProperty.call(overrides, "observations") ? overrides.observations : cleanClientObservationText(request, snapshot)),
+    reason: normalizeSourceValue(Object.prototype.hasOwnProperty.call(overrides, "reason") ? overrides.reason : request?.motivo_evento || event.motivo || event.reason || fields.eventReason?.value || parsed.reason),
   };
 }
 
@@ -7386,6 +7388,7 @@ function applyGuidedEvent(eventKey) {
   state.guided.welcomeId = "";
   state.guided.workshopId = "";
   fields.eventType.value = config.label;
+  if (typeof confirmConsultativeField === "function") confirmConsultativeField("type", config.label);
   fields.categoryFilter.value = config.category;
   fields.searchPrice.value = "";
   nodes.flowStatus.textContent = config.status;
@@ -7393,6 +7396,7 @@ function applyGuidedEvent(eventKey) {
 
   if (eventKey === "almoco") {
     fields.eventTime.value = "11:30";
+    if (typeof confirmConsultativeField === "function") confirmConsultativeField("time", "");
     fields.eventDuration.value = "1.5";
     if (getGuestCount() < 2) fields.guestCount.value = "2";
   }
@@ -8182,6 +8186,7 @@ function getProposalSnapshot() {
     activeQuoteRequestId: state.activeQuoteRequestId,
     qualificacao: sourceQualification,
     sourceOverrides: getCurrentSourceOverrides(),
+    ...(typeof getConsultativeBriefingConfirmation === "function" ? { briefingConfirmation: getConsultativeBriefingConfirmation() } : {}),
     sourceRequestSnapshot: activeRequest?.snapshot || activeProposal?.snapshot?.sourceRequestSnapshot || null,
     privatizationRules: state.privatizationRules,
     generalTerms: fields.generalTerms.value,
@@ -8230,7 +8235,7 @@ function getActiveOpportunityId() {
   return state.activeOpportunityId || activeProposal?.oportunidade_id || activeRequest?.oportunidade_id || "";
 }
 
-async function ensureActiveOpportunity(snapshot, status = "proposta_enviada") {
+async function ensureActiveOpportunity(snapshot, status = "proposta_enviada", isCurrent = () => true) {
   const existingId = getActiveOpportunityId();
   if (existingId) {
     state.activeOpportunityId = existingId;
@@ -8269,6 +8274,7 @@ async function ensureActiveOpportunity(snapshot, status = "proposta_enviada") {
     return "";
   }
 
+  if (!isCurrent()) return data.id;
   state.activeOpportunityId = data.id;
   const requestId = getPersistableQuoteRequestId();
   if (requestId) {
@@ -8277,7 +8283,7 @@ async function ensureActiveOpportunity(snapshot, status = "proposta_enviada") {
       .update({ oportunidade_id: data.id })
       .eq("id", requestId);
     if (result.error) console.warn("Falha ao vincular lead à oportunidade.", result.error);
-    state.quoteRequests = state.quoteRequests.map((item) =>
+    if (isCurrent()) state.quoteRequests = state.quoteRequests.map((item) =>
       item.id === requestId ? { ...item, oportunidade_id: data.id } : item,
     );
   }
@@ -9205,6 +9211,7 @@ function updateAuthUI() {
   const isConnected = Boolean(state.supabase);
   const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
 
+  if (!isLoggedIn && typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   document.body.classList.toggle("auth-locked", !isLoggedIn);
   document.body.classList.toggle("auth-connected", isLoggedIn);
 
@@ -10825,6 +10832,7 @@ function getCurrentEditorSignature() {
     guided: state.guided,
     privatizationChoice: state.privatizationChoice || "",
     sourceOverrides: getCurrentSourceOverrides(),
+    ...(typeof getConsultativeBriefingConfirmation === "function" ? { briefingConfirmation: getConsultativeBriefingConfirmation() } : {}),
   });
 }
 
@@ -12094,9 +12102,11 @@ function resetProposalDraftState() {
 }
 
 async function applyQuoteRequest(requestId, sourceLabel = "") {
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
   const request = state.quoteRequests.find((item) => item.id === requestId);
   if (!request) return;
 
+  if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   state.activeQuoteRequestId = request.id;
   state.activeProposalId = "";
   state.activeOpportunityId = request.oportunidade_id || "";
@@ -12149,6 +12159,7 @@ async function markQuoteRequestAnalyzed(requestId) {
 
 async function updateQuoteRequest(requestId, changes, shouldToast = true) {
   if (!state.supabase || !state.session) return;
+  const client = state.supabase, user = state.session.user?.id || state.session.user?.email;
   const { data, error } = await state.supabase
     .from("solicitacoes_cotacao")
     .update(changes)
@@ -12162,6 +12173,7 @@ async function updateQuoteRequest(requestId, changes, shouldToast = true) {
     return;
   }
 
+  if (state.supabase !== client || (state.session?.user?.id || state.session?.user?.email) !== user) return;
   state.quoteRequests = state.quoteRequests.map((item) => (item.id === requestId ? data : item));
   renderPipeline();
   if (shouldToast) showToast("Solicitação atualizada.");
@@ -12510,10 +12522,16 @@ async function deleteTestPipelineItem(kind, id) {
 
   if (kind === "request") {
     state.quoteRequests = state.quoteRequests.filter((entry) => entry.id !== id);
-    if (state.activeQuoteRequestId === id) state.activeQuoteRequestId = null;
+    if (state.activeQuoteRequestId === id) {
+      if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
+      state.activeQuoteRequestId = null;
+    }
   } else {
     state.proposals = state.proposals.filter((entry) => entry.id !== id);
-    if (state.activeProposalId === id) state.activeProposalId = null;
+    if (state.activeProposalId === id) {
+      if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
+      state.activeProposalId = null;
+    }
   }
   renderHistory();
   renderPipeline();
@@ -13173,6 +13191,7 @@ async function logoutSupabase() {
   resetCommercialDashboard();
   await state.supabase.auth.signOut();
   state.session = null;
+  if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   state.proposals = [];
   state.quoteRequests = [];
   state.opportunities = [];
@@ -13217,6 +13236,13 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (saveButton) { saveButton.disabled = true; saveButton.setAttribute("aria-busy", "true"); }
   const editorIdentity = () => JSON.stringify([state.activeProposalId, state.activeQuoteRequestId, state.manualSourceKey]);
   const initialEditorIdentity = editorIdentity();
+  const initialEditorContext = state.activeEditorContext;
+  const initialEditorClient = state.supabase;
+  const initialEditorUser = state.session?.user?.id || state.session?.user?.email;
+  const sameSession = () => state.supabase === initialEditorClient &&
+    (state.session?.user?.id || state.session?.user?.email) === initialEditorUser;
+  const sameSessionContext = () => state.activeEditorContext === initialEditorContext && sameSession();
+  const sameEditor = () => editorIdentity() === initialEditorIdentity && sameSessionContext();
   let committedProposal = null;
   try {
   state.lastProposalSaveError = "";
@@ -13227,7 +13253,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   }
 
-  if (editorIdentity() !== initialEditorIdentity) {
+  if (!sameEditor()) {
     showToast("O evento aberto mudou. Revise o editor antes de salvar.");
     return null;
   }
@@ -13251,13 +13277,13 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   const nextStatus = amendmentSource ? "negociacao"
     : options.markReady && (!activeProposal || activeProposal.publication_status === "draft") ? "proposta_pronta"
     : status || activeProposal?.status || "proposta_pronta";
-  const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus);
+  const opportunityId = await ensureActiveOpportunity(snapshot, nextStatus, sameEditor);
   if (!opportunityId) {
     state.lastProposalSaveError = "Não foi possível criar ou localizar a oportunidade comercial.";
     showToast(state.lastProposalSaveError);
     return null;
   }
-  if (editorIdentity() !== initialEditorIdentity) {
+  if (!sameEditor()) {
     showToast("O evento aberto mudou. Nenhuma proposta foi gravada neste editor.");
     return null;
   }
@@ -13341,6 +13367,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     snapshot.pagamentoRestante = remainingPayment || activeProposal?.snapshot?.pagamentoRestante || null;
   }
   snapshot.pagamentoRestante = snapshot.pagamentoRestante || activeProposal?.snapshot?.pagamentoRestante || null;
+  if (!sameEditor()) {
+    showToast("O evento aberto ou a sessão mudou. Nenhuma proposta foi gravada neste editor.");
+    return null;
+  }
   const historyEntries = [];
   const previousStatus = normalizeProposalStatus(activeProposal?.status || "");
   const proposalChanges = activeProposal ? getProposalChangeList(activeProposal.snapshot || {}, snapshot) : [];
@@ -13496,8 +13526,8 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   }
 
   committedProposal = data;
-  if (editorIdentity() !== initialEditorIdentity) {
-    upsertProposalState(data);
+  if (!sameEditor()) {
+    if (sameSession()) upsertProposalState(data);
     showToast("A proposta anterior foi gravada, mas outro evento está aberto. Revise antes de enviar.");
     return null;
   }
@@ -13544,6 +13574,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   } else if (state.activeQuoteRequestId) {
     console.warn("Solicitação ativa não é UUID persistível; vínculo ignorado no Supabase.", state.activeQuoteRequestId);
   }
+  if (!sameSessionContext()) return null;
   renderHistory();
   renderPipeline();
   renderSignalPaymentInfo(data.snapshot?.pagamentoSinal || null, data.snapshot?.pagamentoRestante || null);
@@ -13624,6 +13655,7 @@ function applyProposalSnapshot(snapshot) {
     return;
   }
 
+  if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   fields.clientName.value = snapshot.client?.name || "";
   fields.clientEmail.value = snapshot.client?.email || "";
   fields.clientPhone.value = snapshot.client?.phone || "";
@@ -13694,6 +13726,7 @@ function applyProposalSnapshot(snapshot) {
 }
 
 function openSavedProposal(proposalId, sourceLabel = "") {
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
   const proposal = state.proposals.find((item) => item.id === proposalId);
   if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return; }
   if (!proposal) return;
@@ -14012,6 +14045,7 @@ function renderAll() {
 }
 
 function startNewProposal(options = {}) {
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
   const mode = options.mode || "manual";
   const isRealizedMode = mode === "realized";
   const hasDraft =
@@ -14023,6 +14057,8 @@ function startNewProposal(options = {}) {
     ? "Registrar um evento já realizado e limpar os dados atuais da tela?"
     : "Começar uma nova proposta e limpar os dados atuais da tela?";
   if (hasDraft && !window.confirm(confirmMessage)) return;
+
+  if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
 
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
