@@ -465,7 +465,8 @@ const copy = {
       contactRequirementNote:
         "Nome + e-mail ou WhatsApp já são suficientes para salvar seu pedido. Empresa, cliente final e grupo ajudam a equipe a responder mais rápido.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
-      contactAssurance: "Solicitação sem compromisso. Usamos os dados apenas para preparar sua proposta.",
+      contactAssurance: "Sem compromisso. Usamos seus dados só para a proposta do evento. Ao informar nome e e-mail ou telefone, o que já foi preenchido fica salvo, mesmo sem envio.",
+      privacyPolicyLink: "Política de privacidade",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
       finalReviewEyebrow: "Revisão final",
       finalReviewTitle: "Veja o que a equipe vai receber",
@@ -642,7 +643,8 @@ const copy = {
       contactRequirementNote:
         "Name plus e-mail or WhatsApp is enough to send your request. Company, final client and group help our team reply faster.",
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
-      contactAssurance: "No commitment required. We use this information only to prepare the service and proposal for your event.",
+      contactAssurance: "No commitment. We use your details only for your event proposal. Once you enter your name and email or phone, what you have filled in is saved, even if you don't submit.",
+      privacyPolicyLink: "Privacy policy (in Portuguese)",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
       finalReviewEyebrow: "Final review",
       finalReviewTitle: "See what our team will receive",
@@ -842,6 +844,8 @@ function applyStaticCopy() {
   if (contactRequirementNote) contactRequirementNote.textContent = current.labels.contactRequirementNote;
   document.querySelector("#contactPromise").textContent = current.labels.contactPromise;
   document.querySelector("#contactAssurance").textContent = current.labels.contactAssurance;
+  const privacyPolicyLink = document.querySelector("#privacyPolicyLink");
+  if (privacyPolicyLink && current.labels.privacyPolicyLink) privacyPolicyLink.textContent = current.labels.privacyPolicyLink;
   document.querySelector("#finalReviewEyebrow").textContent = current.labels.finalReviewEyebrow;
   document.querySelector("#finalReviewTitle").textContent = current.labels.finalReviewTitle;
   document.querySelector("#finalReviewBody").textContent = current.labels.finalReviewBody;
