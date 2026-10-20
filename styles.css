@@ -12973,3 +12973,8 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .production-line label { min-width:0; }
 .production-line input,.production-line select { width:100%; min-width:0; }
 @media(max-width:500px){.production-line {grid-template-columns:minmax(0,1fr);} }
+/* Formulário público: contraste AA (WCAG 1.4.3). O cinza #7d8386 (3,6–3,8:1)
+   e o laranja #f59b1e (2,2:1) ficam só no painel interno. */
+.public-form-body { --cinza-2: #5b6265; --muted: #5b6265; }
+.public-form-body .section-heading span { color: #8a4f00; }
+.public-form-body .contact-assurance a { color: #183a2d; font-weight: 700; text-decoration: underline; }
