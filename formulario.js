@@ -193,8 +193,10 @@ function getLeadAnalyticsProperties(snapshot = null) {
   };
 }
 
-function captureLeadAnalytics(eventName, properties = {}, options = {}) {
-  return window.EventAnalytics?.capture(eventName, { ...getLeadAnalyticsProperties(), ...properties }, options);
+function captureLeadAnalytics(eventName, properties = {}, options = {}, snapshot = null) {
+  try {
+    return Promise.resolve(window.EventAnalytics?.capture(eventName, { ...getLeadAnalyticsProperties(snapshot), ...properties }, options)).catch(() => false);
+  } catch (_error) { return Promise.resolve(false); }
 }
 
 function applyConversionStepOrder() {
@@ -2110,22 +2112,26 @@ async function submitRequest(event) {
 
   submitButton.disabled = true;
   setStatus(current.messages.submitting, "neutral");
+  let submittedOpportunityId = null;
 
   try {
     const client = getPublicSupabaseClient();
-    const { error } = await client.rpc("submit_public_quote_request", {
+    const { data, error } = await client.rpc("submit_public_quote_request", {
       p_capture_token: getCaptureToken(),
       p_snapshot: snapshot,
     });
 
 
     if (error) {
+      captureLeadAnalytics("lead_submit_failed", { reason_code: "request_rejected" });
       console.warn("Falha ao enviar solicitacao.", error);
       setStatus(getFriendlySubmitError(error, current), "error");
       scrollToStep("contact", true);
       return;
     }
+    submittedOpportunityId = data?.[0]?.opportunity_id || null;
   } catch (error) {
+    captureLeadAnalytics("lead_submit_failed", { reason_code: "request_unavailable" });
     console.warn("Falha inesperada ao enviar solicitacao.", error);
     setStatus(getFriendlySubmitError(error, current), "error");
     scrollToStep("contact", true);
@@ -2136,10 +2142,12 @@ async function submitRequest(event) {
 
   resetCaptureIdentity();
   analyticsFormState.submitted = true;
-  captureLeadAnalytics("lead_created", getLeadAnalyticsProperties(snapshot), {
-    entityId: referenceCode,
+  captureLeadAnalytics("lead_created", {
+    entity_key_kind: submittedOpportunityId ? "opportunity" : "legacy_reference",
+  }, {
+    entityId: submittedOpportunityId || referenceCode,
     dedupeKey: `lead-created:${referenceCode}`,
-  });
+  }, snapshot);
   form.reset();
   fields.moment.value = "";
   fields.clientType.value = "";

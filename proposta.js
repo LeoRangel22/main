@@ -45,7 +45,7 @@ function getProposalAnalyticsProperties(proposal = currentProposal) {
   const snapshot = proposal?.snapshot || {};
   const event = snapshot.event || {};
   const totals = snapshot.totals || {};
-  const options = Array.isArray(snapshot.publicOfferOptions) ? snapshot.publicOfferOptions : [];
+  const options = Array.isArray(snapshot.publicOfferOptions) ? snapshot.publicOfferOptions.slice(0, 3) : [];
   return {
     surface: "public_proposal",
     language,
@@ -56,17 +56,19 @@ function getProposalAnalyticsProperties(proposal = currentProposal) {
     days_to_event_bucket: analytics?.bucketDaysToEvent(proposal?.data_evento || event.date),
     value_bucket: analytics?.bucketCurrency(proposal?.total || totals.total),
     proposal_version: Number(proposal?.versao || 1),
-    has_upsell_options: options.some((option) => !option.base),
+    has_upsell_options: options.length >= 2 && options.some((option) => !option.base),
   };
 }
 
 function captureProposalAnalytics(eventName, properties = {}, options = {}) {
-  const entityId = options.entityId || currentProposal?.oportunidade_id || currentProposal?.id;
-  return window.EventAnalytics?.capture(
-    eventName,
-    { ...getProposalAnalyticsProperties(), ...properties },
-    { ...options, entityId, entityHash: currentProposal?.snapshot?.analyticsEntityHash },
-  );
+  try {
+    const entityId = options.entityId || currentProposal?.oportunidade_id || currentProposal?.id;
+    return Promise.resolve(window.EventAnalytics?.capture(
+      eventName,
+      { ...getProposalAnalyticsProperties(), ...properties },
+      { ...options, entityId, entityHash: currentProposal?.snapshot?.analyticsEntityHash },
+    )).catch(() => false);
+  } catch (_error) { return Promise.resolve(false); }
 }
 
 function escapeHtml(value) {
@@ -764,6 +766,7 @@ async function submitPublicResponse(event) {
   if (submitButton) submitButton.disabled = false;
 
   if (error || !data?.[0]?.ok) {
+    captureProposalAnalytics("proposal_response_failed", { response_type: action, reason_code: error?.code === "PT409" ? "stale_revision" : "request_failed" });
     console.warn("Falha ao responder proposta.", error);
     setMessage(getPublicResponseErrorMessage(error), "error");
     return;
@@ -845,6 +848,16 @@ async function loadProposal() {
     entityId: data[0].oportunidade_id || data[0].id,
     dedupeKey: `proposal-viewed:${data[0].id}:${data[0].versao || 1}`,
   });
+  const response = currentProposal.cliente_resposta || currentProposal.snapshot?.clienteResposta?.acao;
+  captureProposalAnalytics("proposal_decision_presented", {
+    response_available: !response && ["proposta_enviada", "negociacao"].includes(currentProposal.status),
+    reason_code: response ? "already_replied" : ["proposta_enviada", "negociacao"].includes(currentProposal.status) ? "ready" : "status_not_eligible",
+  }, { dedupeKey: `proposal-decision:${currentProposal.id}:${currentProposal.snapshot?.publicRevision || currentProposal.versao || 1}` });
+  if (card.querySelector("[data-request-offer]")) {
+    captureProposalAnalytics("proposal_upsell_presented", { has_upsell_options: true }, {
+      dedupeKey: `upsell-presented:${currentProposal.id}:${currentProposal.snapshot?.publicRevision || currentProposal.versao || 1}`,
+    });
+  }
   recordProposalView();
 }
 
