@@ -109,12 +109,12 @@ function getCommercialAnalyticsProperties(entity = {}) {
 
 function captureEventAnalytics(eventName, entity = {}, properties = {}, options = {}) {
   try {
-  const entityId = options.entityId || entity.oportunidade_id || entity.id;
-  return Promise.resolve(window.EventAnalytics?.capture(
-    eventName,
-    { ...getCommercialAnalyticsProperties(entity), entity_key_kind: entity.oportunidade_id || options.entityId ? "opportunity" : "proposal", ...properties },
-    { ...options, entityId },
-  )).catch(() => false);
+    const entityId = options.entityId || entity.oportunidade_id || entity.id;
+    return Promise.resolve(window.EventAnalytics?.capture(
+      eventName,
+      { ...getCommercialAnalyticsProperties(entity), entity_key_kind: entity.oportunidade_id || options.entityId ? "opportunity" : "proposal", ...properties },
+      { ...options, entityId },
+    )).catch(() => false);
   } catch (_error) { return Promise.resolve(false); }
 }
 

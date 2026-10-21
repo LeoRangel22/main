@@ -10,9 +10,9 @@ sem espera no fluxo de gravação, respeitando opt-out e Do Not Track.
 - O painel usa o ID de oportunidade; a proposta pública já recebe do banco o
   hash anônimo da mesma oportunidade. Referências, IDs crus e contatos não são
   transmitidos ao PostHog.
-- `$session_id` usa UUID; a parte aleatória das sessões legadas é preservada,
-  mantendo o mesmo `distinct_id` anônimo. A chave legada não é usada como filtro
-  retroativo em funis novos.
+- `$session_id` usa UUIDv7 com horário de início; o `distinct_id` anônimo legado
+  é preservado separadamente. A sessão nativa inicia uma série nova na v2,
+  sem reescrever a chave legada dos eventos históricos.
 - `$raw_user_agent` permite classificar o navegador. `is_test` e `environment`
   distinguem coleta forçada, navegador automatizado e hosts locais de produção.
   Não basta usar o filtro antigo de contas de teste: relatórios v2 devem excluir

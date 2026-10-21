@@ -62,12 +62,12 @@ function getProposalAnalyticsProperties(proposal = currentProposal) {
 
 function captureProposalAnalytics(eventName, properties = {}, options = {}) {
   try {
-  const entityId = options.entityId || currentProposal?.oportunidade_id || currentProposal?.id;
-  return Promise.resolve(window.EventAnalytics?.capture(
-    eventName,
-    { ...getProposalAnalyticsProperties(), ...properties },
-    { ...options, entityId, entityHash: currentProposal?.snapshot?.analyticsEntityHash },
-  )).catch(() => false);
+    const entityId = options.entityId || currentProposal?.oportunidade_id || currentProposal?.id;
+    return Promise.resolve(window.EventAnalytics?.capture(
+      eventName,
+      { ...getProposalAnalyticsProperties(), ...properties },
+      { ...options, entityId, entityHash: currentProposal?.snapshot?.analyticsEntityHash },
+    )).catch(() => false);
   } catch (_error) { return Promise.resolve(false); }
 }
 

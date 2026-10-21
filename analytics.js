@@ -7,11 +7,13 @@
     version: "2026-10-21-conversion-v2",
   });
   const SESSION_KEY = "ec_event_analytics_session_v1";
+  const NATIVE_SESSION_KEY = "ec_event_analytics_native_session_v2";
   const OPT_OUT_KEY = "ec_event_analytics_opt_out_v1";
   const DEDUPE_PREFIX = "ec_event_analytics_sent_v1:";
   const pendingDedupe = new Set();
   const sentDedupe = new Set();
   let memorySessionId = "";
+  let memoryDistinctId = "";
   let memoryOptOut = false;
   const ALLOWED_EVENTS = new Set([
     "dashboard_loaded",
@@ -122,25 +124,42 @@
   }
 
   function randomId() {
-    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
     const bytes = new Uint8Array(16);
     if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
     else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
-    bytes[6] = (bytes[6] & 15) | 64;
+    // Native PostHog sessions require UUIDv7, including the start timestamp.
+    let timestamp = Date.now();
+    for (let i = 5; i >= 0; i -= 1) {
+      bytes[i] = timestamp % 256;
+      timestamp = Math.floor(timestamp / 256);
+    }
+    bytes[6] = (bytes[6] & 15) | 112;
     bytes[8] = (bytes[8] & 63) | 128;
     const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
     return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
   }
 
   function getSessionId() {
-    if (memorySessionId) return memorySessionId;
-    const existing = readStorage("sessionStorage", SESSION_KEY);
-    // Preserve the random part of a pre-v2 session; PostHog requires a UUID here.
-    const normalized = String(existing || "").replace(/^events-session-/, "");
-    const next = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(normalized) ? normalized : randomId();
+    if (memorySessionId) {
+      const startedAt = parseInt(memorySessionId.replace(/-/g, "").slice(0, 12), 16);
+      if (startedAt <= Date.now() && Date.now() - startedAt < 864e5) return memorySessionId;
+    }
+    const existing = readStorage("sessionStorage", NATIVE_SESSION_KEY);
+    const startedAt = parseInt(String(existing || "").replace(/-/g, "").slice(0, 12), 16);
+    const next = /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(existing || "")
+      && startedAt <= Date.now() && Date.now() - startedAt < 864e5 ? existing : randomId();
     memorySessionId = next;
-    writeStorage("sessionStorage", SESSION_KEY, next);
+    writeStorage("sessionStorage", NATIVE_SESSION_KEY, next);
     return next;
+  }
+
+  function getDistinctId(sessionId) {
+    if (memoryDistinctId) return memoryDistinctId;
+    const existing = readStorage("sessionStorage", SESSION_KEY);
+    // Keep legacy anonymous identity separate from the native UUIDv7 session.
+    memoryDistinctId = /^events-session-[a-f0-9-]{32,36}$/i.test(existing || "") ? existing : `events-session-${sessionId}`;
+    writeStorage("sessionStorage", SESSION_KEY, memoryDistinctId);
+    return memoryDistinctId;
   }
 
   function safeString(value, maxLength = 120) {
@@ -249,34 +268,34 @@
   async function capture(eventName, properties = {}, options = {}) {
     let pendingKey;
     try {
-    if (!isEnabled() || !ALLOWED_EVENTS.has(eventName)) return false;
-    if (hasDedupeKey(options.dedupeKey) || pendingDedupe.has(options.dedupeKey)) return false;
-    pendingKey = options.dedupeKey;
-    if (pendingKey) pendingDedupe.add(pendingKey);
+      if (!isEnabled() || !ALLOWED_EVENTS.has(eventName)) return false;
+      if (hasDedupeKey(options.dedupeKey) || pendingDedupe.has(options.dedupeKey)) return false;
+      pendingKey = options.dedupeKey;
+      if (pendingKey) pendingDedupe.add(pendingKey);
 
-    const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
-    const safeProperties = sanitizeProperties({
-      ...properties,
-      ...(entityHash ? { entity_hash: entityHash } : {}),
-      page: pageName(),
-      analytics_version: CONFIG.version,
-    });
-    const sessionId = getSessionId();
-    const payload = {
-      api_key: CONFIG.apiKey,
-      event: eventName,
-      distinct_id: `events-session-${sessionId}`,
-      properties: {
-        ...safeProperties,
-        $session_id: sessionId,
-        $process_person_profile: false,
-        $raw_user_agent: safeString(navigator.userAgent || "", 350),
-        capture_origin: "browser",
-        environment: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost() ? "test" : "production",
-        is_test: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost(),
-      },
-      timestamp: new Date().toISOString(),
-    };
+      const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
+      const safeProperties = sanitizeProperties({
+        ...properties,
+        ...(entityHash ? { entity_hash: entityHash } : {}),
+        page: pageName(),
+        analytics_version: CONFIG.version,
+      });
+      const sessionId = getSessionId();
+      const payload = {
+        api_key: CONFIG.apiKey,
+        event: eventName,
+        distinct_id: getDistinctId(sessionId),
+        properties: {
+          ...safeProperties,
+          $session_id: sessionId,
+          $process_person_profile: false,
+          $raw_user_agent: safeString(navigator.userAgent || "", 350),
+          capture_origin: "browser",
+          environment: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost() ? "test" : "production",
+          is_test: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost(),
+        },
+        timestamp: new Date().toISOString(),
+      };
 
       const response = await fetch(CONFIG.endpoint, {
         method: "POST",

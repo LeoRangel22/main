@@ -13,11 +13,12 @@ function createStorage() {
   };
 }
 
-function loadAnalytics({ doNotTrack = "0", brokenStorage = false, crypto = webcrypto, send, sessionValue, force = false } = {}) {
+function loadAnalytics({ doNotTrack = "0", brokenStorage = false, crypto = webcrypto, send, sessionValue, nativeSessionValue, force = false } = {}) {
   const requests = [];
   const localStorage = createStorage();
   const sessionStorage = createStorage();
   if (sessionValue) sessionStorage.setItem("ec_event_analytics_session_v1", sessionValue);
+  if (nativeSessionValue) sessionStorage.setItem("ec_event_analytics_native_session_v2", nativeSessionValue);
   if (brokenStorage) {
     for (const store of [localStorage, sessionStorage]) for (const method of ["getItem", "setItem", "removeItem"]) store[method] = () => { throw Error("Storage disabled"); };
   }
@@ -103,7 +104,9 @@ test("migra sessão legada preservando identidade anônima sem criar novo visita
   const { analytics, requests } = loadAnalytics({ sessionValue: `events-session-${id}` });
   await analytics.capture("lead_form_viewed");
   assert.equal(requests[0].body.distinct_id, `events-session-${id}`);
-  assert.equal(requests[0].body.properties.$session_id, id);
+  assert.match(requests[0].body.properties.$session_id, /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  const startedAt = parseInt(requests[0].body.properties.$session_id.replace(/-/g, "").slice(0,12),16);
+  assert.ok(Date.now() - startedAt < 5000);
 });
 
 test("deduplicação protege chamadas concorrentes e permite tentar de novo após falha", async () => {
@@ -114,6 +117,15 @@ test("deduplicação protege chamadas concorrentes e permite tentar de novo apó
   const results = await Promise.all([1, 2, 3].map(() => analytics.capture("lead_created", {}, { dedupeKey: "one", entityId: "opportunity" })));
   assert.equal(results.filter(Boolean).length, 1);
   assert.equal(requests.length, 2);
+});
+
+test("sessão nativa expirada é renovada sem trocar identidade anônima", async () => {
+  const legacy = 'events-session-b9fa901e-3b4f-4347-890f-82e38c674505';
+  const expired = '00000000-0000-7000-8000-000000000000';
+  const { analytics, requests } = loadAnalytics({sessionValue: legacy, nativeSessionValue: expired});
+  await analytics.capture('lead_form_viewed');
+  assert.equal(requests[0].body.distinct_id, legacy);
+  assert.notEqual(requests[0].body.properties.$session_id, expired);
 });
 
 test("falha de criptografia ou rede nunca rejeita a promessa do analytics", async () => {
