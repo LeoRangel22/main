@@ -78,6 +78,7 @@ test("analytics envia somente evento e propriedades permitidos sem PII ou URL", 
   assert.equal(requests[0].body.properties.guests_bucket, "41-80");
   assert.equal(requests[0].body.properties.value_bucket, "20k-40k");
   assert.equal(requests[0].body.properties.page, "proposta");
+  assert.equal(requests[0].body.properties.analytics_version, "2026-10-21-conversion-v2");
   assert.equal(requests[0].body.properties.$process_person_profile, false);
   assert.equal(`events-session-${requests[0].body.properties.$session_id}`, requests[0].body.distinct_id);
   assert.match(requests[0].body.properties.$session_id, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
@@ -144,6 +145,14 @@ test("hash da oportunidade coincide nas superfícies pública e interna e testes
   assert.equal(requests[0].body.properties.environment, "test");
   assert.equal(requests[0].body.properties.capture_origin, "browser");
   assert.equal(requests[0].body.properties.$raw_user_agent, "Mozilla/5.0 Chrome/147.0.0.0");
+});
+
+test("hash numérico válido não é confundido com telefone e hash livre não é aceito", async () => {
+  const { analytics, requests } = loadAnalytics();
+  await analytics.capture('proposal_viewed', {entity_hash:'not-a-hash'}, {entityHash:'123456789012345678901234'});
+  assert.equal(requests[0].body.properties.entity_hash, '123456789012345678901234');
+  await analytics.capture('proposal_viewed', {entity_hash:'not-a-hash'});
+  assert.equal(requests[1].body.properties.entity_hash, undefined);
 });
 
 test("analytics rejeita eventos desconhecidos e respeita Do Not Track", async () => {

@@ -276,10 +276,9 @@
       const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
       const safeProperties = sanitizeProperties({
         ...properties,
-        ...(entityHash ? { entity_hash: entityHash } : {}),
         page: pageName(),
-        analytics_version: CONFIG.version,
       });
+      delete safeProperties.entity_hash;
       const sessionId = getSessionId();
       const payload = {
         api_key: CONFIG.apiKey,
@@ -287,6 +286,9 @@
         distinct_id: getDistinctId(sessionId),
         properties: {
           ...safeProperties,
+          // Trusted metadata must not be mistaken for contact data by the PII filter.
+          analytics_version: CONFIG.version,
+          ...(entityHash ? { entity_hash: entityHash } : {}),
           $session_id: sessionId,
           $process_person_profile: false,
           $raw_user_agent: safeString(navigator.userAgent || "", 350),
