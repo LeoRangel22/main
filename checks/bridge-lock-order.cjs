@@ -7,7 +7,7 @@ module.exports=async function verifyBridgeLockOrder(c,connect,name,actor){
  const priorChannel=(await c.query("select to_jsonb(c) value from event_private.channel_credentials c where provider='zapi'")).rows[0].value;
  const opp=(await c.query("insert into oportunidades(cliente_nome,status,data_evento) values('Bridge lock fixture','proposta_pronta','2099-11-19') returning id")).rows[0].id;
  const p=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,data_evento,total,subtotal,taxa_servico,snapshot) values($1,'Bridge lock fixture','proposta_pronta','ready','2099-11-19',1120,1000,120,'{}') returning *",[opp])).rows[0];
- await c.query("insert into event_outbox(id,proposal_id,opportunity_id,fingerprint,channel,destination,body,status,provider_id,approved_by,reviewed_revision,reviewed_fingerprint) select $1,id,oportunidade_id,$1::text,'whatsapp','5521000000001','Synthetic accepted content','accepted',$2,$3,revision,event_private.public_proposal_fingerprint(p) from propostas p where id=$4",[send,provider,actor,p.id]);
+ await c.query("insert into event_outbox(id,proposal_id,opportunity_id,fingerprint,channel,destination,body,status,provider_id,approved_by,reviewed_revision,reviewed_fingerprint) select $1::uuid,id,oportunidade_id,($1::uuid)::text,'whatsapp','5521000000001','Synthetic accepted content','accepted',$2,$3,revision,event_private.public_proposal_fingerprint(p) from propostas p where id=$4",[send,provider,actor,p.id]);
  await c.query('update event_private.bot_bridge_state set enabled=false,cursor=0,scope_id=$1 where singleton',[scope]);
  await c.query("select event_bot_bridge_activate('bot:embaixada_urca|'||$1,0)",[scope]);
  const bridge=await connect(name),reconcile=await connect(name);let pending;
