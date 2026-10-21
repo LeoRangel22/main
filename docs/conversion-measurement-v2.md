@@ -13,6 +13,8 @@ sem espera no fluxo de gravação, respeitando opt-out e Do Not Track.
 - `$session_id` usa UUIDv7 com horário de início; o `distinct_id` anônimo legado
   é preservado separadamente. A sessão nativa inicia uma série nova na v2,
   sem reescrever a chave legada dos eventos históricos.
+  A deduplicação v2 é vinculada à sessão nativa, para que um marcador antigo não
+  oculte a visualização de entrada no novo funil.
 - `$raw_user_agent` permite classificar o navegador. `is_test` e `environment`
   distinguem coleta forçada, navegador automatizado e hosts locais de produção.
   Não basta usar o filtro antigo de contas de teste: relatórios v2 devem excluir

@@ -129,6 +129,15 @@ test("sessão nativa expirada é renovada sem trocar identidade anônima", async
   assert.notEqual(requests[0].body.properties.$session_id, expired);
 });
 
+test("marcador legado não oculta a entrada no funil da nova sessão", async () => {
+  const { analytics, requests, sessionStorage } = loadAnalytics();
+  sessionStorage.setItem('ec_event_analytics_sent_v1:form-view', '1');
+  assert.equal(await analytics.capture('lead_form_viewed', {}, {dedupeKey:'form-view'}), true);
+  assert.equal(await analytics.capture('lead_form_viewed', {}, {dedupeKey:'form-view'}), false);
+  assert.equal(requests.length, 1);
+  assert.equal(sessionStorage.getItem(`ec_event_analytics_sent_v2:${requests[0].body.properties.$session_id}:form-view`), '1');
+});
+
 test("falha de criptografia ou rede nunca rejeita a promessa do analytics", async () => {
   const hashing = loadAnalytics({ crypto: { randomUUID: () => "b9fa901e-3b4f-4347-890f-82e38c674505", subtle: { digest: async () => { throw Error("Crypto unavailable"); } } } });
   assert.equal(await hashing.analytics.capture("lead_created", {}, { entityId: "id" }), false);

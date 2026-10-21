@@ -9,7 +9,7 @@
   const SESSION_KEY = "ec_event_analytics_session_v1";
   const NATIVE_SESSION_KEY = "ec_event_analytics_native_session_v2";
   const OPT_OUT_KEY = "ec_event_analytics_opt_out_v1";
-  const DEDUPE_PREFIX = "ec_event_analytics_sent_v1:";
+  const DEDUPE_PREFIX = "ec_event_analytics_sent_v2:";
   const pendingDedupe = new Set();
   const sentDedupe = new Set();
   let memorySessionId = "";
@@ -269,8 +269,9 @@
     let pendingKey;
     try {
       if (!isEnabled() || !ALLOWED_EVENTS.has(eventName)) return false;
-      if (hasDedupeKey(options.dedupeKey) || pendingDedupe.has(options.dedupeKey)) return false;
-      pendingKey = options.dedupeKey;
+      const dedupeKey = options.dedupeKey ? `${getSessionId()}:${options.dedupeKey}` : undefined;
+      if (hasDedupeKey(dedupeKey) || pendingDedupe.has(dedupeKey)) return false;
+      pendingKey = dedupeKey;
       if (pendingKey) pendingDedupe.add(pendingKey);
 
       const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
@@ -308,7 +309,7 @@
         referrerPolicy: "no-referrer",
       });
       if (!response.ok) return false;
-      rememberDedupeKey(options.dedupeKey);
+      rememberDedupeKey(dedupeKey);
       return true;
     } catch (_error) {
       return false;
