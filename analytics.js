@@ -4,11 +4,15 @@
   const CONFIG = Object.freeze({
     apiKey: "phc_taiVfAm9ARoT8nHwVwzT8cioUYKfhyBVi8WkUoyUm7kM",
     endpoint: "https://us.i.posthog.com/i/v0/e/",
-    version: "2026-10-07-commercial-v1",
+    version: "2026-10-21-conversion-v2",
   });
   const SESSION_KEY = "ec_event_analytics_session_v1";
   const OPT_OUT_KEY = "ec_event_analytics_opt_out_v1";
   const DEDUPE_PREFIX = "ec_event_analytics_sent_v1:";
+  const pendingDedupe = new Set();
+  const sentDedupe = new Set();
+  let memorySessionId = "";
+  let memoryOptOut = false;
   const ALLOWED_EVENTS = new Set([
     "dashboard_loaded",
     "dashboard_refresh_failed",
@@ -17,12 +21,16 @@
     "lead_form_started",
     "lead_form_abandoned",
     "lead_created",
+    "lead_submit_failed",
     "returning_event_reused",
     "client_portal_opened",
     "proposal_generated",
     "proposal_sent",
     "proposal_viewed",
     "proposal_response_started",
+    "proposal_response_failed",
+    "proposal_decision_presented",
+    "proposal_upsell_presented",
     "proposal_upsell_selected",
     "proposal_upsell_requested",
     "assisted_offer_prepared",
@@ -76,6 +84,8 @@
     "result",
     "entity_hash",
     "analytics_version",
+    "response_available",
+    "entity_key_kind",
   ]);
   const FORBIDDEN_PROPERTY = /(name|nome|email|mail|phone|telefone|whatsapp|message|mensagem|token|url|referrer|address|endereco|document|cpf|cnpj|proof|comprovante|pix|bank|banco|company|empresa|client_id|user_id)/i;
 
@@ -87,6 +97,14 @@
     }
   }
 
+  function readStorage(storageName, key) {
+    try { return storage(storageName)?.getItem(key); } catch (_error) { return null; }
+  }
+
+  function writeStorage(storageName, key, value) {
+    try { storage(storageName)?.setItem(key, value); } catch (_error) { /* Analytics remains optional. */ }
+  }
+
   function isProductionHost(hostname = window.location?.hostname || "") {
     return hostname === "leorangel22.github.io"
       || hostname === "embaixadacarioca.com"
@@ -96,8 +114,9 @@
   }
 
   function isEnabled() {
+    if (memoryOptOut) return false;
     if (window.__EVENT_ANALYTICS_DISABLED__ === true) return false;
-    if (storage("localStorage")?.getItem(OPT_OUT_KEY) === "1") return false;
+    if (readStorage("localStorage", OPT_OUT_KEY) === "1") return false;
     if (navigator.doNotTrack === "1" || window.doNotTrack === "1") return false;
     return window.__EVENT_ANALYTICS_FORCE__ === true || isProductionHost();
   }
@@ -105,16 +124,22 @@
   function randomId() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
     const bytes = new Uint8Array(16);
-    globalThis.crypto?.getRandomValues?.(bytes);
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("") || `${Date.now()}-${Math.random()}`;
+    if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
   }
 
   function getSessionId() {
-    const session = storage("sessionStorage");
-    const existing = session?.getItem(SESSION_KEY);
-    if (existing) return existing;
-    const next = `events-session-${randomId()}`;
-    session?.setItem(SESSION_KEY, next);
+    if (memorySessionId) return memorySessionId;
+    const existing = readStorage("sessionStorage", SESSION_KEY);
+    // Preserve the random part of a pre-v2 session; PostHog requires a UUID here.
+    const normalized = String(existing || "").replace(/^events-session-/, "");
+    const next = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(normalized) ? normalized : randomId();
+    memorySessionId = next;
+    writeStorage("sessionStorage", SESSION_KEY, next);
     return next;
   }
 
@@ -211,16 +236,23 @@
   }
 
   function hasDedupeKey(key) {
-    return Boolean(key && storage("sessionStorage")?.getItem(`${DEDUPE_PREFIX}${safeString(key, 180)}`));
+    return Boolean(key && (sentDedupe.has(key) || readStorage("sessionStorage", `${DEDUPE_PREFIX}${safeString(key, 180)}`)));
   }
 
   function rememberDedupeKey(key) {
-    if (key) storage("sessionStorage")?.setItem(`${DEDUPE_PREFIX}${safeString(key, 180)}`, "1");
+    if (key) {
+      sentDedupe.add(key);
+      writeStorage("sessionStorage", `${DEDUPE_PREFIX}${safeString(key, 180)}`, "1");
+    }
   }
 
   async function capture(eventName, properties = {}, options = {}) {
+    let pendingKey;
+    try {
     if (!isEnabled() || !ALLOWED_EVENTS.has(eventName)) return false;
-    if (hasDedupeKey(options.dedupeKey)) return false;
+    if (hasDedupeKey(options.dedupeKey) || pendingDedupe.has(options.dedupeKey)) return false;
+    pendingKey = options.dedupeKey;
+    if (pendingKey) pendingDedupe.add(pendingKey);
 
     const entityHash = /^[a-f0-9]{24}$/.test(options.entityHash || "") ? options.entityHash : options.entityId ? await hashIdentifier(options.entityId) : "";
     const safeProperties = sanitizeProperties({
@@ -233,16 +265,19 @@
     const payload = {
       api_key: CONFIG.apiKey,
       event: eventName,
-      distinct_id: sessionId,
+      distinct_id: `events-session-${sessionId}`,
       properties: {
         ...safeProperties,
         $session_id: sessionId,
         $process_person_profile: false,
+        $raw_user_agent: safeString(navigator.userAgent || "", 350),
+        capture_origin: "browser",
+        environment: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost() ? "test" : "production",
+        is_test: window.__EVENT_ANALYTICS_FORCE__ === true || navigator.webdriver === true || !isProductionHost(),
       },
       timestamp: new Date().toISOString(),
     };
 
-    try {
       const response = await fetch(CONFIG.endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -256,13 +291,17 @@
       return true;
     } catch (_error) {
       return false;
+    } finally {
+      if (pendingKey) pendingDedupe.delete(pendingKey);
     }
   }
 
   function setOptOut(optedOut = true) {
-    const local = storage("localStorage");
-    if (optedOut) local?.setItem(OPT_OUT_KEY, "1");
-    else local?.removeItem(OPT_OUT_KEY);
+    memoryOptOut = optedOut;
+    try {
+      if (optedOut) writeStorage("localStorage", OPT_OUT_KEY, "1");
+      else storage("localStorage")?.removeItem(OPT_OUT_KEY);
+    } catch (_error) { /* Storage can be unavailable in private browsing. */ }
   }
 
   window.EventAnalytics = Object.freeze({
