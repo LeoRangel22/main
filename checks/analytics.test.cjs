@@ -13,10 +13,15 @@ function createStorage() {
   };
 }
 
-function loadAnalytics({ doNotTrack = "0" } = {}) {
+function loadAnalytics({ doNotTrack = "0", brokenStorage = false, crypto = webcrypto, send, sessionValue, nativeSessionValue, force = false } = {}) {
   const requests = [];
   const localStorage = createStorage();
   const sessionStorage = createStorage();
+  if (sessionValue) sessionStorage.setItem("ec_event_analytics_session_v1", sessionValue);
+  if (nativeSessionValue) sessionStorage.setItem("ec_event_analytics_native_session_v2", nativeSessionValue);
+  if (brokenStorage) {
+    for (const store of [localStorage, sessionStorage]) for (const method of ["getItem", "setItem", "removeItem"]) store[method] = () => { throw Error("Storage disabled"); };
+  }
   const context = {
     TextEncoder,
     Uint8Array,
@@ -32,17 +37,18 @@ function loadAnalytics({ doNotTrack = "0" } = {}) {
     RegExp,
     JSON,
     Promise,
-    crypto: webcrypto,
-    navigator: { doNotTrack },
+    crypto,
+    navigator: { doNotTrack, userAgent: "Mozilla/5.0 Chrome/147.0.0.0" },
     fetch: async (url, options) => {
       requests.push({ url, options, body: JSON.parse(options.body) });
-      return { ok: true };
+      return send ? send() : { ok: true };
     },
     window: {
       location: { hostname: "leorangel22.github.io", pathname: "/main/proposta.html", search: "?p=segredo" },
       localStorage,
       sessionStorage,
       doNotTrack,
+      __EVENT_ANALYTICS_FORCE__: force,
     },
   };
   context.globalThis = context;
@@ -72,15 +78,90 @@ test("analytics envia somente evento e propriedades permitidos sem PII ou URL", 
   assert.equal(requests[0].body.properties.guests_bucket, "41-80");
   assert.equal(requests[0].body.properties.value_bucket, "20k-40k");
   assert.equal(requests[0].body.properties.page, "proposta");
+  assert.equal(requests[0].body.properties.analytics_version, "2026-10-21-conversion-v2");
   assert.equal(requests[0].body.properties.$process_person_profile, false);
-  assert.equal(requests[0].body.properties.$session_id, requests[0].body.distinct_id);
-  assert.match(requests[0].body.properties.$session_id, /^events-session-/);
+  assert.equal(`events-session-${requests[0].body.properties.$session_id}`, requests[0].body.distinct_id);
+  assert.match(requests[0].body.properties.$session_id, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
   assert.match(requests[0].body.properties.entity_hash, /^[a-f0-9]{24}$/);
   assert.equal(JSON.stringify(requests[0].body).includes("proposal-123"), false);
   assert.equal(JSON.stringify(requests[0].body).includes("cliente@example.com"), false);
   assert.equal(JSON.stringify(requests[0].body).includes("?p=segredo"), false);
   assert.equal(requests[0].body.properties.action, undefined);
   assert.equal(requests[0].body.properties.source, undefined);
+});
+
+test("storage bloqueado não impede medição e mantém sessão estável e opt-out em memória", async () => {
+  const { analytics, requests } = loadAnalytics({ brokenStorage: true });
+  assert.equal(await analytics.capture("lead_form_viewed", {}), true);
+  assert.equal(await analytics.capture("lead_form_started", {}), true);
+  assert.equal(requests[0].body.properties.$session_id, requests[1].body.properties.$session_id);
+  analytics.setOptOut();
+  assert.equal(await analytics.capture("lead_created"), false);
+  assert.equal(requests.length, 2);
+});
+
+test("migra sessão legada preservando identidade anônima sem criar novo visitante", async () => {
+  const id = "b9fa901e-3b4f-4347-890f-82e38c674505";
+  const { analytics, requests } = loadAnalytics({ sessionValue: `events-session-${id}` });
+  await analytics.capture("lead_form_viewed");
+  assert.equal(requests[0].body.distinct_id, `events-session-${id}`);
+  assert.match(requests[0].body.properties.$session_id, /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  const startedAt = parseInt(requests[0].body.properties.$session_id.replace(/-/g, "").slice(0,12),16);
+  assert.ok(Date.now() - startedAt < 5000);
+});
+
+test("deduplicação protege chamadas concorrentes e permite tentar de novo após falha", async () => {
+  let healthy = false;
+  const { analytics, requests } = loadAnalytics({ send: () => ({ ok: healthy }) });
+  assert.equal(await analytics.capture("lead_created", {}, { dedupeKey: "one", entityId: "opportunity" }), false);
+  healthy = true;
+  const results = await Promise.all([1, 2, 3].map(() => analytics.capture("lead_created", {}, { dedupeKey: "one", entityId: "opportunity" })));
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(requests.length, 2);
+});
+
+test("sessão nativa expirada é renovada sem trocar identidade anônima", async () => {
+  const legacy = 'events-session-b9fa901e-3b4f-4347-890f-82e38c674505';
+  const expired = '00000000-0000-7000-8000-000000000000';
+  const { analytics, requests } = loadAnalytics({sessionValue: legacy, nativeSessionValue: expired});
+  await analytics.capture('lead_form_viewed');
+  assert.equal(requests[0].body.distinct_id, legacy);
+  assert.notEqual(requests[0].body.properties.$session_id, expired);
+});
+
+test("marcador legado não oculta a entrada no funil da nova sessão", async () => {
+  const { analytics, requests, sessionStorage } = loadAnalytics();
+  sessionStorage.setItem('ec_event_analytics_sent_v1:form-view', '1');
+  assert.equal(await analytics.capture('lead_form_viewed', {}, {dedupeKey:'form-view'}), true);
+  assert.equal(await analytics.capture('lead_form_viewed', {}, {dedupeKey:'form-view'}), false);
+  assert.equal(requests.length, 1);
+  assert.equal(sessionStorage.getItem(`ec_event_analytics_sent_v2:${requests[0].body.properties.$session_id}:form-view`), '1');
+});
+
+test("falha de criptografia ou rede nunca rejeita a promessa do analytics", async () => {
+  const hashing = loadAnalytics({ crypto: { randomUUID: () => "b9fa901e-3b4f-4347-890f-82e38c674505", subtle: { digest: async () => { throw Error("Crypto unavailable"); } } } });
+  assert.equal(await hashing.analytics.capture("lead_created", {}, { entityId: "id" }), false);
+  const network = loadAnalytics({ send: () => { throw Error("Network unavailable"); } });
+  assert.equal(await network.analytics.capture("lead_created"), false);
+});
+
+test("hash da oportunidade coincide nas superfícies pública e interna e testes são identificados", async () => {
+  const { analytics, requests } = loadAnalytics({ force: true });
+  await analytics.capture("lead_created", {}, { entityId: "opportunity-id" });
+  await analytics.capture("proposal_viewed", {}, { entityHash: requests[0].body.properties.entity_hash });
+  assert.equal(requests[0].body.properties.entity_hash, requests[1].body.properties.entity_hash);
+  assert.equal(requests[0].body.properties.is_test, true);
+  assert.equal(requests[0].body.properties.environment, "test");
+  assert.equal(requests[0].body.properties.capture_origin, "browser");
+  assert.equal(requests[0].body.properties.$raw_user_agent, "Mozilla/5.0 Chrome/147.0.0.0");
+});
+
+test("hash numérico válido não é confundido com telefone e hash livre não é aceito", async () => {
+  const { analytics, requests } = loadAnalytics();
+  await analytics.capture('proposal_viewed', {entity_hash:'not-a-hash'}, {entityHash:'123456789012345678901234'});
+  assert.equal(requests[0].body.properties.entity_hash, '123456789012345678901234');
+  await analytics.capture('proposal_viewed', {entity_hash:'not-a-hash'});
+  assert.equal(requests[1].body.properties.entity_hash, undefined);
 });
 
 test("analytics rejeita eventos desconhecidos e respeita Do Not Track", async () => {
