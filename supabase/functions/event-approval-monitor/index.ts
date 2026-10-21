@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { deliverManagerNotice } from "../_shared/approval-notifications.ts";
+import { botSendExpiry } from "../_shared/bot-dispatch.ts";
+import { approvalDispatchCurrent } from "../_shared/dispatch-readiness.ts";
 
 const site = "https://leorangel22.github.io/main/aprovacoes.html";
 const responseHeaders = {"Content-Type":"application/json","Cache-Control":"no-store"};
@@ -31,9 +33,12 @@ Deno.serve(async (req: Request) => {
    if(!uuid(job.id)||!reasonLabels[job.kind]||(!uuid(job.approval_id)&&job.kind!=="probe"))throw Error("Invalid alert");
    const link=job.approval_id?`${site}?id=${job.approval_id}`:site;
    const title=job.kind==="probe"?"TESTE — avisos de aprovação da Embaixada Carioca":"Atenção — aprovação de proposta";
-   const body=[title,reasonLabels[job.kind],`Verificação: ${new Date().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})} (Brasília)`,link,
+   const body=[title,reasonLabels[job.kind],`Referência temporal: ${new Date(job.created_at).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})} (Brasília)`,link,
     "Abrir o link não aprova nem envia propostas. Entre com sua conta para conferir.",`Referência: ${job.reference}`].join("\n\n");
-   const result=await deliverManagerNotice(job.channel,job.destination,body,title,link,job.reference);
+   let botContext;
+   if(job.channel==='whatsapp')try{botContext={id:job.id,contextId:job.context_id,revision:Number(job.revision),purpose:job.kind==='probe'?'event_diagnostic':'event_monitor_alert',expiresAt:botSendExpiry(job.created_at)};}catch{/* no context means no attempt */}
+   const current=job.channel!=='whatsapp'||job.kind==='probe'||await approvalDispatchCurrent(worker,job.approval_id,Number(job.revision),job.kind);
+   const result=current?await deliverManagerNotice(job.channel,job.destination,body,title,link,job.reference,botContext):{status:'paused',providerId:null,detail:'Alerta não mais aplicável. Nenhuma mensagem foi tentada.'};
    await call("event_finish_approval_watch_alert",{target_id:job.id,result_status:result.status,external_id:result.providerId,result_detail:result.detail});
    return {channel:job.channel,status:result.status};
   }));

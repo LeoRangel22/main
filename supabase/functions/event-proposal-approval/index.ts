@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { deliverManagerNotice } from "../_shared/approval-notifications.ts";
+import { botNoticeId, botSendExpiry, botDestinationIsCanonical } from "../_shared/bot-dispatch.ts";
+import { approvalDispatchCurrent } from "../_shared/dispatch-readiness.ts";
 
 const APPROVAL_SITE = "https://leorangel22.github.io/main/";
 const headers = { "Access-Control-Allow-Origin": "https://leorangel22.github.io", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
@@ -7,7 +9,7 @@ const uuid = (v: unknown) => typeof v === "string" && /^[0-9a-f]{8}(-[0-9a-f]{4}
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
 const html = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
-function phone(value: unknown) { const n = text(value).replace(/\D/g, ""); return n.length === 10 || n.length === 11 ? "55" + n : n; }
+function phone(value: unknown) { const n = text(value).replace(/\D/g, ""); return n; }
 async function rpc(client: any, name: string, args: any = {}) { const r = await client.rpc(name, args); if (r.error) throw r.error; return r.data; }
 async function invoke(url: string, key: string, authorization: string, name: string, body: any) {
   const res = await fetch(`${url}/functions/v1/${name}`, { method: "POST", headers: { Authorization: authorization, apikey: key, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(40000) });
@@ -26,9 +28,13 @@ function notificationText(a: any) {
 async function notify(worker: any, approvalId: string, channel: string) {
   const claimed = await rpc(worker,"event_claim_approval_notification", { target_approval: approvalId, target_channel: channel });
   if (!claimed) return;
-  const result = await deliverManagerNotice(channel,claimed.destination,notificationText(claimed.approval),
+  const reference=`APPROVAL:${approvalId}:${channel}`;
+  let botContext;
+  if(channel==='whatsapp')try{botContext={id:await botNoticeId(reference),contextId:approvalId,revision:Number(claimed.approval.revision),purpose:'event_approval_notice',expiresAt:botSendExpiry(claimed.approval.created_at,claimed.approval.expires_at)};}catch{/* fail closed below */}
+  const current=channel!=='whatsapp'||await approvalDispatchCurrent(worker,approvalId,Number(claimed.approval.revision));
+  const result = !current ? {status:'paused',providerId:null,detail:'A solicitação mudou. Nenhum aviso foi tentado.'} : await deliverManagerNotice(channel,claimed.destination,notificationText(claimed.approval),
     `Aprovar proposta — ${text(claimed.approval.proposal_snapshot.cliente_nome).slice(0,80)}`,
-    `${APPROVAL_SITE}aprovacoes.html?id=${approvalId}`,`APPROVAL:${approvalId}:${channel}`);
+    `${APPROVAL_SITE}aprovacoes.html?id=${approvalId}`,reference,botContext);
   await rpc(worker,"event_finish_approval_notification", { target_approval: approvalId, target_channel: channel, result_status: result.status, external_id: result.providerId, result_detail: result.detail });
 }
 
@@ -55,10 +61,10 @@ Deno.serve(async (req: Request) => {
       if (Number(p.revision) !== input.reviewedRevision) return reply({ok:false,message:"A proposta mudou. Salve e revise a versão atual."},409);
       if (!Array.isArray(p.snapshot?.selectedItems) || !p.snapshot.selectedItems.length) return reply({ok:false,message:"Inclua os itens da proposta antes de solicitar aprovação."},400);
       const destination = input.channel === "email" ? text(input.destination || p.cliente_email).toLowerCase() : phone(input.destination || p.cliente_whatsapp);
-      if (input.channel === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destination) : !/^\d{12,15}$/.test(destination)) return reply({ok:false,message:"Destinatário inválido."},400);
+      if (input.channel === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destination) : !botDestinationIsCanonical(destination)) return reply({ok:false,message:"Revise o destinatário e o WhatsApp completo com DDI e DDD no formato atual; nenhum número será alterado após a aprovação."},400);
       const proposalUrl = `${APPROVAL_SITE}proposta.html?p=${p.public_token}${p.snapshot?.event?.clientLanguage === "en" ? "&lang=en" : ""}`;
       const message = text(input.message), title = text(input.title) || "Proposta comercial";
-      if (message.length > 12000 || title.length > 180 || (input.channel === "whatsapp" && message.length < 10)) return reply({ok:false,message:"Revise a mensagem e o assunto."},400);
+      if (message.length > 12000 || title.length > 180 || (input.channel === "whatsapp" && (message.length < 10 || message.length > 6000))) return reply({ok:false,message:"Revise a mensagem e o assunto."},400);
       const content: any = { channel: input.channel, destination, message, title, body: message, proposalUrl, contentHash: null, html: "", sender: "WhatsApp automático da Embaixada Carioca", reviewedResponseAt: input.reviewedResponseAt || null };
       if (input.channel === "email") {
         const preview = await invoke(url,key,authorization,"send-proposal-email",{preview:true,proposalId:p.id,reviewedRevision:input.reviewedRevision,email:destination,proposalUrl,message,title});
@@ -80,7 +86,7 @@ Deno.serve(async (req: Request) => {
     if (["approve","changes_requested","rejected"].includes(input.action)) {
       const a = await rpc(client,"event_decide_proposal_approval",{target_approval:input.id,decision:input.action,reviewed_hash:input.reviewHash,confirmed:input.confirmed === true,decision_reason:text(input.reason)});
       let warning = "";
-      if (input.action === "approve" && (!a.send_id || a.send?.status === "failed")) {
+      if (input.action === "approve" && (!a.send_id || ['failed','paused'].includes(a.send?.status))) {
         const c = a.content;
         try {
           await invoke(url,key,authorization,`send-proposal-${c.channel === "email" ? "email" : "whatsapp"}`,{approvalId:a.id,proposalId:a.proposal_id,approved:true,reviewedRevision:Number(a.revision),reviewedResponseAt:c.reviewedResponseAt,email:c.destination,phone:c.destination,proposalUrl:c.proposalUrl,title:c.title,message:c.message,reviewedContentHash:c.contentHash});

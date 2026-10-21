@@ -1,31 +1,34 @@
 -- Isolated fixtures only. No provider calls; every write rolls back.
 begin;
 do $$
-declare blocked boolean; before_count bigint; actor uuid; opp uuid; prop uuid; rev bigint; result jsonb;
+declare blocked boolean; before_count bigint; actor uuid; opp uuid; prop uuid; rev bigint; result jsonb; scope uuid:='00000000-0000-4000-8000-000000000001'; envelope jsonb; send_id uuid; event jsonb;
 begin
   assert not has_function_privilege('authenticated','public.event_bot_bridge_commit(text,bigint,bigint,jsonb)','EXECUTE'), 'Sellers cannot advance bridge cursor';
   assert not has_function_privilege('anon','public.begin_event_send_reviewed(uuid,bigint,text,text,text,text,timestamptz)','EXECUTE'), 'Anonymous send forbidden';
-  perform public.event_bot_bridge_activate('bot:embaixada_urca',7);
+  -- Private, synthetic provisioning only; the migration never selects a scope.
+  update event_private.bot_bridge_state set scope_id='00000000-0000-4000-8000-000000000001',enabled=false,cursor=0 where singleton;
+  envelope:=jsonb_build_object('scope',scope,'events','[]'::jsonb);
+  perform public.event_bot_bridge_activate('bot:embaixada_urca|'||scope::text,7);
   select count(*) into before_count from public.event_provider_events;
-  blocked:=false;begin perform public.event_bot_bridge_commit('bot:outra',7,8,'[]');exception when others then blocked:=true;end;
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:outra',7,8,envelope);exception when others then blocked:=true;end;
   assert blocked and (select cursor=7 from event_private.bot_bridge_state), 'Wrong account preserves cursor';
-  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',6,8,'[]');exception when others then blocked:=true;end;
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',6,8,envelope);exception when others then blocked:=true;end;
   assert blocked and (select cursor=7 from event_private.bot_bridge_state), 'Concurrent stale worker preserves cursor';
-  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',7,null,'[]');exception when others then blocked:=true;end;
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',7,null,envelope);exception when others then blocked:=true;end;
   assert blocked and (select cursor=7 from event_private.bot_bridge_state), 'Null cursor rejected';
-  -- Ingestion can begin but a malformed second event aborts the entire transaction.
+  -- An uncorrelated/malformed batch aborts the entire transaction.
   blocked:=false;begin
-    perform public.event_bot_bridge_commit('bot:embaixada_urca',7,9,jsonb_build_array(
+    perform public.event_bot_bridge_commit('bot:embaixada_urca',7,9,jsonb_build_object('scope',scope,'events',jsonb_build_array(
       jsonb_build_object('key','atomic-fixture','channel','whatsapp','kind','inbound','message_id','atomic-fixture','destination','5521000000011','body','Fixture','occurred_at',now()),
-      jsonb_build_object('key','invalid-fixture','channel','invalid','kind','inbound','message_id','invalid-fixture','destination','5521000000011','body','Fixture','occurred_at',now())));
+      jsonb_build_object('key','invalid-fixture','channel','invalid','kind','inbound','message_id','invalid-fixture','destination','5521000000011','body','Fixture','occurred_at',now()))));
   exception when others then blocked:=true;end;
   assert blocked, 'Malformed event rejects batch';
   assert (select count(*)=before_count from public.event_provider_events), 'Partial events roll back with cursor';
   assert (select cursor=7 and last_success_at is null from event_private.bot_bridge_state), 'Failed ingestion preserves health and cursor';
-  perform public.event_bot_bridge_commit('bot:embaixada_urca',7,8,'[]');
+  perform public.event_bot_bridge_commit('bot:embaixada_urca',7,8,envelope);
   assert (select cursor=8 and last_success_at is not null from event_private.bot_bridge_state), 'Successful empty poll records health';
   perform public.event_zapi_direct_activate('instance');
-  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,'[]');exception when others then blocked:=true;end;
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,envelope);exception when others then blocked:=true;end;
   assert blocked and (select cursor=8 from event_private.bot_bridge_state), 'Direct activation invalidates in-flight bridge batch';
 
   select id into actor from auth.users where email='leorangel@gmail.com';
@@ -37,5 +40,25 @@ begin
   assert blocked and not exists(select 1 from public.event_outbox where proposal_id=prop), 'Unreviewed revision never creates a send';
   result:=public.begin_event_send_reviewed(prop,rev,'whatsapp','5521000000011','Reviewed content','Fixture',null);
   assert (result->>'claimed')::boolean, 'Exact reviewed revision may claim';
+  send_id:=(result#>>'{send,id}')::uuid;
+  assert (select reviewed_revision=rev and reviewed_fingerprint is not null from event_outbox where id=send_id),'Send claim records genuine review context';
+  event:=jsonb_build_object('key','scoped-reply','channel','whatsapp','kind','inbound','message_id','reply-id','reply_to_id','scoped-provider-id','destination','5521000000011','body','Exact scoped reply','occurred_at',now(),'captured_at',now(),'send_id',send_id,'context_id',prop,'revision',rev,'purpose','event_proposal');
+  perform public.event_bot_bridge_activate('bot:embaixada_urca|'||scope::text,8);
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,jsonb_build_object('scope',scope,'events',jsonb_build_array(event)));exception when others then blocked:=true;end;
+  assert blocked and (select cursor=8 from event_private.bot_bridge_state),'Receipt before local send finalization preserves cursor without phone fallback';
+  perform public.finish_event_send(send_id,'accepted','scoped-provider-id','Synthetic provider acceptance');
+  assert (select revision>rev from propostas where id=prop),'System acceptance advances revision without changing commercial fingerprint';
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,jsonb_build_object('scope',scope,'events',jsonb_build_array(event||jsonb_build_object('destination','5521000000099'))));exception when others then blocked:=true;end;
+  assert blocked and (select cursor=8 from event_private.bot_bridge_state),'Wrong destination never reaches matching fallback';
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,jsonb_build_object('scope',scope,'events',jsonb_build_array(event||jsonb_build_object('revision',rev+1))));exception when others then blocked:=true;end;
+  assert blocked,'Grant revision must match reviewed send, not current incidental revision';
+  update propostas set snapshot=jsonb_set(snapshot,'{event,notes}','"Internal operations note"'::jsonb) where id=prop;
+  perform public.event_bot_bridge_commit('bot:embaixada_urca',8,9,jsonb_build_object('scope',scope,'events',jsonb_build_array(event)));
+  assert exists(select 1 from event_provider_events where event_key='scoped-reply' and opportunity_id=opp and state='applied'),'Internal notes do not invalidate exact scoped reply to the authorized event';
+  -- Synthetic mismatch, not a rewrite of the protected published agreement.
+  update event_outbox set reviewed_fingerprint='different-reviewed-content' where id=send_id;
+  blocked:=false;begin perform public.event_bot_bridge_commit('bot:embaixada_urca',9,10,jsonb_build_object('scope',scope,'events',jsonb_build_array(event||jsonb_build_object('key','stale-reply','message_id','stale-reply'))));exception when others then blocked:=true;end;
+  assert blocked and (select cursor=9 from event_private.bot_bridge_state),'Divergent commercial context rejects former grant without advancing cursor';
+
 end; $$;
 rollback;

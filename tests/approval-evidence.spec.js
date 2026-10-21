@@ -57,3 +57,6 @@ test('mobile navigation reaches the existing commercial and operational panel wi
  await page.setViewportSize({width:320,height:760});await mount(page);
  await expect(page.getByRole('link',{name:'Painel comercial e operação'})).toHaveAttribute('href','./index.html');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
 });
+
+test('pausa comprovada exige nova confirmação e nunca dispara ao abrir',async({page})=>{await mount(page,{transport:'paused'});await expect(page.locator('.status')).toContainText('envio pausado antes da tentativa');await expect(page.getByRole('button',{name:'Revisar e tentar envio pausado',exact:true})).toBeVisible();expect(await page.evaluate(()=>window.evidenceCalls.map(x=>x.action))).toEqual(['get']);await page.getByRole('button',{name:'Revisar e tentar envio pausado',exact:true}).click();await expect(page.locator('#notice')).toContainText('Marque a confirmação');expect(await page.evaluate(()=>window.evidenceCalls.map(x=>x.action))).toEqual(['get']);});
+for(const receipt of ['accepted','delivered','read','uncertain'])test(`pausa conflitante com ${receipt} não permite repetição`,async({page})=>{await mount(page,{transport:'paused',receipt});await expect(page.locator('[data-decision]')).toHaveCount(0);});

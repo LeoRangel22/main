@@ -34,6 +34,6 @@ test('normal authenticated API errors remain actionable',async()=>{
 });
 test('approval evidence rollout uses a new script URL and preserves app navigation',()=>{
  const html=fs.readFileSync(`${__dirname}/../aprovacoes.html`,'utf8');
- assert.match(html,/aprovacoes\.js\?v=20261015-approval-evidence/);
+ assert.match(html,/aprovacoes\.js\?v=20261021-protected-bot/);
  assert.ok(html.includes('Painel comercial e operação'));
 });

@@ -18,7 +18,7 @@ export function createSendWorker() {
   if (!key) throw new Error("Registro interno de envios indisponível.");
   return createClient(Deno.env.get("SUPABASE_URL") || "", key, { auth: { persistSession: false } });
 }
-export async function finishSend(worker: any, id: string, status: "accepted" | "failed" | "uncertain", providerId: string | null = null, detail: string | null = null) {
+export async function finishSend(worker: any, id: string, status: "accepted" | "failed" | "uncertain" | "paused", providerId: string | null = null, detail: string | null = null) {
   const { error } = await worker.rpc("finish_event_send", { send_id: id, send_status: status, external_message_id: providerId, error_detail: detail });
   if (error) throw new Error("O resultado não foi registrado. Confira o provedor antes de repetir o envio.");
   // A receipt can arrive before the provider HTTP response. Reconcile after commit.
@@ -26,6 +26,7 @@ export async function finishSend(worker: any, id: string, status: "accepted" | "
   if (receiptError) console.error("Conciliação de retorno pendente");
 }
 export function duplicateResult(claim: any) {
+  if(claim.send.status==='paused')return {ok:false,duplicate:true,sendId:claim.send.id,deliveryStatus:'paused',message:'Envio pausado antes da tentativa. Revise a autorização e o contexto antes de nova ação explícita.'};
   const ok=claim.send.status === "accepted" || ["delivered","read"].includes(claim.send.delivery_status);
   return { ok, duplicate: true, sendId: claim.send.id, deliveryStatus: claim.send.delivery_status || claim.send.status, message: ok ? "Este conteúdo já foi aceito ou entregue pelo canal. Nenhum novo envio foi feito." : "Envio em andamento ou incerto. Confira o canal antes de tentar novamente." };
 }
