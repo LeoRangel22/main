@@ -73,6 +73,20 @@
     if(action!=='approve'&&reason.length<3){notice('Informe o motivo para orientar a equipe.',true);$('reason').focus();return;}
     await run(async()=>{const generation=state.generation;const r=await api({action,id:a.id,reviewHash:a.review_hash,confirmed:true,reason});if(generation!==state.generation)return;render(r.approval);notice(r.warning||status(r.approval),Boolean(r.warning));});
   }
+  function approvalWatchLabel(health,now) {
+    let label;
+    if(health.paused_reason==='APPROVAL_POLICY_DISABLED'||health.policy_enabled===false)
+      label='Monitor pausado: política de aprovações desabilitada';
+    else if(!health.enabled)label='Monitor de aprovações desativado';
+    else if(Number(health.unresolved_count)>0)label='Monitor com tentativas que exigem conferência';
+    else {
+      const checkedAt=Date.parse(health.last_success_at);
+      label=!Number.isFinite(checkedAt)||checkedAt>now+60000||now-checkedAt>15*60*1000
+        ?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
+    }
+    if(Number(health.unresolved_count)>0&&(!health.enabled||health.policy_enabled===false||health.paused_reason==='APPROVAL_POLICY_DISABLED'))label+=' · '+health.unresolved_count+' tentativas que exigem conferência';
+    return label;
+  }
   async function loadWatch(generation){
     let timeout;
     $('watchStatus').textContent='Consultando estado do monitor…';
@@ -84,13 +98,12 @@
       if(generation!==state.generation||!state.user)return;
       if(result.error||typeof result.data?.enabled!=='boolean')throw Error('unavailable');
       const health=result.data;
-      const checkedAt=Date.parse(health.last_success_at);
-      const stale=!Number.isFinite(checkedAt)||checkedAt>Date.now()+60000||Date.now()-checkedAt>15*60*1000;
       if(!Number.isSafeInteger(health.unresolved_count)||health.unresolved_count<0)throw Error('unavailable');
-      const label=!health.enabled?'Monitor de aprovações desativado':Number(health.unresolved_count)>0?'Monitor com tentativas que exigem conferência':stale?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
+      const label=approvalWatchLabel(health,Date.now());
+      const expired=Number.isSafeInteger(health.pending_expired_count)&&health.pending_expired_count>0?' · '+health.pending_expired_count+' aprovação(ões) expirada(s) aguardando revisão':'';
       const names={approval_waiting:'Aguardando decisão',approval_expired:'Aprovação expirada',notification_failed:'Aviso recusado',notification_stalled:'Aviso parado ou incerto',dispatch_attention:'Envio requer conferência'};
       const alerts=(health.alerts||[]).slice(0,8);
-      $('watchStatus').innerHTML=`<p>${esc(label)}. Verificação a cada 5 minutos; alertas das 08h30 às 21h (Brasília).</p>${alerts.length?'<details><summary>Histórico recente de alertas</summary>'+alerts.map(a=>`<p>${esc(names[a.kind]||a.kind)} · ${esc(a.channel)} · ${esc(a.status==='accepted'?'aceito pelo provedor; entrega não confirmada':a.status)} ${/^[a-f0-9-]{36}$/i.test(a.approval_id||'')?`<a href="./aprovacoes.html?id=${esc(a.approval_id)}">Conferir solicitação</a>`:''}</p>`).join('')+'</details>':''}`;
+      $('watchStatus').innerHTML=`<p>${esc(label)}${esc(expired)}. Verificação a cada 5 minutos; alertas das 08h30 às 21h (Brasília).</p>${alerts.length?'<details><summary>Histórico recente de alertas</summary>'+alerts.map(a=>`<p>${esc(names[a.kind]||a.kind)} · ${esc(a.channel)} · ${esc(a.status==='accepted'?'aceito pelo provedor; entrega não confirmada':a.status)} ${/^[a-f0-9-]{36}$/i.test(a.approval_id||'')?`<a href="./aprovacoes.html?id=${esc(a.approval_id)}">Conferir solicitação</a>`:''}</p>`).join('')+'</details>':''}`;
     }catch{if(generation===state.generation&&state.user)$('watchStatus').textContent='Estado do monitor indisponível. A revisão da proposta permanece acessível.';}finally{clearTimeout(timeout);}
   }
   async function load(){
