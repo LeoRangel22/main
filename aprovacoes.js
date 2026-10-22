@@ -74,14 +74,17 @@
     await run(async()=>{const generation=state.generation;const r=await api({action,id:a.id,reviewHash:a.review_hash,confirmed:true,reason});if(generation!==state.generation)return;render(r.approval);notice(r.warning||status(r.approval),Boolean(r.warning));});
   }
   function approvalWatchLabel(health,now) {
+    let label;
     if(health.paused_reason==='APPROVAL_POLICY_DISABLED'||health.policy_enabled===false)
-      return 'Monitor pausado: política de aprovações desabilitada';
-    if(!health.enabled)return 'Monitor de aprovações desativado';
-    if(Number(health.unresolved_count)>0)return 'Monitor com tentativas que exigem conferência';
-    const checkedAt=Date.parse(health.last_success_at);
-    if(!Number.isFinite(checkedAt)||checkedAt>now+60000||now-checkedAt>15*60*1000)
-      return 'Monitor sem verificação recente — confira as pendências';
-    return 'Monitor de aprovações ativo';
+      label='Monitor pausado: política de aprovações desabilitada';
+    else if(!health.enabled)label='Monitor de aprovações desativado';
+    else {
+      const checkedAt=Date.parse(health.last_success_at);
+      label=!Number.isFinite(checkedAt)||checkedAt>now+60000||now-checkedAt>15*60*1000
+        ?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
+    }
+    if(Number(health.unresolved_count)>0)label+=' · '+health.unresolved_count+' tentativa(s) exigem conferência';
+    return label;
   }
   async function loadWatch(generation){
     let timeout;

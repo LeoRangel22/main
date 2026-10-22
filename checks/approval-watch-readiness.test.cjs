@@ -5,6 +5,8 @@ const c=vm.createContext({Date,Number});vm.runInContext(src.slice(a,b),c);
 const now=Date.parse('2026-10-22T00:00:00Z');
 test('disabled approval policy is a pause even when the scheduler is installed',()=>{
   assert.match(c.approvalWatchLabel({enabled:true,policy_enabled:false,last_success_at:'2026-10-17',unresolved_count:0},now),/política.*desabilitada/);
+  const warning=c.approvalWatchLabel({enabled:false,policy_enabled:false,unresolved_count:2},now);assert.match(warning,/política.*desabilitada/);assert.match(warning,/2 tentativa.*exigem conferência/);
+  assert.match(c.approvalWatchLabel({enabled:false,watch_enabled:false,unresolved_count:1},now),/1 tentativa.*exigem conferência/);
 });
 test('future, missing and stale success never show an active monitor',()=>{
   for(const value of [null,'invalid',new Date(now+120000).toISOString(),new Date(now-901000).toISOString()])
