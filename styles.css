@@ -12994,7 +12994,7 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .send-client-address div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; }
 .send-client-address dt { color: #526358; }
 .send-client-address dd { margin: 0; overflow-wrap: anywhere; }
-.send-client-preview .send-confirm-message { margin-top: 8px; padding: 16px; border: 1px solid #cbdcd1; border-radius: 10px; background: white; color: #183a2d; font: inherit; line-height: 1.6; }
+.send-client-preview .send-confirm-message { margin-top: 8px; padding: 16px; border: 1px solid #cbdcd1; border-radius: 10px; background: white; color: #183a2d; font: inherit; font-weight: 400; line-height: 1.6; }
 .send-internal-review { min-width: 0; padding: 14px; border: 1px solid #ddd7cb; border-radius: 10px; background: #fffaf1; }
 .send-internal-review summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
 .send-internal-review .send-confirm-details { margin-bottom: 0; overflow-wrap: anywhere; }
