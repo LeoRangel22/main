@@ -200,7 +200,11 @@ create function event_private.invalidate_signoff_release() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
  if not (select enabled from event_private.operation_contact_config where id) then return null;end if;
- if tg_table_name='event_handoff_tasks' and coalesce(new.task_key,old.task_key)='gerencia_go_no_go' then return null;end if;
+ -- Branch before referencing table-specific columns: SQL boolean evaluation is
+ -- not a schema guard for NEW/OLD records from reservation or production tables.
+ if tg_table_name='event_handoff_tasks' then
+  if coalesce(new.task_key,old.task_key)='gerencia_go_no_go' then return null;end if;
+ end if;
  if tg_op='UPDATE' and (to_jsonb(new)-'updated_at') is not distinct from (to_jsonb(old)-'updated_at') then return null;end if;
  perform event_private.reset_operation_release(coalesce(new.opportunity_id,old.opportunity_id));
  return null;

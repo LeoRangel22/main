@@ -59,5 +59,17 @@ begin
  assert exists(select 1 from event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go' and status='pending');
  assert event_operation_readiness(p.id,p.revision)->'ready'='false';
  reset role;
+ -- The shared trigger must work on tables that have no task_key column.
+ -- Seed only disposable release evidence; no person is acknowledged in production.
+ update event_handoff_tasks set status='in_progress',acknowledged_at=now(),acknowledged_by=manager
+ where opportunity_id=opp and task_key='gerencia_go_no_go';
+ update event_reservations set status='released' where opportunity_id=opp;
+ assert exists(select 1 from event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go'
+  and status='pending' and acknowledged_at is null),'Reservation semantic edit invalidates release without task_key';
+ update event_handoff_tasks set status='in_progress',acknowledged_at=now(),acknowledged_by=manager
+ where opportunity_id=opp and task_key='gerencia_go_no_go';
+ update event_private.production_plans set data=jsonb_set(data,'{logistics,setup}','1'::jsonb) where opportunity_id=opp;
+ assert exists(select 1 from event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go'
+  and status='pending' and acknowledged_at is null),'Production semantic edit invalidates release without task_key';
 end $$;
 rollback;
