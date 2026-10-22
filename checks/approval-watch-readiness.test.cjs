@@ -13,7 +13,7 @@ test('future, missing and stale success never show an active monitor',()=>{
     assert.match(c.approvalWatchLabel({enabled:true,policy_enabled:true,last_success_at:value,unresolved_count:0},now),/sem verificação recente/);
 });
 test('uncertain outcomes remain visible and current success can be healthy',()=>{
-  assert.match(c.approvalWatchLabel({enabled:true,last_success_at:new Date(now).toISOString(),unresolved_count:1},now),/exigem conferência/);
+  const unresolved=c.approvalWatchLabel({enabled:true,last_success_at:new Date(now).toISOString(),unresolved_count:1},now);assert.match(unresolved,/tentativas que exigem conferência/);assert.doesNotMatch(unresolved,/Monitor de aprovações ativo/);
   assert.equal(c.approvalWatchLabel({enabled:true,last_success_at:new Date(now).toISOString(),unresolved_count:0},now),'Monitor de aprovações ativo');
   assert.match(c.approvalWatchLabel({enabled:false,watch_enabled:false},now),/desativado/);
 });

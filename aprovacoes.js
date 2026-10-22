@@ -78,12 +78,13 @@
     if(health.paused_reason==='APPROVAL_POLICY_DISABLED'||health.policy_enabled===false)
       label='Monitor pausado: política de aprovações desabilitada';
     else if(!health.enabled)label='Monitor de aprovações desativado';
+    else if(Number(health.unresolved_count)>0)label='Monitor com tentativas que exigem conferência';
     else {
       const checkedAt=Date.parse(health.last_success_at);
       label=!Number.isFinite(checkedAt)||checkedAt>now+60000||now-checkedAt>15*60*1000
         ?'Monitor sem verificação recente — confira as pendências':'Monitor de aprovações ativo';
     }
-    if(Number(health.unresolved_count)>0)label+=' · '+health.unresolved_count+' tentativa(s) exigem conferência';
+    if(Number(health.unresolved_count)>0&&(!health.enabled||health.policy_enabled===false||health.paused_reason==='APPROVAL_POLICY_DISABLED'))label+=' · '+health.unresolved_count+' tentativas que exigem conferência';
     return label;
   }
   async function loadWatch(generation){
