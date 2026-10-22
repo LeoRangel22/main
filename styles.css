@@ -12999,3 +12999,17 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .send-internal-review summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
 .send-internal-review .send-confirm-details { margin-bottom: 0; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .send-client-preview { padding: 12px; } .send-client-address div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+.commercial-calendar { margin: 20px 0; padding: 20px; border: 1px solid #cbdcd1; border-radius: 14px; background: #f5faf6; }
+.commercial-calendar[hidden], .auth-locked .commercial-calendar { display: none; }
+.commercial-calendar-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 16px; }
+.commercial-calendar-heading h2 { margin: 0; }
+.commercial-calendar p { line-height: 1.5; overflow-wrap: anywhere; }
+.commercial-calendar-days { display: grid; gap: 18px; }
+.commercial-calendar-events { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,260px),1fr)); gap: 12px; }
+.commercial-calendar-event { min-width: 0; display: grid; gap: 8px; padding: 16px; border: 1px solid #d8d0bc; border-left: 5px solid #a66a16; border-radius: 10px; background: white; overflow-wrap: anywhere; }
+.commercial-calendar-event.is-closed { border-left-color: #317759; }
+.commercial-calendar-event span, .commercial-calendar-event small { line-height: 1.5; }
+.commercial-calendar-event p { margin: 0; }
+.commercial-calendar-overlap { color: #80500e; }
+@media(max-width:480px) { .commercial-calendar { padding: 12px; } }
