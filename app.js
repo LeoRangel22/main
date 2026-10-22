@@ -14557,13 +14557,25 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     dialog.className = "send-confirm-dialog";
     dialog.setAttribute("aria-labelledby", "sendConfirmTitle");
     dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
-      <h2 id="sendConfirmTitle">Revisar ${escapeHtml(channel)} antes de enviar</h2>
-      <p class="send-confirm-details">${escapeHtml(details)}</p>
-      ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
-      <label>${html ? "Versão completa em texto" : "Mensagem completa"}<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
+      <h2 id="sendConfirmTitle" tabindex="-1" autofocus>Revisar ${escapeHtml(channel)} antes de enviar</h2>
+      <section class="send-client-preview" aria-labelledby="sendClientPreviewTitle">
+        <div class="send-client-preview-heading"><h3 id="sendClientPreviewTitle">Mensagem ao cliente</h3><span>Prévia · nada enviado</span></div>
+        <dl class="send-client-address">
+          <div><dt>Canal</dt><dd>${escapeHtml(channel)}</dd></div>
+          <div><dt>Destinatário</dt><dd>${escapeHtml(destination || "Não informado")}</dd></div>
+          ${sender ? `<div><dt>Remetente</dt><dd>${escapeHtml(sender)}</dd></div>` : ""}
+          ${subject ? `<div><dt>Assunto</dt><dd>${escapeHtml(subject)}</dd></div>` : ""}
+        </dl>
+        ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
+        <label>${html ? "Versão completa em texto" : "Texto exato preparado"}<textarea class="send-confirm-message" readonly rows="12">${escapeHtml(message)}</textarea></label>
+      </section>
+      <details class="send-internal-review" open>
+        <summary>Conferência interna · não faz parte da mensagem</summary>
+        <p class="send-confirm-details">${escapeHtml(details)}</p>
+      </details>
       <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
       <div class="send-confirm-actions">
-        <button type="submit" value="cancel" formnovalidate class="secondary" autofocus>Cancelar</button>
+        <button type="submit" value="cancel" formnovalidate class="secondary">Cancelar</button>
         <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
       </div>
     </form>`;
