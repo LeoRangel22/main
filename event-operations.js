@@ -242,8 +242,13 @@ function getConversationWait(messages, now = Date.now()) {
   const at = Date.parse(latest.occurred_at);
   if (candidates.some(m => Date.parse(m.occurred_at) === at && m.direction !== latest.direction)) return unknown;
   if (latest.direction === "outbound" && ["uncertain", "sending"].includes(latest.delivery_status || latest.status)) return {...unknown, message: latest};
-  return {waiting: latest.direction === "inbound" ? "team" : "client", since: latest.occurred_at,
-    minutes: Math.floor((now - at) / 60000), message: latest};
+  let firstUnanswered = latest;
+  for (const message of candidates.slice(1)) {
+    if (message.direction !== latest.direction || ["uncertain", "sending"].includes(message.delivery_status || message.status)) break;
+    firstUnanswered = message;
+  }
+  return {waiting: latest.direction === "inbound" ? "team" : "client", since: firstUnanswered.occurred_at,
+    minutes: Math.floor((now - Date.parse(firstUnanswered.occurred_at)) / 60000), message: latest};
 }
 
 function renderOpsConversationWait(messages) {
@@ -254,7 +259,7 @@ function renderOpsConversationWait(messages) {
     wait.waiting === "client" ? "Equipe aguarda retorno do cliente" : "Responsabilidade pelo retorno ainda não confirmada";
   const elapsed = wait.minutes === null ? "" : wait.minutes < 1 ? "há menos de 1 minuto" : wait.minutes < 60 ? `há ${wait.minutes} min` :
     wait.minutes < 1440 ? `há ${Math.floor(wait.minutes / 60)} h e ${wait.minutes % 60} min` : `há ${Math.floor(wait.minutes / 1440)} dias e ${Math.floor(wait.minutes % 1440 / 60)} h`;
-  const evidence = wait.message ? `${wait.message.channel} · ${wait.message.source === "manual" ? "Registro manual da equipe" : wait.message.source === "public" ? "Resposta pelo link" : "Canal integrado"}` : "Sem interação confirmada com horário válido.";
+  const evidence = wait.message ? `Último registro: ${wait.message.channel} · ${wait.message.source === "manual" ? "Registro manual da equipe" : wait.message.source === "public" ? "Resposta pelo link" : "Canal integrado"}` : "Sem interação confirmada com horário válido.";
   return `<section class="event-ops-message" aria-label="Acompanhamento da conversa"><strong>${escapeHtml(title)}</strong>
     ${wait.since ? `<p>Desde ${escapeHtml(formatSavedAt(wait.since))} · ${escapeHtml(elapsed)}</p>` : ""}
     <small>${escapeHtml(evidence)}</small>${wait.message ? `<p>${escapeHtml(opsMessageStatus(wait.message))}</p>` : ""}

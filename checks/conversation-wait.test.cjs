@@ -43,3 +43,10 @@ for(const status of ['proposta_pronta','proposta_enviada','negociacao','confirma
 test('recorded send enables client follow-up without claiming delivery',()=>{
  const result=context.getCustomerDecisionLoop({status:'negociacao',public_token:'fixture',sent_at:'2025-01-01T12:00:00Z'});assert.equal(result.steps[0].status,'done');assert.equal(result.steps[1].status,'current');
 });
+test('consecutive customer messages do not reset the oldest unanswered waiting clock',()=>{
+ const result=wait([row(),row(1800000,{id:'followup',channel:'email'})]);assert.equal(result.waiting,'team');assert.equal(result.minutes,60);assert.equal(result.message.id,'followup');
+});
+test('repeated team follow-ups keep the clock until a client reply',()=>{
+ const result=wait([row(0,{direction:'outbound',delivery_status:'delivered'}),row(1800000,{direction:'outbound',delivery_status:'accepted'})]);assert.equal(result.waiting,'client');assert.equal(result.minutes,60);
+ const replied=wait([row(0,{direction:'outbound',delivery_status:'delivered'}),row(1800000,{id:'reply'})]);assert.equal(replied.waiting,'team');assert.equal(replied.minutes,30);
+});
