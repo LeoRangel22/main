@@ -8,7 +8,7 @@ for(const page of ['index.html','clientes.html','comunicacao.html','valores.html
   assert.ok(app&&helper);assert.equal(app[1],helper[1]);assert.ok(app[1].slice(0,8)>='20261013');assert.doesNotMatch(html,/app\.js\?v=20261012-integrity/);
 });
 for(const [page,asset,release] of [
-  ['aprovacoes.html','aprovacoes.js','20261021-protected-bot'],
+  ['aprovacoes.html','aprovacoes.js','20261022-effective-watch'],
   ['formulario.html','formulario.js','20261015-approval-closure'],
   ['proposta.html','proposta.js','20261018-synergy']
 ])test(`approval public cache rollout: ${page}`,()=>{
