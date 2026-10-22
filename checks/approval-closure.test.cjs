@@ -35,7 +35,7 @@ for(const page of ['index.html','clientes.html','comunicacao.html','valores.html
  const html=fs.readFileSync(root+'/'+page,'utf8');assert.match(html,/app\.js\?v=20261018-synergy/);assert.match(html,/remote-approval-ui\.js\?v=20261018-synergy/);assert.doesNotMatch(html,/app\.js\?v=20261012/);
 });
 for(const [page,asset,release] of [
- ['aprovacoes.html','aprovacoes.js','20261021-protected-bot'],
+ ['aprovacoes.html','aprovacoes.js','20261022-effective-watch'],
  ['formulario.html','formulario.js','20261015-approval-closure'],
  ['proposta.html','proposta.js','20261018-synergy']
 ])test(`cache: ${page} invalidates changed public script`,()=>{assert.ok(fs.readFileSync(root+'/'+page,'utf8').includes(asset+'?v='+release));});
