@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { sameSecret } from '../_shared/channel-events.ts';
-import { botBridgeUrl, fetchBotBridge, normalizeBotBridgeResult } from '../_shared/bot-bridge.ts';
+import { botBridgeUrl, fetchBotBridge, normalizeBotBridgeResult, scopedBotCursor } from '../_shared/bot-bridge.ts';
 
 const json=(status:number,data:any)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 Deno.serve(async(req:Request)=>{
@@ -14,21 +14,22 @@ Deno.serve(async(req:Request)=>{
     const payload=await req.json();diagnose=payload.action==='diagnose';
     if(!diagnose&&(config.enabled!==true||config.channel_enabled!==true))return json(409,{ok:false,message:'Ponte ainda não ativada'});
     const base=Deno.env.get('EVENT_BOT_BRIDGE_URL')||'',secret=Deno.env.get('EVENT_BOT_BRIDGE_SECRET')||'';
-    if(diagnose&&(!base||secret.length<32))return json(409,{ok:false,message:'Configuração da ponte pendente',diagnostic:{configured:false,urlConfigured:Boolean(base),secretConfigured:secret.length>=32}});
+    const scope=String(config.scope_id||'');
+    if(!base||secret.length<32||!scope)return json(409,{ok:false,message:'Configuração privada e escopo da ponte pendentes',diagnostic:{configured:false,urlConfigured:Boolean(base),secretConfigured:secret.length>=32,scopeConfigured:Boolean(scope)}});
     let current=Number(config.cursor||0);
     const url=botBridgeUrl(base);
     if(diagnose){
-      const result=normalizeBotBridgeResult(await fetchBotBridge(url,secret,{probe:1,tenant:'embaixada_urca'}),current);
+      const result=normalizeBotBridgeResult(await fetchBotBridge(url,secret,{probe:1,scope}),0,scope);
       if(config.expected_account&&result.account!==config.expected_account)throw new Error('Conta divergente');
       return json(200,{ok:true,diagnostic:{configured:true,account:result.account,reachable:true}});
     }
     let received=0,hasMore=false;
     const deadline=Date.now()+20000;
     for(let page=0;page<10;page++){
-      const result=normalizeBotBridgeResult(await fetchBotBridge(url,secret,{cursor:current,limit:100,tenant:'embaixada_urca'},deadline-Date.now()),current);
+      const result=normalizeBotBridgeResult(await fetchBotBridge(url,secret,{cursor:scopedBotCursor(scope,current),scope,limit:100},deadline-Date.now()),current,scope);
       if(!config.expected_account||result.account!==config.expected_account)throw new Error('Conta divergente');
       if(result.hasMore&&result.nextCursor===current)throw new Error('Ponte sem avanço de cursor');
-      const {error:commitError}=await worker.rpc('event_bot_bridge_commit',{account_id:result.account,expected_cursor:current,next_cursor_value:result.nextCursor,events:result.events});
+      const {error:commitError}=await worker.rpc('event_bot_bridge_commit',{account_id:result.account,expected_cursor:current,next_cursor_value:result.nextCursor,events:{scope,events:result.events}});
       if(commitError)throw new Error('Falha ao persistir lote e cursor');
       received+=result.events.length;current=result.nextCursor;hasMore=result.hasMore;
       if(!hasMore||Date.now()>=deadline)break;

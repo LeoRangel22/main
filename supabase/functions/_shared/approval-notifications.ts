@@ -1,20 +1,18 @@
 // Shared transport for manager approval notices, watchdog alerts and controlled probes.
 // Callers resolve destinations from private configuration, never from browser inputs.
+import { dispatchProtectedBot } from './bot-dispatch.ts';
 const noticeText = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const noticeEscape = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 function noticeEnv(names: string[]) { for (const n of names) { const v = noticeText(Deno.env.get(n)); if (v) return v; } return ""; }
-export async function deliverManagerNotice(channel: string, destination: string, body: string, subject: string, link: string, reference: string) {
+export async function deliverManagerNotice(channel: string, destination: string, body: string, subject: string, link: string, reference: string, botContext?: any) {
   let attempted = false;
   try {
     const url = new URL(link);
     if (url.origin !== "https://leorangel22.github.io" || url.pathname !== "/main/aprovacoes.html") throw Error("Link interno inválido.");
     let endpoint: string, headers: Record<string,string>, payload: unknown;
     if (channel === "whatsapp") {
-      const instance = noticeEnv(["ZAPI_INSTANCE_ID"]), token = noticeEnv(["ZAPI_TOKEN"]), client = noticeEnv(["ZAPI_CLIENT_TOKEN","CLIENT_TOKEN"]);
-      if (!instance || !token || !client || !/^\d{12,15}$/.test(destination)) throw Error("Configuração do aviso de WhatsApp incompleta.");
-      endpoint = `https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/send-text`;
-      headers = { "Content-Type": "application/json", "Client-Token": client };
-      payload = { phone: destination, message: body };
+      if(!botContext)return {status:'paused',providerId:null,detail:'Aviso sem contexto autorizado. Nenhuma mensagem foi tentada.'};
+      return await dispatchProtectedBot(destination,body,botContext);
     } else if (channel === "email") {
       let token = noticeEnv(["ZEPTO_MAIL_TOKEN","ZEPTOMAIL_TOKEN","ZEPTO_TOKEN","ZOHO_ZEPTO_TOKEN","ZOHO_ZEPTOMAIL_TOKEN"]);
       const sender = noticeEnv(["PROPOSAL_FROM_EMAIL","LEAD_ALERT_FROM_EMAIL"]);
