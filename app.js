@@ -14297,7 +14297,7 @@ async function ensureProposalReadyForSending() {
       <ul class="send-readiness-items">${items.map((item) => `<li>
         <strong>${escapeHtml(item.label)} — ${item.status === "error" ? "Pendente" : item.status === "warning" ? "Atenção" : "Conferido"}</strong>
         <p>${escapeHtml(item.detail || "")}</p>
-        ${item.status !== "success" && item.target ? `<button type="button" class="secondary" data-send-correction="${escapeHtml(item.target)}">Corrigir: ${escapeHtml(item.label)}</button>` : ""}
+        ${["error", "warning"].includes(item.status) && item.target ? `<button type="button" class="secondary" data-send-correction="${escapeHtml(item.target)}">Corrigir: ${escapeHtml(item.label)}</button>` : ""}
       </li>`).join("")}</ul>
       <p class="send-readiness-error" role="alert"></p>
       ${summary.ready ? '<label class="event-ops-check"><input type="checkbox" required /> Revisei os dados e as condições da proposta.</label>' : ""}

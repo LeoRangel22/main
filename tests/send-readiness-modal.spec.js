@@ -75,6 +75,7 @@ test('explicit approval continues the WhatsApp preparation exactly once',async({
   const dialog=page.locator('.send-readiness-dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Aprovar revisão e continuar'})).toBeEnabled();
+  await expect(dialog.locator('li').filter({hasText:'— Conferido'}).locator('[data-send-correction]')).toHaveCount(0);
   await dialog.getByRole('button',{name:'Aprovar revisão e continuar'}).click();
   await expect(dialog).toBeVisible();
   expect(await page.evaluate(()=>window.prepared)).toEqual([]);
