@@ -12985,3 +12985,17 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .send-readiness-error { color: var(--danger); margin: 0; }
 .send-readiness-error:empty { display: none; }
 .send-confirm-dialog { box-sizing: border-box; overscroll-behavior: contain; }
+
+.send-client-preview { min-width: 0; padding: 18px; border: 1px solid #cbdcd1; border-radius: 14px; background: #f5faf6; }
+.send-client-preview-heading { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.send-client-preview-heading h3 { margin: 0; font-size: 1.1rem; }
+.send-client-preview-heading span { color: #3d6250; font-size: .85rem; }
+.send-client-address { display: grid; gap: 8px; margin: 18px 0; }
+.send-client-address div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; }
+.send-client-address dt { color: #526358; }
+.send-client-address dd { margin: 0; overflow-wrap: anywhere; }
+.send-client-preview .send-confirm-message { margin-top: 8px; padding: 16px; border: 1px solid #cbdcd1; border-radius: 10px; background: white; color: #183a2d; font: inherit; font-weight: 400; line-height: 1.6; }
+.send-internal-review { min-width: 0; padding: 14px; border: 1px solid #ddd7cb; border-radius: 10px; background: #fffaf1; }
+.send-internal-review summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.send-internal-review .send-confirm-details { margin-bottom: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .send-client-preview { padding: 12px; } .send-client-address div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
