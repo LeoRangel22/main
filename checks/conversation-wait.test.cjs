@@ -50,3 +50,7 @@ test('repeated team follow-ups keep the clock until a client reply',()=>{
  const result=wait([row(0,{direction:'outbound',delivery_status:'delivered'}),row(1800000,{direction:'outbound',delivery_status:'accepted'})]);assert.equal(result.waiting,'client');assert.equal(result.minutes,60);
  const replied=wait([row(0,{direction:'outbound',delivery_status:'delivered'}),row(1800000,{id:'reply'})]);assert.equal(replied.waiting,'team');assert.equal(replied.minutes,30);
 });
+test('equal timestamps at an older reply boundary never depend on input order',()=>{
+ const current=row(1800000,{id:'current'}),older=row(),reply=row(0,{direction:'outbound',delivery_status:'delivered'});
+ for(const messages of [[current,older,reply],[current,reply,older]]){const result=wait(messages);assert.equal(result.waiting,'team');assert.equal(result.minutes,30);}
+});

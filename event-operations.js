@@ -243,8 +243,11 @@ function getConversationWait(messages, now = Date.now()) {
   if (candidates.some(m => Date.parse(m.occurred_at) === at && m.direction !== latest.direction)) return unknown;
   if (latest.direction === "outbound" && ["uncertain", "sending"].includes(latest.delivery_status || latest.status)) return {...unknown, message: latest};
   let firstUnanswered = latest;
+  const opposite = candidates.find(message => message.direction !== latest.direction);
   for (const message of candidates.slice(1)) {
-    if (message.direction !== latest.direction || ["uncertain", "sending"].includes(message.delivery_status || message.status)) break;
+    // Equal timestamps do not establish which party replied first.
+    if ((opposite && Date.parse(message.occurred_at) <= Date.parse(opposite.occurred_at)) ||
+      message.direction !== latest.direction || ["uncertain", "sending"].includes(message.delivery_status || message.status)) break;
     firstUnanswered = message;
   }
   return {waiting: latest.direction === "inbound" ? "team" : "client", since: firstUnanswered.occurred_at,
