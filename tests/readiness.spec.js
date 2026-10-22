@@ -14,6 +14,24 @@ test('channel diagnostics expose setup blockers and never claim real homologatio
  await page.locator('[data-ops-tab="channels"]').click();const d=page.getByRole('region',{name:'Diagnóstico das integrações'});await expect(d).toContainText('Desconectado');await expect(d).toContainText('Pendente');await expect(d).toContainText('Preserve-os');await expect(d).not.toContainText('Homologado');
 });
 for(const width of [320,390,1440])test(`journey and diagnostic evidence fit ${width}px`,async({page})=>{await page.setViewportSize({width,height:900});await start(page);await journey(page);await expect(page.locator('[data-journey-step="operation"]')).toBeVisible();await expectNoHorizontalOverflow(page);await page.locator('[data-ops-tab="channels"]').click();await expectNoHorizontalOverflow(page);});
+for(const width of [320,390,1440])test(`integration health distinguishes quarantine and disabled reception at ${width}px`,async({page})=>{
+ const errors=collectBrowserErrors(page);await page.setViewportSize({width,height:900});await start(page);
+ const before=await page.evaluate(()=>JSON.stringify([state.proposals,window.EventOperationsState.outbox]));
+ await page.evaluate(()=>{Object.assign(readinessCache('channels'),{attemptedAt:Date.now(),data:{state:'not_checked',runtime:{observed_at:new Date().toISOString(),bridge:{state:'degraded',enabled:true,last_success_at:new Date().toISOString(),quarantined_total:2,quarantined_recent:1},mailbox:{state:'disabled',enabled:false,last_success_at:null}}}});});
+ await page.locator('[data-ops-tab="channels"]').click();
+ await expect(page.locator('[data-integration-health="bridge"]')).toContainText('Consulta recente com eventos em quarentena');
+ await expect(page.locator('[data-integration-health="mailbox"]')).toContainText('Desativada');
+ await expect(page.locator('[data-bridge-quarantine]')).toContainText('não reenvie o histórico');
+ await expectNoHorizontalOverflow(page);await expectNoBrowserErrors(errors);
+ expect(await page.evaluate(()=>JSON.stringify([state.proposals,window.EventOperationsState.outbox]))).toBe(before);
+});
+test('cached integration success ages into stale and a failed refresh cannot remain green',async({page})=>{
+ await start(page);await page.evaluate(()=>{Object.assign(readinessCache('channels'),{attemptedAt:Date.now(),data:{state:'not_checked',runtime:{observed_at:new Date().toISOString(),bridge:{state:'observed',enabled:true,last_success_at:new Date(Date.now()-16*60000).toISOString(),quarantined_total:0,quarantined_recent:0},mailbox:{state:'disabled',enabled:false,last_success_at:null}}}});});
+ await page.locator('[data-ops-tab="channels"]').click();await expect(page.locator('[data-integration-health="bridge"]')).toHaveAttribute('data-health-state','stale');
+ await page.evaluate(()=>{readinessCache('channels').error='Synthetic refresh failure';renderEventOperations();});
+ await expect(page.locator('[data-integration-health="bridge"]')).toHaveAttribute('data-health-state','unknown');
+ await expect(page.getByRole('region',{name:'Diagnóstico das integrações'})).not.toContainText('Consulta autenticada recente');
+});
 test('unavailable journey keeps other actions usable and does not invent successful evidence',async({page})=>{
  await start(page);await page.evaluate(()=>{buildQaJourneyEvidence=()=>{throw Error('Fixture offline')};});await page.locator('[data-ops-tab="journey"]').click();await page.locator('[data-ops-selector]').selectOption('qa-opp-qa-proposal-sem-resposta');await expect(page.locator('#eventOperations [role="alert"]')).toContainText('offline');await expect(page.locator('[data-journey-step]')).toHaveCount(0);await page.locator('[data-ops-tab="pending"]').click();await expect(page.locator('[data-ops-bulk]')).toBeVisible();
 });
