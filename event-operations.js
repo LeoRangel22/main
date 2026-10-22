@@ -220,10 +220,50 @@ function renderEventOperations() {
   ${eventOps.tab==="sends"?`<p>Aceito não significa entregue ou lido. Resultado incerto exige conferência antes de repetir.</p><div class="event-ops-list">${eventOps.outbox.map((b)=>`<article class="event-ops-row"><span><strong>${escapeHtml(b.destination)} · ${escapeHtml(b.channel)}</strong><small>${escapeHtml(opsMessageStatus(b))} · ${escapeHtml(formatSavedAt(b.created_at))}</small><small>${escapeHtml(b.detail||"")}</small></span></article>`).join("")||"<p>Nenhum envio no novo registro compartilhado.</p>"}</div>`:""}
   ${eventOps.tab==="reservations"?`<p>Capacidade autorizada: ${eventOps.policy.capacity||"a configurar pelo gestor"}. Pré-reserva não confirma pagamento.</p>${isSuperAdminSession()?'<button class="secondary" type="button" data-ops-policy>Configurar capacidade e responsável padrão</button>':""}${selected?renderOpsReservation(selected):""}`:""}</div></details>`;
 }
+function getOpsConversationMessages(item) {
+  let messages = eventOps.messages.filter(m => m.opportunity_id === item.opportunityId);
+  const proposal = state.proposals.find(p => p.id === item.id);
+  if (proposal?.cliente_resposta_em && !messages.some(m => m.proposal_id === proposal.id && m.source === "public")) {
+    messages = messages.concat({id: "legacy-response", occurred_at: proposal.cliente_resposta_em, channel: "link", direction: "inbound", source: "public", body: `${getClientResponseLabel(proposal.cliente_resposta)}: ${proposal.cliente_mensagem || ""}`});
+  }
+  return messages;
+}
+
+function getConversationWait(messages, now = Date.now()) {
+  const unknown = {waiting: "unknown", since: null, minutes: null, message: null};
+  const relevant = messages.filter(m => ["inbound", "outbound"].includes(m.direction) &&
+    ["provider", "manual", "public"].includes(m.source) && ["email", "whatsapp", "phone", "link"].includes(m.channel) && typeof m.body === "string" && m.body.trim());
+  if (!Number.isFinite(now) || relevant.some(m => !m.occurred_at || !Number.isFinite(Date.parse(m.occurred_at)) || Date.parse(m.occurred_at) > now)) return unknown;
+  const candidates = relevant.filter(m => m.direction === "inbound" ||
+    ["accepted", "delivered", "read", "manual_sent", "uncertain", "sending"].includes(m.delivery_status || m.status));
+  candidates.sort((a,b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at));
+  const latest = candidates[0];
+  if (!latest) return unknown;
+  const at = Date.parse(latest.occurred_at);
+  if (candidates.some(m => Date.parse(m.occurred_at) === at && m.direction !== latest.direction)) return unknown;
+  if (latest.direction === "outbound" && ["uncertain", "sending"].includes(latest.delivery_status || latest.status)) return {...unknown, message: latest};
+  return {waiting: latest.direction === "inbound" ? "team" : "client", since: latest.occurred_at,
+    minutes: Math.floor((now - at) / 60000), message: latest};
+}
+
+function renderOpsConversationWait(messages) {
+  const current = Boolean(state.session?.user?.id) && eventOps.loadedFor === state.session.user.id &&
+    !eventOps.error && !eventOps.loading && (QA_MODE || (!commercialRefreshError && commercialClient === state.supabase));
+  const wait = getConversationWait(current ? messages : []);
+  const title = !current ? "Atualize a conversa antes de decidir" : wait.waiting === "team" ? "Equipe precisa retornar ao cliente" :
+    wait.waiting === "client" ? "Equipe aguarda retorno do cliente" : "Responsabilidade pelo retorno ainda não confirmada";
+  const elapsed = wait.minutes === null ? "" : wait.minutes < 1 ? "há menos de 1 minuto" : wait.minutes < 60 ? `há ${wait.minutes} min` :
+    wait.minutes < 1440 ? `há ${Math.floor(wait.minutes / 60)} h e ${wait.minutes % 60} min` : `há ${Math.floor(wait.minutes / 1440)} dias e ${Math.floor(wait.minutes % 1440 / 60)} h`;
+  const evidence = wait.message ? `${wait.message.channel} · ${wait.message.source === "manual" ? "Registro manual da equipe" : wait.message.source === "public" ? "Resposta pelo link" : "Canal integrado"}` : "Sem interação confirmada com horário válido.";
+  return `<section class="event-ops-message" aria-label="Acompanhamento da conversa"><strong>${escapeHtml(title)}</strong>
+    ${wait.since ? `<p>Desde ${escapeHtml(formatSavedAt(wait.since))} · ${escapeHtml(elapsed)}</p>` : ""}
+    <small>${escapeHtml(evidence)}</small>${wait.message ? `<p>${escapeHtml(opsMessageStatus(wait.message))}</p>` : ""}
+    <small>Baseado nos registros carregados de todos os canais deste evento. Leitura e nota interna não contam como resposta. O tempo não representa prazo combinado.</small></section>`;
+}
+
 function renderOpsInbox(item) {
-  let messages=eventOps.messages.filter((m)=>m.opportunity_id===item.opportunityId);const p=state.proposals.find((p)=>p.id===item.id);
-  if(p?.cliente_resposta_em&&!messages.some((m)=>m.proposal_id===p.id&&m.source==="public"))messages=messages.concat({id:"legacy-response",occurred_at:p.cliente_resposta_em,channel:"link",direction:"inbound",source:"public",body:`${getClientResponseLabel(p.cliente_resposta)}: ${p.cliente_mensagem||""}`});
-  return `<div class="event-ops-toolbar"><button class="secondary" type="button" data-ops-record>Registrar mensagem / contato</button><button class="primary" type="button" data-ops-prepare>Preparar atendimento</button><button class="secondary" type="button" data-ops-read>Marcar recebidas como lidas</button></div><div class="event-ops-thread" aria-label="Conversa do evento">${messages.sort((a,b)=>new Date(a.occurred_at)-new Date(b.occurred_at)).map((m)=>`<article class="event-ops-message ${escapeHtml(m.direction)}"><strong>${m.direction==="inbound"?"Cliente":m.direction==="outbound"?"Equipe":"Registro interno"} · ${escapeHtml(m.channel)}</strong><small>${escapeHtml(formatSavedAt(m.occurred_at))} · ${m.source==="manual"?"Registro manual":m.source==="public"?"Link da proposta":m.source==="provider"?"Canal integrado":"Sistema"}${m.direction==="inbound"&&!m.read_at?" · não lida":""}</small><p>${escapeHtml(m.body)}</p><small>${escapeHtml(opsMessageStatus(m))}</small></article>`).join("")||"<p>Nenhuma mensagem registrada. Registre respostas externas manualmente.</p>"}</div>`;
+  const messages = getOpsConversationMessages(item);
+  return `${renderOpsConversationWait(messages)}<div class="event-ops-toolbar"><button class="secondary" type="button" data-ops-record>Registrar mensagem / contato</button><button class="primary" type="button" data-ops-prepare>Preparar atendimento</button><button class="secondary" type="button" data-ops-read>Marcar recebidas como lidas</button></div><div class="event-ops-thread" aria-label="Conversa do evento">${messages.sort((a,b)=>new Date(a.occurred_at)-new Date(b.occurred_at)).map((m)=>`<article class="event-ops-message ${escapeHtml(m.direction)}"><strong>${m.direction==="inbound"?"Cliente":m.direction==="outbound"?"Equipe":"Registro interno"} · ${escapeHtml(m.channel)}</strong><small>${escapeHtml(formatSavedAt(m.occurred_at))} · ${m.source==="manual"?"Registro manual":m.source==="public"?"Link da proposta":m.source==="provider"?"Canal integrado":"Sistema"}${m.direction==="inbound"&&!m.read_at?" · não lida":""}</small><p>${escapeHtml(m.body)}</p><small>${escapeHtml(opsMessageStatus(m))}</small></article>`).join("")||"<p>Nenhuma mensagem registrada. Registre respostas externas manualmente.</p>"}</div>`;
 }
 function renderOpsTriage(){
   const pending=eventOps.providerEvents.filter(e=>e.kind==="inbound"&&e.state==="triage");
