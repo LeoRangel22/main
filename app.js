@@ -8062,6 +8062,11 @@ function buildProposalText() {
   return lines.join("\n");
 }
 
+function getProposalClientLanguage(proposal, request) {
+  return [proposal?.snapshot?.event?.clientLanguage, request?.snapshot?.cliente?.idioma]
+    .find(language => ["pt", "en", "es"].includes(language)) || "pt";
+}
+
 function getProposalSnapshot() {
   syncEventTypeFromSelection();
   const totals = getQuoteTotals();
@@ -8107,6 +8112,7 @@ function getProposalSnapshot() {
   return {
     version: 1,
     referencia: activeRequest?.snapshot?.referencia || "",
+    ...((activeRequest?.snapshot?.attribution || activeProposal?.snapshot?.attribution) ? {attribution: activeRequest?.snapshot?.attribution || activeProposal?.snapshot?.attribution} : {}),
     savedAt: new Date().toISOString(),
     client: {
       name: fields.clientName.value.trim(),
@@ -8118,7 +8124,7 @@ function getProposalSnapshot() {
     },
     event: {
       type: getCurrentEventType(),
-      clientLanguage: activeRequest?.snapshot?.cliente?.idioma || activeProposal?.snapshot?.event?.clientLanguage || "pt",
+      clientLanguage: getProposalClientLanguage(activeProposal, activeRequest),
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),

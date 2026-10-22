@@ -157,6 +157,47 @@ const chipLabelSets = {
   },
 };
 
+// Fixed campaign taxonomy: attribution is not identity or authorization.
+const EVENT_ATTRIBUTION_KEY = "embaixada_form_attribution_v1";
+const formStorageMemory = Object.create(null);
+const EVENT_CONTENTS = new Set(["index", "index_en", "index_es", "eventos", "eventos-corporativos", "en-eventos-corporativos", "es-eventos-corporativos", "contato", "en-contato", "es-contato", "formulario"]);
+function readFormStorage(key) {
+  if (Object.prototype.hasOwnProperty.call(formStorageMemory, key)) return formStorageMemory[key];
+  try { return localStorage.getItem(key); } catch (_) { return null; }
+}
+function writeFormStorage(key, value) {
+  formStorageMemory[key] = value;
+  try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (_) { /* Retry remains stable within this tab. */ }
+}
+function normalizeEventAttribution(value) {
+  if (!value || Array.isArray(value) || typeof value !== "object" || Object.keys(value).sort().join(",") !== "utm_campaign,utm_content,utm_medium,utm_source,version") return null;
+  if (value.version !== 1 || value.utm_source !== "embaixadacarioca" || value.utm_medium !== "website" || value.utm_campaign !== "eventos" || !EVENT_CONTENTS.has(value.utm_content)) return null;
+  return {version:1, utm_source:value.utm_source, utm_medium:value.utm_medium, utm_campaign:value.utm_campaign, utm_content:value.utm_content};
+}
+function readUrlAttribution(search = location.search) {
+  const query = new URLSearchParams(search), names = ["utm_source", "utm_medium", "utm_campaign", "utm_content"];
+  if (names.some(name => query.getAll(name).length !== 1)) return null;
+  return normalizeEventAttribution(Object.fromEntries([["version", 1], ...names.map(name => [name, query.get(name)])]));
+}
+function getEventAttribution() {
+  const token = getCaptureToken();
+  try {
+    const saved = JSON.parse(readFormStorage(EVENT_ATTRIBUTION_KEY) || "null");
+    const valid = normalizeEventAttribution(saved?.attribution);
+    if (saved?.token === token && valid) {
+      formStorageMemory[EVENT_ATTRIBUTION_KEY] = JSON.stringify({token, attribution:valid});
+      return valid;
+    }
+  } catch (_) { /* Ignore corrupt or unrelated browser state. */ }
+  const attribution = readUrlAttribution();
+  if (attribution) {
+    const serialized = JSON.stringify({token, attribution});
+    formStorageMemory[EVENT_ATTRIBUTION_KEY] = serialized;
+    try { if (localStorage.getItem(CAPTURE_TOKEN_KEY) === token) localStorage.setItem(EVENT_ATTRIBUTION_KEY, serialized); } catch (_) { /* Never overwrite a newer capture from an older tab. */ }
+  }
+  return attribution;
+}
+
 const preferenceChips = [...document.querySelectorAll("[data-preference-chip]")];
 const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
@@ -703,9 +744,416 @@ const copy = {
   },
 };
 
+copy.es = {
+    progressLabel: (current, total) => `Pregunta ${current} de ${total} - Tiempo estimado: 2 minutos`,
+    uxCues: ["Elige con tarjetas", "Te sugerimos formatos", "Toma unos 2 minutos"],
+    trustPoints: ["Morro da Urca", "Parque Bondinho Pão de Açúcar", "Empresas, agencias y eventos privados", "Propuesta en un plazo de 2 días hábiles"],
+    heroEyebrow: "Embaixada Carioca",
+    heroTitle: "Organiza tu evento en Embaixada Carioca",
+    heroSubtitle: "Encuentra el mejor formato para tu evento en Morro da Urca.",
+    introEyebrow: "Asesoría para eventos",
+    introTitle: "Tu evento empieza aquí",
+    introBody: "Indica la fecha, el tamaño del grupo y tus datos de contacto. Nuestro equipo puede ayudarte a elegir el formato.",
+    stepLabels: ["Cuándo", "Ocasión", "Fecha y grupo", "Contacto", "Formato", "Preferencias"],
+    commercialSummary: "Ver los horarios más recomendados",
+    commercialWindows: [
+      "Mañanas de lunes a viernes: desayuno, brunch y pausa para café.",
+      "Inicio del almuerzo de lunes a viernes: Almuerzo Carioca.",
+      "Después de las 17:00, de domingo a jueves: bebida de bienvenida y cócteles.",
+      "De 19:00 a 21:00: encuentros elegantes, ligeros y centrados en lo esencial.",
+    ],
+    momentOptions: [
+      {
+        value: "weekday-morning",
+        title: "Mañana entre semana",
+        description:
+          "Un desayuno con vistas al Pan de Azúcar transforma el ambiente de reuniones y activaciones.",
+      },
+      {
+        value: "weekday-lunch",
+        title: "Inicio del almuerzo",
+        description:
+          "Un almuerzo carioca relajado con feijoada premiada, una llegada tranquila y tiempo de calidad en la mesa.",
+      },
+      {
+        value: "late-afternoon",
+        title: "Últimas horas de la tarde",
+        description:
+          "Imagina a tu grupo llegando a Morro da Urca con la luz dorada del atardecer.",
+      },
+      {
+        value: "night",
+        title: "Noche (19:00-21:00)",
+        description:
+          "Un encuentro elegante y centrado en lo esencial, con Río como escenario y un servicio al ritmo adecuado.",
+      },
+      {
+        value: "evaluating",
+        title: "Quiero ayuda para elegir",
+        description:
+          "Cuéntanos el contexto y te sugeriremos la mejor opción.",
+      },
+    ],
+    clientTypes: [
+      {
+        value: "agency-tourism",
+        title: "Agencia de turismo receptivo / DMC",
+        description: "Grupos turísticos, itinerarios, operadores y experiencias en Río.",
+      },
+      {
+        value: "agency-marketing",
+        title: "Agencia de marketing / eventos",
+        description: "Activaciones, producción, relaciones con clientes, lanzamientos y experiencias de marca.",
+      },
+      {
+        value: "company",
+        title: "Empresa",
+        description: "Recursos humanos, marketing, dirección o relaciones con clientes.",
+      },
+      {
+        value: "person",
+        title: "Particular",
+        description: "Celebraciones, cumpleaños y encuentros privados.",
+      },
+    ],
+    profiles: [
+      { value: "corporate", label: "Reunión / encuentro corporativo", icon: "01" },
+      { value: "celebration", label: "Celebración / encuentro de equipo", icon: "02" },
+      { value: "birthday", label: "Cumpleaños / celebración", icon: "03" },
+      { value: "relationship", label: "Lanzamiento / encuentro con clientes", icon: "04" },
+      { value: "experience", label: "Experiencia gastronómica", icon: "05" },
+      { value: "travel", label: "Grupo turístico / receptivo", icon: "06" },
+      { value: "suggestion", label: "Ayúdenme a definirlo", icon: "07" },
+    ],
+    profileSupport: "Indica quién organiza y elige la ocasión. Puedes seleccionar más de una opción.",
+    occasionSupport: "Ocasión del evento · elige al menos una opción. Si tienes dudas, selecciona “Ayúdenme a definirlo”.",
+    recommendationTitle: "Experiencias más recomendadas para tu evento",
+    recommendationEmpty: "Elige el momento y el perfil para ver las sugerencias. Nuestro equipo también puede ajustarlo después.",
+    recommendationReady: (moment) => `Seleccionamos una sugerencia inicial para ${moment.toLowerCase()}. Si otra experiencia te convence más, puedes cambiarla sin problema.`,
+    labels: {
+      eventDate: "Fecha deseada",
+      eventDateHelp: "Si aún no tienes una fecha definida, indica un período aproximado a continuación.",
+      dateFlex: "Si no tienes una fecha definida",
+      dateFlexible: "¿La fecha puede cambiar?",
+      guests: "Cantidad de invitados",
+      guestsHelp: "Usa el control deslizante hasta 99+. Para grupos más grandes, escribe la cantidad exacta hasta 500.",
+      period: "Franja horaria deseada",
+      time: "Hora de llegada",
+      timeHelp: "La hora acordada orienta la reserva y la organización.",
+      duration: "Duración estimada",
+      briefingSupport: "Marca solo lo que sea importante. Si tienes dudas, déjalo en blanco; nuestro equipo puede completarlo contigo después.",
+      reason: "Motivo del evento",
+      preferences: "Preferencias de comida y bebida",
+      notes: "¿Hay algo importante que debamos tener en cuenta al preparar tu propuesta?",
+      budget: "Presupuesto aproximado (opcional)",
+      leadSource: "¿Cómo conociste Embaixada? (opcional)",
+      name: "Nombre completo",
+      nameHelp: "Indica tu nombre y apellido. Ejemplo: Marina Costa.",
+      email: "Correo electrónico",
+      emailHelp: "Lo usaremos para enviarte la propuesta.",
+      phone: "Teléfono/WhatsApp",
+      phoneHelp: "Indica el código de área y el teléfono. Para números internacionales, incluye el código del país.",
+      company: "Empresa o agencia",
+      companyHelpOptional: "Opcional para particulares.",
+      companyHelpRequired: "Recomendado para empresas y agencias. Ayuda a nuestro equipo a identificar y priorizar la solicitud.",
+      endClient: "Cliente final",
+      endClientHelp: "Recomendado para agencias. Ejemplo: marca, empresa contratante o familia atendida.",
+      groupName: "Nombre del grupo",
+      groupNameHelp: "Para turismo receptivo/DMC. Nos ayuda a identificar grupos e itinerarios.",
+      contactIntroTitle: "¿Cómo podemos contactarte?",
+      contactIntroBody:
+        "Indica tu nombre y al menos un medio de contacto. Puedes completar el resto después.",
+      contactRequirementNote:
+        "Tu nombre y un correo electrónico o WhatsApp bastan para enviar la solicitud. La empresa, el cliente final y el grupo ayudan a nuestro equipo a responder más rápido.",
+      contactPromise: "Nuestro equipo responde en un plazo de 2 días hábiles con una propuesta personalizada.",
+      contactAssurance: "Sin compromiso. Usamos tus datos solo para la propuesta de tu evento. Cuando introduces tu nombre y correo electrónico o teléfono, la información que has completado se guarda, aunque no envíes el formulario.",
+      privacyPolicyLink: "Política de privacidad (en portugués)",
+      defaultStatus: "El equipo de eventos de Embaixada Carioca revisará tu solicitud.",
+      finalReviewEyebrow: "Revisión final",
+      finalReviewTitle: "Revisa lo que recibirá nuestro equipo",
+      finalReviewBody: "Revisa los puntos principales. Si necesitas cambiar algo, pulsa “Ajustar” en la tarjeta.",
+      submit: "Enviar solicitud de propuesta",
+      preferenceLegend: "¿Qué no puede faltar?",
+      extrasLegend: "Extras de producción",
+    },
+    placeholders: {
+      dateFlex: "Ej.: primera quincena de agosto…",
+      reason: "Ej.: celebrar el décimo aniversario de la empresa, premiar al equipo de ventas, recibir invitados especiales…",
+      preferences: "Indica estilos, bebidas preferidas o restricciones alimentarias que el equipo deba tener en cuenta…",
+      notes: "Cualquier detalle ayuda: accesibilidad, una sorpresa para los invitados, necesidades técnicas, perfil del grupo…",
+      name: "Ej.: Marina Costa…",
+      email: "Ej.: nombre@empresa.com…",
+      phone: "Ej.: +1 305 555 0100",
+      company: "Ej.: Atlantic Events Group…",
+      endClient: "Ej.: L'Oréal Brazil…",
+      groupName: "Ej.: incentivo México 2026…",
+    },
+    select: {
+      dateFlexible: ["Selecciona", "Sí", "No", "Aún lo estoy evaluando"],
+      period: ["Selecciona", "Mañana", "Tarde", "Noche"],
+      duration: ["Por definir", "1h", "1h30", "2h", "2h30", "3h", "3h30", "4h"],
+      budget: ["Selecciona", "Hasta 15 mil BRL", "De 15 mil a 30 mil BRL", "De 30 mil a 60 mil BRL", "Más de 60 mil BRL", "Aún no definido"],
+      leadSource: ["Selecciona", "Recomendación", "Google / Instagram", "Agencia / colaborador", "Ya conozco el restaurante", "Parque Bondinho", "Otro"],
+      timePlaceholder: "Selecciona la franja horaria",
+    },
+    guestOutput: (value) => (value >= 100 ? "99+ invitados" : `${value} ${value === 1 ? "invitado" : "invitados"}`),
+    messages: {
+      submitting: "Enviando solicitud…",
+      successTitle: "Solicitud enviada. ¡Gracias!",
+      successBody: (referenceCode) => `Tu referencia es ${referenceCode}. Nuestro equipo de eventos responde en un plazo de 2 días hábiles.`,
+      successContact: "Si quieres añadir algo, contacta a eventos@embaixadacarioca.com.br o al +55 21 97142-6007.",
+      loadError: "No pudimos establecer la conexión. Inténtalo de nuevo en unos instantes.",
+      submitError: "No pudimos enviar tu solicitud. Revisa los datos e inténtalo de nuevo.",
+      missingFields: (fieldsList) => `Completa: ${fieldsList}. Revisa estos puntos y vuelve a enviar la solicitud.`,
+      fixThisPointTitle: "Corrige este punto para continuar:",
+      fixThisPointFooter: "Después de corregirlo, pulsa Enviar solicitud de propuesta.",
+      missingRequired: "Solo necesitamos el momento, la ocasión, el formato, la franja horaria y los datos de contacto para continuar.",
+      missingDate: "Indica una fecha deseada o un período aproximado.",
+      requiredName: "Indica tu nombre completo para que podamos preparar bien la propuesta. Ejemplo: Marina Costa.",
+      invalidEmail: "Revisa el correo electrónico para que la propuesta llegue al destinatario correcto.",
+      invalidPhone: "Revisa el teléfono/WhatsApp. Incluye el código del país si es internacional.",
+      requiredPhone: "Indica un teléfono/WhatsApp para que nuestro equipo pueda responder.",
+      requiredCompany: "Para solicitudes de empresas o agencias, incluye el nombre de la organización.",
+      requiredEndClient: "Para solicitudes de agencias, indica también el cliente final.",
+      invalidEndClient: "Indica claramente el nombre del cliente final. Ejemplo: L'Oréal Brazil o familia Almeida.",
+      invalidGroupName: "Si conoces el nombre del grupo, usa uno fácil de identificar. Ejemplo: incentivo México 2026.",
+      invalidName: "Indica tu nombre y apellido. Ejemplo: Marina Costa.",
+      invalidCompany: "Indica el nombre completo de la empresa o agencia. Ejemplo: Atlantic Events Group.",
+      submitTemporary: "No pudimos enviar tu solicitud en este momento. Inténtalo de nuevo en unos instantes o contacta a eventos@embaixadacarioca.com.br.",
+    },
+  };
+
+chipLabelSets.es = {
+    preference: {
+      "open-bar": "Barra libre",
+      "tasting-menu": "Menú degustación",
+      "welcome-drink": "Bebida de bienvenida",
+      "vegetarian-options": "Opciones vegetarianas",
+      "dietary-restrictions": "Restricciones alimentarias",
+      "interactive-experience": "Experiencia interactiva",
+    },
+    extra: {
+      dj: "DJ",
+      "jazz-trio": "Trío de jazz/bossa nova",
+      photo: "Fotografía",
+      video: "Video",
+      tv: "TV",
+      "sound-mic": "Sonido con micrófono",
+      "ambient-sound": "Sonido ambiental",
+      decor: "Decoración",
+      banners: "Banners",
+    },
+  };
+
+const formatCopies = {};
+formatCopies.es = {
+  "recommendation": {
+    "label": "Quiero la recomendación del equipo",
+    "description": "Nuestro equipo sugerirá el mejor formato según el horario, el grupo y el objetivo.",
+    "badge": "Asesoramiento",
+    "visual": "A medida",
+    "group": "Cualquier grupo"
+  },
+  "breakfast": {
+    "label": "Desayuno / Brunch",
+    "description": "Perfecto para reuniones matinales, activaciones y recepciones más ligeras.",
+    "badge": "Ideal para la mañana",
+    "visual": "Mañana",
+    "group": "A partir de 30 personas"
+  },
+  "coffee": {
+    "label": "Pausa para café",
+    "description": "Ideal para pausas corporativas y eventos breves con un servicio práctico.",
+    "badge": "Muy solicitado por empresas",
+    "visual": "Pausa",
+    "group": "A partir de 30 personas"
+  },
+  "lunch": {
+    "label": "Almuerzo Carioca",
+    "description": "Un formato para el inicio del almuerzo entre semana, con feijoada premiada y bebidas.",
+    "badge": "Nuevo de lunes a viernes",
+    "visual": "Carioca",
+    "group": "A partir de 2 personas"
+  },
+  "welcome": {
+    "label": "Bebida de bienvenida",
+    "description": "Una recepción elegante para grupos que quieren empezar el evento con impacto.",
+    "badge": "Ideal para el final de la tarde",
+    "visual": "Bienvenida",
+    "group": "A partir de 20 personas"
+  },
+  "cocktail": {
+    "label": "Cóctel",
+    "description": "Ideal para networking, lanzamientos, celebraciones y encuentros sociales.",
+    "badge": "Excelente opción de 19:00 a 21:00",
+    "visual": "Cóctel",
+    "group": "A partir de 20 personas"
+  },
+  "workshop": {
+    "label": "Taller de caipiriña",
+    "description": "Una experiencia interactiva y memorable para grupos que buscan algo diferente.",
+    "badge": "Experiencia interactiva",
+    "visual": "Experiencia",
+    "group": "A partir de 8 personas"
+  },
+  "custom": {
+    "label": "Evento a medida",
+    "description": "Para necesidades personalizadas, itinerarios de agencias y propuestas institucionales.",
+    "badge": "Consultar",
+    "visual": "A medida",
+    "group": "Consultar"
+  }
+};
+
+function getDisplayFormat(id) { return getFormatDefinition(id); }
+function getDisplayFormatLabel(label) { const id=Object.keys(formats).find(key=>formats[key].label===label); return id ? getDisplayFormat(id).label : label; }
+
+const spanishDynamicText = {
+  "Recommended": "Recomendado",
+  "Select": "Seleccionar",
+  "Access history": "Acceder al historial",
+  "Access sent. Open the link in your e-mail to see your history.": "Acceso enviado. Abre el enlace de tu correo electrónico para ver tu historial.",
+  "Adjust": "Ajustar",
+  "All set": "Todo listo",
+  "Already know your date and group size?": "¿Ya sabes la fecha y el tamaño del grupo?",
+  "Booking": "Reserva",
+  "Budget and referral (optional)": "Presupuesto y cómo nos conociste (opcional)",
+  "Check the remaining payment with the events team.": "Coordina el pago pendiente con el equipo de eventos.",
+  "Come back without filling everything out again": "Vuelve sin tener que completarlo todo de nuevo",
+  "Complete your name and at least e-mail or WhatsApp so our team can reply.": "Completa tu nombre y al menos un correo electrónico o WhatsApp para que nuestro equipo pueda responder.",
+  "Contact": "Contacto",
+  "Date and arrival": "Fecha y llegada",
+  "Date to define": "Fecha por definir",
+  "Deposit received. The team will confirm the remaining details.": "Anticipo recibido. El equipo confirmará los detalles pendientes.",
+  "Enter a valid e-mail.": "Introduce un correo electrónico válido.",
+  "Essentials first · About 2 minutes": "Lo esencial primero · Unos 2 minutos",
+  "Event": "Evento",
+  "Event approaching. Keep the day-of contact available.": "Tu evento se acerca. Mantén disponible el contacto para ese día.",
+  "Event completed. You can reuse it as a starting point.": "Evento realizado. Puedes reutilizarlo como punto de partida.",
+  "Event details": "Detalles del evento",
+  "Event format": "Formato del evento",
+  "Event preferences": "Preferencias del evento",
+  "Event progress": "Progreso del evento",
+  "Explore formats, occasions and preferences.": "Explora formatos, ocasiones y preferencias.",
+  "Extras": "Extras",
+  "Final client": "Cliente final",
+  "Go to essentials": "Ir a lo esencial",
+  "Group": "Grupo",
+  "Guests and duration": "Invitados y duración",
+  "Have you held an event or received a proposal from us?": "¿Ya celebraste un evento o recibiste una propuesta nuestra?",
+  "History is temporarily unavailable. You can continue with the form.": "El historial no está disponible temporalmente. Puedes continuar con el formulario.",
+  "I have the essentials. Go to contact": "Ya tengo lo esencial. Ir a contacto",
+  "Loading your history...": "Cargando tu historial...",
+  "Needs completion": "Falta completar",
+  "New event": "Nuevo evento",
+  "Next": "Próximo",
+  "Next step": "Siguiente paso",
+  "No must-have preference selected. That is fine if there is nothing essential.": "No has marcado ninguna preferencia imprescindible. No hay problema si no tienes ninguna.",
+  "No previous events or proposals were found for this e-mail. You can continue with the form normally.": "No encontramos eventos ni propuestas anteriores para este correo electrónico. Puedes continuar con el formulario normalmente.",
+  "Open and continue": "Abrir y continuar",
+  "Opening your proposal...": "Abriendo tu propuesta...",
+  "Operation": "Operación",
+  "Optional": "Opcional",
+  "Our team can suggest the best format if you prefer.": "Nuestro equipo puede sugerirte el mejor formato si lo prefieres.",
+  "Personalize": "Personalizar",
+  "Personalize your event (optional)": "Personaliza tu evento (opcional)",
+  "Preferences": "Preferencias",
+  "Previous event loaded. Confirm the new date and adjust only what changed.": "Evento anterior cargado. Confirma la nueva fecha y ajusta solo lo que haya cambiado.",
+  "Proposal": "Propuesta",
+  "Repeat this event": "Repetir este evento",
+  "Reply contact": "Contacto para la respuesta",
+  "Request": "Solicitud",
+  "Request saved. You can continue without starting over.": "Solicitud guardada. Puedes continuar sin empezar de nuevo.",
+  "Review the proposal and approve or request a change.": "Revisa la propuesta y apruébala o solicita un cambio.",
+  "Secure access ended on this device.": "La sesión se ha cerrado de forma segura en este dispositivo.",
+  "Secure client area": "Área segura del cliente",
+  "Send access link": "Recibir enlace de acceso",
+  "Send the essentials now. Our team can help choose the format later.": "Envía lo esencial ahora. Nuestro equipo puede ayudarte a elegir el formato después.",
+  "Sending secure access...": "Enviando acceso seguro...",
+  "Share an e-mail or WhatsApp so our team can reply.": "Indica un correo electrónico o WhatsApp para que nuestro equipo pueda responder.",
+  "Sign out": "Cerrar sesión de forma segura",
+  "Talk to our team": "Hablar con el equipo",
+  "The events team will guide the next step.": "El equipo de eventos te orientará sobre el siguiente paso.",
+  "The team is reviewing your requested changes.": "El equipo está revisando los cambios que solicitaste.",
+  "This request is closed. Start a new event whenever you wish.": "Esta solicitud está cerrada. Inicia un nuevo evento cuando quieras.",
+  "To be defined": "Por definir",
+  "Use the same e-mail as before to resume a proposal or repeat an event in a few steps.": "Usa el mismo correo electrónico de antes para retomar una propuesta o repetir un evento en pocos pasos.",
+  "We could not reopen this proposal. Continue below and we will prepare a new version.": "No pudimos volver a abrir esta propuesta. Continúa abajo y prepararemos una nueva versión.",
+  "We could not send the access e-mail. Try again shortly.": "No pudimos enviar el correo de acceso. Inténtalo de nuevo en unos instantes.",
+  "Who and occasion": "Quién organiza y ocasión",
+  "Who is organizing and what is the occasion?": "¿Quién organiza y cuál es la ocasión?",
+  "Who is organizing has not been selected yet": "Aún no se ha seleccionado quién organiza",
+  "Worth completing": "Conviene completar",
+  "Your e-mail": "Tu correo electrónico",
+  "Your event is in operational planning.": "Tu evento está en planificación operativa.",
+  "Your events in one place": "Tus eventos en un solo lugar",
+  "active": "en curso",
+  "arrival time not selected yet": "hora de llegada aún no seleccionada",
+  "guests": "invitados",
+  "occasion not selected yet": "ocasión aún no seleccionada"
+};
+function translateEnglish(text) { return uiState.language === "es" ? (spanishDynamicText[text] || text) : text; }
+function localizedText(english, portuguese) { return uiState.language === "pt" ? portuguese : translateEnglish(english); }
+const formAriaLabels = {
+  "Idioma do formulário": {
+    "en": "Form language",
+    "es": "Idioma del formulario"
+  },
+  "Credenciais": {
+    "en": "Credentials",
+    "es": "Credenciales"
+  },
+  "Formulário de solicitação": {
+    "en": "Request form",
+    "es": "Formulario de solicitud"
+  },
+  "Etapas do pedido": {
+    "en": "Request steps",
+    "es": "Pasos de la solicitud"
+  },
+  "Progresso do formulário": {
+    "en": "Form progress",
+    "es": "Progreso del formulario"
+  },
+  "Como funciona": {
+    "en": "How it works",
+    "es": "Cómo funciona"
+  },
+  "Caminho rápido": {
+    "en": "Quick path",
+    "es": "Acceso rápido"
+  },
+  "Momento do evento": {
+    "en": "Event timing",
+    "es": "Momento del evento"
+  },
+  "Tipo de cliente": {
+    "en": "Client type",
+    "es": "Tipo de cliente"
+  },
+  "Ocasião do evento": {
+    "en": "Event occasion",
+    "es": "Ocasión del evento"
+  },
+  "Escolha rápida de convidados": {
+    "en": "Quick guest selection",
+    "es": "Selección rápida de invitados"
+  }
+};
+function applyLocalizedAria() {
+  document.querySelectorAll("[aria-label]").forEach(node=>{
+    const original=node.dataset.formAriaKey || node.getAttribute("aria-label");
+    if (!formAriaLabels[original]) return;
+    node.dataset.formAriaKey=original;
+    node.setAttribute("aria-label", formAriaLabels[original][uiState.language] || original);
+  });
+}
+
 function loadLanguage() {
-  const saved = localStorage.getItem(LANGUAGE_KEY);
-  return saved === "en" ? "en" : "pt";
+  const query = new URLSearchParams(location.search);
+  if (query.has("lang")) return query.getAll("lang").length === 1 && ["pt","en","es"].includes(query.get("lang")) ? query.get("lang") : "pt";
+  const saved = readFormStorage(LANGUAGE_KEY);
+  return ["pt","en","es"].includes(saved) ? saved : "pt";
 }
 
 function getCopy() {
@@ -730,7 +1178,7 @@ function applyChipLabels() {
   });
 }
 
-function getFormatDefinition(id) {
+function getFormatDefinition(id, language = uiState.language) {
   const definitions = {
     recommendation: {
       pt: { label: "Quero recomendação da equipe", description: "A equipe indica o melhor formato considerando horário, grupo e objetivo.", badge: "Consultivo", visual: "Sob medida", group: "Qualquer grupo" },
@@ -765,7 +1213,7 @@ function getFormatDefinition(id) {
       en: { label: "Tailored Event", description: "For customized demands, agency itineraries and institutional proposals.", badge: "By consultation", visual: "Tailored", group: "On request" },
     },
   };
-  return definitions[id]?.[uiState.language] || definitions[id]?.pt;
+  return formatCopies[language]?.[id] || definitions[id]?.[language] || definitions[id]?.pt;
 }
 
 function renderChoiceButtons(container, items, groupName) {
@@ -789,7 +1237,8 @@ function renderChoiceButtons(container, items, groupName) {
 
 function applyStaticCopy() {
   const current = getCopy();
-  document.documentElement.lang = uiState.language === "en" ? "en" : "pt-BR";
+  document.documentElement.lang = uiState.language === "pt" ? "pt-BR" : uiState.language;
+  document.title = `${current.heroTitle} | Embaixada Carioca`;
   document.querySelector("#heroEyebrow").textContent = current.heroEyebrow;
   document.querySelector("#heroTitle").textContent = current.heroTitle;
   document.querySelector("#heroSubtitle").textContent = current.heroSubtitle;
@@ -867,11 +1316,11 @@ function applyStaticCopy() {
   fields.groupName.placeholder = current.placeholders.groupName;
   updateContactRequirements();
   updateContactGuidance();
-  document.querySelector("#briefingTitle").textContent = uiState.language === "en" ? "Event preferences" : "Preferências do evento";
+  document.querySelector("#briefingTitle").textContent = localizedText("Event preferences", "Preferências do evento");
   document.querySelector("#contactTitle").textContent = current.stepLabels[3];
   document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
-  document.querySelector("#profileTitle").textContent = uiState.language === "en" ? "Who is organizing and what is the occasion?" : "Quem está organizando e qual é a ocasião?";
-  document.querySelector("#eventDetailsTitle").textContent = uiState.language === "en" ? "Event details" : "Detalhes do evento";
+  document.querySelector("#profileTitle").textContent = localizedText("Who is organizing and what is the occasion?", "Quem está organizando e qual é a ocasião?");
+  document.querySelector("#eventDetailsTitle").textContent = localizedText("Event details", "Detalhes do evento");
   document.querySelector(".preference-chips legend").textContent = current.labels.preferenceLegend;
   document.querySelectorAll(".preference-chips legend")[1].textContent = current.labels.extrasLegend;
   applyChipLabels();
@@ -901,17 +1350,17 @@ function renderLocalizedChoices() {
 }
 
 function setLanguage(language) {
-  uiState.language = language === "en" ? "en" : "pt";
-  localStorage.setItem(LANGUAGE_KEY, uiState.language);
-  const shortcutCopy = uiState.language === "en"
+  uiState.language = ["pt", "en", "es"].includes(language) ? language : "pt";
+  writeFormStorage(LANGUAGE_KEY, uiState.language);
+  const shortcutCopy = uiState.language !== "pt"
     ? ["Already know your date and group size?", "Send the essentials now. Our team can help choose the format later.", "Go to essentials", "Talk to our team"]
     : ["Já sabe a data e o tamanho do grupo?", "Envie o essencial agora. A equipe ajuda a definir o formato depois.", "Ir ao essencial", "Falar com a equipe"];
   ["quickPathTitle", "quickPathDescription", "quickPathLink", "quickHumanLink"].forEach((id, index) => {
     const node = document.querySelector(`#${id}`);
-    if (node) node.textContent = shortcutCopy[index];
+    if (node) node.textContent = translateEnglish(shortcutCopy[index]);
   });
   const quickContact = document.querySelector("#quickContactLink");
-  if (quickContact) quickContact.textContent = uiState.language === "en" ? "I have the essentials. Go to contact" : "Já tenho o essencial. Ir para contato";
+  if (quickContact) quickContact.textContent = localizedText("I have the essentials. Go to contact", "Já tenho o essencial. Ir para contato");
   langButtons.forEach((button) => {
     const active = button.dataset.lang === uiState.language;
     button.classList.toggle("is-active", active);
@@ -919,10 +1368,11 @@ function setLanguage(language) {
   });
   renderLocalizedChoices();
   applyStaticCopy();
-  const compactCopy = uiState.language === "en"
+  applyLocalizedAria();
+  const compactCopy = uiState.language !== "pt"
     ? { formContactNav: "Contact", formPersonalizeNav: "Personalize", personalizeTitle: "Personalize your event (optional)", personalizeDescription: "Explore formats, occasions and preferences.", contactOptionalSummary: "Budget and referral (optional)" }
     : { formContactNav: "Contato", formPersonalizeNav: "Personalizar", personalizeTitle: "Personalize seu evento (opcional)", personalizeDescription: "Explore formatos, ocasião e preferências.", contactOptionalSummary: "Investimento e origem (opcional)" };
-  Object.entries(compactCopy).forEach(([id, text]) => { document.getElementById(id).textContent = text; });
+  Object.entries(compactCopy).forEach(([id, text]) => { document.getElementById(id).textContent = translateEnglish(text); });
   fillTimeOptions();
   renderRecommendations();
   updateGuestOutput();
@@ -961,7 +1411,7 @@ function updateProgress(stepName = "eventDetails") {
   const current = getCopy();
   const index = Math.max(0, stepOrder.indexOf(stepName));
   const percent = ((index + 1) / stepOrder.length) * 100;
-  if (progressText) progressText.textContent = uiState.language === "en" ? "Essentials first · About 2 minutes" : "O essencial primeiro · Cerca de 2 minutos";
+  if (progressText) progressText.textContent = localizedText("Essentials first · About 2 minutes", "O essencial primeiro · Cerca de 2 minutos");
   if (progressBar) progressBar.style.width = `${percent}%`;
   progressSteps.forEach((step, stepIndex) => {
     step.toggleAttribute("data-active", stepIndex === index);
@@ -983,26 +1433,41 @@ function getPublicSupabaseClient() {
 }
 
 function getCaptureToken() {
-  let token = localStorage.getItem(CAPTURE_TOKEN_KEY) || "";
+  let token = readFormStorage(CAPTURE_TOKEN_KEY) || "";
   if (!token) {
     token = window.crypto?.randomUUID?.() || `00000000-0000-4000-8000-${Math.random().toString(16).slice(2).padEnd(12, "0").slice(0, 12)}`;
-    localStorage.setItem(CAPTURE_TOKEN_KEY, token);
+    writeFormStorage(CAPTURE_TOKEN_KEY, token);
   }
+  formStorageMemory[CAPTURE_TOKEN_KEY] = token;
   return token;
 }
 
 function getOrCreateReferenceCode() {
-  let reference = localStorage.getItem(REFERENCE_CODE_KEY) || "";
+  let reference = readFormStorage(REFERENCE_CODE_KEY) || "";
   if (!reference) {
     reference = createReferenceCode();
-    localStorage.setItem(REFERENCE_CODE_KEY, reference);
+    writeFormStorage(REFERENCE_CODE_KEY, reference);
   }
+  formStorageMemory[REFERENCE_CODE_KEY] = reference;
   return reference;
 }
 
+function initializeCaptureIdentity() {
+  getCaptureToken();
+  getOrCreateReferenceCode();
+  getEventAttribution();
+}
+
 function resetCaptureIdentity() {
-  localStorage.removeItem(CAPTURE_TOKEN_KEY);
-  localStorage.removeItem(REFERENCE_CODE_KEY);
+  const completedToken = formStorageMemory[CAPTURE_TOKEN_KEY];
+  try {
+    if (completedToken && localStorage.getItem(CAPTURE_TOKEN_KEY) === completedToken) {
+      localStorage.removeItem(EVENT_ATTRIBUTION_KEY);
+      localStorage.removeItem(REFERENCE_CODE_KEY);
+      localStorage.removeItem(CAPTURE_TOKEN_KEY);
+    }
+  } catch (_) { /* Clear this tab even when shared storage is unavailable. */ }
+  for (const key of [EVENT_ATTRIBUTION_KEY, CAPTURE_TOKEN_KEY, REFERENCE_CODE_KEY]) formStorageMemory[key] = null;
   if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
   partialCaptureTimer = null;
 }
@@ -1049,7 +1514,7 @@ async function savePartialLead() {
       }
       return;
     }
-    if (node) node.textContent = uiState.language === "en" ? "Request saved. You can continue without starting over." : "Pedido salvo. Você pode continuar sem começar de novo.";
+    if (node) node.textContent = localizedText("Request saved. You can continue without starting over.", "Pedido salvo. Você pode continuar sem começar de novo.");
   } catch (error) {
     console.warn("Falha silenciosa na captura parcial.", error);
   }
@@ -1138,43 +1603,37 @@ function formatReviewDate(value) {
 function renderFinalReview() {
   if (!finalReviewGrid) return;
   const current = getCopy();
-  const pendingLabel = uiState.language === "en" ? "To be defined" : "A definir";
+  const pendingLabel = localizedText("To be defined", "A definir");
   const isEn = uiState.language === "en";
   const reviewCopy = {
-    ok: isEn ? "All set" : "Tudo certo",
-    warning: isEn ? "Worth completing" : "Vale completar",
-    required: isEn ? "Needs completion" : "Precisa completar",
-    optional: isEn ? "Optional" : "Opcional",
-    edit: isEn ? "Adjust" : "Ajustar",
-    formatMissing: isEn
-      ? "Our team can suggest the best format if you prefer."
-      : "A equipe pode sugerir o melhor formato, se você preferir.",
-    clientMissing: isEn ? "Who is organizing has not been selected yet" : "Quem organiza ainda não foi selecionado",
-    occasionMissing: isEn ? "occasion not selected yet" : "ocasião ainda não escolhida",
-    timeMissing: isEn ? "arrival time not selected yet" : "horário ainda não escolhido",
-    preferenceEmpty: isEn
-      ? "No must-have preference selected. That is fine if there is nothing essential."
-      : "Nenhuma preferência indispensável marcada. Tudo bem se não houver.",
-    contactMissing: isEn
-      ? "Complete your name and at least e-mail or WhatsApp so our team can reply."
-      : "Complete seu nome e pelo menos e-mail ou WhatsApp para a equipe retornar.",
+    ok: localizedText("All set", "Tudo certo"),
+    warning: localizedText("Worth completing", "Vale completar"),
+    required: localizedText("Needs completion", "Precisa completar"),
+    optional: localizedText("Optional", "Opcional"),
+    edit: localizedText("Adjust", "Ajustar"),
+    formatMissing: localizedText("Our team can suggest the best format if you prefer.", "A equipe pode sugerir o melhor formato, se você preferir."),
+    clientMissing: localizedText("Who is organizing has not been selected yet", "Quem organiza ainda não foi selecionado"),
+    occasionMissing: localizedText("occasion not selected yet", "ocasião ainda não escolhida"),
+    timeMissing: localizedText("arrival time not selected yet", "horário ainda não escolhido"),
+    preferenceEmpty: localizedText("No must-have preference selected. That is fine if there is nothing essential.", "Nenhuma preferência indispensável marcada. Tudo bem se não houver."),
+    contactMissing: localizedText("Complete your name and at least e-mail or WhatsApp so our team can reply.", "Complete seu nome e pelo menos e-mail ou WhatsApp para a equipe retornar."),
     contactFallback: current.labels.defaultStatus,
   };
-  const selectedPreferences = getSelectedPreferenceLabels();
-  const selectedExtras = getSelectedExtraLabels();
+  const selectedPreferences = getSelectedChipDisplayLabels(preferenceChips, "preference");
+  const selectedExtras = getSelectedChipDisplayLabels(extraChips, "extra");
   const preferenceSummary = [
     selectedPreferences.length
       ? selectedPreferences.join(", ")
       : reviewCopy.preferenceEmpty,
-    selectedExtras.length ? `${isEn ? "Extras" : "Extras"}: ${selectedExtras.join(", ")}` : "",
+    selectedExtras.length ? `${localizedText("Extras", "Extras")}: ${selectedExtras.join(", ")}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
   const contactParts = [
     fields.name.value.trim(),
     fields.company.value.trim(),
-    fields.endClientName.value.trim() ? `${isEn ? "Final client" : "Cliente final"}: ${fields.endClientName.value.trim()}` : "",
-    fields.groupName.value.trim() ? `${isEn ? "Group" : "Grupo"}: ${fields.groupName.value.trim()}` : "",
+    fields.endClientName.value.trim() ? `${localizedText("Final client", "Cliente final")}: ${fields.endClientName.value.trim()}` : "",
+    fields.groupName.value.trim() ? `${localizedText("Group", "Grupo")}: ${fields.groupName.value.trim()}` : "",
     fields.email.value.trim(),
     fields.phone.value.trim(),
   ].filter(Boolean);
@@ -1185,14 +1644,14 @@ function renderFinalReview() {
   const profileLabel = getSelectedProfileDisplayLabels().join(", ");
   const items = [
     {
-      label: isEn ? "Event format" : "Formato do evento",
-      value: fields.eventType.value || reviewCopy.formatMissing,
+      label: localizedText("Event format", "Formato do evento"),
+      value: getDisplayFormatLabel(fields.eventType.value) || reviewCopy.formatMissing,
       step: "recommendation",
       status: fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
       state: fields.eventType.value ? "is-ok" : "is-warning",
     },
     {
-      label: isEn ? "Who and occasion" : "Quem organiza e ocasião",
+      label: localizedText("Who and occasion", "Quem organiza e ocasião"),
       value: [
         clientTypeLabel || reviewCopy.clientMissing,
         profileLabel || reviewCopy.occasionMissing,
@@ -1202,7 +1661,7 @@ function renderFinalReview() {
       state: clientTypeLabel && profileLabel ? "is-ok" : "is-optional",
     },
     {
-      label: isEn ? "Date and arrival" : "Data e chegada",
+      label: localizedText("Date and arrival", "Data e chegada"),
       value: [
         formatReviewDate(fields.date.value) || fields.dateFlex.value.trim() || pendingLabel,
         fields.time.value || reviewCopy.timeMissing,
@@ -1212,21 +1671,21 @@ function renderFinalReview() {
       state: dateReady ? "is-ok" : "is-required",
     },
     {
-      label: isEn ? "Guests and duration" : "Convidados e duração",
-      value: `${fields.guests.value || 30} ${isEn ? "guests" : "pessoas"} · ${getSelectedDurationLabel()}`,
+      label: localizedText("Guests and duration", "Convidados e duração"),
+      value: `${fields.guests.value || 30} ${localizedText("guests", "pessoas")} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
       status: reviewCopy.ok,
       state: "is-ok",
     },
     {
-      label: isEn ? "Preferences" : "Preferências",
+      label: localizedText("Preferences", "Preferências"),
       value: preferenceSummary,
       step: "briefing",
       status: selectedPreferences.length || selectedExtras.length ? reviewCopy.ok : reviewCopy.optional,
       state: selectedPreferences.length || selectedExtras.length ? "is-ok" : "is-optional",
     },
     {
-      label: isEn ? "Reply contact" : "Contato para retorno",
+      label: localizedText("Reply contact", "Contato para retorno"),
       value: contactReady ? contactParts.join(" · ") : [contactParts.join(" · "), reviewCopy.contactMissing].filter(Boolean).join(" · "),
       step: "contact",
       status: contactReady ? reviewCopy.ok : reviewCopy.required,
@@ -1505,6 +1964,10 @@ function getClientTypeDisplayLabel() {
   return current.clientTypes.find((item) => item.value === selected)?.title || canonicalClientTypeLabels[selected] || "";
 }
 
+function getSelectedChipDisplayLabels(chips, kind) {
+  return chips.filter(chip=>chip.checked).map(chip=>chipLabelSets[uiState.language]?.[kind]?.[chip.dataset.chipKey] || chip.value);
+}
+
 function getSelectedPreferenceLabels() {
   return preferenceChips.filter((chip) => chip.checked).map((chip) => chip.value);
 }
@@ -1542,7 +2005,7 @@ function getFormatIdByLabel(label) {
     cocktail: true,
     workshop: true,
     custom: true,
-  }).find((id) => getFormatDefinition(id)?.label === label) || "";
+  }).find((id) => ["pt", "en", "es"].some(language=>getFormatDefinition(id, language)?.label === label)) || "";
 }
 
 function renderRecommendations() {
@@ -1557,14 +2020,14 @@ function renderRecommendations() {
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
   if (fields.eventType.value && !ids.includes(selectedFormatId)) fields.eventType.value = "";
   if (!fields.eventType.value && fields.profile.value && ids.length) {
-    fields.eventType.value = getFormatDefinition(ids[0]).label;
+    fields.eventType.value = formats[ids[0]].label;
   }
-  const moment = canonicalMomentLabels[fields.moment.value];
+  const moment = current.momentOptions.find(item=>item.value===fields.moment.value)?.title || canonicalMomentLabels[fields.moment.value];
   recommendationIntro.textContent = current.recommendationReady(moment);
   recommendationList.innerHTML = ids
     .map((id, index) => {
       const item = getFormatDefinition(id);
-      const selected = fields.eventType.value === item.label;
+      const selected = fields.eventType.value === formats[id].label;
       return `
         <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}">
           <span>${item.badge}</span>
@@ -1572,7 +2035,7 @@ function renderRecommendations() {
           <strong>${item.label}</strong>
           <em>${item.description}</em>
           <small>${item.group}</small>
-          <b>${index === 0 ? "Mais indicado" : "Selecionar"}</b>
+          <b>${index === 0 ? localizedText("Recommended", "Mais indicado") : localizedText("Select", "Selecionar")}</b>
         </button>
       `;
     })
@@ -1582,7 +2045,7 @@ function renderRecommendations() {
 function selectFormat(formatId) {
   const item = getFormatDefinition(formatId);
   if (!item) return;
-  fields.eventType.value = item.label;
+  fields.eventType.value = formats[formatId].label;
   setStepValidity("recommendation", true);
   renderRecommendations();
   scrollToStep("briefing");
@@ -1642,6 +2105,7 @@ function getSnapshot(referenceCode) {
   const selectedOccasions = getSelectedProfileLabels().join(", ");
   const durationLabel = getSelectedDurationLabel();
   return {
+    ...(getEventAttribution() ? {attribution: getEventAttribution()} : {}),
     referencia: referenceCode,
     cliente: {
       idioma: uiState.language,
@@ -1744,7 +2208,7 @@ function getFriendlySubmitError(error, current) {
   if (/cliente_nome|nome_completo|null value/i.test(raw)) return current.messages.requiredName;
   if (/cliente_email|email/i.test(raw)) return current.messages.invalidEmail;
   if (/cliente_whatsapp|whatsapp|phone/i.test(raw)) return current.messages.invalidPhone;
-  return `${current.messages.submitError} ${raw}`;
+  return current.messages.submitError;
 }
 
 function validateSnapshot(snapshot) {
@@ -1773,7 +2237,7 @@ function validateSnapshot(snapshot) {
   const hasEmail = Boolean(snapshot.cliente.email);
   const hasPhone = Boolean(snapshot.cliente.whatsapp);
   if (!hasEmail && !hasPhone) {
-    return failValidation(fields.email, "contact", uiState.language === "en" ? "Share an e-mail or WhatsApp so our team can reply." : "Informe um e-mail ou WhatsApp para a equipe retornar.");
+    return failValidation(fields.email, "contact", localizedText("Share an e-mail or WhatsApp so our team can reply.", "Informe um e-mail ou WhatsApp para a equipe retornar."));
   }
 
   if (hasEmail && !isValidEmail(snapshot.cliente.email)) {
@@ -1805,18 +2269,18 @@ function getCanonicalKeyByLabel(map, label) {
 function renderReturningClientCopy() {
   const isEn = uiState.language === "en";
   const copyMap = {
-    returningClientSummary: isEn ? "Have you held an event or received a proposal from us?" : "Já fez evento ou recebeu proposta conosco?",
-    returningClientSummaryAction: isEn ? "Access history" : "Acessar histórico",
-    returningClientTitle: isEn ? "Come back without filling everything out again" : "Volte sem preencher tudo de novo",
-    returningClientBody: isEn ? "Use the same e-mail as before to resume a proposal or repeat an event in a few steps." : "Use o mesmo e-mail de antes para retomar uma proposta ou repetir um evento em poucos passos.",
-    returningClientEmailLabel: isEn ? "Your e-mail" : "Seu e-mail",
+    returningClientSummary: localizedText("Have you held an event or received a proposal from us?", "Já fez evento ou recebeu proposta conosco?"),
+    returningClientSummaryAction: localizedText("Access history", "Acessar histórico"),
+    returningClientTitle: localizedText("Come back without filling everything out again", "Volte sem preencher tudo de novo"),
+    returningClientBody: localizedText("Use the same e-mail as before to resume a proposal or repeat an event in a few steps.", "Use o mesmo e-mail de antes para retomar uma proposta ou repetir um evento em poucos passos."),
+    returningClientEmailLabel: localizedText("Your e-mail", "Seu e-mail"),
   };
   Object.entries(copyMap).forEach(([id, value]) => {
     const node = document.querySelector("#" + id);
     if (node) node.textContent = value;
   });
   const button = document.querySelector("#returningClientSendOtp");
-  if (button) button.textContent = isEn ? "Send access link" : "Receber acesso por e-mail";
+  if (button) button.textContent = localizedText("Send access link", "Receber acesso por e-mail");
 }
 
 function getReturningStatusLabel(status) {
@@ -1830,15 +2294,16 @@ function getReturningStatusLabel(status) {
     pos_venda: "Evento realizado",
     cancelado: "Encerrado",
   };
-  return labels[status] || status || "Proposta";
+  const translated = {"proposta_enviada": "Propuesta enviada", "negociacao": "En negociación", "confirmado": "Confirmado", "pagamento_final": "Pago final", "planejamento": "Planificación", "evento_proximo": "Evento próximo", "pos_venda": "Evento realizado", "cancelado": "Cerrado"};
+  return (uiState.language === "es" ? translated[status] : labels[status]) || status || localizedText("Proposal", "Proposta");
 }
 
 function getReturningClientProgress(status) {
   const stages = [
-    { id: "pedido", label: uiState.language === "en" ? "Request" : "Pedido" },
-    { id: "proposta", label: uiState.language === "en" ? "Proposal" : "Proposta" },
-    { id: "reserva", label: uiState.language === "en" ? "Booking" : "Reserva" },
-    { id: "operacao", label: uiState.language === "en" ? "Operation" : "Operação" },
+    { id: "pedido", label: localizedText("Request", "Pedido") },
+    { id: "proposta", label: localizedText("Proposal", "Proposta") },
+    { id: "reserva", label: localizedText("Booking", "Reserva") },
+    { id: "operacao", label: localizedText("Operation", "Operação") },
   ];
   const index = ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(status)
     ? (["planejamento", "evento_proximo", "pos_venda"].includes(status) ? 3 : 2)
@@ -1849,16 +2314,16 @@ function getReturningClientProgress(status) {
 function getReturningClientNextStep(item) {
   const isEn = uiState.language === "en";
   const copy = {
-    proposta_enviada: isEn ? "Review the proposal and approve or request a change." : "Revise a proposta e aprove ou peça um ajuste.",
-    negociacao: isEn ? "The team is reviewing your requested changes." : "A equipe está tratando os ajustes solicitados.",
-    confirmado: isEn ? "Deposit received. The team will confirm the remaining details." : "Sinal recebido. A equipe confirmará os detalhes restantes.",
-    pagamento_final: isEn ? "Check the remaining payment with the events team." : "Alinhe o pagamento restante com a equipe de eventos.",
-    planejamento: isEn ? "Your event is in operational planning." : "Seu evento está em planejamento operacional.",
-    evento_proximo: isEn ? "Event approaching. Keep the day-of contact available." : "Evento próximo. Mantenha disponível o contato do dia.",
-    pos_venda: isEn ? "Event completed. You can reuse it as a starting point." : "Evento realizado. Você pode reutilizá-lo como ponto de partida.",
-    cancelado: isEn ? "This request is closed. Start a new event whenever you wish." : "Este pedido está encerrado. Inicie um novo evento quando quiser.",
+    proposta_enviada: localizedText("Review the proposal and approve or request a change.", "Revise a proposta e aprove ou peça um ajuste."),
+    negociacao: localizedText("The team is reviewing your requested changes.", "A equipe está tratando os ajustes solicitados."),
+    confirmado: localizedText("Deposit received. The team will confirm the remaining details.", "Sinal recebido. A equipe confirmará os detalhes restantes."),
+    pagamento_final: localizedText("Check the remaining payment with the events team.", "Alinhe o pagamento restante com a equipe de eventos."),
+    planejamento: localizedText("Your event is in operational planning.", "Seu evento está em planejamento operacional."),
+    evento_proximo: localizedText("Event approaching. Keep the day-of contact available.", "Evento próximo. Mantenha disponível o contato do dia."),
+    pos_venda: localizedText("Event completed. You can reuse it as a starting point.", "Evento realizado. Você pode reutilizá-lo como ponto de partida."),
+    cancelado: localizedText("This request is closed. Start a new event whenever you wish.", "Este pedido está encerrado. Inicie um novo evento quando quiser."),
   };
-  return copy[item.status] || (isEn ? "The events team will guide the next step." : "A equipe de eventos orientará o próximo passo.");
+  return copy[item.status] || (localizedText("The events team will guide the next step.", "A equipe de eventos orientará o próximo passo."));
 }
 
 function renderReturningClientHistory(rows = [], email = "") {
@@ -1868,7 +2333,7 @@ function renderReturningClientHistory(rows = [], email = "") {
   returningClientHistory = rows || [];
   container.hidden = false;
   if (!rows.length) {
-    container.innerHTML = `<p>${uiState.language === "en" ? "No previous events or proposals were found for this e-mail. You can continue with the form normally." : "Não encontramos eventos ou propostas anteriores para este e-mail. Você pode seguir pelo formulário normalmente."}</p>`;
+    container.innerHTML = `<p>${localizedText("No previous events or proposals were found for this e-mail. You can continue with the form normally.", "Não encontramos eventos ou propostas anteriores para este e-mail. Você pode seguir pelo formulário normalmente.")}</p>`;
     if (status) status.textContent = email ? email : "";
     return;
   }
@@ -1878,41 +2343,41 @@ function renderReturningClientHistory(rows = [], email = "") {
   container.innerHTML = `
     <div class="returning-history-heading client-portal-heading">
       <div>
-        <span>${isEn ? "Secure client area" : "Área segura do cliente"}</span>
-        <strong>${isEn ? "Your events in one place" : "Seus eventos em um só lugar"}</strong>
-        <small>${activeCount} ${isEn ? "active" : "em andamento"}${nextEvent ? ` · ${isEn ? "Next" : "Próximo"}: ${escapeHtml(formatReviewDate(nextEvent.data_evento))}` : ""}</small>
+        <span>${localizedText("Secure client area", "Área segura do cliente")}</span>
+        <strong>${localizedText("Your events in one place", "Seus eventos em um só lugar")}</strong>
+        <small>${activeCount} ${localizedText("active", "em andamento")}${nextEvent ? ` · ${localizedText("Next", "Próximo")}: ${escapeHtml(formatReviewDate(nextEvent.data_evento))}` : ""}</small>
       </div>
       <div class="client-portal-actions">
-        <button class="secondary" type="button" data-returning-new>${isEn ? "New event" : "Novo evento"}</button>
-        <button class="secondary" type="button" data-returning-signout>${isEn ? "Sign out" : "Sair com segurança"}</button>
+        <button class="secondary" type="button" data-returning-new>${localizedText("New event", "Novo evento")}</button>
+        <button class="secondary" type="button" data-returning-signout>${localizedText("Sign out", "Sair com segurança")}</button>
       </div>
     </div>
     <div class="returning-history-list">
       ${rows.map((item, index) => {
-        const date = item.data_evento ? formatReviewDate(item.data_evento) : (isEn ? "Date to define" : "Data a definir");
+        const date = item.data_evento ? formatReviewDate(item.data_evento) : (localizedText("Date to define", "Data a definir"));
         const open = ["proposta_enviada", "negociacao"].includes(item.status);
         const progress = getReturningClientProgress(item.status);
         return `
           <article class="returning-history-item client-portal-event-card">
             <div class="client-portal-event-copy">
               <span>${escapeHtml(getReturningStatusLabel(item.status))}${item.versao ? ` · V${escapeHtml(item.versao)}` : ""}</span>
-              <strong>${escapeHtml(item.tipo_evento || (isEn ? "Event" : "Evento"))}</strong>
+              <strong>${escapeHtml(getDisplayFormatLabel(item.tipo_evento) || (localizedText("Event", "Evento")))}</strong>
               <small>${escapeHtml(date)} · ${escapeHtml(item.convidados || "")}${item.convidados ? " pax" : ""}${item.total ? ` · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.total))}` : ""}</small>
-              <div class="client-portal-progress" aria-label="${isEn ? "Event progress" : "Progresso do evento"}">
+              <div class="client-portal-progress" aria-label="${localizedText("Event progress", "Progresso do evento")}">
                 ${progress.stages.map((stage, stageIndex) => `<span class="${stageIndex <= progress.index ? "is-complete" : ""}${stageIndex === progress.index ? " is-current" : ""}"><i></i>${escapeHtml(stage.label)}</span>`).join("")}
               </div>
-              <p class="client-portal-next-step"><b>${isEn ? "Next step" : "Próximo passo"}</b>${escapeHtml(getReturningClientNextStep(item))}</p>
+              <p class="client-portal-next-step"><b>${localizedText("Next step", "Próximo passo")}</b>${escapeHtml(getReturningClientNextStep(item))}</p>
             </div>
             <div class="returning-history-actions">
-              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${isEn ? "Open and continue" : "Abrir e continuar"}</button>` : ""}
-              <button class="secondary" type="button" data-returning-repeat="${index}">${isEn ? "Repeat this event" : "Repetir este evento"}</button>
+              ${open ? `<button class="primary" type="button" data-returning-resume="${index}">${localizedText("Open and continue", "Abrir e continuar")}</button>` : ""}
+              <button class="secondary" type="button" data-returning-repeat="${index}">${localizedText("Repeat this event", "Repetir este evento")}</button>
             </div>
           </article>
         `;
       }).join("")}
     </div>
   `;
-  if (status) status.textContent = isEn ? `Signed in as ${email}.` : `Acesso confirmado para ${email}.`;
+  if (status) status.textContent = uiState.language === "es" ? `Sesión iniciada como ${email}.` : (uiState.language === "en" ? `Signed in as ${email}.` : `Acesso confirmado para ${email}.`);
 }
 
 async function loadReturningClientHistory() {
@@ -1922,11 +2387,11 @@ async function loadReturningClientHistory() {
   const { data: sessionData } = await client.auth.getSession();
   const session = sessionData?.session;
   if (!session?.user?.email) return;
-  if (status) status.textContent = uiState.language === "en" ? "Loading your history..." : "Carregando seu histórico...";
+  if (status) status.textContent = localizedText("Loading your history...", "Carregando seu histórico...");
   const { data, error } = await client.rpc("get_my_event_history");
   if (error) {
     console.warn("Falha ao carregar histórico do cliente.", error);
-    if (status) status.textContent = uiState.language === "en" ? "History is temporarily unavailable. You can continue with the form." : "O histórico está temporariamente indisponível. Você pode seguir pelo formulário.";
+    if (status) status.textContent = localizedText("History is temporarily unavailable. You can continue with the form.", "O histórico está temporariamente indisponível. Você pode seguir pelo formulário.");
     return;
   }
   const access = document.querySelector("#returningClientAccess");
@@ -1957,7 +2422,7 @@ async function signOutReturningClient() {
   }
   if (input) input.value = "";
   if (access) access.open = false;
-  if (status) status.textContent = uiState.language === "en" ? "Secure access ended on this device." : "Acesso encerrado com segurança neste dispositivo.";
+  if (status) status.textContent = localizedText("Secure access ended on this device.", "Acesso encerrado com segurança neste dispositivo.");
 }
 
 async function sendReturningClientOtp() {
@@ -1967,12 +2432,12 @@ async function sendReturningClientOtp() {
   const status = document.querySelector("#returningClientStatus");
   const email = String(input?.value || "").trim().toLowerCase();
   if (!client || !isValidEmail(email)) {
-    if (status) status.textContent = uiState.language === "en" ? "Enter a valid e-mail." : "Informe um e-mail válido.";
+    if (status) status.textContent = localizedText("Enter a valid e-mail.", "Informe um e-mail válido.");
     input?.focus();
     return;
   }
   if (button) button.disabled = true;
-  if (status) status.textContent = uiState.language === "en" ? "Sending secure access..." : "Enviando acesso seguro...";
+  if (status) status.textContent = localizedText("Sending secure access...", "Enviando acesso seguro...");
   const { error } = await client.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: CANONICAL_CLIENT_FORM_URL, shouldCreateUser: true },
@@ -1980,10 +2445,10 @@ async function sendReturningClientOtp() {
   if (button) button.disabled = false;
   if (error) {
     console.warn("Falha ao enviar OTP do cliente.", error);
-    if (status) status.textContent = uiState.language === "en" ? "We could not send the access e-mail. Try again shortly." : "Não conseguimos enviar o acesso agora. Tente novamente em instantes.";
+    if (status) status.textContent = localizedText("We could not send the access e-mail. Try again shortly.", "Não conseguimos enviar o acesso agora. Tente novamente em instantes.");
     return;
   }
-  if (status) status.textContent = uiState.language === "en" ? "Access sent. Open the link in your e-mail to see your history." : "Acesso enviado. Abra o link no seu e-mail para ver seu histórico.";
+  if (status) status.textContent = localizedText("Access sent. Open the link in your e-mail to see your history.", "Acesso enviado. Abra o link no seu e-mail para ver seu histórico.");
 }
 
 function applyReturningHistoryAsBase(item) {
@@ -2045,7 +2510,7 @@ function applyReturningHistoryAsBase(item) {
     dedupeKey: `returning-event-reused:${item.opportunity_id || item.proposal_id || item.id || "unknown"}`,
   });
   const status = document.querySelector("#returningClientStatus");
-  if (status) status.textContent = uiState.language === "en" ? "Previous event loaded. Confirm the new date and adjust only what changed." : "Evento anterior carregado. Confirme a nova data e ajuste apenas o que mudou.";
+  if (status) status.textContent = localizedText("Previous event loaded. Confirm the new date and adjust only what changed.", "Evento anterior carregado. Confirme a nova data e ajuste apenas o que mudou.");
   scrollToStep("eventDetails", true);
 }
 
@@ -2053,10 +2518,10 @@ async function resumeReturningProposal(item) {
   const client = getPublicSupabaseClient();
   const status = document.querySelector("#returningClientStatus");
   if (!client || !item?.proposal_id) return;
-  if (status) status.textContent = uiState.language === "en" ? "Opening your proposal..." : "Abrindo sua proposta...";
+  if (status) status.textContent = localizedText("Opening your proposal...", "Abrindo sua proposta...");
   const { data, error } = await client.rpc("refresh_my_proposal_link", { p_proposal_id: item.proposal_id });
   if (error || !data) {
-    if (status) status.textContent = uiState.language === "en" ? "We could not reopen this proposal. Continue below and we will prepare a new version." : "Não conseguimos reabrir esta proposta. Continue abaixo e prepararemos uma nova versão.";
+    if (status) status.textContent = localizedText("We could not reopen this proposal. Continue below and we will prepare a new version.", "Não conseguimos reabrir esta proposta. Continue abaixo e prepararemos uma nova versão.");
     return;
   }
   window.location.href = `./proposta.html?p=${encodeURIComponent(data)}`;
@@ -2099,6 +2564,7 @@ function initReturningClientAccess() {
 
 async function submitRequest(event) {
   event.preventDefault();
+  if (submitButton.disabled) return;
   const current = getCopy();
 
   if (!window.supabase?.createClient) {
@@ -2281,6 +2747,7 @@ langButtons.forEach((button) =>
     setLanguage(button.dataset.lang);
   }),
 );
+initializeCaptureIdentity();
 setLanguage(uiState.language);
 captureLeadAnalytics("lead_form_viewed", {}, { dedupeKey: `lead-form-viewed:${uiState.language}` });
 window.addEventListener("pagehide", () => {
