@@ -28,6 +28,7 @@
   }
   function disable(value){state.busy=value;document.querySelectorAll('button').forEach(b=>b.disabled=value);}
   function canRetryRefusedSend(a){
+    if(a.send?.status==='paused')return !a.send.provider_id&&!a.send.provider_reference&&!a.send.delivery_status&&!a.send.engagement;
     return a.send?.status==='failed' && [undefined,null,'','failed'].includes(a.send?.delivery_status);
   }
   function status(a){
@@ -39,6 +40,7 @@
     if(delivery==='uncertain')return 'Aprovação registrada · entrega com resultado incerto. Não repita sem conferir o provedor.';
     if(a.send?.status==='accepted'||delivery==='accepted')return 'Aprovada · envio aceito pelo provedor. Entrega não confirmada.';
     if(a.send?.status==='uncertain'||a.send?.status==='sending')return 'Aprovação registrada · envio em andamento ou incerto. Não repita sem conferir o provedor.';
+    if(a.send?.status==='paused')return 'Aprovação registrada · envio pausado antes da tentativa. Revise a autorização e os limites do Bot; a retomada exige nova ação explícita.';
     if(a.send?.status==='failed')return 'Aprovação registrada · envio recusado. Confira o canal antes de autorizar nova tentativa. Não haverá repetição automática.';
     if(a.status==='pending'&&(a.stale||a.expired))return a.expired?'Solicitação expirada — solicite nova revisão':'A proposta mudou — solicite nova revisão';
     return labels[a.status]||a.status;
@@ -47,7 +49,7 @@
     state.current=a;const p=a.proposal_snapshot,c=a.content,s=p.snapshot||{};
     const discount=Math.max(0,-Number(s.totals?.adjustment||0))+Math.max(0,-Number(s.totals?.privatizationAdjustment||0));
     const allowed=a.can_decide&&!a.expired&&!a.stale&&(!a.send_id||canRetryRefusedSend(a))&&['pending','approved'].includes(a.status);
-    const nstatus={pending:'aguardando processamento',sending:'em andamento; resultado ainda não confirmado',accepted:'aceito pelo provedor; entrega não confirmada',failed:'recusado',uncertain:'resultado incerto; não repetir automaticamente'};
+    const nstatus={pending:'aguardando processamento',sending:'em andamento; resultado ainda não confirmado',accepted:'aceito pelo provedor; entrega não confirmada',failed:'recusado',paused:'pausado antes de qualquer tentativa; exige revisão',uncertain:'resultado incerto; não repetir automaticamente'};
     $('detail').hidden=false;$('list').hidden=true;
     $('detail').innerHTML=`<div class="summary"><p class="eyebrow">VERSÃO ${esc(p.versao)} · REVISÃO ${esc(a.revision)}</p><h2>${esc(p.cliente_nome)}</h2><p>${esc(p.tipo_evento)} · ${esc(date(p.data_evento))} às ${esc(String(p.horario_evento||'').slice(0,5))} (Brasília)</p><p class="amount">${esc(money(p.total))}</p><p class="status">${esc(status(a))}</p></div>
       <dl class="metadata">${[['Convidados',p.convidados],['Duração',`${p.duracao} h`],['Subtotal',money(p.subtotal)],['Taxa de serviço',money(p.taxa_servico)],['Privatização',money(p.privatizacao)],['Desconto total',money(discount)],['Canal para o cliente',c.channel],['Destinatário exato',c.destination],['Remetente',c.sender],['Assunto',c.title],['Gestor responsável',a.approver_email],['Validade desta solicitação',new Date(a.expires_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+' (Brasília)']].map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
@@ -59,7 +61,7 @@
       <h3>Mensagem exata para o cliente</h3>${c.html?'<iframe id="emailPreview" title="E-mail completo que será enviado" sandbox="" referrerpolicy="no-referrer"></iframe>':''}<label for="exactMessage">${c.html?'Versão completa em texto':'WhatsApp'}</label><textarea id="exactMessage" readonly rows="10">${esc(c.body)}</textarea>
       <details><summary>Avisos e rastreabilidade</summary><p class="notification">${(a.notifications||[]).map(n=>`${esc(n.channel)}: ${esc(nstatus[n.status]||n.status)}`).join('<br>')}</p><p>Solicitação ${esc(a.id)}. Os avisos de WhatsApp e e-mail apontam para esta mesma decisão.</p><button id="retryNotifications">Reprocessar avisos pendentes ou recusados</button></details>
       ${a.reason?`<h3>Orientação registrada</h3><p class="terms">${esc(a.reason)}</p>`:''}
-      <div class="decisions">${allowed?`<label class="check"><input type="checkbox" id="confirmed">Revisei a proposta completa, os valores, o desconto, a mensagem e o destinatário. Ao aprovar, autorizo o envio ao cliente.</label><label for="reason">Orientação à equipe</label><textarea id="reason" maxlength="2000" placeholder="Obrigatória para solicitar ajustes ou rejeitar esta versão."></textarea><button class="primary" data-decision="approve">${a.send?.status==='failed'?'Repetir envio recusado':a.status==='approved'?'Concluir envio aprovado':'Aprovar e enviar ao cliente'}</button>${a.status==='pending'?'<button data-decision="changes_requested">Solicitar ajustes</button><button data-decision="rejected">Rejeitar esta versão</button>':''}`:`<p>${a.can_decide?'Esta solicitação não permite novo envio. Confira o estado acima.':'Somente o gestor designado pode decidir. Você pode acompanhar o estado e as orientações.'}</p>`}</div>`;
+      <div class="decisions">${allowed?`<label class="check"><input type="checkbox" id="confirmed">Revisei a proposta completa, os valores, o desconto, a mensagem e o destinatário. Ao aprovar, autorizo o envio ao cliente.</label><label for="reason">Orientação à equipe</label><textarea id="reason" maxlength="2000" placeholder="Obrigatória para solicitar ajustes ou rejeitar esta versão."></textarea><button class="primary" data-decision="approve">${a.send?.status==='paused'?'Revisar e tentar envio pausado':a.send?.status==='failed'?'Repetir envio recusado':a.status==='approved'?'Concluir envio aprovado':'Aprovar e enviar ao cliente'}</button>${a.status==='pending'?'<button data-decision="changes_requested">Solicitar ajustes</button><button data-decision="rejected">Rejeitar esta versão</button>':''}`:`<p>${a.can_decide?'Esta solicitação não permite novo envio. Confira o estado acima.':'Somente o gestor designado pode decidir. Você pode acompanhar o estado e as orientações.'}</p>`}</div>`;
     if(c.html)$('emailPreview').srcdoc='<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">'+c.html;
     $('retryNotifications').disabled=a.status!=='pending'||a.expired||a.stale;
     $('retryNotifications').onclick=()=>run(async()=>{const r=await api({action:'notify',id:a.id});render(r.approval);notice('Avisos processados. Aceitação não comprova entrega.');});
