@@ -5305,14 +5305,15 @@ function getCustomerDecisionLoop(proposal = getActiveProposal()) {
   const response = proposal?.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const proof = proposal?.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || snapshot.pagamentoSinal?.comprovante || null;
   const hasPublicLink = Boolean(proposal?.public_token);
-  const sent = ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal?.status));
+  const sentAt = proposal?.sent_at ? Date.parse(proposal.sent_at) : NaN;
+  const sent = Number.isFinite(sentAt) && sentAt <= Date.now();
   const steps = [
     {
       id: "proposal",
       label: "Proposta",
-      title: sent ? "Link enviado/salvo" : "Gerar link público",
+      title: sent ? "Envio registrado" : hasPublicLink ? "Link disponível; envio não confirmado" : "Gerar link público",
       status: hasPublicLink && sent ? "done" : hasPublicLink ? "current" : "pending",
-      detail: hasPublicLink ? "Cliente recebe um link único para decidir." : "Salve a proposta para criar o link seguro.",
+      detail: sent ? "Registro de envio não confirma entrega nem resposta." : hasPublicLink ? "Link disponível para revisão; salvar não confirma envio." : "Salve a proposta para criar o link seguro.",
     },
     {
       id: "client",
