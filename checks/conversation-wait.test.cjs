@@ -54,3 +54,10 @@ test('equal timestamps at an older reply boundary never depend on input order',(
  const current=row(1800000,{id:'current'}),older=row(),reply=row(0,{direction:'outbound',delivery_status:'delivered'});
  for(const messages of [[current,older,reply],[current,reply,older]]){const result=wait(messages);assert.equal(result.waiting,'team');assert.equal(result.minutes,30);}
 });
+
+test('unresolved outbound tied with a confirmed message stays unknown in either order',()=>{
+ for(const status of ['uncertain','sending']){
+  const confirmed=row(0,{direction:'outbound',delivery_status:'delivered'}),unresolved=row(0,{direction:'outbound',delivery_status:status});
+  for(const messages of [[confirmed,unresolved],[unresolved,confirmed]]){const result=wait(messages);assert.equal(result.waiting,'unknown');assert.equal(result.since,null);assert.equal(result.message.delivery_status,status);}
+ }
+});

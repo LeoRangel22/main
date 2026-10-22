@@ -241,7 +241,8 @@ function getConversationWait(messages, now = Date.now()) {
   if (!latest) return unknown;
   const at = Date.parse(latest.occurred_at);
   if (candidates.some(m => Date.parse(m.occurred_at) === at && m.direction !== latest.direction)) return unknown;
-  if (latest.direction === "outbound" && ["uncertain", "sending"].includes(latest.delivery_status || latest.status)) return {...unknown, message: latest};
+  const unresolvedLatest = candidates.find(m => Date.parse(m.occurred_at) === at && m.direction === "outbound" && ["uncertain", "sending"].includes(m.delivery_status || m.status));
+  if (unresolvedLatest) return {...unknown, message: unresolvedLatest};
   let firstUnanswered = latest;
   const opposite = candidates.find(message => message.direction !== latest.direction);
   for (const message of candidates.slice(1)) {
