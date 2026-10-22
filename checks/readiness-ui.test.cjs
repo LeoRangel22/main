@@ -15,6 +15,30 @@ test('channel status inspection does not request a provider probe',async()=>{con
 test('explicit channel probe queues once and reads status without enabling any channel',async()=>{const calls=[];const f=fixture({rpc:async name=>{calls.push(name);return {data:name==='event_request_channel_diagnostics'?'batch':{id:'batch',requested_at:'2026-10-17T06:00:00Z',bridge:{state:'blocked',bridge_url:false},delivery:{state:'observed',email_oauth:false}}}}});await f.c.loadOpsChannelDiagnostics({request:true});assert.deepEqual(calls,['event_request_channel_diagnostics','event_channel_diagnostics_status']);assert.equal(f.getCache('channels').data.delivery.email_oauth,false);});
 test('channel read errors remain explicit and do not report a successful connection',async()=>{const f=fixture({rpc:async()=>({error:{message:'offline'}})});await f.c.loadOpsChannelDiagnostics();assert.equal(f.getCache('channels').data,null);assert.equal(f.getCache('channels').error,'offline');assert.equal(f.getCache('channels').pending,null);});
 
+const runtime=()=>({observed_at:new Date().toISOString(),bridge:{state:'observed',enabled:true,last_success_at:new Date().toISOString(),quarantined_total:0,quarantined_recent:0},mailbox:{state:'disabled',enabled:false,last_success_at:null}});
+test('local runtime survives not_checked without scheduling an external probe',async()=>{
+ const data={state:'not_checked',runtime:runtime()},calls=[];const f=fixture({rpc:async name=>{calls.push(name);return {data}}});
+ await f.c.loadOpsChannelDiagnostics();assert.equal(f.getCache('channels').data.runtime,data.runtime);assert.deepEqual(calls,['event_channel_diagnostics_status']);
+});
+test('runtime validates known states, bounded counters, timestamps and activation evidence',()=>{
+ const {c}=fixture();assert.equal(c.validIntegrationRuntime(runtime()),true);
+ for(const change of [r=>r.observed_at='invalid',r=>r.observed_at=new Date(Date.now()+86400000).toISOString(),r=>r.bridge.state='approved',r=>r.bridge.last_success_at=null,r=>r.bridge.enabled=false,r=>r.mailbox.enabled=true,r=>r.bridge.quarantined_total=-1,r=>r.bridge.quarantined_recent=1,r=>r.bridge.quarantined_total=Infinity]){
+  const r=runtime();change(r);assert.equal(c.validIntegrationRuntime(r),false);
+ }
+});
+test('malformed runtime is explicit instead of reporting a healthy channel',async()=>{
+ const r=runtime();r.bridge.last_success_at=null;const f=fixture({rpc:async()=>({data:{state:'not_checked',runtime:r}})});
+ await f.c.loadOpsChannelDiagnostics();assert.equal(f.getCache('channels').data,null);assert.match(f.getCache('channels').error,/incompleto/);
+});
+test('runtime separates disabled, stale, quarantined and unknown from delivery proof',()=>{
+ const {c}=fixture();c.escapeHtml=String;c.formatSavedAt=String;
+ let r=runtime();r.bridge.state='degraded';r.bridge.quarantined_total=2;r.bridge.quarantined_recent=1;
+ let html=c.renderIntegrationRuntime(r);assert.match(html,/2 evento\(s\) antigo\(s\)/);assert.match(html,/Desativada/);assert.match(html,/não reenvie o histórico/);assert.doesNotMatch(html,/Homologad|Entrega confirmada/);
+ r.bridge.last_success_at=new Date(Date.now()-16*60000).toISOString();html=c.renderIntegrationRuntime(r);assert.match(html,/data-health-state="stale"/);
+ r.observed_at=new Date(Date.now()-16*60000).toISOString();html=c.renderIntegrationRuntime(r);assert.match(html,/data-health-state="unknown"/);assert.doesNotMatch(html,/2 evento/);
+ html=c.renderIntegrationRuntime(runtime(),true);assert.match(html,/Não foi possível comprovar/);assert.doesNotMatch(html,/Consulta autenticada recente/);
+});
+
 for(const page of ['index.html','clientes.html','comunicacao.html','valores.html'])test(`readiness module loads before its consumer on ${page}`,()=>{const html=fs.readFileSync(__dirname+'/../'+page,'utf8');const reader=html.indexOf('event-readiness.js?v=20261018-synergy'),consumer=html.indexOf('event-operations.js?v=');if(html.includes('event-operations.js'))assert.ok(reader>=0&&consumer>reader);else assert.equal(reader,-1);});
 
 test('diagnostics keep polling past 24 seconds to observe a late valid response',async()=>{let statuses=0;const f=fixture({fastPoll:true,rpc:async name=>({data:name==='event_request_channel_diagnostics'?'batch':{id:'batch',requested_at:new Date().toISOString(),bridge:{state:++statuses<=15?'pending':'observed',bridge_reachable:statuses>15},delivery:{state:'observed',email_oauth:false}}})});await f.c.loadOpsChannelDiagnostics({request:true});assert.equal(statuses,16);assert.equal(f.getCache('channels').data.bridge.bridge_reachable,true);});

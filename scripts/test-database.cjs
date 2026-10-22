@@ -14,12 +14,15 @@ async function connect(name) { const url = new URL(address); url.pathname=`/${na
 async function apply(c,file) {
   const cohortReview=file.startsWith('supabase/migrations/')&&file.endsWith('_cohort_preparation_review.sql');
   const deferredSend=file.startsWith('supabase/migrations/')&&file.endsWith('_deferred_send_ledger.sql');
+  const bridgeHealth=file.startsWith('supabase/migrations/')&&file.endsWith('_bridge_quarantine_health.sql');
+  if(bridgeHealth) await apply(c,'checks/bridge-health-upgrade-setup.sql');
   if(deferredSend) await apply(c,'checks/deferred-send-upgrade-setup.sql');
   if(cohortReview) await apply(c,'checks/cohort-preparation-upgrade-setup.sql');
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
   if(deferredSend) { await apply(c,'checks/deferred-send-upgrade-assert.sql'); console.log('PASS deferred send upgrade preserves history, inactive configuration and existing ACLs'); }
+  if(bridgeHealth) { await apply(c,'checks/bridge-health-upgrade-assert.sql'); console.log('PASS bridge health upgrade preserves configuration, business records, cron and existing ACLs'); }
   if(cohortReview) { await apply(c,'checks/cohort-preparation-upgrade-assert.sql'); console.log('PASS preparation evidence upgrade preserves proposals and unknown history'); }
 }
 async function create(name) {
@@ -33,7 +36,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -136,7 +139,8 @@ async function concurrent(c,name) {
     const closure=migrationFiles.find(f=>f.endsWith('_approval_closure.sql'));
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
     const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness)) await apply(c,`supabase/migrations/${f}`);
+    const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth)) await apply(c,`supabase/migrations/${f}`);
     const legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
         approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
@@ -154,6 +158,7 @@ async function concurrent(c,name) {
     await apply(c,`supabase/migrations/${closure}`);
     // Deferred transport contracts require the closure tables, already present in production.
     if(deferred) await apply(c,`supabase/migrations/${deferred}`);
+    if(bridgeHealth) await apply(c,`supabase/migrations/${bridgeHealth}`);
     if(watchReadiness) await apply(c,`supabase/migrations/${watchReadiness}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
