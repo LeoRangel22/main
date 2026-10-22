@@ -29,3 +29,17 @@ test('calendar hides its data after logout and fits a mobile viewport',async({pa
  await page.setViewportSize({width:390,height:900});await prepare(page);await expectNoHorizontalOverflow(page);
  await page.evaluate(()=>{state.session=null;renderCommercialCalendar();});await expect(page.locator('#commercialCalendar')).toBeHidden();await expect(page.locator('#commercialCalendar')).toHaveText('');
 });
+test('space comes only from the selected current plan and is invalidated by a new proposal revision',async({page})=>{
+ await prepare(page);
+ await page.evaluate(()=>productionQa.set('fechado',{revision:2,reviewed_at:new Date().toISOString(),data:{rows:[],crew:[],logistics:{space:'Sala de teste'}}}));
+ await page.locator('[data-calendar-space="fechado"]').click();
+ const card=page.locator('[data-calendar-id="fechado"]');await expect(card).toContainText('Sala de teste');await expect(card).toContainText('plano V2');
+ await expect(page.locator('[data-calendar-id="concorrente"]')).not.toContainText('Sala de teste');
+ await page.evaluate(()=>{state.proposals.find(p=>p.id==='fechado').revision+=1;renderCommercialCalendar();});await expect(card).not.toContainText('Sala de teste');await expect(card).toContainText('a confirmar no planejamento');
+});
+test('a delayed space lookup cannot expose a previous session result',async({page})=>{
+ await prepare(page);
+ await page.evaluate(()=>{loadProductionWorkspace=async()=>new Promise(resolve=>window.releaseCalendarSpace=resolve);});
+ await page.locator('[data-calendar-space="fechado"]').click();await expect.poll(()=>page.evaluate(()=>Boolean(window.releaseCalendarSpace))).toBe(true);
+ await page.evaluate(()=>{state.session=null;renderCommercialCalendar();window.releaseCalendarSpace();});await expect(page.locator('#commercialCalendar')).toBeHidden();await expect(page.locator('#commercialCalendar')).toHaveText('');
+});
