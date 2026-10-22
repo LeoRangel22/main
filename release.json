@@ -1,5 +1,5 @@
 {
-  "commit": "ce6e5817ed064ed27b956a92ad813f5085115e5f",
+  "commit": "f34e1670011b891de4c5e2fc7abd135f978c7eca",
   "schemaHead": "20261022011834_approval_watch_effective_readiness.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
@@ -7,7 +7,7 @@
     "aditivos.js": "bd917e4792c3b1d8d9afff977e1454ed41f3570811945b8fccab80f065761775",
     "amendment-ui.js": "9a74eae2250de13a35378d2aa4beceb1fb25f81c0023db28086674f3ee6e30f4",
     "amendment.css": "2d1c75bf1432f318407aaba95c52850c4d0803926b533cc2419e960d898b5ffb",
-    "index.html": "8e60e678240c28f88f2a08324cafab7615d81693a71e1fa8c18860673130b553",
+    "index.html": "61552618263afef5918dbe0922830c073fcad45ac1e426fa30d47e0b0d146be3",
     "aprovacoes.html": "0d8f18ccd2f03bbb1947047afe675f6dce2281ccb652faaecef413c38b1efd65",
     "aprovacoes.js": "44967ae560174a8ebb65bbecd1ed7ca46fd380644ce94a8a44f04a8232c9d93b",
     "approval-config.js": "4067d25492a129f829e7626027946cbbb63b704a16ca7151b5a5fc58b626d310",
@@ -20,7 +20,7 @@
     "proposta.html": "de4594b82ca8f92f45aa039d6856918c7be3616f4893aedfea8020f9bd2127f7",
     "styles.css": "310fb4eb65177d51e47ee0a655bf0685c7941a73cb399db6e1e65eb34137ed8d",
     "app.js": "bc096f7a58a84a58f29f911f584cbbfca313e81808b228cf34ab148b04313942",
-    "event-readiness.js": "570801a1a2fc4a1edcc36213e1d7be045b3cb5acd21d4275a838c9661248da80",
+    "event-readiness.js": "581409bd23329de23e79064a6f4caabfb2b0a776457d7bcb95860cf99981ec39",
     "event-operations.js": "2c3b92ba50ed0ed6f622a74aa00af4f7b930cceb5d52918c6057483619c1b51c",
     "analytics.js": "0ad4d90cb1097a990df4a98efa5800cb6d52fb5e82d1c7e25fedde7b41e2f278",
     "formulario.js": "1a6c8b618b04315f25d817791222832e2170eea0ed516e09b207aea8ad4f1629",

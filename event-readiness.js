@@ -39,7 +39,8 @@ async function loadOpsChannelDiagnostics({request=false}={}){
     if(!data||typeof data!=='object'||!['not_checked',undefined].includes(data.state))throw Error('Resposta de diagnóstico não reconhecida.');
     if(data.state!=='not_checked'&&(!data.id||!Number.isFinite(Date.parse(data.requested_at))||!data.bridge||!data.delivery))throw Error('Evidência de diagnóstico incompleta.');
     if(data.state!=='not_checked'&&![data.bridge.state,data.delivery.state].every(s=>['pending','observed','blocked','failed','expired'].includes(s)))throw Error('Estado do diagnóstico não reconhecido.');
-    cache.data=data.state==='not_checked'?{state:'not_checked'}:data;
+    if(data.runtime!==undefined&&!validIntegrationRuntime(data.runtime))throw Error('Estado de execução das integrações incompleto.');
+    cache.data=data;
     if(![data.bridge?.state,data.delivery?.state].includes('pending'))break;
     if(attempt<23)await new Promise(resolve=>setTimeout(resolve,2000));
     if(!readinessCurrent(cache,'channels'))return;
@@ -49,6 +50,29 @@ async function loadOpsChannelDiagnostics({request=false}={}){
  });
  return cache.pending;
 }
+const integrationRuntimeLabels={unknown:'Não foi possível comprovar',disabled:'Desativada',blocked:'Configuração privada pendente',not_observed:'Sem consulta concluída registrada',stale:'Consulta antiga; atualização necessária',degraded:'Consulta recente com eventos em quarentena',observed:'Consulta autenticada recente'};
+function validIntegrationRuntime(runtime){
+ if(!runtime||!Number.isFinite(Date.parse(runtime.observed_at))||Date.parse(runtime.observed_at)>Date.now()+300000)return false;
+ return ['bridge','mailbox'].every(key=>{
+  const item=runtime[key];
+  if(!item||!Object.hasOwn(integrationRuntimeLabels,item.state)||![true,false,null].includes(item.enabled))return false;
+  if(item.state==='disabled'&&item.enabled!==false||['blocked','not_observed'].includes(item.state)&&item.enabled!==true)return false;
+  if(item.last_success_at!==null&&(!Number.isFinite(Date.parse(item.last_success_at))||Date.parse(item.last_success_at)>Date.now()+300000))return false;
+  if(['observed','degraded','stale'].includes(item.state)&&(!item.last_success_at||item.enabled!==true))return false;
+  return key!=='bridge'||['quarantined_total','quarantined_recent'].every(name=>Number.isSafeInteger(item[name])&&item[name]>=0)&&item.quarantined_recent<=item.quarantined_total;
+ });
+}
+function renderIntegrationRuntime(runtime,unavailable=false){
+ const current=!unavailable&&validIntegrationRuntime(runtime)&&Date.now()-Date.parse(runtime.observed_at)<=15*60000;
+ const rows=[['bridge','Recepção WhatsApp pela ponte do Bot'],['mailbox','Recepção integrada da caixa de e-mail']].map(([key,label])=>{
+  const item=current?runtime[key]:null;
+  let status=item?.state||'unknown';
+  if(['observed','degraded'].includes(status)&&Date.now()-Date.parse(item.last_success_at)>15*60000)status='stale';
+  return `<article class="event-ops-row" data-integration-health="${key}" data-health-state="${status}"><span><strong>${label}</strong><small>${integrationRuntimeLabels[status]}</small>${item?.last_success_at?`<small>Última consulta concluída: ${escapeHtml(formatSavedAt(item.last_success_at))}</small>`:''}</span></article>`;
+ }).join('');
+ const quarantined=current?runtime.bridge.quarantined_total:0;
+ return `<h4>Execução e frescor</h4><p>Conexão, consulta autenticada, entrega e resposta são evidências diferentes. Esta leitura não ativa canais nem envia mensagens.</p><div class="event-ops-list">${rows}</div>${quarantined?`<p role="status" data-bridge-quarantine>${quarantined} evento(s) antigo(s) em quarentena técnica, sem aplicar à proposta atual. Os demais eventos válidos podem continuar; não reenvie o histórico para resolver este aviso.</p>`:''}`;
+}
 function renderOpsChannelDiagnostics(){
  const cache=readinessCache('channels');
  if(!cache.pending&&!cache.attemptedAt)queueMicrotask(()=>loadOpsChannelDiagnostics());
@@ -56,11 +80,11 @@ function renderOpsChannelDiagnostics(){
   ['URL da ponte do Bot',d?.bridge?.bridge_url,'Configurada','Pendente'],
   ['Chave exclusiva da ponte',d?.bridge?.bridge_secret,'Configurada','Pendente'],
   ['Ponte autenticada da Embaixada',d?.bridge?.bridge_reachable,'Resposta autenticada','Sem resposta autenticada'],
-  ['Credenciais WhatsApp em Eventos',d?.delivery?.whatsapp_credentials,'Presentes','Pendentes'],
-  ['WhatsApp configurado em Eventos',d?.delivery?.whatsapp_connected,'Conectado','Desconectado'],
+  ['Consulta legada ao número (somente leitura)',d?.delivery?.whatsapp_credentials,'Disponível','Não configurada; não é autorização de envio'],
+  ['Conexão informada pela consulta ao número',d?.delivery?.whatsapp_connected,'Conectado','Desconectado'],
   ['Configuração de leitura de entregas de e-mail',d?.delivery?.email_oauth,'Presente · validar o acesso ao provedor','Pendente']
  ];
- return `<section aria-label="Diagnóstico das integrações"><h3>Diagnóstico das integrações</h3><p>Esta consulta verifica conexão e configuração. Recebimento e entrega reais são comprovados pelos retornos registrados abaixo.</p><button type="button" class="secondary" data-ops-diagnose ${cache.pending?'disabled':''}>${cache.pending?'Consultando integrações…':'Conferir integrações'}</button>${cache.error?`<p role="alert">${escapeHtml(cache.error)} Os resultados anteriores não confirmam a situação atual.</p>`:''}${d?.requested_at?`<small>Consulta iniciada em ${escapeHtml(formatSavedAt(d.requested_at))}${stale?' · leitura antiga; consulte novamente':''}.</small>`:''}<div class="event-ops-list">${checks.map(([label,value,yes,no])=>`<article class="event-ops-row"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(stale||cache.error?'Atualização necessária':typeof value==='boolean'?(value?yes:no):cache.pending?'Consulta em andamento':d?.state==='not_checked'?'Ainda não consultado':'Não foi possível comprovar')}</small></span></article>`).join('')}</div>${d?.delivery?.foreign_callbacks===true?'<p>Há callbacks existentes fora do receptor de Eventos. Preserve-os e use a ponte do Bot após verificar sua origem.</p>':''}${['failed','expired'].some(s=>[d?.bridge?.state,d?.delivery?.state].includes(s))?'<p role="alert">Uma consulta falhou ou expirou. Não há confirmação de conexão para esse componente.</p>':''}</section>`;
+ return `<section aria-label="Diagnóstico das integrações"><h3>Diagnóstico das integrações</h3><p>Esta consulta verifica conexão e configuração. Recebimento e entrega reais são comprovados pelos retornos registrados abaixo.</p><button type="button" class="secondary" data-ops-diagnose ${cache.pending?'disabled':''}>${cache.pending?'Consultando integrações…':'Conferir integrações'}</button>${cache.error?`<p role="alert">${escapeHtml(cache.error)} Os resultados anteriores não confirmam a situação atual.</p>`:''}${d?.requested_at?`<small>Consulta iniciada em ${escapeHtml(formatSavedAt(d.requested_at))}${stale?' · leitura antiga; consulte novamente':''}.</small>`:''}<div class="event-ops-list">${checks.map(([label,value,yes,no])=>`<article class="event-ops-row"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(stale||cache.error?'Atualização necessária':typeof value==='boolean'?(value?yes:no):cache.pending?'Consulta em andamento':d?.state==='not_checked'?'Ainda não consultado':'Não foi possível comprovar')}</small></span></article>`).join('')}</div>${renderIntegrationRuntime(d?.runtime,Boolean(cache.error))}${d?.delivery?.foreign_callbacks===true?'<p>Há callbacks existentes fora do receptor de Eventos. Preserve-os e use a ponte do Bot após verificar sua origem.</p>':''}${['failed','expired'].some(s=>[d?.bridge?.state,d?.delivery?.state].includes(s))?'<p role="alert">Uma consulta falhou ou expirou. Não há confirmação de conexão para esse componente.</p>':''}</section>`;
 }
 const journeyStepLabels={proposal:'Proposta atual pronta',approval:'Revisão do gestor e alçadas aplicáveis',dispatch:'Envio aceito pelo canal',delivery:'Entrega confirmada pelo provedor',reply:'Resposta do cliente registrada',client_acceptance:'Aceite da proposta pelo cliente',payment:'Sinal com validação auditada',reservation:'Reserva confirmada',operation:'Ciência, execução e liberação dos setores',outcome:'Desfecho informado pela equipe'};
 const journeyStateLabels={not_required:'Não exigida pela política atual',confirmed:'Evidência registrada',pending:'Pendente de evidência',manual:'Contato informado manualmente · recebimento integrado não comprovado',legacy:'Registro legado · sem validação auditada neste fluxo',expired:'Aprovação expirada',approved:'Aprovação sem decisão auditada completa',changes_requested:'Gestor solicitou ajustes',rejected:'Gestor recusou',invalidated:'Solicitação invalidada',sending:'Envio em andamento · não repetir',uncertain:'Resultado incerto · conferir o canal',failed:'Falha registrada'};
