@@ -2205,17 +2205,17 @@ function getActiveServiceContext() {
 
 function getServiceClientMatch(context = getActiveServiceContext()) {
   const clients = getClientRegistry(getPipelineItems());
-  const email = normalizeSearchValue(context.email);
+  const email = String(context.email || "").trim().toLowerCase();
   const phone = String(context.phone || "").replace(/\D/g, "");
-  const company = normalizeSearchValue(context.company);
-  const name = normalizeSearchValue(context.clientName);
-  return (
-    clients.find((client) => email && normalizeSearchValue(client.email) === email) ||
-    clients.find((client) => phone && String(client.phone || "").replace(/\D/g, "") === phone) ||
-    clients.find((client) => company && normalizeSearchValue(client.company) === company) ||
-    clients.find((client) => name && normalizeSearchValue(client.name) === name) ||
-    null
-  );
+  // A conflicting supplied email must not fall back to a shared phone or name.
+  if (email) {
+    if (!isLikelyEmailAddress(email)) return null;
+    const matches = clients.filter((client) => String(client.email || "").trim().toLowerCase() === email);
+    return matches.length === 1 ? matches[0] : null;
+  }
+  if (!/^\d{10,15}$/.test(phone)) return null;
+  const matches = clients.filter((client) => String(client.phone || "").replace(/\D/g, "") === phone);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
@@ -2427,11 +2427,11 @@ function renderServiceCockpit() {
       </article>
       <article class="service-cockpit-card service-client-context">
         <span>Histórico do cliente</span>
-        <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Novo relacionamento")}</strong>
+        <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Histórico não vinculado")}</strong>
         <p>${
           clientMatch
             ? `Total registrado: ${escapeHtml(formatMoney(totalValue))}. Use o histórico para ajustar abordagem e acompanhamento.`
-            : "Ainda sem histórico encontrado. Capriche no primeiro contato e registre os próximos passos."
+            : "Confira o e-mail ou telefone para vincular o histórico com segurança. Nome e empresa não identificam o contato."
         }</p>
         ${
           clientMatch?.items?.[0]
