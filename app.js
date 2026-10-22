@@ -11293,6 +11293,67 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
   `;
 }
 
+let commercialCalendarMonth = "";
+function getCommercialCalendarEntries(items) {
+  const selected = new Map();
+  for (const item of items) {
+    if (["cancelado", "perdido"].includes(item.status)) continue;
+    const key = item.opportunityId || `${item.kind}:${item.id}`;
+    const previous = selected.get(key);
+    // getPipelineItems already selects the working agreement, including amendments.
+    if (!previous || (previous.kind === "request" && item.kind === "proposal")) selected.set(key, item);
+  }
+  return [...selected.values()].map(item => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.date || "");
+    const day = match ? Date.UTC(Number(match[1]), Number(match[2])-1, Number(match[3])) : NaN;
+    const validDate = Number.isFinite(day) && new Date(day).toISOString().slice(0,10) === item.date;
+    const time = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(item.time || "");
+    const validTime = time && Number(time[1]) < 24 && Number(time[2]) < 60;
+    const duration = Number(item.duration);
+    const start = validDate && validTime ? day + (Number(time[1])*60+Number(time[2]))*60000 : null;
+    const end = start !== null && Number.isFinite(duration) && duration > 0 ? start + duration*3600000 : null;
+    const closed = ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda", "realizado"].includes(item.status);
+    return {...item, calendarDate:validDate ? item.date : "", start, end, closed};
+  }).sort((a,b)=>(a.calendarDate || "9999").localeCompare(b.calendarDate || "9999") || (a.start ?? Infinity)-(b.start ?? Infinity) || String(a.id).localeCompare(String(b.id)));
+}
+function getCommercialCalendarOverlap(entry, entries) {
+  if (entry.start === null || entry.end === null) return [];
+  return entries.filter(other => other !== entry && other.start !== null && other.end !== null &&
+    entry.start < other.end && entry.end > other.start);
+}
+function renderCommercialCalendar(items = getPipelineItems()) {
+  const root = document.getElementById("commercialCalendar");
+  if (!root) return;
+  if (!state.session || !state.supabase) { root.innerHTML = ""; root.hidden = true; return; }
+  root.hidden = false;
+  const withKnownDuration = items.map(item => {
+    const source = item.kind === "proposal" ? state.proposals.find(p=>p.id===item.id) : state.quoteRequests.find(r=>r.id===item.id);
+    return {...item, duration: source?.duracao ?? source?.snapshot?.event?.duration ?? source?.snapshot?.evento?.duracao ?? null,
+      guests: source?.convidados ?? source?.snapshot?.evento?.convidados ?? null};
+  });
+  const entries = getCommercialCalendarEntries(withKnownDuration);
+  const month = /^\d{4}-\d{2}$/.test(commercialCalendarMonth) ? commercialCalendarMonth : CommercialPriority.today().slice(0,7);
+  const visible = entries.filter(entry=>entry.calendarDate.startsWith(month));
+  const days = [...new Set(visible.map(entry=>entry.calendarDate))];
+  const undated = entries.filter(entry=>!entry.calendarDate).length;
+  const stale = typeof commercialRefreshError !== "undefined" && commercialRefreshError;
+  root.innerHTML = `<header class="commercial-calendar-heading"><div><h2>Calendário comercial</h2><p>Negociações e eventos fechados. Negociação não reserva espaço.</p></div>
+    <label>Mês<input type="month" data-commercial-calendar-month value="${escapeHtml(month)}"/></label></header>
+    <p>${visible.filter(e=>!e.closed).length} em negociação · ${visible.filter(e=>e.closed).length} fechado(s) · ${undated} sem data válida fora do calendário.</p>
+    ${stale ? '<p role="status">Atualização pendente: confira os registros antes de decidir.</p>' : ""}
+    <p>Sobreposições indicam horários concorrentes; não comprovam conflito de espaço ou indisponibilidade. Montagem e desmontagem devem ser conferidas no planejamento.</p>
+    <div class="commercial-calendar-days">${days.map(date=>`<section class="commercial-calendar-day"><h3>${escapeHtml(formatDateFromIso(date))}</h3><div class="commercial-calendar-events">${visible.filter(entry=>entry.calendarDate===date).map(entry=>{
+      const overlaps = getCommercialCalendarOverlap(entry, entries);
+      const time = entry.start === null ? "Horário a confirmar" : `${String(entry.time).slice(0,5)}${entry.end === null ? " · duração a confirmar" : ` · ${entry.duration} h`}`;
+      return `<article class="commercial-calendar-event ${entry.closed ? "is-closed" : "is-negotiating"}" data-calendar-id="${escapeHtml(entry.id)}">
+        <strong>${escapeHtml(entry.name || "Cliente")}</strong><span>${entry.closed ? "Fechado comercialmente" : "Em negociação · sem reserva"}</span>
+        <p>${escapeHtml(time)}<br/>Porte: ${entry.guests ? `${escapeHtml(entry.guests)} pax` : "a confirmar"} · ${entry.total == null ? "Valor a definir" : escapeHtml(formatMoney(entry.total))}<br/>Espaço: a confirmar no planejamento</p>
+        <small>${escapeHtml(entry.type || "Evento")}${entry.kind === "proposal" ? ` · V${Number(entry.version)||1}${entry.pendingDraftId ? " · revisão em preparação" : ""}` : ""}</small>
+        ${overlaps.length ? `<p class="commercial-calendar-overlap">Horário concorrente com: ${overlaps.map(other=>escapeHtml(other.name||"Cliente")).join(", ")}.</p>` : entry.end === null ? '<p>Sem horário completo para comparar.</p>' : ""}
+        <button class="secondary" type="button" ${entry.kind === "proposal" ? "data-calendar-proposal" : "data-calendar-request"}="${escapeHtml(entry.id)}">Abrir evento</button></article>`;
+    }).join("")}</div></section>`).join("") || "<p>Nenhum evento com data neste mês.</p>"}</div>`;
+}
+
 function getAgendaEventLabel(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -11412,6 +11473,7 @@ function renderConflictCard(conflict) {
 }
 
 function renderOperationsAgenda(items = getPipelineItems()) {
+  renderCommercialCalendar(items);
   if (!nodes.operationsAgenda) return;
   if (!state.supabase) {
     nodes.operationsAgenda.innerHTML = "<p>Entre com Supabase para ver a agenda operacional.</p>";
@@ -16040,6 +16102,18 @@ function bindEvents() {
     if (!action || event.target !== action) return;
     event.preventDefault();
     await openActionElement(action, "Prioridade agora");
+  });
+  document.getElementById("commercialCalendar")?.addEventListener("change", event => {
+    if (!event.target.matches("[data-commercial-calendar-month]")) return;
+    commercialCalendarMonth = event.target.value;
+    renderCommercialCalendar();
+    document.querySelector("[data-commercial-calendar-month]")?.focus({preventScroll:true});
+  });
+  document.getElementById("commercialCalendar")?.addEventListener("click", async event => {
+    const proposal = event.target.closest("[data-calendar-proposal]");
+    if (proposal) return safeOpenSavedProposal(proposal.dataset.calendarProposal, "Calendário comercial");
+    const request = event.target.closest("[data-calendar-request]");
+    if (request) await safeApplyQuoteRequest(request.dataset.calendarRequest, "Calendário comercial");
   });
   nodes.operationsAgenda?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
