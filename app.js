@@ -7081,6 +7081,8 @@ function scrollToClientData() {
   scrollToNodeReliably(document.querySelector("#clientDataSection"), { behavior: "smooth", offset: 14 });
 }
 
+let editorScrollGeneration = 0;
+
 function getScrollableAncestors(node) {
   const ancestors = [];
   let parent = node?.parentElement;
@@ -7097,7 +7099,9 @@ function getScrollableAncestors(node) {
 
 function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
   if (!target) return;
+  const generation = editorScrollGeneration;
   const scroll = (scrollBehavior = behavior) => {
+    if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
     try {
       target.scrollIntoView({ behavior: scrollBehavior, block: "start", inline: "nearest" });
     } catch (_) {}
@@ -7177,9 +7181,11 @@ function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
 }
 
 function scheduleLoadedEditorJump(targetMode = "client", behavior = "auto") {
+  const generation = editorScrollGeneration;
   const jumps = [0, 90, 240, 520, 980, 1500];
   jumps.forEach((delay) => {
     window.setTimeout(() => {
+      if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
       jumpToLoadedEditor(targetMode, delay >= 520 ? "auto" : behavior);
     }, delay);
   });
@@ -14244,20 +14250,88 @@ function scrollToReviewTarget(target) {
   }, 180);
 }
 
-function ensureProposalReadyForSending() {
+function showStableSendDialog(dialog) {
+  const opener = document.activeElement;
+  const openerAction = opener?.dataset?.sendReviewAction;
+  const root = document.documentElement;
+  const overflow = root.style.overflow;
+  const position = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
+  // Retire queued editor jumps before opening the review.
+  editorScrollGeneration += 1;
+  root.style.overflow = "hidden";
+  window.scrollTo(position);
+  dialog.addEventListener("close", () => {
+    root.style.overflow = overflow;
+    const returnFocus = opener?.isConnected ? opener : openerAction
+      ? document.querySelector(`[data-send-review-action="${CSS.escape(openerAction)}"]`) : null;
+    returnFocus?.focus?.({ preventScroll: true });
+    window.scrollTo(position);
+  }, { once: true });
+  dialog.showModal();
+  dialog.querySelector("[autofocus]")?.focus({ preventScroll: true });
+  window.scrollTo(position);
+}
+
+async function ensureProposalReadyForSending() {
+  if (document.querySelector(".send-readiness-dialog[open]")) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
-  renderSendReview();
   if (summary.ready && isSendReviewApproved(items)) return true;
-  if (summary.ready) {
-    showToast("Aprove o checklist: clique em “Revisado, pode enviar” antes de mandar ao cliente.");
-    nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
-    return false;
-  }
-  const firstError = items.find((item) => item.status === "error");
-  showToast(firstError?.detail || "Revise os pontos obrigatórios antes de enviar.");
-  nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
-  return false;
+  const signature = getSendReviewSignature(items);
+  const proposalId = state.activeProposalId;
+  const revision = state.editorProposalBase?.revision;
+  const client = state.supabase;
+  const userId = state.session?.user?.id;
+  const unchanged = () => signature === getSendReviewSignature() &&
+    proposalId === state.activeProposalId && revision === state.editorProposalBase?.revision &&
+    client === state.supabase && userId === state.session?.user?.id;
+  return new Promise((resolve) => {
+    let approved = false;
+    let correctionTarget = "";
+    const dialog = document.createElement("dialog");
+    dialog.className = "send-confirm-dialog send-readiness-dialog";
+    dialog.setAttribute("aria-labelledby", "sendReadinessTitle");
+    dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
+      <h2 id="sendReadinessTitle" tabindex="-1" autofocus>Revisar proposta antes de continuar</h2>
+      <p>${summary.ready ? "Confira as condições abaixo. A mensagem e o destinatário serão apresentados na próxima etapa." : "Corrija as pendências obrigatórias para continuar. Nenhum envio foi iniciado."}</p>
+      <ul class="send-readiness-items">${items.map((item) => `<li>
+        <strong>${escapeHtml(item.label)} — ${item.status === "error" ? "Pendente" : item.status === "warning" ? "Atenção" : "Conferido"}</strong>
+        <p>${escapeHtml(item.detail || "")}</p>
+        ${["error", "warning"].includes(item.status) && item.target ? `<button type="button" class="secondary" data-send-correction="${escapeHtml(item.target)}">Corrigir: ${escapeHtml(item.label)}</button>` : ""}
+      </li>`).join("")}</ul>
+      <p class="send-readiness-error" role="alert"></p>
+      ${summary.ready ? '<label class="event-ops-check"><input type="checkbox" required /> Revisei os dados e as condições da proposta.</label>' : ""}
+      <div class="send-confirm-actions">
+        <button type="submit" value="cancel" formnovalidate class="secondary">Voltar</button>
+        <button type="submit" value="continue" class="primary" ${summary.ready ? "" : "disabled"}>Aprovar revisão e continuar</button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    dialog.querySelectorAll("[data-send-correction]").forEach((button) => {
+      button.addEventListener("click", () => {
+        correctionTarget = button.dataset.sendCorrection;
+        dialog.close("correct");
+      });
+    });
+    dialog.querySelector("form").addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "continue") return;
+      event.preventDefault();
+      if (!unchanged() || !getProposalReviewSummary().ready) {
+        dialog.querySelector(".send-readiness-error").textContent = "Os dados mudaram. Volte e abra a revisão novamente.";
+        dialog.querySelector('[value="continue"]').disabled = true;
+        return;
+      }
+      if (!event.currentTarget.reportValidity()) return;
+      approved = approveSendReview();
+      if (approved) dialog.close("continue");
+    });
+    dialog.addEventListener("close", () => {
+      resolve(approved && unchanged() && isSendReviewApproved());
+      dialog.remove();
+      if (correctionTarget) window.requestAnimationFrame(() => scrollToReviewTarget(correctionTarget));
+    }, { once: true });
+    showStableSendDialog(dialog);
+  });
 }
 
 function isInteractivePipelineTarget(target) {
@@ -14278,7 +14352,7 @@ async function openPipelineCardElement(card) {
 async function ensureProposalForSharing({ forApproval = false } = {}) {
   if (!forApproval && !(await remoteProposalMayShare())) return null;
   state.lastProposalShareError = "";
-  if (!ensureProposalReadyForSending()) return null;
+  if (!(await ensureProposalReadyForSending())) return null;
   const activeProposal = state.editorProposalBase?.id === state.activeProposalId
     ? state.editorProposalBase : state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
@@ -14502,7 +14576,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
       resolve(dialog.returnValue === "confirm" && unchanged && Boolean(message.trim()));
       dialog.remove();
     }, { once: true });
-    dialog.showModal();
+    showStableSendDialog(dialog);
   });
 }
 
@@ -14884,7 +14958,7 @@ async function openEmail() {
     fields.clientEmail?.focus?.();
     return;
   }
-  if (!ensureProposalReadyForSending()) return;
+  if (!(await ensureProposalReadyForSending())) return;
   const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) {
     const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
@@ -15017,7 +15091,7 @@ async function runServiceCockpitAction(action, button = null) {
 }
 
 async function openWhatsApp() {
-  if (!ensureProposalReadyForSending()) return;
+  if (!(await ensureProposalReadyForSending())) return;
   const phone = fields.clientPhone.value.trim();
   const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) return;
