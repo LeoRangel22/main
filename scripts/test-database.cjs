@@ -33,7 +33,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -135,7 +135,8 @@ async function concurrent(c,name) {
     c=await create('events_current_upgrade_test');
     const closure=migrationFiles.find(f=>f.endsWith('_approval_closure.sql'));
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred)) await apply(c,`supabase/migrations/${f}`);
+    const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness)) await apply(c,`supabase/migrations/${f}`);
     const legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
         approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
@@ -153,6 +154,7 @@ async function concurrent(c,name) {
     await apply(c,`supabase/migrations/${closure}`);
     // Deferred transport contracts require the closure tables, already present in production.
     if(deferred) await apply(c,`supabase/migrations/${deferred}`);
+    if(watchReadiness) await apply(c,`supabase/migrations/${watchReadiness}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
