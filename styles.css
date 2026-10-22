@@ -12978,3 +12978,10 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .public-form-body { --cinza-2: #5b6265; --muted: #5b6265; }
 .public-form-body .section-heading span { color: #8a4f00; }
 .public-form-body .contact-assurance a { color: #183a2d; font-weight: 700; text-decoration: underline; }
+
+.send-readiness-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.send-readiness-items li { border-bottom: 1px solid var(--line); padding-bottom: 14px; overflow-wrap: anywhere; }
+.send-readiness-items p { margin: 6px 0; }
+.send-readiness-error { color: var(--danger); margin: 0; }
+.send-readiness-error:empty { display: none; }
+.send-confirm-dialog { box-sizing: border-box; overscroll-behavior: contain; }
