@@ -14,6 +14,8 @@ async function connect(name) { const url = new URL(address); url.pathname=`/${na
 async function apply(c,file) {
   const cohortReview=file.startsWith('supabase/migrations/')&&file.endsWith('_cohort_preparation_review.sql');
   const deferredSend=file.startsWith('supabase/migrations/')&&file.endsWith('_deferred_send_ledger.sql');
+  const futureTariff=file.startsWith('supabase/migrations/')&&file.endsWith('_future_tariff_application.sql');
+  if(futureTariff) await apply(c,'checks/future-tariff-upgrade-setup.sql');
   const bridgeHealth=file.startsWith('supabase/migrations/')&&file.endsWith('_bridge_quarantine_health.sql');
   if(bridgeHealth) await apply(c,'checks/bridge-health-upgrade-setup.sql');
   if(deferredSend) await apply(c,'checks/deferred-send-upgrade-setup.sql');
@@ -21,6 +23,7 @@ async function apply(c,file) {
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(futureTariff) { await apply(c,'checks/future-tariff-upgrade-assert.sql'); console.log('PASS tariff applicability upgrade preserves historical values, hashes and existing ACLs'); }
   if(deferredSend) { await apply(c,'checks/deferred-send-upgrade-assert.sql'); console.log('PASS deferred send upgrade preserves history, inactive configuration and existing ACLs'); }
   if(bridgeHealth) { await apply(c,'checks/bridge-health-upgrade-assert.sql'); console.log('PASS bridge health upgrade preserves configuration, business records, cron and existing ACLs'); }
   if(cohortReview) { await apply(c,'checks/cohort-preparation-upgrade-assert.sql'); console.log('PASS preparation evidence upgrade preserves proposals and unknown history'); }
@@ -36,7 +39,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','future-tariff-application']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -45,6 +48,7 @@ async function checks(c) {
 async function concurrent(c,name) {
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
+  await require('../checks/future-tariff-concurrency.cjs')(c,connect,name,actor);
   const claims=JSON.stringify({sub:actor,email:'leorangel@gmail.com',role:'authenticated'});
   const opp=(await c.query("insert into oportunidades(cliente_nome,status) values('Concurrent fixture','proposta_pronta') returning id")).rows[0].id;
   const p=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,snapshot) values($1,'Concurrent fixture','proposta_pronta','ready','{}') returning *",[opp])).rows[0];

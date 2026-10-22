@@ -1406,6 +1406,95 @@ function formatAuditChanges(changes = []) {
     .join(" · ");
 }
 
+// Applicability is a per-quote decision, never a change to the catalog or its validity.
+function tariffStableValue(value) {
+  if (Array.isArray(value)) return value.map(tariffStableValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, tariffStableValue(value[key])]));
+  return value;
+}
+function tariffBasis(snapshot = {}) {
+  const keys = ["id", "formula", "preco1h", "preco2h", "precoMeiaHoraExtra", "precoFixo", "valorAdicional", "minimo"];
+  return JSON.parse(JSON.stringify({prices: snapshot.prices || [], privatizationRules: snapshot.privatizationRules || [], generalTerms: String(snapshot.generalTerms || ""),
+    selectedPrices: (snapshot.selectedItems || []).map(item => Object.fromEntries(keys.map(key => [key, item[key] ?? null])))}));
+}
+function tariffBasisKey(snapshot) { return JSON.stringify(tariffStableValue(tariffBasis(snapshot))); }
+function tariffValidUntil(terms) {
+  const parts = String(terms || "").match(/VALIDADE[^\r\n]*?(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (!parts) return "";
+  const value = `${parts[3]}-${parts[2]}-${parts[1]}`;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+}
+function tariffApplicationIdentity(application) {
+  if (!application) return null;
+  return {requestId: application.requestId, mode: application.mode, eventDate: application.eventDate, validUntil: application.validUntil};
+}
+function getTariffEditorSnapshot() {
+  return {event: {date: fields.eventDate?.value || ""}, prices: state.prices, privatizationRules: state.privatizationRules,
+    generalTerms: fields.generalTerms?.value || "", selectedItems: getSelectedItems()};
+}
+function tariffEditorScope() {
+  return JSON.stringify([state.session?.user?.id || state.session?.user?.email || "", state.activeProposalId || "", state.activeQuoteRequestId || "", state.manualSourceKey || ""]);
+}
+function clearTariffApplication() { state.tariffApplicationState = null; }
+function getTariffApplication() {
+  const saved = state.tariffApplicationState;
+  if (!saved) return null;
+  const current = getTariffEditorSnapshot();
+  if (saved.scope !== tariffEditorScope() || saved.basisKey !== tariffBasisKey(current) || saved.application.eventDate !== current.event.date || saved.application.validUntil !== tariffValidUntil(current.generalTerms)) {
+    clearTariffApplication();
+    return null;
+  }
+  return structuredClone(saved.application);
+}
+function tariffApplicationNeeded() {
+  const snapshot = getTariffEditorSnapshot(), until = tariffValidUntil(snapshot.generalTerms);
+  return Boolean(until && snapshot.event.date > until && !getTariffApplication());
+}
+function restoreTariffApplication(snapshot) {
+  clearTariffApplication();
+  const application = snapshot?.event?.tariffApplication;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (application?.schema !== 1 || application.kind !== "confirmed" || application.mode !== "use_current_table" ||
+    !/^[0-9a-f]{64}$/.test(application.basisHash || "") || !/^[0-9a-f]{64}$/.test(application.catalog?.reference || "") ||
+    !uuid.test(application.confirmedBy || "") || !uuid.test(application.requestId || "") || !uuid.test(application.proposalId || "") ||
+    application.proposalId !== state.activeProposalId || !Number.isFinite(Date.parse(application.confirmedAt || "")) || application.eventDate !== snapshot.event.date ||
+    application.validUntil !== tariffValidUntil(snapshot.generalTerms) || application.eventDate <= application.validUntil) return;
+  if (tariffBasisKey(snapshot) !== tariffBasisKey(getTariffEditorSnapshot())) return;
+  // The server owns proof validation. Bind the received proof to this exact loaded editor;
+  // subsequent edits cannot reuse it, and dispatch validates its private provenance again.
+  state.tariffApplicationState = {application: structuredClone(application), basisKey: tariffBasisKey(getTariffEditorSnapshot()), scope: tariffEditorScope()};
+}
+function ensureTariffApplicationConfirmed() {
+  if (!tariffApplicationNeeded()) return true;
+  if (!state.session?.user) { showToast("Entre com sua conta da equipe para confirmar a tabela deste orçamento."); return false; }
+  const snapshot = getTariffEditorSnapshot(), basis = tariffBasis(snapshot), basisKey = tariffBasisKey(snapshot), scope = tariffEditorScope();
+  const date = snapshot.event.date, until = tariffValidUntil(snapshot.generalTerms);
+  const catalog = state.sharedSettings?.catalog;
+  const version = Number.isSafeInteger(catalog?.version) && JSON.stringify(tariffStableValue(catalog.value)) === JSON.stringify(tariffStableValue(snapshot.prices)) ? catalog.version : null;
+  const label = version === null ? "a tabela exibida neste orçamento" : `a tabela compartilhada versão ${version}, exibida neste orçamento`;
+  const confirmed = window.confirm(`O evento de ${date.split("-").reverse().join("/")} está após a validade de ${until.split("-").reverse().join("/")}.\n\nDeseja aplicar os preços de ${label} a este evento?\n\nOK: confirmar esta tabela para esta data, sem recalcular valores. Cancelar: manter o orçamento sem essa confirmação.\n\nEsta decisão não envia a proposta, não aprova descontos e não altera a tabela geral.`);
+  if (!confirmed) return false;
+  if (scope !== tariffEditorScope() || basisKey !== tariffBasisKey(getTariffEditorSnapshot()) || fields.eventDate.value !== date) {
+    showToast("O orçamento mudou. Confira novamente a data e a tabela antes de confirmar."); return false;
+  }
+  if (typeof crypto?.randomUUID !== "function") { showToast("Não foi possível identificar a confirmação. Tente novamente em um navegador atualizado."); return false; }
+  const application = {schema: 1, kind: "request", mode: "use_current_table", requestId: crypto.randomUUID(), eventDate: date, validUntil: until, catalogVersion: version, reviewedBasis: basis};
+  state.tariffApplicationState = {application, basisKey, scope};
+  state.sendReviewApprovedSignature = "";
+  state.sendReviewApproval = null;
+  renderAll();
+  showToast("Tabela confirmada para esta data. Salve o orçamento para registrar a confirmação; nenhum envio foi feito.");
+  return true;
+}
+function tariffApplicationNotice(application = getTariffApplication()) {
+  if (!application) return "";
+  const date = String(application.eventDate || "").split("-").reverse().join("/");
+  const until = String(application.validUntil || "").split("-").reverse().join("/");
+  const version = application.catalog?.version ?? application.catalogVersion;
+  return `Aplicação específica deste orçamento: os preços da tabela${Number.isSafeInteger(version) ? ` versão ${version}` : " registrada nesta proposta"}, originalmente válida até ${until}, aplicam-se ao evento de ${date}. A validade geral da tabela não foi alterada.`;
+}
+
 function proposalCommercialSections(snapshot = {}) {
   const text = value => String(value ?? "").replace(/\r\n/g, "\n").trim();
   const event = snapshot.event || {}, client = snapshot.client || {}, totals = snapshot.totals || {};
@@ -1428,6 +1517,7 @@ function proposalCommercialSections(snapshot = {}) {
     ["Validade", text(event.validity || "14 dias")],
     ["Prazo do sinal", numeric(event.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS)],
     ["Idioma", text(event.clientLanguage || "pt")], ["Itens", items],
+    ["Aplicação do tarifário", tariffApplicationIdentity(event.tariffApplication)],
     ["Condições gerais", text(snapshot.generalTerms)], ["Condições de pagamento", snapshot.paymentTerms || []],
     ["Finalidade", text(event.reason)], ["Anotações do briefing", text(event.sourceNotes)],
     ["Preferências", text(event.preferences)], ["Extras", text(event.extras)],
@@ -1494,7 +1584,7 @@ function hasCommercialEditorInputChanges() {
 
 function preserveUneditedCommercialSnapshot(snapshot, proposal) {
   if (!proposal?.snapshot || state.forceNewVersionDraft || hasCommercialEditorInputChanges()) return;
-  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
+  for (const key of ["client", "selectedItems", "prices", "privatizationRules", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
     if (Object.hasOwn(proposal.snapshot, key)) snapshot[key] = structuredClone(proposal.snapshot[key]);
     else delete snapshot[key];
   }
@@ -2622,8 +2712,9 @@ async function duplicateProposalForAdjustment(proposalId) {
     showToast("Não foi possível localizar essa versão.");
     return;
   }
-  await safeOpenSavedProposal(proposalId, "Duplicar e ajustar");
+  if (!(await safeOpenSavedProposal(proposalId, "Duplicar e ajustar"))) return;
   state.forceNewVersionDraft = true;
+  clearTariffApplication();
   state.sendReviewApprovedSignature = "";
   state.sendReviewApproval = null;
   renderSendReview();
@@ -5388,6 +5479,8 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     selectedIds: [...state.selectedIds].sort(),
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     total: roundCurrency(totals.total),
@@ -5408,6 +5501,7 @@ function isSendReviewApproved(items = getProposalReviewItems()) {
 }
 
 function approveSendReview() {
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   const alerts = getSmartProposalAlerts(items);
@@ -8034,6 +8128,8 @@ function buildProposalText() {
 
   const terms = fields.generalTerms.value.trim();
   if (terms) lines.push(``, terms);
+  const tariffNotice = tariffApplicationNotice();
+  if (tariffNotice) lines.push(``, tariffNotice);
 
   lines.push(``, `Pagamento:`, ...getProposalPaymentTerms());
 
@@ -8119,6 +8215,7 @@ function getProposalSnapshot() {
     event: {
       type: getCurrentEventType(),
       clientLanguage: activeRequest?.snapshot?.cliente?.idioma || activeProposal?.snapshot?.event?.clientLanguage || "pt",
+      ...(getTariffApplication() ? {tariffApplication: getTariffApplication()} : {}),
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
@@ -10812,6 +10909,8 @@ function getCurrentEditorSignature() {
   return JSON.stringify({
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     activeProposalId: state.activeProposalId || "",
@@ -10932,16 +11031,17 @@ function getOpenSourceLabelForItem(item, fallback = "Funil") {
 async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = "client") {
   if (!proposalId) {
     showToast("Não encontrei o código desta proposta. Atualize o funil e tente de novo.");
-    return;
+    return false;
   }
   if (!state.proposals.some((item) => item.id === proposalId)) {
     showToast("Não encontrei essa proposta no histórico carregado. Clique em Atualizar e tente novamente.");
-    return;
+    return false;
   }
-  if (!(await confirmEditorSwitch())) return;
-  if (!(await ensureProposalJourneyDetails(proposalId))) return;
-  openSavedProposal(proposalId, sourceLabel);
+  if (!(await confirmEditorSwitch())) return false;
+  if (!(await ensureProposalJourneyDetails(proposalId))) return false;
+  if (openSavedProposal(proposalId, sourceLabel) !== true) return false;
   scheduleLoadedEditorJump(targetMode, "auto");
+  return true;
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "client") {
@@ -12073,6 +12173,7 @@ function getGuidedEventKeyFromType(type) {
 }
 
 function resetProposalDraftState() {
+  clearTariffApplication();
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
@@ -12116,6 +12217,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   state.quoteGuideDismissed = true;
   state.smartDraftApproval = null;
   resetProposalDraftState();
+  fields.generalTerms.value = loadGeneralTerms();
   if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
   if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
   fields.clientName.value = request.cliente_nome || "";
@@ -12869,7 +12971,7 @@ async function initSupabase() {
     state.session = data.session;
 
     state.supabase.auth.onAuthStateChange((event, session) => {
-      if (state.session?.user?.id !== session?.user?.id) resetCommercialDashboard();
+      if (state.session?.user?.id !== session?.user?.id) { resetCommercialDashboard(); clearTariffApplication(); }
       state.session = session;
       if (session?.user?.email && !isTeamEmail(session.user.email)) {
         state.supabase.auth.signOut();
@@ -13193,6 +13295,7 @@ async function logoutSupabase() {
   resetCommercialDashboard();
   await state.supabase.auth.signOut();
   state.session = null;
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   state.proposals = [];
   state.quoteRequests = [];
@@ -13259,6 +13362,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("O evento aberto mudou. Revise o editor antes de salvar.");
     return null;
   }
+  if (!options.asDraft && !ensureTariffApplicationConfirmed()) return null;
   // Freeze nested prices, options and selected items before the first write.
   const snapshot = structuredClone(getProposalSnapshot());
   const savedEditorSignature = JSON.parse(getCurrentEditorSignature());
@@ -13533,7 +13637,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("A proposta anterior foi gravada, mas outro evento está aberto. Revise antes de enviar.");
     return null;
   }
+  const tariffWasUnchanged = JSON.stringify(tariffApplicationIdentity(getTariffApplication())) === JSON.stringify(savedEditorSignature.tariffApplication) &&
+    tariffBasisKey(getTariffEditorSnapshot()) === savedEditorSignature.tariffTable;
   state.activeProposalId = data.id;
+  if (tariffWasUnchanged) restoreTariffApplication(data.snapshot);
   state.editorProposalBase = structuredClone(data);
   state.forceNewVersionDraft = false;
   const newSourceKey = `proposal:${data.id}`;
@@ -13657,6 +13764,7 @@ function applyProposalSnapshot(snapshot) {
     return;
   }
 
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   fields.clientName.value = snapshot.client?.name || "";
   fields.clientEmail.value = snapshot.client?.email || "";
@@ -13698,7 +13806,7 @@ function applyProposalSnapshot(snapshot) {
   renderInternalNotesPanel(getActiveProposal());
   renderEventAttachmentsPanel(getActiveProposal());
 
-  if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
+  if (Array.isArray(snapshot.prices)) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
     savePrices({ localOnly: true });
   }
@@ -13714,12 +13822,13 @@ function applyProposalSnapshot(snapshot) {
   state.guided = snapshot.guided || { event: "", beverageId: "", foodId: "" };
   state.privatizationChoice = snapshot.privatizationChoice || "";
 
-  if (Array.isArray(snapshot.privatizationRules) && snapshot.privatizationRules.length) {
+  if (Array.isArray(snapshot.privatizationRules)) {
     state.privatizationRules = snapshot.privatizationRules;
     savePrivatizationRules({ localOnly: true });
     renderPrivatizationRulesTable();
   }
 
+  restoreTariffApplication(snapshot);
   saveSelectedIds();
   saveGeneralTerms();
   renderCategoryFilter();
@@ -13728,10 +13837,10 @@ function applyProposalSnapshot(snapshot) {
 }
 
 function openSavedProposal(proposalId, sourceLabel = "") {
-  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return false; }
   const proposal = state.proposals.find((item) => item.id === proposalId);
-  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return; }
-  if (!proposal) return;
+  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return false; }
+  if (!proposal?.snapshot) return false;
   state.activeProposalId = proposal.id;
   state.editorProposalBase = structuredClone(proposal);
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
@@ -13742,6 +13851,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
   focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
+  return true;
 }
 
 function formatDateFromIso(value) {
@@ -13845,7 +13955,7 @@ function renderProposal() {
 
       ${
       terms
-          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>`
+          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>${tariffApplicationNotice() ? `<p class="proposal-note">${escapeHtml(tariffApplicationNotice())}</p>` : ""}`
           : ""
       }
 
@@ -14062,6 +14172,7 @@ function startNewProposal(options = {}) {
 
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
 
+  clearTariffApplication();
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   state.activeOpportunityId = "";
@@ -14239,6 +14350,7 @@ function scrollToReviewTarget(target) {
 }
 
 function ensureProposalReadyForSending() {
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   renderSendReview();
@@ -15645,6 +15757,7 @@ function bindEvents() {
       } else if (event?.target === fields.eventDate || event?.target === fields.eventTime) {
         syncDateTimeFromFields();
       }
+      getTariffApplication();
       renderPriceList();
       renderAvailabilityAlert();
       renderFormSourcePanel();
