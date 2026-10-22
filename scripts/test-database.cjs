@@ -15,6 +15,8 @@ async function apply(c,file) {
   const cohortReview=file.startsWith('supabase/migrations/')&&file.endsWith('_cohort_preparation_review.sql');
   const deferredSend=file.startsWith('supabase/migrations/')&&file.endsWith('_deferred_send_ledger.sql');
   const bridgeHealth=file.startsWith('supabase/migrations/')&&file.endsWith('_bridge_quarantine_health.sql');
+  const privateSignoffs=file.startsWith('supabase/migrations/')&&file.endsWith('_private_operational_signoffs.sql');
+  if(privateSignoffs) await apply(c,'checks/private-signoffs-upgrade-setup.sql');
   if(bridgeHealth) await apply(c,'checks/bridge-health-upgrade-setup.sql');
   if(deferredSend) await apply(c,'checks/deferred-send-upgrade-setup.sql');
   if(cohortReview) await apply(c,'checks/cohort-preparation-upgrade-setup.sql');
@@ -24,6 +26,7 @@ async function apply(c,file) {
   if(deferredSend) { await apply(c,'checks/deferred-send-upgrade-assert.sql'); console.log('PASS deferred send upgrade preserves history, inactive configuration and existing ACLs'); }
   if(bridgeHealth) { await apply(c,'checks/bridge-health-upgrade-assert.sql'); console.log('PASS bridge health upgrade preserves configuration, business records, cron and existing ACLs'); }
   if(cohortReview) { await apply(c,'checks/cohort-preparation-upgrade-assert.sql'); console.log('PASS preparation evidence upgrade preserves proposals and unknown history'); }
+  if(privateSignoffs) { await apply(c,'checks/private-signoffs-upgrade-assert.sql'); console.log('PASS private signoffs install dormant, preserve existing public functions, evidence, identities and channels'); }
 }
 async function create(name) {
   await admin.query(`create database ${name}`);
@@ -36,7 +39,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','private-operational-signoffs','private-operational-release']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -45,6 +48,7 @@ async function checks(c) {
 async function concurrent(c,name) {
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
+  await require('../checks/private-operational-signoffs-concurrency.cjs')(c,connect,name,actor);
   const claims=JSON.stringify({sub:actor,email:'leorangel@gmail.com',role:'authenticated'});
   const opp=(await c.query("insert into oportunidades(cliente_nome,status) values('Concurrent fixture','proposta_pronta') returning id")).rows[0].id;
   const p=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,snapshot) values($1,'Concurrent fixture','proposta_pronta','ready','{}') returning *",[opp])).rows[0];
@@ -140,7 +144,8 @@ async function concurrent(c,name) {
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
     const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
     const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth)) await apply(c,`supabase/migrations/${f}`);
+    const privateSignoffs=migrationFiles.find(f=>f.endsWith('_private_operational_signoffs.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==privateSignoffs)) await apply(c,`supabase/migrations/${f}`);
     const legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
         approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
@@ -160,6 +165,7 @@ async function concurrent(c,name) {
     if(deferred) await apply(c,`supabase/migrations/${deferred}`);
     if(bridgeHealth) await apply(c,`supabase/migrations/${bridgeHealth}`);
     if(watchReadiness) await apply(c,`supabase/migrations/${watchReadiness}`);
+    if(privateSignoffs) await apply(c,`supabase/migrations/${privateSignoffs}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
