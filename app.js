@@ -9881,7 +9881,73 @@ function initializeReportDefaults() {
   if (fields.reportEndDate && !fields.reportEndDate.value) fields.reportEndDate.value = toDateInputValue(addDays(weekStart, 6));
 }
 
+const salesFunnelStages = [
+  {id:"lead", label:"Leads recebidos", action:"Qualificar o pedido e preparar a proposta"},
+  {id:"preparation", label:"Propostas em preparação", action:"Concluir a revisão e preparar o envio"},
+  {id:"waiting", label:"Enviadas · aguardam retorno", action:"Acompanhar o cliente no prazo combinado"},
+  {id:"changes", label:"Retorno · alterações pendentes", action:"Revisar o pedido e preparar a nova versão"},
+  {id:"reply", label:"Retorno · responder cliente", action:"Ler a conversa e definir o próximo passo"},
+  {id:"approved", label:"Aprovadas · aguardam sinal", action:"Combinar o prazo do sinal e orientar o pagamento"},
+  {id:"validation", label:"Sinal em validação", action:"Conferir o recebimento antes de confirmar a venda"},
+  {id:"won", label:"Sinal recebido", action:"Acompanhar o saldo e preparar a operação"},
+  {id:"review", label:"Situação a conferir", action:"Conferir o histórico antes de retomar o contato"},
+];
+
+// Read-only commercial interpretation. It never writes a stage, sends a message,
+// or treats an approval/proof attachment as a validated payment.
+function getSalesFunnelState(item, conversation = null, now = Date.now()) {
+  if (item.stage === "desfecho_pendente" || ["cancelado", "perdido", "pos_venda", "realizado"].includes(item.status)) return null;
+  const result = (id, evidence) => ({id, evidence});
+  if (item.kind === "request") return result("lead", item.firstReplySentAt ? "Primeiro contato registrado; falta preparar a proposta." : "Pedido recebido; atendimento inicial pendente.");
+  if (item.isDraft) return result("preparation", "Rascunho de trabalho; ainda não enviado ao cliente.");
+  const payment = item.snapshot?.pagamentoSinal;
+  if (payment?.validacaoPendente === true) return result("validation", "Comprovante pendente não confirma recebimento nem reserva.");
+  const received = Number(payment?.valor) > 0 && Number(item.paymentPaidTotal) > 0;
+  const booked = ["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(item.status);
+  if (booked) return received ? result("won", "Sinal registrado e contabilizado; confira as pendências da operação.") : result("review", "Etapa avançada sem sinal validado disponível neste registro.");
+  if (item.clientResponse === "cancelar") return result("reply", "Cliente pediu cancelamento; registrar o desfecho informado.");
+  if (item.clientResponse === "alteracao") return result("changes", "Pedido de alteração registrado na proposta de trabalho.");
+  if (item.clientResponse === "confirmar") return received ? result("review", "Aprovação e pagamento registrados; conferir a etapa comercial.") : result("approved", "Cliente aprovou. Aprovação ainda não é sinal recebido nem reserva confirmada.");
+  if (item.clientResponse) return result("reply", "Há uma resposta registrada; conferir o conteúdo e retornar.");
+  const sent = Date.parse(item.sentAt || "");
+  if (conversation?.waiting === "team" && (!Number.isFinite(sent) || Date.parse(conversation.message?.occurred_at || "") >= sent)) return result("reply", "Há mensagem do cliente sem retorno registrado da equipe.");
+  if (conversation?.waiting === "unknown") return result("review", "Não foi possível determinar o retorno com segurança; confira a conversa.");
+  if (Number.isFinite(sent) && sent <= now) return result("waiting", "Envio registrado. Entrega, leitura e eventuais respostas devem ser conferidas na conversa.");
+  if (item.status === "proposta_pronta" || item.publicationStatus === "ready") return result("preparation", "Proposta pronta, ainda sem envio registrado.");
+  return result("review", "A etapa comercial, sozinha, não comprova envio da proposta.");
+}
+
+function getSalesFunnelStateForItem(item) {
+  const current = typeof eventOps !== "undefined" && state.session?.user?.id && eventOps.loadedFor === state.session.user.id &&
+    !eventOps.error && !eventOps.loading && (QA_MODE || (!commercialRefreshError && commercialClient === state.supabase));
+  const messages = current && item.opportunityId ? getOpsConversationMessages(item) : [];
+  return getSalesFunnelState(item, messages.length ? getConversationWait(messages) : null);
+}
+
+function getSalesFunnelItems(items) {
+  const unique = new Map();
+  for (const item of items) {
+    const key = item.opportunityId || `${item.kind}:${item.id}`;
+    if (!unique.has(key) || (unique.get(key).kind === "request" && item.kind === "proposal")) unique.set(key, item);
+  }
+  return [...unique.values()];
+}
+
+function renderSalesFunnelOverview(items) {
+  const root = document.getElementById("salesFunnelOverview");
+  if (!root) return;
+  if (!state.session || !state.supabase) { root.hidden = true; root.innerHTML = ""; return; }
+  root.hidden = false;
+  const states = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
+  root.innerHTML = `<h2>Onde cada venda está</h2><p>Escolha uma etapa para ver as oportunidades e avançar o próximo passo. Cada oportunidade é contada uma vez.</p>
+    <div class="sales-funnel-stages">${salesFunnelStages.map(stage=>`<button type="button" data-sales-funnel="${stage.id}" aria-pressed="${state.activePipelineFilter === `sales:${stage.id}`}">
+      <span>${stage.label}</span><strong>${states.filter(s=>s.id===stage.id).length}</strong><small>${stage.action}</small></button>`).join("")}</div>
+    <p class="sales-funnel-evidence">Leitura baseada nos registros disponíveis. Aprovação não confirma pagamento; envio registrado não comprova entrega ou leitura.</p>
+    ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}`;
+}
+
 function renderPipelineMetrics(items = getPipelineItems()) {
+  renderSalesFunnelOverview(items);
   renderGlobalSearch(items);
   renderClientRegistry(items);
   if (!nodes.metricStageLead) return;
@@ -10381,11 +10447,9 @@ function getPipelineQuickFilterDefinitions() {
     },
     {
       id: "awaitingSignal",
-      label: "Falta sinal",
+      label: "Aprovadas · falta sinal",
       matches: (item) =>
-        item.kind === "proposal" &&
-        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)) &&
-        !item.snapshot?.pagamentoSinal,
+        getSalesFunnelStateForItem(item)?.id === "approved",
     },
     {
       id: "awaitingRemaining",
@@ -10424,6 +10488,7 @@ function getPipelineQuickFilterDefinitions() {
 
 function getFilteredPipelineItems(items = getPipelineItems()) {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter.startsWith("sales:")) return getSalesFunnelItems(items).filter(item=>getSalesFunnelStateForItem(item)?.id === activeFilter.slice(6));
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
   if (activeFilter === "all") return items;
   if (!definition) {
@@ -10435,6 +10500,7 @@ function getFilteredPipelineItems(items = getPipelineItems()) {
 
 function getActivePipelineFilterLabel() {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter.startsWith("sales:")) return salesFunnelStages.find(stage=>stage.id === activeFilter.slice(6))?.label || "";
   if (activeFilter === "all") return "";
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
   if (definition) return definition.label;
@@ -11804,6 +11870,8 @@ function renderPipelineValueBreakdown(item = {}, className = "", { includeProduc
 
 function renderPipelineCard(item) {
   const status = getReportStatus(item);
+  const salesState = getSalesFunnelStateForItem(item);
+  const salesStage = salesFunnelStages.find(stage=>stage.id === salesState?.id);
   const needsOutcome = item.stage === "desfecho_pendente";
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -11955,6 +12023,7 @@ function renderPipelineCard(item) {
         </div>
       </div>
       ${riskAlertsLine}
+      ${salesStage ? `<div class="pipeline-sales-stage" data-sales-state="${salesStage.id}"><strong>${salesStage.label}</strong><small>${escapeHtml(salesState.evidence)}</small></div>` : ""}
       ${primaryActionLine}
       ${planLine}
       ${clientResponseLine}
@@ -16207,6 +16276,14 @@ function bindEvents() {
     const button = event.target.closest("button[data-pipeline-stage-jump]");
     if (!button) return;
     jumpToPipelineStage(button.dataset.pipelineStageJump);
+  });
+  document.getElementById("salesFunnelOverview")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-sales-funnel]");
+    if (!button || !salesFunnelStages.some(stage=>stage.id === button.dataset.salesFunnel)) return;
+    const id = button.dataset.salesFunnel;
+    state.activePipelineFilter = state.activePipelineFilter === `sales:${id}` ? "all" : `sales:${id}`;
+    renderPipeline();
+    document.querySelector(`[data-sales-funnel="${id}"]`)?.focus({preventScroll:true});
   });
   nodes.proposalNextStep?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-next-step-action]");

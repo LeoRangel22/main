@@ -13001,6 +13001,25 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 @media (max-width: 480px) { .send-client-preview { padding: 12px; } .send-client-address div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 
 .commercial-calendar { margin: 20px 0; padding: 20px; border: 1px solid #cbdcd1; border-radius: 14px; background: #f5faf6; }
+.sales-funnel-overview { margin: 16px 0; padding: 20px; border: 1px solid #cbdcd1; border-radius: 14px; background: #f7faf8; }
+.sales-funnel-overview[hidden], .auth-locked .sales-funnel-overview { display: none; }
+.sales-funnel-overview h2 { margin: 0 0 8px; color: #183a2d; font-size: 1.25rem; }
+.sales-funnel-overview p { line-height: 1.5; }
+.sales-funnel-stages { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,210px),1fr)); gap: 10px; }
+.sales-funnel-stages button { display: grid; gap: 8px; text-align: left; padding: 16px; border: 1px solid #cbdcd1; border-radius: 10px; background: white; color: #183a2d; min-width: 0; overflow-wrap: anywhere; }
+.sales-funnel-stages button strong { font-size: 1.65rem; }
+.sales-funnel-stages button small { color: #596963; line-height: 1.4; font-weight: 400; }
+.sales-funnel-stages button[aria-pressed="true"] { outline: 2px solid #335d4a; outline-offset: -2px; background: #edf4ef; }
+.sales-funnel-stages button:focus-visible { outline: 3px solid #183a2d; outline-offset: 2px; }
+.sales-funnel-evidence { font-size: .85rem; color: #596963; }
+.pipeline-sales-stage { display: grid; gap: 4px; padding: 10px; border-radius: 8px; background: #edf4ef; color: #183a2d; }
+.pipeline-sales-stage small { line-height: 1.4; }
+.pipeline-sales-stage[data-sales-state="approved"], .pipeline-sales-stage[data-sales-state="validation"], .pipeline-sales-stage[data-sales-state="changes"] { background: #fff2d9; color: #80500e; }
+@media(max-width:600px) {
+  .sales-funnel-overview { padding: 12px; }
+  .sales-funnel-stages { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .sales-funnel-stages button { padding: 12px; }
+}
 .commercial-calendar[hidden], .auth-locked .commercial-calendar { display: none; }
 .commercial-calendar-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 16px; }
 .commercial-calendar-heading h2 { margin: 0; }
