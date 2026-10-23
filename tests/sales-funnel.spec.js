@@ -17,7 +17,10 @@ test('sales overview separates approval, revision, recorded send and unverified 
  const before=await page.evaluate(()=>JSON.stringify(state.proposals));
  await root.locator('[data-sales-funnel="approved"]').click();await expect(root.locator('[data-sales-funnel="approved"]')).toBeFocused();
  await expect(page.locator('#pipelineBoard .pipeline-card')).toHaveCount(1);await expect(page.locator('#pipelineBoard .pipeline-card')).toContainText('Fixture approved');
- await expect(page.locator('#pipelineBoard [data-sales-state="approved"]')).toContainText('Aprovação ainda não é sinal recebido');
+  await expect(page.locator('#pipelineBoard [data-sales-state="approved"]')).toContainText('Aprovadas · aguardam sinal');
+  await page.locator('#pipelineBoard .pipeline-card-details > summary').click();
+  await expect(page.locator('#pipelineBoard .pipeline-sales-evidence')).toBeVisible();
+  await expect(page.locator('#pipelineBoard .pipeline-sales-evidence')).toContainText('Aprovação ainda não é sinal recebido');
  await root.locator('[data-sales-funnel="changes"]').click();await expect(page.locator('#pipelineBoard .pipeline-card')).toHaveCount(1);await expect(page.locator('#pipelineBoard .pipeline-card')).toContainText('Fixture change');
  expect(await page.evaluate(()=>JSON.stringify(state.proposals))).toBe(before);
 });

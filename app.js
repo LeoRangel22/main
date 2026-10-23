@@ -11988,7 +11988,7 @@ function renderPipelineCard(item) {
   `;
   return `
     <article
-      class="pipeline-card pipeline-card-stage-${escapeHtml(status)}"
+      class="pipeline-card pipeline-card-stage-${escapeHtml(status)}${salesStage ? " has-sales-stage" : ""}"
       draggable="true"
       tabindex="0"
       aria-label="Abrir ${escapeHtml(displayName)} no editor"
@@ -12020,10 +12020,10 @@ function renderPipelineCard(item) {
         </div>
         <div class="pipeline-card-offer">
           <span class="pipeline-card-product">${escapeHtml(item.type || "Formato a definir")}</span>
+          ${salesStage ? `<span class="pipeline-sales-stage" data-sales-state="${salesStage.id}">${salesStage.label}</span>` : ""}
         </div>
       </div>
       ${riskAlertsLine}
-      ${salesStage ? `<div class="pipeline-sales-stage" data-sales-state="${salesStage.id}"><strong>${salesStage.label}</strong><small>${escapeHtml(salesState.evidence)}</small></div>` : ""}
       ${primaryActionLine}
       ${planLine}
       ${clientResponseLine}
@@ -12032,6 +12032,7 @@ function renderPipelineCard(item) {
         <summary>Detalhes e opções</summary>
         <div class="pipeline-card-details-content">
           <small class="pipeline-card-full-name">Cliente: ${escapeHtml(displayName)}</small>
+          ${salesState ? `<small class="pipeline-sales-evidence">${escapeHtml(salesState.evidence)}</small>` : ""}
           <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
           ${item.isDraft ? "" : versionBadge}
           ${scoreBadge}

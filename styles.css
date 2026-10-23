@@ -13012,10 +13012,15 @@ body[data-page="app"] .pipeline-card-footer:has(.pipeline-card-stage-switch .pip
 .sales-funnel-stages button[aria-pressed="true"] { outline: 2px solid #335d4a; outline-offset: -2px; background: #edf4ef; }
 .sales-funnel-stages button:focus-visible { outline: 3px solid #183a2d; outline-offset: 2px; }
 .sales-funnel-evidence { font-size: .85rem; color: #596963; }
-.pipeline-sales-stage { display: grid; gap: 4px; padding: 10px; border-radius: 8px; background: #edf4ef; color: #183a2d; }
-.pipeline-sales-stage small { line-height: 1.4; }
+.pipeline-card-event-summary .pipeline-card-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 3px 8px; }
+body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
+.pipeline-sales-stage { padding: 2px 6px; border-radius: 6px; background: #edf4ef; color: #183a2d; font-size: .73rem; font-weight: 700; line-height: 1.35; }
+.pipeline-sales-evidence { line-height: 1.4; }
 .pipeline-sales-stage[data-sales-state="approved"], .pipeline-sales-stage[data-sales-state="validation"], .pipeline-sales-stage[data-sales-state="changes"] { background: #fff2d9; color: #80500e; }
 @media(max-width:600px) {
+  .pipeline-stage-header { flex-direction: column; align-items: stretch; }
+  .pipeline-stage-header > div { width: 100%; min-width: 0; }
+  .pipeline-header-actions { flex-wrap: wrap; }
   .sales-funnel-overview { padding: 12px; }
   .sales-funnel-stages { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .sales-funnel-stages button { padding: 12px; }
