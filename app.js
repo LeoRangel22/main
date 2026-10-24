@@ -13589,7 +13589,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
-  if (!options.asDraft && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
+  if (!options.asDraft && !(isContractedProposal(activeProposal) && !options.forSharing) && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
     if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
