@@ -1406,6 +1406,95 @@ function formatAuditChanges(changes = []) {
     .join(" · ");
 }
 
+// Applicability is a per-quote decision, never a change to the catalog or its validity.
+function tariffStableValue(value) {
+  if (Array.isArray(value)) return value.map(tariffStableValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, tariffStableValue(value[key])]));
+  return value;
+}
+function tariffBasis(snapshot = {}) {
+  const keys = ["id", "formula", "preco1h", "preco2h", "precoMeiaHoraExtra", "precoFixo", "valorAdicional", "minimo"];
+  return JSON.parse(JSON.stringify({prices: snapshot.prices || [], privatizationRules: snapshot.privatizationRules || [], generalTerms: String(snapshot.generalTerms || ""),
+    selectedPrices: (snapshot.selectedItems || []).map(item => Object.fromEntries(keys.map(key => [key, item[key] ?? null])))}));
+}
+function tariffBasisKey(snapshot) { return JSON.stringify(tariffStableValue(tariffBasis(snapshot))); }
+function tariffValidUntil(terms) {
+  const parts = String(terms || "").match(/VALIDADE[^\r\n]*?(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (!parts) return "";
+  const value = `${parts[3]}-${parts[2]}-${parts[1]}`;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+}
+function tariffApplicationIdentity(application) {
+  if (!application) return null;
+  return {requestId: application.requestId, mode: application.mode, eventDate: application.eventDate, validUntil: application.validUntil};
+}
+function getTariffEditorSnapshot() {
+  return {event: {date: fields.eventDate?.value || ""}, prices: state.prices, privatizationRules: state.privatizationRules,
+    generalTerms: fields.generalTerms?.value || "", selectedItems: getSelectedItems()};
+}
+function tariffEditorScope() {
+  return JSON.stringify([state.session?.user?.id || state.session?.user?.email || "", state.activeProposalId || "", state.activeQuoteRequestId || "", state.manualSourceKey || ""]);
+}
+function clearTariffApplication() { state.tariffApplicationState = null; }
+function getTariffApplication() {
+  const saved = state.tariffApplicationState;
+  if (!saved) return null;
+  const current = getTariffEditorSnapshot();
+  if (saved.scope !== tariffEditorScope() || saved.basisKey !== tariffBasisKey(current) || saved.application.eventDate !== current.event.date || saved.application.validUntil !== tariffValidUntil(current.generalTerms)) {
+    clearTariffApplication();
+    return null;
+  }
+  return structuredClone(saved.application);
+}
+function tariffApplicationNeeded() {
+  const snapshot = getTariffEditorSnapshot(), until = tariffValidUntil(snapshot.generalTerms);
+  return Boolean(until && snapshot.event.date > until && !getTariffApplication());
+}
+function restoreTariffApplication(snapshot) {
+  clearTariffApplication();
+  const application = snapshot?.event?.tariffApplication;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (application?.schema !== 1 || application.kind !== "confirmed" || application.mode !== "use_current_table" ||
+    !/^[0-9a-f]{64}$/.test(application.basisHash || "") || !/^[0-9a-f]{64}$/.test(application.catalog?.reference || "") ||
+    !uuid.test(application.confirmedBy || "") || !uuid.test(application.requestId || "") || !uuid.test(application.proposalId || "") ||
+    application.proposalId !== state.activeProposalId || !Number.isFinite(Date.parse(application.confirmedAt || "")) || application.eventDate !== snapshot.event.date ||
+    application.validUntil !== tariffValidUntil(snapshot.generalTerms) || application.eventDate <= application.validUntil) return;
+  if (tariffBasisKey(snapshot) !== tariffBasisKey(getTariffEditorSnapshot())) return;
+  // The server owns proof validation. Bind the received proof to this exact loaded editor;
+  // subsequent edits cannot reuse it, and dispatch validates its private provenance again.
+  state.tariffApplicationState = {application: structuredClone(application), basisKey: tariffBasisKey(getTariffEditorSnapshot()), scope: tariffEditorScope()};
+}
+function ensureTariffApplicationConfirmed() {
+  if (!tariffApplicationNeeded()) return true;
+  if (!state.session?.user) { showToast("Entre com sua conta da equipe para confirmar a tabela deste orçamento."); return false; }
+  const snapshot = getTariffEditorSnapshot(), basis = tariffBasis(snapshot), basisKey = tariffBasisKey(snapshot), scope = tariffEditorScope();
+  const date = snapshot.event.date, until = tariffValidUntil(snapshot.generalTerms);
+  const catalog = state.sharedSettings?.catalog;
+  const version = Number.isSafeInteger(catalog?.version) && JSON.stringify(tariffStableValue(catalog.value)) === JSON.stringify(tariffStableValue(snapshot.prices)) ? catalog.version : null;
+  const label = version === null ? "a tabela exibida neste orçamento" : `a tabela compartilhada versão ${version}, exibida neste orçamento`;
+  const confirmed = window.confirm(`O evento de ${date.split("-").reverse().join("/")} está após a validade de ${until.split("-").reverse().join("/")}.\n\nDeseja aplicar os preços de ${label} a este evento?\n\nOK: confirmar esta tabela para esta data, sem recalcular valores. Cancelar: manter o orçamento sem essa confirmação.\n\nEsta decisão não envia a proposta, não aprova descontos e não altera a tabela geral.`);
+  if (!confirmed) return false;
+  if (scope !== tariffEditorScope() || basisKey !== tariffBasisKey(getTariffEditorSnapshot()) || fields.eventDate.value !== date) {
+    showToast("O orçamento mudou. Confira novamente a data e a tabela antes de confirmar."); return false;
+  }
+  if (typeof crypto?.randomUUID !== "function") { showToast("Não foi possível identificar a confirmação. Tente novamente em um navegador atualizado."); return false; }
+  const application = {schema: 1, kind: "request", mode: "use_current_table", requestId: crypto.randomUUID(), eventDate: date, validUntil: until, catalogVersion: version, reviewedBasis: basis};
+  state.tariffApplicationState = {application, basisKey, scope};
+  state.sendReviewApprovedSignature = "";
+  state.sendReviewApproval = null;
+  renderAll();
+  showToast("Tabela confirmada para esta data. Salve o orçamento para registrar a confirmação; nenhum envio foi feito.");
+  return true;
+}
+function tariffApplicationNotice(application = getTariffApplication()) {
+  if (!application) return "";
+  const date = String(application.eventDate || "").split("-").reverse().join("/");
+  const until = String(application.validUntil || "").split("-").reverse().join("/");
+  const version = application.catalog?.version ?? application.catalogVersion;
+  return `Aplicação específica deste orçamento: os preços da tabela${Number.isSafeInteger(version) ? ` versão ${version}` : " registrada nesta proposta"}, originalmente válida até ${until}, aplicam-se ao evento de ${date}. A validade geral da tabela não foi alterada.`;
+}
+
 function proposalCommercialSections(snapshot = {}) {
   const text = value => String(value ?? "").replace(/\r\n/g, "\n").trim();
   const event = snapshot.event || {}, client = snapshot.client || {}, totals = snapshot.totals || {};
@@ -1428,6 +1517,7 @@ function proposalCommercialSections(snapshot = {}) {
     ["Validade", text(event.validity || "14 dias")],
     ["Prazo do sinal", numeric(event.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS)],
     ["Idioma", text(event.clientLanguage || "pt")], ["Itens", items],
+    ["Aplicação do tarifário", tariffApplicationIdentity(event.tariffApplication)],
     ["Condições gerais", text(snapshot.generalTerms)], ["Condições de pagamento", snapshot.paymentTerms || []],
     ["Finalidade", text(event.reason)], ["Anotações do briefing", text(event.sourceNotes)],
     ["Preferências", text(event.preferences)], ["Extras", text(event.extras)],
@@ -1494,7 +1584,7 @@ function hasCommercialEditorInputChanges() {
 
 function preserveUneditedCommercialSnapshot(snapshot, proposal) {
   if (!proposal?.snapshot || state.forceNewVersionDraft || hasCommercialEditorInputChanges()) return;
-  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
+  for (const key of ["client", "selectedItems", "prices", "privatizationRules", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
     if (Object.hasOwn(proposal.snapshot, key)) snapshot[key] = structuredClone(proposal.snapshot[key]);
     else delete snapshot[key];
   }
@@ -2622,8 +2712,9 @@ async function duplicateProposalForAdjustment(proposalId) {
     showToast("Não foi possível localizar essa versão.");
     return;
   }
-  await safeOpenSavedProposal(proposalId, "Duplicar e ajustar");
+  if (!(await safeOpenSavedProposal(proposalId, "Duplicar e ajustar"))) return;
   state.forceNewVersionDraft = true;
+  clearTariffApplication();
   state.sendReviewApprovedSignature = "";
   state.sendReviewApproval = null;
   renderSendReview();
@@ -5305,14 +5396,15 @@ function getCustomerDecisionLoop(proposal = getActiveProposal()) {
   const response = proposal?.cliente_resposta || snapshot.clienteResposta?.acao || "";
   const proof = proposal?.cliente_solicitacao?.comprovante || snapshot.clienteResposta?.comprovante || snapshot.pagamentoSinal?.comprovante || null;
   const hasPublicLink = Boolean(proposal?.public_token);
-  const sent = ["proposta_enviada", "negociacao", "confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda"].includes(normalizeProposalStatus(proposal?.status));
+  const sentAt = proposal?.sent_at ? Date.parse(proposal.sent_at) : NaN;
+  const sent = Number.isFinite(sentAt) && sentAt <= Date.now();
   const steps = [
     {
       id: "proposal",
       label: "Proposta",
-      title: sent ? "Link enviado/salvo" : "Gerar link público",
+      title: sent ? "Envio registrado" : hasPublicLink ? "Link disponível; envio não confirmado" : "Gerar link público",
       status: hasPublicLink && sent ? "done" : hasPublicLink ? "current" : "pending",
-      detail: hasPublicLink ? "Cliente recebe um link único para decidir." : "Salve a proposta para criar o link seguro.",
+      detail: sent ? "Registro de envio não confirma entrega nem resposta." : hasPublicLink ? "Link disponível para revisão; salvar não confirma envio." : "Salve a proposta para criar o link seguro.",
     },
     {
       id: "client",
@@ -5388,6 +5480,8 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     selectedIds: [...state.selectedIds].sort(),
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     total: roundCurrency(totals.total),
@@ -5408,6 +5502,7 @@ function isSendReviewApproved(items = getProposalReviewItems()) {
 }
 
 function approveSendReview() {
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   const alerts = getSmartProposalAlerts(items);
@@ -7081,6 +7176,8 @@ function scrollToClientData() {
   scrollToNodeReliably(document.querySelector("#clientDataSection"), { behavior: "smooth", offset: 14 });
 }
 
+let editorScrollGeneration = 0;
+
 function getScrollableAncestors(node) {
   const ancestors = [];
   let parent = node?.parentElement;
@@ -7097,7 +7194,9 @@ function getScrollableAncestors(node) {
 
 function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
   if (!target) return;
+  const generation = editorScrollGeneration;
   const scroll = (scrollBehavior = behavior) => {
+    if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
     try {
       target.scrollIntoView({ behavior: scrollBehavior, block: "start", inline: "nearest" });
     } catch (_) {}
@@ -7177,9 +7276,11 @@ function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
 }
 
 function scheduleLoadedEditorJump(targetMode = "client", behavior = "auto") {
+  const generation = editorScrollGeneration;
   const jumps = [0, 90, 240, 520, 980, 1500];
   jumps.forEach((delay) => {
     window.setTimeout(() => {
+      if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
       jumpToLoadedEditor(targetMode, delay >= 520 ? "auto" : behavior);
     }, delay);
   });
@@ -8034,6 +8135,8 @@ function buildProposalText() {
 
   const terms = fields.generalTerms.value.trim();
   if (terms) lines.push(``, terms);
+  const tariffNotice = tariffApplicationNotice();
+  if (tariffNotice) lines.push(``, tariffNotice);
 
   lines.push(``, `Pagamento:`, ...getProposalPaymentTerms());
 
@@ -8125,6 +8228,7 @@ function getProposalSnapshot() {
     event: {
       type: getCurrentEventType(),
       clientLanguage: getProposalClientLanguage(activeProposal, activeRequest),
+      ...(getTariffApplication() ? {tariffApplication: getTariffApplication()} : {}),
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
@@ -9874,7 +9978,74 @@ function initializeReportDefaults() {
   if (fields.reportEndDate && !fields.reportEndDate.value) fields.reportEndDate.value = toDateInputValue(addDays(weekStart, 6));
 }
 
+const salesFunnelStages = [
+  {id:"lead", label:"Leads recebidos", action:"Qualificar o pedido e preparar a proposta"},
+  {id:"preparation", label:"Propostas em preparação", action:"Concluir a revisão e preparar o envio"},
+  {id:"ready", label:"Prontas · falta envio", action:"Escolher o canal; se já enviou por fora, registrar o envio manual"},
+  {id:"waiting", label:"Enviadas · aguardam retorno", action:"Acompanhar o cliente no prazo combinado"},
+  {id:"changes", label:"Retorno · alterações pendentes", action:"Revisar o pedido e preparar a nova versão"},
+  {id:"reply", label:"Retorno · responder cliente", action:"Ler a conversa e definir o próximo passo"},
+  {id:"approved", label:"Aprovadas · aguardam sinal", action:"Combinar o prazo do sinal e orientar o pagamento"},
+  {id:"validation", label:"Sinal em validação", action:"Conferir o recebimento antes de confirmar a venda"},
+  {id:"won", label:"Sinal recebido", action:"Acompanhar o saldo e preparar a operação"},
+  {id:"review", label:"Situação a conferir", action:"Conferir o histórico antes de retomar o contato"},
+];
+
+// Read-only commercial interpretation. It never writes a stage, sends a message,
+// or treats an approval/proof attachment as a validated payment.
+function getSalesFunnelState(item, conversation = null, now = Date.now()) {
+  if (item.stage === "desfecho_pendente" || ["cancelado", "perdido", "pos_venda", "realizado"].includes(item.status)) return null;
+  const result = (id, evidence) => ({id, evidence});
+  if (item.kind === "request") return result("lead", item.firstReplySentAt ? "Primeiro contato registrado; falta preparar a proposta." : "Pedido recebido; atendimento inicial pendente.");
+  if (item.isDraft) return result("preparation", "Rascunho de trabalho; ainda não enviado ao cliente.");
+  const payment = item.snapshot?.pagamentoSinal;
+  if (payment?.validacaoPendente === true) return result("validation", "Comprovante pendente não confirma recebimento nem reserva.");
+  const received = Number(payment?.valor) > 0 && Number(item.paymentPaidTotal) > 0;
+  const booked = ["confirmado", "pagamento_final", "planejamento", "evento_proximo"].includes(item.status);
+  if (booked) return received ? result("won", "Sinal registrado e contabilizado; confira as pendências da operação.") : result("review", "Etapa avançada sem sinal validado disponível neste registro.");
+  if (item.clientResponse === "cancelar") return result("reply", "Cliente pediu cancelamento; registrar o desfecho informado.");
+  if (item.clientResponse === "alteracao") return result("changes", "Pedido de alteração registrado na proposta de trabalho.");
+  if (item.clientResponse === "confirmar") return received ? result("review", "Aprovação e pagamento registrados; conferir a etapa comercial.") : result("approved", "Cliente aprovou. Aprovação ainda não é sinal recebido nem reserva confirmada.");
+  if (item.clientResponse) return result("reply", "Há uma resposta registrada; conferir o conteúdo e retornar.");
+  const sent = Date.parse(item.sentAt || "");
+  if (conversation?.waiting === "team" && (!Number.isFinite(sent) || Date.parse(conversation.message?.occurred_at || "") >= sent)) return result("reply", "Há mensagem do cliente sem retorno registrado da equipe.");
+  if (conversation?.waiting === "unknown") return result("review", "Não foi possível determinar o retorno com segurança; confira a conversa.");
+  if (Number.isFinite(sent) && sent <= now) return result("waiting", "Envio registrado. Entrega, leitura e eventuais respostas devem ser conferidas na conversa.");
+  if (item.status === "proposta_pronta" || item.publicationStatus === "ready") return result("ready", `Versão ${item.version || "atual"} pronta, ainda sem envio registrado desta versão. Envie pelo canal escolhido ou registre o envio que já fez fora do sistema.`);
+  return result("review", "A etapa comercial, sozinha, não comprova envio da proposta.");
+}
+
+function getSalesFunnelStateForItem(item) {
+  const current = typeof eventOps !== "undefined" && state.session?.user?.id && eventOps.loadedFor === state.session.user.id &&
+    !eventOps.error && !eventOps.loading && (QA_MODE || (!commercialRefreshError && commercialClient === state.supabase));
+  const messages = current && item.opportunityId ? getOpsConversationMessages(item) : [];
+  return getSalesFunnelState(item, messages.length ? getConversationWait(messages) : null);
+}
+
+function getSalesFunnelItems(items) {
+  const unique = new Map();
+  for (const item of items) {
+    const key = item.opportunityId || `${item.kind}:${item.id}`;
+    if (!unique.has(key) || (unique.get(key).kind === "request" && item.kind === "proposal")) unique.set(key, item);
+  }
+  return [...unique.values()];
+}
+
+function renderSalesFunnelOverview(items) {
+  const root = document.getElementById("salesFunnelOverview");
+  if (!root) return;
+  if (!state.session || !state.supabase) { root.hidden = true; root.innerHTML = ""; return; }
+  root.hidden = false;
+  const states = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
+  root.innerHTML = `<h2>Onde cada venda está</h2><p>Escolha uma etapa para ver as oportunidades e avançar o próximo passo. Cada oportunidade é contada uma vez.</p>
+    <div class="sales-funnel-stages">${salesFunnelStages.map(stage=>`<button type="button" data-sales-funnel="${stage.id}" aria-pressed="${state.activePipelineFilter === `sales:${stage.id}`}">
+      <span>${stage.label}</span><strong>${states.filter(s=>s.id===stage.id).length}</strong><small>${stage.action}</small></button>`).join("")}</div>
+    <p class="sales-funnel-evidence">Leitura baseada nos registros disponíveis. Aprovação não confirma pagamento; envio registrado não comprova entrega ou leitura.</p>
+    ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}`;
+}
+
 function renderPipelineMetrics(items = getPipelineItems()) {
+  renderSalesFunnelOverview(items);
   renderGlobalSearch(items);
   renderClientRegistry(items);
   if (!nodes.metricStageLead) return;
@@ -10374,11 +10545,9 @@ function getPipelineQuickFilterDefinitions() {
     },
     {
       id: "awaitingSignal",
-      label: "Falta sinal",
+      label: "Aprovadas · falta sinal",
       matches: (item) =>
-        item.kind === "proposal" &&
-        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)) &&
-        !item.snapshot?.pagamentoSinal,
+        getSalesFunnelStateForItem(item)?.id === "approved",
     },
     {
       id: "awaitingRemaining",
@@ -10417,6 +10586,7 @@ function getPipelineQuickFilterDefinitions() {
 
 function getFilteredPipelineItems(items = getPipelineItems()) {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter.startsWith("sales:")) return getSalesFunnelItems(items).filter(item=>getSalesFunnelStateForItem(item)?.id === activeFilter.slice(6));
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
   if (activeFilter === "all") return items;
   if (!definition) {
@@ -10428,6 +10598,7 @@ function getFilteredPipelineItems(items = getPipelineItems()) {
 
 function getActivePipelineFilterLabel() {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter.startsWith("sales:")) return salesFunnelStages.find(stage=>stage.id === activeFilter.slice(6))?.label || "";
   if (activeFilter === "all") return "";
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
   if (definition) return definition.label;
@@ -10818,6 +10989,8 @@ function getCurrentEditorSignature() {
   return JSON.stringify({
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     activeProposalId: state.activeProposalId || "",
@@ -10938,16 +11111,17 @@ function getOpenSourceLabelForItem(item, fallback = "Funil") {
 async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = "client") {
   if (!proposalId) {
     showToast("Não encontrei o código desta proposta. Atualize o funil e tente de novo.");
-    return;
+    return false;
   }
   if (!state.proposals.some((item) => item.id === proposalId)) {
     showToast("Não encontrei essa proposta no histórico carregado. Clique em Atualizar e tente novamente.");
-    return;
+    return false;
   }
-  if (!(await confirmEditorSwitch())) return;
-  if (!(await ensureProposalJourneyDetails(proposalId))) return;
-  openSavedProposal(proposalId, sourceLabel);
+  if (!(await confirmEditorSwitch())) return false;
+  if (!(await ensureProposalJourneyDetails(proposalId))) return false;
+  if (openSavedProposal(proposalId, sourceLabel) !== true) return false;
   scheduleLoadedEditorJump(targetMode, "auto");
+  return true;
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "client") {
@@ -11287,6 +11461,109 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
   `;
 }
 
+let commercialCalendarMonth = "";
+const commercialCalendarSpaces = new Map();
+let commercialCalendarSpaceClient = null;
+let commercialCalendarSpaceUser = null;
+function getCommercialCalendarSpace(id) {
+  const user = state.session?.user?.id;
+  if (commercialCalendarSpaceClient !== state.supabase || commercialCalendarSpaceUser !== user) {
+    commercialCalendarSpaces.clear(); commercialCalendarSpaceClient = state.supabase; commercialCalendarSpaceUser = user;
+  }
+  const cached = commercialCalendarSpaces.get(id), proposal = state.proposals.find(p=>p.id===id);
+  if (!cached || cached.revision !== readinessRevision(proposal)) return null;
+  return cached;
+}
+async function loadCommercialCalendarSpace(id) {
+  const client = state.supabase, user = state.session?.user?.id, proposal = state.proposals.find(p=>p.id===id);
+  if (!client || !user || !proposal || getCommercialCalendarSpace(id)?.pending) return;
+  const request = {revision:readinessRevision(proposal), pending:true, label:"Consultando o planejamento..."};
+  commercialCalendarSpaces.set(id, request); renderCommercialCalendar();
+  try {
+    await loadProductionWorkspace(id);
+    if (client !== state.supabase || user !== state.session?.user?.id || commercialCalendarSpaces.get(id) !== request) return;
+    const workspace = productionWorkspace, data = workspace.data;
+    if (workspace.client !== client || workspace.user !== user || workspace.id !== id || workspace.error ||
+      workspace.revision !== readinessRevision(state.proposals.find(p=>p.id===id)) || workspace.revision !== request.revision ||
+      data?.proposal_id !== id || Number(data.revision) !== request.revision) throw Error("Não foi possível conferir o espaço. Atualize o evento e tente novamente.");
+    const plan = data.plan;
+    request.label = !plan ? "Não definido no planejamento" : !data.agreement_matches ? "Plano de outra revisão; conferir no planejamento" :
+      `${String(plan.data?.logistics?.space || "Não definido")} · plano V${Number(plan.revision)||1}${plan.reviewed_at ? " revisado" : " sem revisão"}`;
+    request.checkedAt = new Date().toISOString();
+  } catch (_error) {
+    if (client === state.supabase && user === state.session?.user?.id && commercialCalendarSpaces.get(id) === request) request.label = "Consulta indisponível; conferir no planejamento";
+  } finally {
+    request.pending = false;
+    if (client === state.supabase && user === state.session?.user?.id) {
+      renderCommercialCalendar();
+      document.querySelector(`[data-calendar-space="${CSS.escape(id)}"]`)?.focus({preventScroll:true});
+    }
+  }
+}
+
+function getCommercialCalendarEntries(items) {
+  const selected = new Map();
+  for (const item of items) {
+    if (["cancelado", "perdido"].includes(item.status)) continue;
+    const key = item.opportunityId || `${item.kind}:${item.id}`;
+    const previous = selected.get(key);
+    // getPipelineItems already selects the working agreement, including amendments.
+    if (!previous || (previous.kind === "request" && item.kind === "proposal")) selected.set(key, item);
+  }
+  return [...selected.values()].map(item => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.date || "");
+    const day = match ? Date.UTC(Number(match[1]), Number(match[2])-1, Number(match[3])) : NaN;
+    const validDate = Number.isFinite(day) && new Date(day).toISOString().slice(0,10) === item.date;
+    const time = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(item.time || "");
+    const validTime = time && Number(time[1]) < 24 && Number(time[2]) < 60;
+    const duration = Number(item.duration);
+    const start = validDate && validTime ? day + (Number(time[1])*60+Number(time[2]))*60000 : null;
+    const end = start !== null && Number.isFinite(duration) && duration > 0 ? start + duration*3600000 : null;
+    const closed = ["confirmado", "pagamento_final", "planejamento", "evento_proximo", "pos_venda", "realizado"].includes(item.status);
+    return {...item, calendarDate:validDate ? item.date : "", start, end, closed};
+  }).sort((a,b)=>(a.calendarDate || "9999").localeCompare(b.calendarDate || "9999") || (a.start ?? Infinity)-(b.start ?? Infinity) || String(a.id).localeCompare(String(b.id)));
+}
+function getCommercialCalendarOverlap(entry, entries) {
+  if (entry.start === null || entry.end === null) return [];
+  return entries.filter(other => other !== entry && other.start !== null && other.end !== null &&
+    entry.start < other.end && entry.end > other.start);
+}
+function renderCommercialCalendar(items = getPipelineItems()) {
+  const root = document.getElementById("commercialCalendar");
+  if (!root) return;
+  if (!state.session || !state.supabase) { commercialCalendarSpaces.clear(); root.innerHTML = ""; root.hidden = true; return; }
+  root.hidden = false;
+  const withKnownDuration = items.map(item => {
+    const source = item.kind === "proposal" ? state.proposals.find(p=>p.id===item.id) : state.quoteRequests.find(r=>r.id===item.id);
+    return {...item, duration: source?.duracao ?? source?.snapshot?.event?.duration ?? source?.snapshot?.evento?.duracao ?? null,
+      guests: source?.convidados ?? source?.snapshot?.evento?.convidados ?? null};
+  });
+  const entries = getCommercialCalendarEntries(withKnownDuration);
+  const month = /^\d{4}-\d{2}$/.test(commercialCalendarMonth) ? commercialCalendarMonth : CommercialPriority.today().slice(0,7);
+  const visible = entries.filter(entry=>entry.calendarDate.startsWith(month));
+  const days = [...new Set(visible.map(entry=>entry.calendarDate))];
+  const undated = entries.filter(entry=>!entry.calendarDate).length;
+  const stale = typeof commercialRefreshError !== "undefined" && commercialRefreshError;
+  root.innerHTML = `<header class="commercial-calendar-heading"><div><h2>Calendário comercial</h2><p>Negociações e eventos fechados. Negociação não reserva espaço.</p></div>
+    <label>Mês<input type="month" data-commercial-calendar-month value="${escapeHtml(month)}"/></label></header>
+    <p>${visible.filter(e=>!e.closed).length} em negociação · ${visible.filter(e=>e.closed).length} fechado(s) · ${undated} sem data válida fora do calendário.</p>
+    ${stale ? '<p role="status">Atualização pendente: confira os registros antes de decidir.</p>' : ""}
+    <p>Sobreposições indicam horários concorrentes; não comprovam conflito de espaço ou indisponibilidade. Montagem e desmontagem devem ser conferidas no planejamento.</p>
+    <div class="commercial-calendar-days">${days.map(date=>`<section class="commercial-calendar-day"><h3>${escapeHtml(formatDateFromIso(date))}</h3><div class="commercial-calendar-events">${visible.filter(entry=>entry.calendarDate===date).map(entry=>{
+      const overlaps = getCommercialCalendarOverlap(entry, entries);
+      const space = entry.kind === "proposal" ? getCommercialCalendarSpace(entry.id) : null;
+      const time = entry.start === null ? "Horário a confirmar" : `${String(entry.time).slice(0,5)}${entry.end === null ? " · duração a confirmar" : ` · ${entry.duration} h`}`;
+      return `<article class="commercial-calendar-event ${entry.closed ? "is-closed" : "is-negotiating"}" data-calendar-id="${escapeHtml(entry.id)}">
+        <strong>${escapeHtml(entry.name || "Cliente")}</strong><span>${entry.closed ? "Fechado comercialmente" : "Em negociação · sem reserva"}</span>
+        <p>${escapeHtml(time)}<br/>Porte: ${entry.guests ? `${escapeHtml(entry.guests)} pax` : "a confirmar"} · ${entry.total == null ? "Valor a definir" : escapeHtml(formatMoney(entry.total))}<br/>Espaço: ${escapeHtml(space?.label || "a confirmar no planejamento")}</p>
+        ${entry.kind === "proposal" ? `<button class="secondary" type="button" data-calendar-space="${escapeHtml(entry.id)}" ${space?.pending ? "disabled" : ""}>${space?.checkedAt ? "Atualizar espaço" : "Conferir espaço"}</button>` : ""}
+        ${space?.checkedAt ? `<small>Consulta do plano: ${escapeHtml(formatSavedAt(space.checkedAt))}. Não confirma reserva.</small>` : ""}
+        <small>${escapeHtml(entry.type || "Evento")}${entry.kind === "proposal" ? ` · V${Number(entry.version)||1}${entry.pendingDraftId ? " · revisão em preparação" : ""}` : ""}</small>
+        ${overlaps.length ? `<p class="commercial-calendar-overlap">Horário concorrente com: ${overlaps.map(other=>escapeHtml(other.name||"Cliente")).join(", ")}.</p>` : entry.end === null ? '<p>Sem horário completo para comparar.</p>' : ""}
+        <button class="secondary" type="button" ${entry.kind === "proposal" ? "data-calendar-proposal" : "data-calendar-request"}="${escapeHtml(entry.id)}">Abrir evento</button></article>`;
+    }).join("")}</div></section>`).join("") || "<p>Nenhum evento com data neste mês.</p>"}</div>`;
+}
+
 function getAgendaEventLabel(item) {
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -11406,6 +11683,7 @@ function renderConflictCard(conflict) {
 }
 
 function renderOperationsAgenda(items = getPipelineItems()) {
+  renderCommercialCalendar(items);
   if (!nodes.operationsAgenda) return;
   if (!state.supabase) {
     nodes.operationsAgenda.innerHTML = "<p>Entre com Supabase para ver a agenda operacional.</p>";
@@ -11655,7 +11933,7 @@ function getPipelineOpenButtonLabel(item, primaryAction) {
   if (item.kind === "proposal" && item.isDraft) return "Continuar V" + (item.version || "");
   if (item.status === "cancelado") return "Abrir";
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
-  if (status === "proposta_pronta") return "Enviar";
+  if (status === "proposta_pronta") return "Abrir envio";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
   if (status === "negociacao") return "Ajustar";
   if (status === "confirmado") return item.hasPaymentComplete ? "Planejar" : "Cobrar saldo";
@@ -11693,6 +11971,8 @@ function renderPipelineValueBreakdown(item = {}, className = "", { includeProduc
 
 function renderPipelineCard(item) {
   const status = getReportStatus(item);
+  const salesState = getSalesFunnelStateForItem(item);
+  const salesStage = salesFunnelStages.find(stage=>stage.id === salesState?.id);
   const needsOutcome = item.stage === "desfecho_pendente";
   const dateLabel = item.date ? formatDateFromIso(item.date) : "Data a definir";
   const timeLabel = item.time ? String(item.time).slice(0, 5) : "Horário a definir";
@@ -11777,7 +12057,7 @@ function renderPipelineCard(item) {
   const topAction = remainingButton || remainingProofLink || (status === "confirmado" ? "" : signalProofLink);
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" ${salesState?.id === "ready" ? 'data-open-send="true"' : ""} title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
       : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`;
   const cancelButton =
     item.status === "cancelado"
@@ -11809,7 +12089,7 @@ function renderPipelineCard(item) {
   `;
   return `
     <article
-      class="pipeline-card pipeline-card-stage-${escapeHtml(status)}"
+      class="pipeline-card pipeline-card-stage-${escapeHtml(status)}${salesStage ? " has-sales-stage" : ""}"
       draggable="true"
       tabindex="0"
       aria-label="Abrir ${escapeHtml(displayName)} no editor"
@@ -11841,10 +12121,12 @@ function renderPipelineCard(item) {
         </div>
         <div class="pipeline-card-offer">
           <span class="pipeline-card-product">${escapeHtml(item.type || "Formato a definir")}</span>
+          ${salesStage ? `<span class="pipeline-sales-stage" data-sales-state="${salesStage.id}">${salesStage.label}</span>` : ""}
         </div>
       </div>
       ${riskAlertsLine}
       ${primaryActionLine}
+      <div data-proposal-send-feedback="${escapeHtml(item.id)}">${renderProposalSendFeedback(state.proposals.find(row => row.id === item.id))}</div>
       ${planLine}
       ${clientResponseLine}
       <div class="pipeline-card-footer">
@@ -11852,6 +12134,7 @@ function renderPipelineCard(item) {
         <summary>Detalhes e opções</summary>
         <div class="pipeline-card-details-content">
           <small class="pipeline-card-full-name">Cliente: ${escapeHtml(displayName)}</small>
+          ${salesState ? `<small class="pipeline-sales-evidence">${escapeHtml(salesState.evidence)}</small>` : ""}
           <span class="status-chip${statusClass} pipeline-stage-chip">${escapeHtml(stageChipLabel)}</span>
           ${item.isDraft ? "" : versionBadge}
           ${scoreBadge}
@@ -12079,6 +12362,7 @@ function getGuidedEventKeyFromType(type) {
 }
 
 function resetProposalDraftState() {
+  clearTariffApplication();
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
@@ -12122,6 +12406,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   state.quoteGuideDismissed = true;
   state.smartDraftApproval = null;
   resetProposalDraftState();
+  fields.generalTerms.value = loadGeneralTerms();
   if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
   if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
   fields.clientName.value = request.cliente_nome || "";
@@ -12875,7 +13160,7 @@ async function initSupabase() {
     state.session = data.session;
 
     state.supabase.auth.onAuthStateChange((event, session) => {
-      if (state.session?.user?.id !== session?.user?.id) resetCommercialDashboard();
+      if (state.session?.user?.id !== session?.user?.id) { resetCommercialDashboard(); clearTariffApplication(); state.proposalSendFeedback = null; }
       state.session = session;
       if (session?.user?.email && !isTeamEmail(session.user.email)) {
         state.supabase.auth.signOut();
@@ -13199,6 +13484,8 @@ async function logoutSupabase() {
   resetCommercialDashboard();
   await state.supabase.auth.signOut();
   state.session = null;
+  state.proposalSendFeedback = null;
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   state.proposals = [];
   state.quoteRequests = [];
@@ -13265,13 +13552,15 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("O evento aberto mudou. Revise o editor antes de salvar.");
     return null;
   }
+  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase
+    : state.proposals.find((item) => item.id === state.activeProposalId);
+  // Internal saves on existing agreements do not apply new commercial terms.
+  if (!options.asDraft && (!isContractedProposal(activeProposal) || options.forSharing) && !ensureTariffApplicationConfirmed()) return null;
   // Freeze nested prices, options and selected items before the first write.
   const snapshot = structuredClone(getProposalSnapshot());
   const savedEditorSignature = JSON.parse(getCurrentEditorSignature());
   const sourceKeyBeforeSave = getSourceOverrideKey();
-  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
-    ? state.editorProposalBase
-    : state.proposals.find((item) => item.id === state.activeProposalId);
   preserveUneditedCommercialSnapshot(snapshot, activeProposal);
   const amendmentSource = activeProposal?.snapshot?.amendmentOf ||
     (isContractedProposal(activeProposal) && (getProposalChangeList(activeProposal.snapshot || {}, snapshot).length || state.forceNewVersionDraft)
@@ -13539,7 +13828,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("A proposta anterior foi gravada, mas outro evento está aberto. Revise antes de enviar.");
     return null;
   }
+  const tariffWasUnchanged = JSON.stringify(tariffApplicationIdentity(getTariffApplication())) === JSON.stringify(savedEditorSignature.tariffApplication) &&
+    tariffBasisKey(getTariffEditorSnapshot()) === savedEditorSignature.tariffTable;
   state.activeProposalId = data.id;
+  if (tariffWasUnchanged) restoreTariffApplication(data.snapshot);
   state.editorProposalBase = structuredClone(data);
   state.forceNewVersionDraft = false;
   const newSourceKey = `proposal:${data.id}`;
@@ -13663,6 +13955,7 @@ function applyProposalSnapshot(snapshot) {
     return;
   }
 
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   fields.clientName.value = snapshot.client?.name || "";
   fields.clientEmail.value = snapshot.client?.email || "";
@@ -13704,7 +13997,7 @@ function applyProposalSnapshot(snapshot) {
   renderInternalNotesPanel(getActiveProposal());
   renderEventAttachmentsPanel(getActiveProposal());
 
-  if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
+  if (Array.isArray(snapshot.prices)) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
     savePrices({ localOnly: true });
   }
@@ -13720,12 +14013,13 @@ function applyProposalSnapshot(snapshot) {
   state.guided = snapshot.guided || { event: "", beverageId: "", foodId: "" };
   state.privatizationChoice = snapshot.privatizationChoice || "";
 
-  if (Array.isArray(snapshot.privatizationRules) && snapshot.privatizationRules.length) {
+  if (Array.isArray(snapshot.privatizationRules)) {
     state.privatizationRules = snapshot.privatizationRules;
     savePrivatizationRules({ localOnly: true });
     renderPrivatizationRulesTable();
   }
 
+  restoreTariffApplication(snapshot);
   saveSelectedIds();
   saveGeneralTerms();
   renderCategoryFilter();
@@ -13734,10 +14028,10 @@ function applyProposalSnapshot(snapshot) {
 }
 
 function openSavedProposal(proposalId, sourceLabel = "") {
-  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return false; }
   const proposal = state.proposals.find((item) => item.id === proposalId);
-  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return; }
-  if (!proposal) return;
+  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return false; }
+  if (!proposal?.snapshot) return false;
   state.activeProposalId = proposal.id;
   state.editorProposalBase = structuredClone(proposal);
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
@@ -13748,6 +14042,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
   focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
+  return true;
 }
 
 function formatDateFromIso(value) {
@@ -13851,7 +14146,7 @@ function renderProposal() {
 
       ${
       terms
-          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>`
+          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>${tariffApplicationNotice() ? `<p class="proposal-note">${escapeHtml(tariffApplicationNotice())}</p>` : ""}`
           : ""
       }
 
@@ -14068,6 +14363,7 @@ function startNewProposal(options = {}) {
 
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
 
+  clearTariffApplication();
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   state.activeOpportunityId = "";
@@ -14244,20 +14540,89 @@ function scrollToReviewTarget(target) {
   }, 180);
 }
 
-function ensureProposalReadyForSending() {
+function showStableSendDialog(dialog) {
+  const opener = document.activeElement;
+  const openerAction = opener?.dataset?.sendReviewAction;
+  const root = document.documentElement;
+  const overflow = root.style.overflow;
+  const position = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
+  // Retire queued editor jumps before opening the review.
+  editorScrollGeneration += 1;
+  root.style.overflow = "hidden";
+  window.scrollTo(position);
+  dialog.addEventListener("close", () => {
+    root.style.overflow = overflow;
+    const returnFocus = opener?.isConnected ? opener : openerAction
+      ? document.querySelector(`[data-send-review-action="${CSS.escape(openerAction)}"]`) : null;
+    returnFocus?.focus?.({ preventScroll: true });
+    window.scrollTo(position);
+  }, { once: true });
+  dialog.showModal();
+  dialog.querySelector("[autofocus]")?.focus({ preventScroll: true });
+  window.scrollTo(position);
+}
+
+async function ensureProposalReadyForSending() {
+  if (document.querySelector(".send-readiness-dialog[open]")) return false;
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
-  renderSendReview();
   if (summary.ready && isSendReviewApproved(items)) return true;
-  if (summary.ready) {
-    showToast("Aprove o checklist: clique em “Revisado, pode enviar” antes de mandar ao cliente.");
-    nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
-    return false;
-  }
-  const firstError = items.find((item) => item.status === "error");
-  showToast(firstError?.detail || "Revise os pontos obrigatórios antes de enviar.");
-  nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
-  return false;
+  const signature = getSendReviewSignature(items);
+  const proposalId = state.activeProposalId;
+  const revision = state.editorProposalBase?.revision;
+  const client = state.supabase;
+  const userId = state.session?.user?.id;
+  const unchanged = () => signature === getSendReviewSignature() &&
+    proposalId === state.activeProposalId && revision === state.editorProposalBase?.revision &&
+    client === state.supabase && userId === state.session?.user?.id;
+  return new Promise((resolve) => {
+    let approved = false;
+    let correctionTarget = "";
+    const dialog = document.createElement("dialog");
+    dialog.className = "send-confirm-dialog send-readiness-dialog";
+    dialog.setAttribute("aria-labelledby", "sendReadinessTitle");
+    dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
+      <h2 id="sendReadinessTitle" tabindex="-1" autofocus>Revisar proposta antes de continuar</h2>
+      <p>${summary.ready ? "Confira as condições abaixo. A mensagem e o destinatário serão apresentados na próxima etapa." : "Corrija as pendências obrigatórias para continuar. Nenhum envio foi iniciado."}</p>
+      <ul class="send-readiness-items">${items.map((item) => `<li>
+        <strong>${escapeHtml(item.label)} — ${item.status === "error" ? "Pendente" : item.status === "warning" ? "Atenção" : "Conferido"}</strong>
+        <p>${escapeHtml(item.detail || "")}</p>
+        ${["error", "warning"].includes(item.status) && item.target ? `<button type="button" class="secondary" data-send-correction="${escapeHtml(item.target)}">Corrigir: ${escapeHtml(item.label)}</button>` : ""}
+      </li>`).join("")}</ul>
+      <p class="send-readiness-error" role="alert"></p>
+      ${summary.ready ? '<label class="event-ops-check"><input type="checkbox" required /> Revisei os dados e as condições da proposta.</label>' : ""}
+      <div class="send-confirm-actions">
+        <button type="submit" value="cancel" formnovalidate class="secondary">Voltar</button>
+        <button type="submit" value="continue" class="primary" ${summary.ready ? "" : "disabled"}>Aprovar revisão e continuar</button>
+      </div>
+    </form>`;
+    document.body.append(dialog);
+    dialog.querySelectorAll("[data-send-correction]").forEach((button) => {
+      button.addEventListener("click", () => {
+        correctionTarget = button.dataset.sendCorrection;
+        dialog.close("correct");
+      });
+    });
+    dialog.querySelector("form").addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "continue") return;
+      event.preventDefault();
+      if (!unchanged() || !getProposalReviewSummary().ready) {
+        dialog.querySelector(".send-readiness-error").textContent = "Os dados mudaram. Volte e abra a revisão novamente.";
+        dialog.querySelector('[value="continue"]').disabled = true;
+        return;
+      }
+      if (!event.currentTarget.reportValidity()) return;
+      approved = approveSendReview();
+      if (approved) dialog.close("continue");
+    });
+    dialog.addEventListener("close", () => {
+      resolve(approved && unchanged() && isSendReviewApproved());
+      dialog.remove();
+      if (correctionTarget) window.requestAnimationFrame(() => scrollToReviewTarget(correctionTarget));
+    }, { once: true });
+    showStableSendDialog(dialog);
+  });
 }
 
 function isInteractivePipelineTarget(target) {
@@ -14278,7 +14643,7 @@ async function openPipelineCardElement(card) {
 async function ensureProposalForSharing({ forApproval = false } = {}) {
   if (!forApproval && !(await remoteProposalMayShare())) return null;
   state.lastProposalShareError = "";
-  if (!ensureProposalReadyForSending()) return null;
+  if (!(await ensureProposalReadyForSending())) return null;
   const activeProposal = state.editorProposalBase?.id === state.activeProposalId
     ? state.editorProposalBase : state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
@@ -14308,7 +14673,8 @@ async function ensureProposalForSharing({ forApproval = false } = {}) {
 
 async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   if (!QA_MODE && !(await remoteProposalMayShare())) return false;
-  if (!proposal || proposal.status !== "proposta_pronta") return true;
+  if (manualChannel ? !canRegisterManualProposalSend(proposal) : !proposal || proposal.status !== "proposta_pronta") return !manualChannel;
+  const client = state.supabase, user = state.session?.user?.id;
   const sentAt = new Date().toISOString();
   // A Edge Function pode ter acrescentado o registro do envio ao snapshot.
   // Leia a versão mais recente antes de gravar o prazo e o histórico manual.
@@ -14317,6 +14683,11 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
     .select("*")
     .eq("id", proposal.id)
     .single();
+  if (client !== state.supabase || !user || state.session?.user?.id !== user) return false;
+  if (manualChannel && (!canRegisterManualProposalSend(currentRow) || Number(currentRow.revision) !== Number(proposal.revision))) {
+    showToast("A versão mudou. Abra a proposta atual e confira qual versão foi enviada antes de registrar.");
+    return false;
+  }
   if (manualChannel && (readError || !currentRow?.snapshot)) {
     showToast("Não foi possível carregar o histórico da proposta. Atualize e tente registrar o envio novamente.");
     return false;
@@ -14340,12 +14711,13 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
         [createCommercialHistoryEntry("envio", "Envio manual registrado", `Canal: ${manualChannel}. Confirmado pela equipe.`)],
       )
     : snapshotWithDeadline;
-  if (readError || !currentRow || currentRow.status !== "proposta_pronta") {
+  if (readError || !currentRow || (!manualChannel && currentRow.status !== "proposta_pronta")) {
     if (currentRow) upsertProposalState(currentRow);
     return !readError && currentRow?.status === "proposta_enviada";
   }
   const { data, error } = await persistEventProposal(proposal.id, {
-    status: "proposta_enviada", publication_status: "sent", sent_at: sentAt,
+    status: currentRow.status === "proposta_pronta" ? "proposta_enviada" : currentRow.status,
+    publication_status: "sent", sent_at: currentRow.sent_at || sentAt,
     ...(updatedSnapshot ? { snapshot: updatedSnapshot } : {}),
   }, currentRow);
   if (error || !data) {
@@ -14370,22 +14742,30 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   return true;
 }
 
+function canRegisterManualProposalSend(proposal) {
+  return Boolean(proposal && proposal.is_current !== false && proposal.publication_status === "ready" &&
+    ["proposta_pronta", "negociacao"].includes(proposal.status) && !proposal.snapshot?.amendmentOf);
+}
+
 function openManualSendDialog() {
   const proposal = getActiveProposal();
-  if (!proposal || proposal.status !== "proposta_pronta") {
-    showToast("Abra uma proposta pronta para registrar o envio.");
+  if (!canRegisterManualProposalSend(proposal)) {
+    showToast("Abra a versão atual pronta para envio. Rascunhos e acordos fechados não são alterados por este registro.");
     return;
   }
+  const client = state.supabase, user = state.session?.user?.id;
+  const revision = proposal.revision;
   const dialog = document.createElement("dialog");
   dialog.className = "send-confirm-dialog";
   dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
     <h2>Registrar envio feito fora do sistema</h2>
-    <p>Use após confirmar que o cliente recebeu o link. O registro inicia o acompanhamento no funil.</p>
+    <p>Use somente depois de enviar esta versão ao cliente por fora do sistema. O registro inicia o acompanhamento; não comprova entrega, aprovação nem pagamento.</p>
     <label>Canal <select name="channel" required>
       <option value="">Selecione</option><option value="WhatsApp">WhatsApp</option>
       <option value="E-mail">E-mail</option><option value="Outro">Outro</option>
     </select></label>
-    <label><input type="checkbox" name="sent" required /> Enviei o link para o cliente</label>
+    <label><input type="checkbox" name="sent" required /> Enviei esta versão ao cliente pelo canal escolhido</label>
+    <p class="manual-send-error" role="alert"></p>
     <div class="send-confirm-actions">
       <button type="button" class="secondary" data-close-manual>Voltar</button>
       <button type="submit" class="primary">Registrar envio</button>
@@ -14397,6 +14777,11 @@ function openManualSendDialog() {
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
+    if (!user || user !== state.session?.user?.id || client !== state.supabase ||
+      getActiveProposal()?.id !== proposal.id || getActiveProposal()?.revision !== revision || hasUnsavedEditorChanges()) {
+      dialog.querySelector(".manual-send-error").textContent = "A proposta, a edição ou a sessão mudou. Volte e confira a versão antes de registrar o envio.";
+      return;
+    }
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     const ok = await registerConfirmedProposalSend(proposal, form.elements.channel.value);
@@ -14404,7 +14789,10 @@ function openManualSendDialog() {
       dialog.close();
       await loadProposalHistory();
       showToast("Envio manual registrado e acompanhamento iniciado.");
-    } else button.disabled = false;
+    } else {
+      dialog.querySelector(".manual-send-error").textContent = "Envio manual não registrado. Confira a versão atual e tente novamente.";
+      button.disabled = false;
+    }
   });
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
   dialog.showModal();
@@ -14483,13 +14871,25 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     dialog.className = "send-confirm-dialog";
     dialog.setAttribute("aria-labelledby", "sendConfirmTitle");
     dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
-      <h2 id="sendConfirmTitle">Revisar ${escapeHtml(channel)} antes de enviar</h2>
-      <p class="send-confirm-details">${escapeHtml(details)}</p>
-      ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
-      <label>${html ? "Versão completa em texto" : "Mensagem completa"}<textarea class="send-confirm-message" readonly rows="9">${escapeHtml(message)}</textarea></label>
+      <h2 id="sendConfirmTitle" tabindex="-1" autofocus>Revisar ${escapeHtml(channel)} antes de enviar</h2>
+      <section class="send-client-preview" aria-labelledby="sendClientPreviewTitle">
+        <div class="send-client-preview-heading"><h3 id="sendClientPreviewTitle">Mensagem ao cliente</h3><span>Prévia · nada enviado</span></div>
+        <dl class="send-client-address">
+          <div><dt>Canal</dt><dd>${escapeHtml(channel)}</dd></div>
+          <div><dt>Destinatário</dt><dd>${escapeHtml(destination || "Não informado")}</dd></div>
+          ${sender ? `<div><dt>Remetente</dt><dd>${escapeHtml(sender)}</dd></div>` : ""}
+          ${subject ? `<div><dt>Assunto</dt><dd>${escapeHtml(subject)}</dd></div>` : ""}
+        </dl>
+        ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
+        <label>${html ? "Versão completa em texto" : "Texto exato preparado"}<textarea class="send-confirm-message" readonly rows="12">${escapeHtml(message)}</textarea></label>
+      </section>
+      <details class="send-internal-review" open>
+        <summary>Conferência interna · não faz parte da mensagem</summary>
+        <p class="send-confirm-details">${escapeHtml(details)}</p>
+      </details>
       <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
       <div class="send-confirm-actions">
-        <button type="submit" value="cancel" formnovalidate class="secondary" autofocus>Cancelar</button>
+        <button type="submit" value="cancel" formnovalidate class="secondary">Cancelar</button>
         <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
       </div>
     </form>`;
@@ -14502,7 +14902,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
       resolve(dialog.returnValue === "confirm" && unchanged && Boolean(message.trim()));
       dialog.remove();
     }, { once: true });
-    dialog.showModal();
+    showStableSendDialog(dialog);
   });
 }
 
@@ -14629,7 +15029,52 @@ function warnUnreconciledProposalSend(result) {
   );
 }
 
+function proposalSendOutcome(data, error) {
+  const accepted = !error && data?.ok === true && !["paused", "failed", "uncertain"].includes(data?.deliveryStatus);
+  if (accepted) return {status: "accepted", title: "Envio aceito pelo canal", message: "A proposta foi aceita para envio. A entrega ao cliente ainda precisa de confirmação; acompanhe a conversa antes de reenviar."};
+  if (data?.deliveryStatus === "paused") return {status: "paused", title: "Proposta não enviada: canal pausado", message: "O envio automático não foi realizado. A proposta continua pronta. Você pode enviar por fora do sistema e, depois, registrar o envio manual desta versão."};
+  return {status: "uncertain", title: "Envio não confirmado", message: "Confira a conversa e o histórico antes de tentar novamente. A proposta não avança no funil sem um registro de envio aceito ou uma confirmação de envio manual."};
+}
+
+function renderProposalSendFeedback(proposal) {
+  const feedback = state.proposalSendFeedback;
+  if (!proposal || !feedback || feedback.client !== state.supabase || feedback.user !== state.session?.user?.id ||
+    feedback.proposal.id !== proposal.id || ![Number(feedback.proposal.revision), feedback.acceptedRevision].includes(Number(proposal.revision))) return "";
+  return `<p class="proposal-send-feedback" role="status"><strong>${escapeHtml(feedback.title)}</strong> ${escapeHtml(feedback.message)}</p>`;
+}
+
+async function reportProposalSendOutcome(proposal, channel, data, error, context) {
+  let payload = data;
+  if (!payload && error?.context?.clone) {
+    try { payload = await error.context.clone().json(); } catch (_) { /* An absent response is an unknown outcome. */ }
+  }
+  if (context.client !== state.supabase || !context.user || context.user !== state.session?.user?.id) return false;
+  const result = proposalSendOutcome(payload, error);
+  const current = state.proposals.find(row => row.id === proposal.id);
+  const ownAccepted = result.status === "accepted" && current && isOwnProposalSendRevision(proposal, current);
+  if (current && Number(current.revision) !== Number(proposal.revision) && !ownAccepted) return false;
+  state.proposalSendFeedback = {...result, client: context.client, user: context.user, proposal: structuredClone(proposal),
+    acceptedRevision: ownAccepted ? Number(current.revision) : null};
+  document.querySelectorAll(`[data-proposal-send-feedback="${CSS.escape(proposal.id)}"]`).forEach(node => {
+    node.innerHTML = renderProposalSendFeedback(current || proposal);
+  });
+  if (state.activeProposalId !== proposal.id || document.querySelector(".proposal-send-result[open]")) return result.status === "accepted";
+  const dialog = document.createElement("dialog");
+  dialog.className = "proposal-send-result";
+  dialog.setAttribute("aria-labelledby", "proposalSendResultTitle");
+  dialog.innerHTML = `<form method="dialog" class="send-confirm-form"><h2 id="proposalSendResultTitle" tabindex="-1" autofocus>${escapeHtml(result.title)}</h2>
+    <p>${escapeHtml(channel)} · ${escapeHtml(proposal.cliente_nome || "Proposta")} · versão ${escapeHtml(proposal.versao || "atual")}</p>
+    <p>${escapeHtml(result.message)}</p>
+    ${result.status === "paused" && canRegisterManualProposalSend(current || proposal) ? '<p>Use “Copiar link” para preparar o envio pelo seu canal. Depois use “Registrar envio fora do sistema”, sem repetir o envio automático.</p>' : ""}
+    <button type="submit" class="primary">Entendi, voltar ao orçamento</button></form>`;
+  dialog.addEventListener("close", () => dialog.remove(), {once: true});
+  document.body.append(dialog);
+  showStableSendDialog(dialog);
+  return result.status === "accepted";
+}
+
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+  const outcomeContext = {client: state.supabase, user: state.session?.user?.id};
   const approvalEnabled = await remoteProposalApprovalEnabled();
   if (approvalEnabled === null) return false;
   if (approvalEnabled) return requestRemoteProposalApproval("whatsapp", { proposal, proposalUrl, message, title });
@@ -14696,7 +15141,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       },
     });
 
-    if (error || data?.ok === false) {
+    if (error || data?.ok !== true || ["paused", "failed", "uncertain"].includes(data?.deliveryStatus)) {
       console.warn("Falha no envio direto por WhatsApp.", error || data);
       const functionMessage = data?.message || (await getFunctionErrorMessage(error));
       updateIntegrationLog(logId, {
@@ -14704,6 +15149,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
         detail: functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.",
       });
       showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
+      await reportProposalSendOutcome(proposal, "WhatsApp", data, error, outcomeContext);
       return false;
     }
 
@@ -14722,6 +15168,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     warnUnreconciledProposalSend(editorResult);
+    await reportProposalSendOutcome(proposal, "WhatsApp", data, null, outcomeContext);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
@@ -14729,6 +15176,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar WhatsApp.",
     });
     showToast("Não foi possível enviar pela Z-API. Confira a conexão e tente novamente.");
+    await reportProposalSendOutcome(proposal, "WhatsApp", null, error, outcomeContext);
     return false;
   } finally {
     releaseProposalDispatch(dispatchGuard);
@@ -14737,6 +15185,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
 }
 
 async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial" }) {
+  const outcomeContext = {client: state.supabase, user: state.session?.user?.id};
   const approvalEnabled = await remoteProposalApprovalEnabled();
   if (approvalEnabled === null) return false;
   if (approvalEnabled) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
@@ -14826,7 +15275,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       },
     });
 
-    if (error || data?.ok === false) {
+    if (error || data?.ok !== true || ["paused", "failed", "uncertain"].includes(data?.deliveryStatus)) {
       console.warn("Falha no envio direto por e-mail.", error || data);
       const functionMessage = data?.message || (await getFunctionErrorMessage(error));
       updateIntegrationLog(logId, {
@@ -14834,6 +15283,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
         detail: functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.",
       });
       showToast(functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.");
+      await reportProposalSendOutcome(proposal, "E-mail", data, error, outcomeContext);
       return false;
     }
 
@@ -14852,6 +15302,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     warnUnreconciledProposalSend(editorResult);
+    await reportProposalSendOutcome(proposal, "E-mail", data, null, outcomeContext);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
@@ -14859,6 +15310,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar e-mail.",
     });
     showToast("Não foi possível enviar o e-mail. Confira a conexão e tente novamente.");
+    await reportProposalSendOutcome(proposal, "E-mail", null, error, outcomeContext);
     return false;
   } finally {
     state.sendLocks.email = false;
@@ -14884,7 +15336,7 @@ async function openEmail() {
     fields.clientEmail?.focus?.();
     return;
   }
-  if (!ensureProposalReadyForSending()) return;
+  if (!(await ensureProposalReadyForSending())) return;
   const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) {
     const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
@@ -15017,7 +15469,7 @@ async function runServiceCockpitAction(action, button = null) {
 }
 
 async function openWhatsApp() {
-  if (!ensureProposalReadyForSending()) return;
+  if (!(await ensureProposalReadyForSending())) return;
   const phone = fields.clientPhone.value.trim();
   const share = await ensureProposalForSharing({ forApproval: true });
   if (!share?.saved || !share?.url) return;
@@ -15651,6 +16103,7 @@ function bindEvents() {
       } else if (event?.target === fields.eventDate || event?.target === fields.eventTime) {
         syncDateTimeFromFields();
       }
+      getTariffApplication();
       renderPriceList();
       renderAvailabilityAlert();
       renderFormSourcePanel();
@@ -15955,6 +16408,20 @@ function bindEvents() {
     event.preventDefault();
     await openActionElement(action, "Prioridade agora");
   });
+  document.getElementById("commercialCalendar")?.addEventListener("change", event => {
+    if (!event.target.matches("[data-commercial-calendar-month]")) return;
+    commercialCalendarMonth = event.target.value;
+    renderCommercialCalendar();
+    document.querySelector("[data-commercial-calendar-month]")?.focus({preventScroll:true});
+  });
+  document.getElementById("commercialCalendar")?.addEventListener("click", async event => {
+    const space = event.target.closest("[data-calendar-space]");
+    if (space) return loadCommercialCalendarSpace(space.dataset.calendarSpace);
+    const proposal = event.target.closest("[data-calendar-proposal]");
+    if (proposal) return safeOpenSavedProposal(proposal.dataset.calendarProposal, "Calendário comercial");
+    const request = event.target.closest("[data-calendar-request]");
+    if (request) await safeApplyQuoteRequest(request.dataset.calendarRequest, "Calendário comercial");
+  });
   nodes.operationsAgenda?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
     if (proposalButton) {
@@ -16002,6 +16469,14 @@ function bindEvents() {
     const button = event.target.closest("button[data-pipeline-stage-jump]");
     if (!button) return;
     jumpToPipelineStage(button.dataset.pipelineStageJump);
+  });
+  document.getElementById("salesFunnelOverview")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-sales-funnel]");
+    if (!button || !salesFunnelStages.some(stage=>stage.id === button.dataset.salesFunnel)) return;
+    const id = button.dataset.salesFunnel;
+    state.activePipelineFilter = state.activePipelineFilter === `sales:${id}` ? "all" : `sales:${id}`;
+    renderPipeline();
+    document.querySelector(`[data-sales-funnel="${id}"]`)?.focus({preventScroll:true});
   });
   nodes.proposalNextStep?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-next-step-action]");
@@ -16148,7 +16623,7 @@ function bindEvents() {
     }
     const button = event.target.closest("button[data-proposal-id]");
     if (button) {
-      await safeOpenSavedProposal(button.dataset.proposalId, "Funil");
+      await safeOpenSavedProposal(button.dataset.proposalId, "Funil", button.dataset.openSend ? "review" : "client");
       return;
     }
     const paidButton = event.target.closest("button[data-mark-paid]");
