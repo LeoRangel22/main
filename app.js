@@ -1184,6 +1184,8 @@ async function loadSharedSettings() {
     renderSharedSettingStatus();
     return;
   }
+  const refreshCleanManualEditor = Boolean(state.loadedEditorSignature) &&
+    !state.activeProposalId && !state.activeQuoteRequestId && !hasUnsavedEditorChanges();
   state.sharedSettings = Object.fromEntries((data || []).map((row) => [row.config_key, row]));
   const editingEvent = Boolean(state.activeProposalId || state.activeQuoteRequestId);
   if (!editingEvent && Array.isArray(state.sharedSettings.catalog?.value)) {
@@ -1199,6 +1201,10 @@ async function loadSharedSettings() {
   }
   renderSharedSettingStatus();
   renderAll();
+  if (refreshCleanManualEditor) {
+    state.loadedEditorSignature = getCurrentEditorSignature();
+    syncEditorLeaveProtection();
+  }
 }
 
 async function publishCommercialSettings(keys) {
@@ -2875,6 +2881,7 @@ async function persistEventProposal(proposalId, changes, source = null) {
   if (isProposalDispatching(proposalId || source?.id)) return {data:null,error:{code:"PT409",message:"Aguarde o envio terminar antes de gravar esta proposta. Suas alterações foram preservadas."}};
   const writeGuard = {client:state.supabase,userId:state.session?.user?.id};
   state.proposalWritesInProgress = [...(state.proposalWritesInProgress || []),writeGuard];
+  syncEditorLeaveProtection();
   try {
     const existing = source || state.proposals.find((row) => row.id === proposalId);
     if (changes.snapshot?._dashboard_summary || existing?._dashboard_summary) return { data: null, error: { code: "PT409", message: "Abra os detalhes completos antes de salvar; o resumo do painel não pode substituir a proposta." } };
@@ -2922,6 +2929,7 @@ async function persistEventProposal(proposalId, changes, source = null) {
     return { data, error: null };
   } finally {
     state.proposalWritesInProgress = (state.proposalWritesInProgress || []).filter(guard => guard !== writeGuard);
+    syncEditorLeaveProtection();
   }
 }
 
@@ -11050,11 +11058,31 @@ function markEditorClean(context = null) {
 }
 
 function hasUnsavedEditorChanges() {
-  if (isQuoteWorkspaceEffectivelyEmpty() || !state.loadedEditorSignature) return false;
+  if (!state.loadedEditorSignature) return false;
   return getCurrentEditorSignature() !== state.loadedEditorSignature;
 }
 
+let editorLeaveProtectionActive = false;
+
+function shouldProtectEditorExit() {
+  return Boolean(hasUnsavedEditorChanges() || hasPendingProposalWrite() || proposalDispatchGuard());
+}
+
+function handleEditorBeforeUnload(event) {
+  if (!shouldProtectEditorExit()) return;
+  event.preventDefault();
+  event.returnValue = true;
+}
+
+function syncEditorLeaveProtection() {
+  const active = shouldProtectEditorExit();
+  if (active === editorLeaveProtectionActive) return;
+  window[active ? "addEventListener" : "removeEventListener"]("beforeunload", handleEditorBeforeUnload);
+  editorLeaveProtectionActive = active;
+}
+
 function renderLoadedEditorBar() {
+  syncEditorLeaveProtection();
   if (!nodes.loadedEditorBar) return;
   const context = state.activeEditorContext;
   const isNewManualDraft = context?.kind === "manual";
@@ -11430,6 +11458,17 @@ async function openActionElement(element, sourceLabel = "Prioridade agora") {
   }
 }
 
+function getMonthlyValidatedReceipts(proposals, referenceDate = new Date()) {
+  const currentMonth = CommercialPriority.today(referenceDate).slice(0, 7);
+  return proposals.reduce((sum, item) => {
+    const signal = item.snapshot?.pagamentoSinal;
+    const remaining = item.snapshot?.pagamentoRestante;
+    const inMonth = (payment) => typeof payment?.data === "string" && payment.data.startsWith(currentMonth);
+    return sum + (hasValidatedSignal(signal) && inMonth(signal) ? toNumber(signal.valor) : 0)
+      + (hasAuditedPayment(remaining) && inMonth(remaining) ? toNumber(remaining.valor) : 0);
+  }, 0);
+}
+
 function renderFinanceCommandPanel(items = getPipelineItems()) {
   if (!nodes.financeCommandPanel) return;
   if (!state.session || !isFinanceSession()) {
@@ -11445,14 +11484,7 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
       (operationStatuses.has(item.status) && !item.hasSignalProof) ||
       (item.hasRemainingPayment && !item.hasRemainingProof),
   );
-  const receivedMonth = proposals.reduce((sum, item) => {
-    const signal = item.snapshot?.pagamentoSinal;
-    const remaining = item.snapshot?.pagamentoRestante;
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const signalValue = signal?.data?.startsWith(currentMonth) ? toNumber(signal.valor) : 0;
-    const remainingValue = remaining?.data?.startsWith(currentMonth) ? toNumber(remaining.valor) : 0;
-    return sum + signalValue + remainingValue;
-  }, 0);
+  const receivedMonth = getMonthlyValidatedReceipts(proposals);
   nodes.financeCommandPanel.classList.remove("is-hidden");
   nodes.financeCommandPanel.innerHTML = `
     <div class="finance-command-heading">
@@ -13487,9 +13519,24 @@ async function recoverMagicLinkSession() {
 }
 
 async function logoutSupabase() {
-  if (!state.supabase) return;
+  if (!state.supabase || state.logoutInProgress) return false;
+  if (hasPendingProposalWrite() || proposalDispatchGuard()) {
+    showToast("Aguarde a gravação ou o envio terminar antes de sair. Seu trabalho foi preservado.");
+    return false;
+  }
+  if (hasUnsavedEditorChanges() && !window.confirm("Sair sem salvar as alterações? Cancele para continuar editando e salvar antes de sair.")) return false;
+  const client = state.supabase;
+  const user = state.session?.user?.id || state.session?.user?.email;
+  const logoutButton = document.querySelector("#logoutBtn");
+  const wasDisabled = Boolean(logoutButton?.disabled);
+  state.logoutInProgress = true;
+  if (logoutButton) { logoutButton.disabled = true; logoutButton.setAttribute("aria-busy", "true"); }
+  try {
+  const result = await client.auth.signOut();
+  if (result?.error) throw result.error;
+  const currentUser = state.session?.user?.id || state.session?.user?.email;
+  if (state.supabase !== client || (currentUser && currentUser !== user)) return false;
   resetCommercialDashboard();
-  await state.supabase.auth.signOut();
   state.session = null;
   state.proposalSendFeedback = null;
   clearTariffApplication();
@@ -13511,6 +13558,15 @@ async function logoutSupabase() {
   renderHistory();
   renderConfirmedEvents();
   renderQuoteRequests();
+  return true;
+  } catch (_error) {
+    showToast("Não foi possível confirmar a saída. Confira sua sessão antes de tentar novamente.");
+    return false;
+  } finally {
+    state.logoutInProgress = false;
+    if (logoutButton) { logoutButton.disabled = wasDisabled; logoutButton.removeAttribute("aria-busy"); }
+    syncEditorLeaveProtection();
+  }
 }
 
 function upsertProposalState(proposal) {
@@ -13533,6 +13589,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   }
   state.proposalSaveInProgress = true;
+  syncEditorLeaveProtection();
   const saveButton = document.querySelector("#saveProposalBtn");
   const wasDisabled = Boolean(saveButton?.disabled);
   if (saveButton) { saveButton.disabled = true; saveButton.setAttribute("aria-busy", "true"); }
@@ -13918,6 +13975,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   } finally {
     state.proposalSaveInProgress = false;
+    syncEditorLeaveProtection();
     if (saveButton) { saveButton.disabled = wasDisabled; saveButton.removeAttribute("aria-busy"); }
   }
 }
@@ -14359,6 +14417,7 @@ function startNewProposal(options = {}) {
   const mode = options.mode || "manual";
   const isRealizedMode = mode === "realized";
   const hasDraft =
+    hasUnsavedEditorChanges() ||
     state.activeProposalId ||
     state.activeQuoteRequestId ||
     fields.clientName.value.trim() ||
@@ -14953,10 +15012,12 @@ function acquireProposalDispatch(proposal) {
   }
   const guard = { proposalId: proposal.id, client: state.supabase, userId: state.session?.user?.id };
   state.proposalDispatchInProgress = guard;
+  syncEditorLeaveProtection();
   return guard;
 }
 function releaseProposalDispatch(guard) {
   if (state.proposalDispatchInProgress === guard) state.proposalDispatchInProgress = null;
+  syncEditorLeaveProtection();
 }
 
 // Only an observed, content-preserving send revision may advance the editor base.
@@ -16733,6 +16794,12 @@ window.addEventListener("hashchange", async () => {
 });
 bindEvents();
 renderAll();
+// Deferred extensions add fields to the editor signature. Establish the initial
+// baseline only after they have loaded; opening an existing record keeps its base.
+document.addEventListener("DOMContentLoaded", () => {
+  if (!state.loadedEditorSignature) state.loadedEditorSignature = getCurrentEditorSignature();
+  syncEditorLeaveProtection();
+}, { once: true });
 if (QA_MODE) {
   initQaMode();
 } else {
