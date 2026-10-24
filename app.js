@@ -1184,6 +1184,8 @@ async function loadSharedSettings() {
     renderSharedSettingStatus();
     return;
   }
+  const refreshCleanManualEditor = Boolean(state.loadedEditorSignature) &&
+    !state.activeProposalId && !state.activeQuoteRequestId && !hasUnsavedEditorChanges();
   state.sharedSettings = Object.fromEntries((data || []).map((row) => [row.config_key, row]));
   const editingEvent = Boolean(state.activeProposalId || state.activeQuoteRequestId);
   if (!editingEvent && Array.isArray(state.sharedSettings.catalog?.value)) {
@@ -1199,6 +1201,10 @@ async function loadSharedSettings() {
   }
   renderSharedSettingStatus();
   renderAll();
+  if (refreshCleanManualEditor) {
+    state.loadedEditorSignature = getCurrentEditorSignature();
+    syncEditorLeaveProtection();
+  }
 }
 
 async function publishCommercialSettings(keys) {
@@ -16788,7 +16794,12 @@ window.addEventListener("hashchange", async () => {
 });
 bindEvents();
 renderAll();
-state.loadedEditorSignature = getCurrentEditorSignature();
+// Deferred extensions add fields to the editor signature. Establish the initial
+// baseline only after they have loaded; opening an existing record keeps its base.
+document.addEventListener("DOMContentLoaded", () => {
+  if (!state.loadedEditorSignature) state.loadedEditorSignature = getCurrentEditorSignature();
+  syncEditorLeaveProtection();
+}, { once: true });
 if (QA_MODE) {
   initQaMode();
 } else {

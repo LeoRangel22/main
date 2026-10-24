@@ -79,6 +79,36 @@ test('first edit without clicking New is also protected', async ({page}) => {
   expect(await page.evaluate(() => shouldProtectEditorExit())).toBe(true);
 });
 
+test('initialization and clean catalogue refresh do not simulate an unsaved edit', async ({page}) => {
+  await start(page);
+  expect(await page.evaluate(() => ({dirty:hasUnsavedEditorChanges(),protected:shouldProtectEditorExit()})))
+    .toEqual({dirty:false,protected:false});
+  const result=await page.evaluate(async()=>{
+    state.supabase.__qa=false;
+    const catalog=structuredClone(state.prices);catalog[0].nome='Synthetic updated catalogue';
+    state.supabase.from=()=>({select:async()=>({data:[{config_key:'catalog',value:catalog}],error:null})});
+    await loadSharedSettings();
+    return {dirty:hasUnsavedEditorChanges(),protected:shouldProtectEditorExit()};
+  });
+  expect(result).toEqual({dirty:false,protected:false});
+});
+
+test('catalogue response does not mark typing during loading as saved', async ({page}) => {
+  await start(page);
+  await page.evaluate(()=>{
+    state.supabase.__qa=false;
+    state.supabase.from=()=>({select:async()=>{await new Promise(resolve=>window.finishSettings=resolve);return {data:[],error:null};}});
+    window.pendingSettings=loadSharedSettings();
+  });
+  await page.locator('#notes').fill('Texto durante carregamento');
+  const result=await page.evaluate(async()=>{
+    window.finishSettings();await window.pendingSettings;
+    return {dirty:hasUnsavedEditorChanges(),protected:shouldProtectEditorExit()};
+  });
+  expect(result).toEqual({dirty:true,protected:true});
+  await expect(page.locator('#notes')).toHaveValue('Texto durante carregamento');
+});
+
 test('confirmed save removes reload warning', async ({page}) => {
   await openDraft(page);
   await page.locator('#notes').fill('Conteúdo salvo');
