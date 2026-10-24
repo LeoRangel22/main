@@ -12,7 +12,8 @@ async function setup(page){
 test('sales overview separates approval, revision, recorded send and unverified send',async({page})=>{
  await setup(page);const root=page.locator('#salesFunnelOverview');await expect(root).toBeVisible();
   expect(await root.evaluate(el=>Boolean(el.compareDocumentPosition(document.querySelector('#commercialCalendar')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
- for(const id of ['approved','changes','waiting','review','preparation','validation'])await expect(root.locator(`[data-sales-funnel="${id}"] strong`)).toHaveText('1');
+ for(const id of ['approved','changes','waiting','review','ready','validation'])await expect(root.locator(`[data-sales-funnel="${id}"] strong`)).toHaveText('1');
+ await expect(root.locator('[data-sales-funnel="preparation"] strong')).toHaveText('0');
  await expect(root.locator('[data-sales-funnel="won"] strong')).toHaveText('0');
  const before=await page.evaluate(()=>JSON.stringify(state.proposals));
  await root.locator('[data-sales-funnel="approved"]').click();await expect(root.locator('[data-sales-funnel="approved"]')).toBeFocused();

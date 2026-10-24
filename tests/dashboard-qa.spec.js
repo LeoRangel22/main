@@ -203,8 +203,25 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator(".proposal-version-comparison")).toContainText("O que mudou");
     await expect(page.locator(".proposal-version-comparison")).toContainText("Convidados");
     await page.locator(".proposal-version-list summary").click();
+    let discardConfirmed = false;
+    const switchDialogs = [];
+    const handleSwitchDialog = async (dialog) => {
+      switchDialogs.push(dialog.message());
+      if (dialog.message().startsWith("Você alterou esta proposta.")) return dialog.dismiss();
+      expect(dialog.message()).toContain("Abrir sem salvar?");
+      return discardConfirmed ? dialog.accept() : dialog.dismiss();
+    };
+    page.on("dialog", handleSwitchDialog);
     await page.locator('[data-duplicate-proposal-id="qa-proposal-sem-resposta"]').click();
-    expect(await page.evaluate(() => state.forceNewVersionDraft)).toBe(true);
+    await expect.poll(() => switchDialogs.length).toBe(2);
+    expect(await page.evaluate(() => state.forceNewVersionDraft)).toBe(false);
+    await expect(page.locator("#manualAdjustment")).toHaveValue("-1500");
+    discardConfirmed = true;
+    await page.locator('[data-duplicate-proposal-id="qa-proposal-sem-resposta"]').click();
+    await expect.poll(() => page.evaluate(() => state.forceNewVersionDraft)).toBe(true);
+    expect(switchDialogs).toHaveLength(4);
+    await expect(page.locator("#manualAdjustment")).not.toHaveValue("-1500");
+    page.off("dialog", handleSwitchDialog);
     await expectNoBrowserErrors(errors);
   });
 

@@ -8,7 +8,8 @@ const proposal=changes=>({id:'p',kind:'proposal',status:'negociacao',snapshot:{}
 const stage=(p,wait)=>ctx.getSalesFunnelState(p,wait,now)?.id;
 test('a lead and an unsent ready proposal have separate next steps',()=>{
  assert.equal(stage({kind:'request',status:'lead_recebido'}),'lead');
- assert.equal(stage(proposal({status:'proposta_pronta',publicationStatus:'ready'})),'preparation');
+ assert.equal(stage(proposal({status:'proposta_pronta',publicationStatus:'ready'})),'ready');
+ assert.equal(stage(proposal({isDraft:true,publicationStatus:'draft'})),'preparation');
 });
 for(const status of ['proposta_enviada','negociacao','confirmado'])test(`${status} alone proves neither sending nor payment`,()=>assert.equal(stage(proposal({status})),'review'));
 test('sending must be recorded with a valid nonfuture timestamp',()=>{

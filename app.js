@@ -1406,6 +1406,95 @@ function formatAuditChanges(changes = []) {
     .join(" · ");
 }
 
+// Applicability is a per-quote decision, never a change to the catalog or its validity.
+function tariffStableValue(value) {
+  if (Array.isArray(value)) return value.map(tariffStableValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, tariffStableValue(value[key])]));
+  return value;
+}
+function tariffBasis(snapshot = {}) {
+  const keys = ["id", "formula", "preco1h", "preco2h", "precoMeiaHoraExtra", "precoFixo", "valorAdicional", "minimo"];
+  return JSON.parse(JSON.stringify({prices: snapshot.prices || [], privatizationRules: snapshot.privatizationRules || [], generalTerms: String(snapshot.generalTerms || ""),
+    selectedPrices: (snapshot.selectedItems || []).map(item => Object.fromEntries(keys.map(key => [key, item[key] ?? null])))}));
+}
+function tariffBasisKey(snapshot) { return JSON.stringify(tariffStableValue(tariffBasis(snapshot))); }
+function tariffValidUntil(terms) {
+  const parts = String(terms || "").match(/VALIDADE[^\r\n]*?(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (!parts) return "";
+  const value = `${parts[3]}-${parts[2]}-${parts[1]}`;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+}
+function tariffApplicationIdentity(application) {
+  if (!application) return null;
+  return {requestId: application.requestId, mode: application.mode, eventDate: application.eventDate, validUntil: application.validUntil};
+}
+function getTariffEditorSnapshot() {
+  return {event: {date: fields.eventDate?.value || ""}, prices: state.prices, privatizationRules: state.privatizationRules,
+    generalTerms: fields.generalTerms?.value || "", selectedItems: getSelectedItems()};
+}
+function tariffEditorScope() {
+  return JSON.stringify([state.session?.user?.id || state.session?.user?.email || "", state.activeProposalId || "", state.activeQuoteRequestId || "", state.manualSourceKey || ""]);
+}
+function clearTariffApplication() { state.tariffApplicationState = null; }
+function getTariffApplication() {
+  const saved = state.tariffApplicationState;
+  if (!saved) return null;
+  const current = getTariffEditorSnapshot();
+  if (saved.scope !== tariffEditorScope() || saved.basisKey !== tariffBasisKey(current) || saved.application.eventDate !== current.event.date || saved.application.validUntil !== tariffValidUntil(current.generalTerms)) {
+    clearTariffApplication();
+    return null;
+  }
+  return structuredClone(saved.application);
+}
+function tariffApplicationNeeded() {
+  const snapshot = getTariffEditorSnapshot(), until = tariffValidUntil(snapshot.generalTerms);
+  return Boolean(until && snapshot.event.date > until && !getTariffApplication());
+}
+function restoreTariffApplication(snapshot) {
+  clearTariffApplication();
+  const application = snapshot?.event?.tariffApplication;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (application?.schema !== 1 || application.kind !== "confirmed" || application.mode !== "use_current_table" ||
+    !/^[0-9a-f]{64}$/.test(application.basisHash || "") || !/^[0-9a-f]{64}$/.test(application.catalog?.reference || "") ||
+    !uuid.test(application.confirmedBy || "") || !uuid.test(application.requestId || "") || !uuid.test(application.proposalId || "") ||
+    application.proposalId !== state.activeProposalId || !Number.isFinite(Date.parse(application.confirmedAt || "")) || application.eventDate !== snapshot.event.date ||
+    application.validUntil !== tariffValidUntil(snapshot.generalTerms) || application.eventDate <= application.validUntil) return;
+  if (tariffBasisKey(snapshot) !== tariffBasisKey(getTariffEditorSnapshot())) return;
+  // The server owns proof validation. Bind the received proof to this exact loaded editor;
+  // subsequent edits cannot reuse it, and dispatch validates its private provenance again.
+  state.tariffApplicationState = {application: structuredClone(application), basisKey: tariffBasisKey(getTariffEditorSnapshot()), scope: tariffEditorScope()};
+}
+function ensureTariffApplicationConfirmed() {
+  if (!tariffApplicationNeeded()) return true;
+  if (!state.session?.user) { showToast("Entre com sua conta da equipe para confirmar a tabela deste orçamento."); return false; }
+  const snapshot = getTariffEditorSnapshot(), basis = tariffBasis(snapshot), basisKey = tariffBasisKey(snapshot), scope = tariffEditorScope();
+  const date = snapshot.event.date, until = tariffValidUntil(snapshot.generalTerms);
+  const catalog = state.sharedSettings?.catalog;
+  const version = Number.isSafeInteger(catalog?.version) && JSON.stringify(tariffStableValue(catalog.value)) === JSON.stringify(tariffStableValue(snapshot.prices)) ? catalog.version : null;
+  const label = version === null ? "a tabela exibida neste orçamento" : `a tabela compartilhada versão ${version}, exibida neste orçamento`;
+  const confirmed = window.confirm(`O evento de ${date.split("-").reverse().join("/")} está após a validade de ${until.split("-").reverse().join("/")}.\n\nDeseja aplicar os preços de ${label} a este evento?\n\nOK: confirmar esta tabela para esta data, sem recalcular valores. Cancelar: manter o orçamento sem essa confirmação.\n\nEsta decisão não envia a proposta, não aprova descontos e não altera a tabela geral.`);
+  if (!confirmed) return false;
+  if (scope !== tariffEditorScope() || basisKey !== tariffBasisKey(getTariffEditorSnapshot()) || fields.eventDate.value !== date) {
+    showToast("O orçamento mudou. Confira novamente a data e a tabela antes de confirmar."); return false;
+  }
+  if (typeof crypto?.randomUUID !== "function") { showToast("Não foi possível identificar a confirmação. Tente novamente em um navegador atualizado."); return false; }
+  const application = {schema: 1, kind: "request", mode: "use_current_table", requestId: crypto.randomUUID(), eventDate: date, validUntil: until, catalogVersion: version, reviewedBasis: basis};
+  state.tariffApplicationState = {application, basisKey, scope};
+  state.sendReviewApprovedSignature = "";
+  state.sendReviewApproval = null;
+  renderAll();
+  showToast("Tabela confirmada para esta data. Salve o orçamento para registrar a confirmação; nenhum envio foi feito.");
+  return true;
+}
+function tariffApplicationNotice(application = getTariffApplication()) {
+  if (!application) return "";
+  const date = String(application.eventDate || "").split("-").reverse().join("/");
+  const until = String(application.validUntil || "").split("-").reverse().join("/");
+  const version = application.catalog?.version ?? application.catalogVersion;
+  return `Aplicação específica deste orçamento: os preços da tabela${Number.isSafeInteger(version) ? ` versão ${version}` : " registrada nesta proposta"}, originalmente válida até ${until}, aplicam-se ao evento de ${date}. A validade geral da tabela não foi alterada.`;
+}
+
 function proposalCommercialSections(snapshot = {}) {
   const text = value => String(value ?? "").replace(/\r\n/g, "\n").trim();
   const event = snapshot.event || {}, client = snapshot.client || {}, totals = snapshot.totals || {};
@@ -1428,6 +1517,7 @@ function proposalCommercialSections(snapshot = {}) {
     ["Validade", text(event.validity || "14 dias")],
     ["Prazo do sinal", numeric(event.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS)],
     ["Idioma", text(event.clientLanguage || "pt")], ["Itens", items],
+    ["Aplicação do tarifário", tariffApplicationIdentity(event.tariffApplication)],
     ["Condições gerais", text(snapshot.generalTerms)], ["Condições de pagamento", snapshot.paymentTerms || []],
     ["Finalidade", text(event.reason)], ["Anotações do briefing", text(event.sourceNotes)],
     ["Preferências", text(event.preferences)], ["Extras", text(event.extras)],
@@ -1494,7 +1584,7 @@ function hasCommercialEditorInputChanges() {
 
 function preserveUneditedCommercialSnapshot(snapshot, proposal) {
   if (!proposal?.snapshot || state.forceNewVersionDraft || hasCommercialEditorInputChanges()) return;
-  for (const key of ["client", "selectedItems", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
+  for (const key of ["client", "selectedItems", "prices", "privatizationRules", "totals", "generalTerms", "paymentTerms", "publicOfferOptions", "versionChanges"]) {
     if (Object.hasOwn(proposal.snapshot, key)) snapshot[key] = structuredClone(proposal.snapshot[key]);
     else delete snapshot[key];
   }
@@ -2205,17 +2295,22 @@ function getActiveServiceContext() {
 
 function getServiceClientMatch(context = getActiveServiceContext()) {
   const clients = getClientRegistry(getPipelineItems());
-  const email = normalizeSearchValue(context.email);
+  const email = String(context.email || "").trim().toLowerCase();
   const phone = String(context.phone || "").replace(/\D/g, "");
-  const company = normalizeSearchValue(context.company);
-  const name = normalizeSearchValue(context.clientName);
-  return (
-    clients.find((client) => email && normalizeSearchValue(client.email) === email) ||
-    clients.find((client) => phone && String(client.phone || "").replace(/\D/g, "") === phone) ||
-    clients.find((client) => company && normalizeSearchValue(client.company) === company) ||
-    clients.find((client) => name && normalizeSearchValue(client.name) === name) ||
-    null
-  );
+  // A conflicting supplied email must not fall back to a shared phone or name.
+  if (email) {
+    if (!isLikelyEmailAddress(email)) return null;
+    const matches = clients.filter((client) => String(client.email || "").trim().toLowerCase() === email);
+    return matches.length === 1 ? matches[0] : null;
+  }
+  if (!/^\d{10,15}$/.test(phone)) return null;
+  const matches = clients.filter((client) => String(client.phone || "").replace(/\D/g, "") === phone);
+  if (matches.length !== 1) return null;
+  const identities = new Set((matches[0].items || []).map(item => {
+    const email = String(item.email || "").trim().toLowerCase();
+    return isLikelyEmailAddress(email) ? `email:${email}` : `event:${item.opportunityId || item.id}`;
+  }));
+  return identities.size <= 1 ? matches[0] : null;
 }
 
 function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
@@ -2427,11 +2522,11 @@ function renderServiceCockpit() {
       </article>
       <article class="service-cockpit-card service-client-context">
         <span>Histórico do cliente</span>
-        <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Novo relacionamento")}</strong>
+        <strong>${escapeHtml(clientMatch ? `${quotesCount} registro(s) · ${soldCount} venda(s)` : "Histórico não vinculado")}</strong>
         <p>${
           clientMatch
             ? `Total registrado: ${escapeHtml(formatMoney(totalValue))}. Use o histórico para ajustar abordagem e acompanhamento.`
-            : "Ainda sem histórico encontrado. Capriche no primeiro contato e registre os próximos passos."
+            : "Confira o e-mail ou telefone para vincular o histórico com segurança. Nome e empresa não identificam o contato."
         }</p>
         ${
           clientMatch?.items?.[0]
@@ -2622,8 +2717,9 @@ async function duplicateProposalForAdjustment(proposalId) {
     showToast("Não foi possível localizar essa versão.");
     return;
   }
-  await safeOpenSavedProposal(proposalId, "Duplicar e ajustar");
+  if (!(await safeOpenSavedProposal(proposalId, "Duplicar e ajustar"))) return;
   state.forceNewVersionDraft = true;
+  clearTariffApplication();
   state.sendReviewApprovedSignature = "";
   state.sendReviewApproval = null;
   renderSendReview();
@@ -5389,6 +5485,8 @@ function getSendReviewSignature(items = getProposalReviewItems()) {
     selectedIds: [...state.selectedIds].sort(),
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     total: roundCurrency(totals.total),
@@ -5409,6 +5507,7 @@ function isSendReviewApproved(items = getProposalReviewItems()) {
 }
 
 function approveSendReview() {
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   const alerts = getSmartProposalAlerts(items);
@@ -8041,6 +8140,8 @@ function buildProposalText() {
 
   const terms = fields.generalTerms.value.trim();
   if (terms) lines.push(``, terms);
+  const tariffNotice = tariffApplicationNotice();
+  if (tariffNotice) lines.push(``, tariffNotice);
 
   lines.push(``, `Pagamento:`, ...getProposalPaymentTerms());
 
@@ -8132,6 +8233,7 @@ function getProposalSnapshot() {
     event: {
       type: getCurrentEventType(),
       clientLanguage: getProposalClientLanguage(activeProposal, activeRequest),
+      ...(getTariffApplication() ? {tariffApplication: getTariffApplication()} : {}),
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
@@ -9884,6 +9986,7 @@ function initializeReportDefaults() {
 const salesFunnelStages = [
   {id:"lead", label:"Leads recebidos", action:"Qualificar o pedido e preparar a proposta"},
   {id:"preparation", label:"Propostas em preparação", action:"Concluir a revisão e preparar o envio"},
+  {id:"ready", label:"Prontas · falta envio", action:"Escolher o canal; se já enviou por fora, registrar o envio manual"},
   {id:"waiting", label:"Enviadas · aguardam retorno", action:"Acompanhar o cliente no prazo combinado"},
   {id:"changes", label:"Retorno · alterações pendentes", action:"Revisar o pedido e preparar a nova versão"},
   {id:"reply", label:"Retorno · responder cliente", action:"Ler a conversa e definir o próximo passo"},
@@ -9913,7 +10016,7 @@ function getSalesFunnelState(item, conversation = null, now = Date.now()) {
   if (conversation?.waiting === "team" && (!Number.isFinite(sent) || Date.parse(conversation.message?.occurred_at || "") >= sent)) return result("reply", "Há mensagem do cliente sem retorno registrado da equipe.");
   if (conversation?.waiting === "unknown") return result("review", "Não foi possível determinar o retorno com segurança; confira a conversa.");
   if (Number.isFinite(sent) && sent <= now) return result("waiting", "Envio registrado. Entrega, leitura e eventuais respostas devem ser conferidas na conversa.");
-  if (item.status === "proposta_pronta" || item.publicationStatus === "ready") return result("preparation", "Proposta pronta, ainda sem envio registrado.");
+  if (item.status === "proposta_pronta" || item.publicationStatus === "ready") return result("ready", `Versão ${item.version || "atual"} pronta, ainda sem envio registrado desta versão. Envie pelo canal escolhido ou registre o envio que já fez fora do sistema.`);
   return result("review", "A etapa comercial, sozinha, não comprova envio da proposta.");
 }
 
@@ -10594,7 +10697,7 @@ function getClientRegistry(items = getPipelineItems()) {
     const phoneDigits = String(item.phone || "").replace(/\D/g, "");
     const phoneKey = /^\d{10,15}$/.test(phoneDigits) ? phoneDigits : "";
     // Names and companies are display fields, never identity anchors.
-    const key = emailKey ? `email:${emailKey}` : phoneKey ? `phone:${phoneKey.length === 11 ? `55${phoneKey}` : phoneKey}` : `event:${item.opportunityId || item.id}`;
+    const key = emailKey ? `email:${emailKey}` : phoneKey ? `phone:${phoneKey}` : `event:${item.opportunityId || item.id}`;
     const current = registry.get(key) || {
       key,
       name: item.name || "Cliente",
@@ -10891,6 +10994,8 @@ function getCurrentEditorSignature() {
   return JSON.stringify({
     prices: getSelectedItems().map((i) => [i.id,i.nome,i.descricao,i.calc]),
     generalTerms: fields.generalTerms.value,
+    tariffApplication: tariffApplicationIdentity(getTariffApplication()),
+    tariffTable: tariffBasisKey(getTariffEditorSnapshot()),
     privatizationAdjustment: getPrivatizationAdjustment(),
     publicOptions: typeof getEventOfferReviewSignature === "function" ? getEventOfferReviewSignature() : "",
     activeProposalId: state.activeProposalId || "",
@@ -11011,16 +11116,17 @@ function getOpenSourceLabelForItem(item, fallback = "Funil") {
 async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = "client") {
   if (!proposalId) {
     showToast("Não encontrei o código desta proposta. Atualize o funil e tente de novo.");
-    return;
+    return false;
   }
   if (!state.proposals.some((item) => item.id === proposalId)) {
     showToast("Não encontrei essa proposta no histórico carregado. Clique em Atualizar e tente novamente.");
-    return;
+    return false;
   }
-  if (!(await confirmEditorSwitch())) return;
-  if (!(await ensureProposalJourneyDetails(proposalId))) return;
-  openSavedProposal(proposalId, sourceLabel);
+  if (!(await confirmEditorSwitch())) return false;
+  if (!(await ensureProposalJourneyDetails(proposalId))) return false;
+  if (openSavedProposal(proposalId, sourceLabel) !== true) return false;
   scheduleLoadedEditorJump(targetMode, "auto");
+  return true;
 }
 
 async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "client") {
@@ -11832,7 +11938,7 @@ function getPipelineOpenButtonLabel(item, primaryAction) {
   if (item.kind === "proposal" && item.isDraft) return "Continuar V" + (item.version || "");
   if (item.status === "cancelado") return "Abrir";
   if (item.kind === "request" || status === "lead_recebido") return "Responder";
-  if (status === "proposta_pronta") return "Enviar";
+  if (status === "proposta_pronta") return "Abrir envio";
   if (status === "proposta_enviada") return item.clientResponse === "confirmar" ? "Cobrar sinal" : "Reenviar";
   if (status === "negociacao") return "Ajustar";
   if (status === "confirmado") return item.hasPaymentComplete ? "Planejar" : "Cobrar saldo";
@@ -11956,7 +12062,7 @@ function renderPipelineCard(item) {
   const topAction = remainingButton || remainingProofLink || (status === "confirmado" ? "" : signalProofLink);
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" ${salesState?.id === "ready" ? 'data-open-send="true"' : ""} title="Abrir proposta">${escapeHtml(salesState?.id === "ready" ? "Abrir envio" : getPipelineOpenButtonLabel(item, primaryAction))}</button>`
       : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`;
   const cancelButton =
     item.status === "cancelado"
@@ -12025,6 +12131,7 @@ function renderPipelineCard(item) {
       </div>
       ${riskAlertsLine}
       ${primaryActionLine}
+      <div data-proposal-send-feedback="${escapeHtml(item.id)}">${renderProposalSendFeedback(state.proposals.find(row => row.id === item.id))}</div>
       ${planLine}
       ${clientResponseLine}
       <div class="pipeline-card-footer">
@@ -12260,6 +12367,7 @@ function getGuidedEventKeyFromType(type) {
 }
 
 function resetProposalDraftState() {
+  clearTariffApplication();
   state.selectedIds.clear();
   state.guided = { event: "", beverageId: "", foodId: "", welcomeId: "", workshopId: "" };
   state.privatizationChoice = "";
@@ -12303,6 +12411,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   state.quoteGuideDismissed = true;
   state.smartDraftApproval = null;
   resetProposalDraftState();
+  fields.generalTerms.value = loadGeneralTerms();
   if (Array.isArray(state.sharedSettings.catalog?.value)) state.prices = state.sharedSettings.catalog.value.map(normalizeCatalogItem);
   if (Array.isArray(state.sharedSettings.privatization?.value)) state.privatizationRules = state.sharedSettings.privatization.value;
   fields.clientName.value = request.cliente_nome || "";
@@ -13056,7 +13165,7 @@ async function initSupabase() {
     state.session = data.session;
 
     state.supabase.auth.onAuthStateChange((event, session) => {
-      if (state.session?.user?.id !== session?.user?.id) resetCommercialDashboard();
+      if (state.session?.user?.id !== session?.user?.id) { resetCommercialDashboard(); clearTariffApplication(); state.proposalSendFeedback = null; }
       state.session = session;
       if (session?.user?.email && !isTeamEmail(session.user.email)) {
         state.supabase.auth.signOut();
@@ -13380,6 +13489,8 @@ async function logoutSupabase() {
   resetCommercialDashboard();
   await state.supabase.auth.signOut();
   state.session = null;
+  state.proposalSendFeedback = null;
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   state.proposals = [];
   state.quoteRequests = [];
@@ -13446,13 +13557,15 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("O evento aberto mudou. Revise o editor antes de salvar.");
     return null;
   }
+  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
+    ? state.editorProposalBase
+    : state.proposals.find((item) => item.id === state.activeProposalId);
+  // Internal saves on existing agreements do not apply new commercial terms.
+  if (!options.asDraft && (!isContractedProposal(activeProposal) || options.forSharing) && !ensureTariffApplicationConfirmed()) return null;
   // Freeze nested prices, options and selected items before the first write.
   const snapshot = structuredClone(getProposalSnapshot());
   const savedEditorSignature = JSON.parse(getCurrentEditorSignature());
   const sourceKeyBeforeSave = getSourceOverrideKey();
-  const activeProposal = state.editorProposalBase?.id === state.activeProposalId
-    ? state.editorProposalBase
-    : state.proposals.find((item) => item.id === state.activeProposalId);
   preserveUneditedCommercialSnapshot(snapshot, activeProposal);
   const amendmentSource = activeProposal?.snapshot?.amendmentOf ||
     (isContractedProposal(activeProposal) && (getProposalChangeList(activeProposal.snapshot || {}, snapshot).length || state.forceNewVersionDraft)
@@ -13481,7 +13594,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   let paymentSignal = signalInfo;
   let remainingPayment = null;
 
-  if (!options.asDraft && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
+  if (!options.asDraft && !(isContractedProposal(activeProposal) && !options.forSharing) && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
     if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
@@ -13720,7 +13833,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     showToast("A proposta anterior foi gravada, mas outro evento está aberto. Revise antes de enviar.");
     return null;
   }
+  const tariffWasUnchanged = JSON.stringify(tariffApplicationIdentity(getTariffApplication())) === JSON.stringify(savedEditorSignature.tariffApplication) &&
+    tariffBasisKey(getTariffEditorSnapshot()) === savedEditorSignature.tariffTable;
   state.activeProposalId = data.id;
+  if (tariffWasUnchanged) restoreTariffApplication(data.snapshot);
   state.editorProposalBase = structuredClone(data);
   state.forceNewVersionDraft = false;
   const newSourceKey = `proposal:${data.id}`;
@@ -13844,6 +13960,7 @@ function applyProposalSnapshot(snapshot) {
     return;
   }
 
+  clearTariffApplication();
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   fields.clientName.value = snapshot.client?.name || "";
   fields.clientEmail.value = snapshot.client?.email || "";
@@ -13885,7 +14002,7 @@ function applyProposalSnapshot(snapshot) {
   renderInternalNotesPanel(getActiveProposal());
   renderEventAttachmentsPanel(getActiveProposal());
 
-  if (Array.isArray(snapshot.prices) && snapshot.prices.length) {
+  if (Array.isArray(snapshot.prices)) {
     state.prices = snapshot.prices.map(normalizeCatalogItem);
     savePrices({ localOnly: true });
   }
@@ -13901,12 +14018,13 @@ function applyProposalSnapshot(snapshot) {
   state.guided = snapshot.guided || { event: "", beverageId: "", foodId: "" };
   state.privatizationChoice = snapshot.privatizationChoice || "";
 
-  if (Array.isArray(snapshot.privatizationRules) && snapshot.privatizationRules.length) {
+  if (Array.isArray(snapshot.privatizationRules)) {
     state.privatizationRules = snapshot.privatizationRules;
     savePrivatizationRules({ localOnly: true });
     renderPrivatizationRulesTable();
   }
 
+  restoreTariffApplication(snapshot);
   saveSelectedIds();
   saveGeneralTerms();
   renderCategoryFilter();
@@ -13915,10 +14033,10 @@ function applyProposalSnapshot(snapshot) {
 }
 
 function openSavedProposal(proposalId, sourceLabel = "") {
-  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return; }
+  if (state.proposalSaveInProgress) { showToast("Aguarde a gravação terminar antes de trocar de evento. Seu trabalho foi preservado."); return false; }
   const proposal = state.proposals.find((item) => item.id === proposalId);
-  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return; }
-  if (!proposal) return;
+  if (proposal?._dashboard_summary) { safeOpenSavedProposal(proposalId, sourceLabel); return false; }
+  if (!proposal?.snapshot) return false;
   state.activeProposalId = proposal.id;
   state.editorProposalBase = structuredClone(proposal);
   state.activeQuoteRequestId = proposal.solicitacao_id || proposal.snapshot?.activeQuoteRequestId || "";
@@ -13929,6 +14047,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
   focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
+  return true;
 }
 
 function formatDateFromIso(value) {
@@ -14032,7 +14151,7 @@ function renderProposal() {
 
       ${
       terms
-          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>`
+          ? `<div class="proposal-terms-header"><img src="./assets/logo-reducao.svg" alt="Embaixada Carioca" /><div><span>Embaixada Carioca</span><strong>Condições comerciais</strong></div></div><div class="proposal-section-title terms-title"><span>02</span><h3>Condições gerais</h3></div><div class="proposal-note terms-note">${formatMultilineHtml(terms)}</div>${tariffApplicationNotice() ? `<p class="proposal-note">${escapeHtml(tariffApplicationNotice())}</p>` : ""}`
           : ""
       }
 
@@ -14249,6 +14368,7 @@ function startNewProposal(options = {}) {
 
   if (typeof resetConsultativeEditor === "function") resetConsultativeEditor();
 
+  clearTariffApplication();
   state.activeProposalId = "";
   state.activeQuoteRequestId = "";
   state.activeOpportunityId = "";
@@ -14449,6 +14569,7 @@ function showStableSendDialog(dialog) {
 
 async function ensureProposalReadyForSending() {
   if (document.querySelector(".send-readiness-dialog[open]")) return false;
+  if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
   if (summary.ready && isSendReviewApproved(items)) return true;
@@ -14557,7 +14678,8 @@ async function ensureProposalForSharing({ forApproval = false } = {}) {
 
 async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   if (!QA_MODE && !(await remoteProposalMayShare())) return false;
-  if (!proposal || proposal.status !== "proposta_pronta") return true;
+  if (manualChannel ? !canRegisterManualProposalSend(proposal) : !proposal || proposal.status !== "proposta_pronta") return !manualChannel;
+  const client = state.supabase, user = state.session?.user?.id;
   const sentAt = new Date().toISOString();
   // A Edge Function pode ter acrescentado o registro do envio ao snapshot.
   // Leia a versão mais recente antes de gravar o prazo e o histórico manual.
@@ -14566,6 +14688,11 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
     .select("*")
     .eq("id", proposal.id)
     .single();
+  if (client !== state.supabase || !user || state.session?.user?.id !== user) return false;
+  if (manualChannel && (!canRegisterManualProposalSend(currentRow) || Number(currentRow.revision) !== Number(proposal.revision))) {
+    showToast("A versão mudou. Abra a proposta atual e confira qual versão foi enviada antes de registrar.");
+    return false;
+  }
   if (manualChannel && (readError || !currentRow?.snapshot)) {
     showToast("Não foi possível carregar o histórico da proposta. Atualize e tente registrar o envio novamente.");
     return false;
@@ -14589,12 +14716,13 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
         [createCommercialHistoryEntry("envio", "Envio manual registrado", `Canal: ${manualChannel}. Confirmado pela equipe.`)],
       )
     : snapshotWithDeadline;
-  if (readError || !currentRow || currentRow.status !== "proposta_pronta") {
+  if (readError || !currentRow || (!manualChannel && currentRow.status !== "proposta_pronta")) {
     if (currentRow) upsertProposalState(currentRow);
     return !readError && currentRow?.status === "proposta_enviada";
   }
   const { data, error } = await persistEventProposal(proposal.id, {
-    status: "proposta_enviada", publication_status: "sent", sent_at: sentAt,
+    status: currentRow.status === "proposta_pronta" ? "proposta_enviada" : currentRow.status,
+    publication_status: "sent", sent_at: currentRow.sent_at || sentAt,
     ...(updatedSnapshot ? { snapshot: updatedSnapshot } : {}),
   }, currentRow);
   if (error || !data) {
@@ -14619,22 +14747,30 @@ async function registerConfirmedProposalSend(proposal, manualChannel = "") {
   return true;
 }
 
+function canRegisterManualProposalSend(proposal) {
+  return Boolean(proposal && proposal.is_current !== false && proposal.publication_status === "ready" &&
+    ["proposta_pronta", "negociacao"].includes(proposal.status) && !proposal.snapshot?.amendmentOf);
+}
+
 function openManualSendDialog() {
   const proposal = getActiveProposal();
-  if (!proposal || proposal.status !== "proposta_pronta") {
-    showToast("Abra uma proposta pronta para registrar o envio.");
+  if (!canRegisterManualProposalSend(proposal)) {
+    showToast("Abra a versão atual pronta para envio. Rascunhos e acordos fechados não são alterados por este registro.");
     return;
   }
+  const client = state.supabase, user = state.session?.user?.id;
+  const revision = proposal.revision;
   const dialog = document.createElement("dialog");
   dialog.className = "send-confirm-dialog";
   dialog.innerHTML = `<form method="dialog" class="send-confirm-form">
     <h2>Registrar envio feito fora do sistema</h2>
-    <p>Use após confirmar que o cliente recebeu o link. O registro inicia o acompanhamento no funil.</p>
+    <p>Use somente depois de enviar esta versão ao cliente por fora do sistema. O registro inicia o acompanhamento; não comprova entrega, aprovação nem pagamento.</p>
     <label>Canal <select name="channel" required>
       <option value="">Selecione</option><option value="WhatsApp">WhatsApp</option>
       <option value="E-mail">E-mail</option><option value="Outro">Outro</option>
     </select></label>
-    <label><input type="checkbox" name="sent" required /> Enviei o link para o cliente</label>
+    <label><input type="checkbox" name="sent" required /> Enviei esta versão ao cliente pelo canal escolhido</label>
+    <p class="manual-send-error" role="alert"></p>
     <div class="send-confirm-actions">
       <button type="button" class="secondary" data-close-manual>Voltar</button>
       <button type="submit" class="primary">Registrar envio</button>
@@ -14646,6 +14782,11 @@ function openManualSendDialog() {
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
+    if (!user || user !== state.session?.user?.id || client !== state.supabase ||
+      getActiveProposal()?.id !== proposal.id || getActiveProposal()?.revision !== revision || hasUnsavedEditorChanges()) {
+      dialog.querySelector(".manual-send-error").textContent = "A proposta, a edição ou a sessão mudou. Volte e confira a versão antes de registrar o envio.";
+      return;
+    }
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
     const ok = await registerConfirmedProposalSend(proposal, form.elements.channel.value);
@@ -14653,7 +14794,10 @@ function openManualSendDialog() {
       dialog.close();
       await loadProposalHistory();
       showToast("Envio manual registrado e acompanhamento iniciado.");
-    } else button.disabled = false;
+    } else {
+      dialog.querySelector(".manual-send-error").textContent = "Envio manual não registrado. Confira a versão atual e tente novamente.";
+      button.disabled = false;
+    }
   });
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
   dialog.showModal();
@@ -14890,7 +15034,52 @@ function warnUnreconciledProposalSend(result) {
   );
 }
 
+function proposalSendOutcome(data, error) {
+  const accepted = !error && data?.ok === true && !["paused", "failed", "uncertain"].includes(data?.deliveryStatus);
+  if (accepted) return {status: "accepted", title: "Envio aceito pelo canal", message: "A proposta foi aceita para envio. A entrega ao cliente ainda precisa de confirmação; acompanhe a conversa antes de reenviar."};
+  if (data?.deliveryStatus === "paused") return {status: "paused", title: "Proposta não enviada: canal pausado", message: "O envio automático não foi realizado. A proposta continua pronta. Você pode enviar por fora do sistema e, depois, registrar o envio manual desta versão."};
+  return {status: "uncertain", title: "Envio não confirmado", message: "Confira a conversa e o histórico antes de tentar novamente. A proposta não avança no funil sem um registro de envio aceito ou uma confirmação de envio manual."};
+}
+
+function renderProposalSendFeedback(proposal) {
+  const feedback = state.proposalSendFeedback;
+  if (!proposal || !feedback || feedback.client !== state.supabase || feedback.user !== state.session?.user?.id ||
+    feedback.proposal.id !== proposal.id || ![Number(feedback.proposal.revision), feedback.acceptedRevision].includes(Number(proposal.revision))) return "";
+  return `<p class="proposal-send-feedback" role="status"><strong>${escapeHtml(feedback.title)}</strong> ${escapeHtml(feedback.message)}</p>`;
+}
+
+async function reportProposalSendOutcome(proposal, channel, data, error, context) {
+  let payload = data;
+  if (!payload && error?.context?.clone) {
+    try { payload = await error.context.clone().json(); } catch (_) { /* An absent response is an unknown outcome. */ }
+  }
+  if (context.client !== state.supabase || !context.user || context.user !== state.session?.user?.id) return false;
+  const result = proposalSendOutcome(payload, error);
+  const current = state.proposals.find(row => row.id === proposal.id);
+  const ownAccepted = result.status === "accepted" && current && isOwnProposalSendRevision(proposal, current);
+  if (current && Number(current.revision) !== Number(proposal.revision) && !ownAccepted) return false;
+  state.proposalSendFeedback = {...result, client: context.client, user: context.user, proposal: structuredClone(proposal),
+    acceptedRevision: ownAccepted ? Number(current.revision) : null};
+  document.querySelectorAll(`[data-proposal-send-feedback="${CSS.escape(proposal.id)}"]`).forEach(node => {
+    node.innerHTML = renderProposalSendFeedback(current || proposal);
+  });
+  if (state.activeProposalId !== proposal.id || document.querySelector(".proposal-send-result[open]")) return result.status === "accepted";
+  const dialog = document.createElement("dialog");
+  dialog.className = "proposal-send-result";
+  dialog.setAttribute("aria-labelledby", "proposalSendResultTitle");
+  dialog.innerHTML = `<form method="dialog" class="send-confirm-form"><h2 id="proposalSendResultTitle" tabindex="-1" autofocus>${escapeHtml(result.title)}</h2>
+    <p>${escapeHtml(channel)} · ${escapeHtml(proposal.cliente_nome || "Proposta")} · versão ${escapeHtml(proposal.versao || "atual")}</p>
+    <p>${escapeHtml(result.message)}</p>
+    ${result.status === "paused" && canRegisterManualProposalSend(current || proposal) ? '<p>Use “Copiar link” para preparar o envio pelo seu canal. Depois use “Registrar envio fora do sistema”, sem repetir o envio automático.</p>' : ""}
+    <button type="submit" class="primary">Entendi, voltar ao orçamento</button></form>`;
+  dialog.addEventListener("close", () => dialog.remove(), {once: true});
+  document.body.append(dialog);
+  showStableSendDialog(dialog);
+  return result.status === "accepted";
+}
+
 async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, title = "Proposta comercial" }) {
+  const outcomeContext = {client: state.supabase, user: state.session?.user?.id};
   const approvalEnabled = await remoteProposalApprovalEnabled();
   if (approvalEnabled === null) return false;
   if (approvalEnabled) return requestRemoteProposalApproval("whatsapp", { proposal, proposalUrl, message, title });
@@ -14957,7 +15146,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       },
     });
 
-    if (error || data?.ok === false) {
+    if (error || data?.ok !== true || ["paused", "failed", "uncertain"].includes(data?.deliveryStatus)) {
       console.warn("Falha no envio direto por WhatsApp.", error || data);
       const functionMessage = data?.message || (await getFunctionErrorMessage(error));
       updateIntegrationLog(logId, {
@@ -14965,6 +15154,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
         detail: functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.",
       });
       showToast(functionMessage || "Não foi possível enviar pela Z-API. Confira a configuração.");
+      await reportProposalSendOutcome(proposal, "WhatsApp", data, error, outcomeContext);
       return false;
     }
 
@@ -14983,6 +15173,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     warnUnreconciledProposalSend(editorResult);
+    await reportProposalSendOutcome(proposal, "WhatsApp", data, null, outcomeContext);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
@@ -14990,6 +15181,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
       detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar WhatsApp.",
     });
     showToast("Não foi possível enviar pela Z-API. Confira a conexão e tente novamente.");
+    await reportProposalSendOutcome(proposal, "WhatsApp", null, error, outcomeContext);
     return false;
   } finally {
     releaseProposalDispatch(dispatchGuard);
@@ -14998,6 +15190,7 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
 }
 
 async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial" }) {
+  const outcomeContext = {client: state.supabase, user: state.session?.user?.id};
   const approvalEnabled = await remoteProposalApprovalEnabled();
   if (approvalEnabled === null) return false;
   if (approvalEnabled) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
@@ -15087,7 +15280,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       },
     });
 
-    if (error || data?.ok === false) {
+    if (error || data?.ok !== true || ["paused", "failed", "uncertain"].includes(data?.deliveryStatus)) {
       console.warn("Falha no envio direto por e-mail.", error || data);
       const functionMessage = data?.message || (await getFunctionErrorMessage(error));
       updateIntegrationLog(logId, {
@@ -15095,6 +15288,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
         detail: functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.",
       });
       showToast(functionMessage || "Não foi possível enviar o e-mail. Confira a configuração.");
+      await reportProposalSendOutcome(proposal, "E-mail", data, error, outcomeContext);
       return false;
     }
 
@@ -15113,6 +15307,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
     if (typeof loadEventOperations === "function") await loadEventOperations();
     await loadProposalHistory();
     warnUnreconciledProposalSend(editorResult);
+    await reportProposalSendOutcome(proposal, "E-mail", data, null, outcomeContext);
     return true;
   } catch (error) {
     updateIntegrationLog(logId, {
@@ -15120,6 +15315,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       detail: getHealthErrorMessage(error) || "Falha inesperada ao enviar e-mail.",
     });
     showToast("Não foi possível enviar o e-mail. Confira a conexão e tente novamente.");
+    await reportProposalSendOutcome(proposal, "E-mail", null, error, outcomeContext);
     return false;
   } finally {
     state.sendLocks.email = false;
@@ -15912,6 +16108,7 @@ function bindEvents() {
       } else if (event?.target === fields.eventDate || event?.target === fields.eventTime) {
         syncDateTimeFromFields();
       }
+      getTariffApplication();
       renderPriceList();
       renderAvailabilityAlert();
       renderFormSourcePanel();
@@ -16431,7 +16628,7 @@ function bindEvents() {
     }
     const button = event.target.closest("button[data-proposal-id]");
     if (button) {
-      await safeOpenSavedProposal(button.dataset.proposalId, "Funil");
+      await safeOpenSavedProposal(button.dataset.proposalId, "Funil", button.dataset.openSend ? "review" : "client");
       return;
     }
     const paidButton = event.target.closest("button[data-mark-paid]");
