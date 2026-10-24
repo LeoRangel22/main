@@ -13037,3 +13037,8 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
 .commercial-calendar-event p { margin: 0; }
 .commercial-calendar-overlap { color: #80500e; }
 @media(max-width:480px) { .commercial-calendar { padding: 12px; } }
+.proposal-send-result { width:min(620px,calc(100vw - 32px)); max-height:85vh; overflow:auto; box-sizing:border-box; border:1px solid #cbd5cf; border-radius:16px; padding:24px; }
+.proposal-send-result::backdrop { background:rgba(0,0,0,.45); }
+.proposal-send-feedback { margin:8px 0; padding:10px; border:1px solid #cf9d42; border-radius:8px; font-size:.85rem; line-height:1.45; overflow-wrap:anywhere; }
+.proposal-send-feedback strong { display:block; }
+.pipeline-card [data-proposal-send-feedback]:empty { display:none; }

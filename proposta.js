@@ -432,6 +432,16 @@ function copyTextFallback(text) {
   return copied;
 }
 
+function publicTariffApplicationNotice(snapshot) {
+  const application = snapshot?.event?.tariffApplication;
+  if (application?.schema !== 1 || application.kind !== "confirmed" || application.mode !== "use_current_table" ||
+    application.eventDate !== snapshot.event.date || !/^\d{4}-\d{2}-\d{2}$/.test(application.validUntil || "") ||
+    application.eventDate <= application.validUntil) return "";
+  const date = application.eventDate.split("-").reverse().join("/"), until = application.validUntil.split("-").reverse().join("/");
+  return tr(`Neste orçamento, os preços da tabela originalmente válida até ${until} foram aplicados especificamente ao evento de ${date}. A validade geral da tabela não foi alterada.`,
+    `For this proposal, the prices originally valid through ${until} apply specifically to the event on ${date}. The general price-list validity has not changed.`);
+}
+
 function renderCommercialSummary(snapshot) {
   const event = snapshot.event || {};
   const payment = Array.isArray(snapshot.paymentTerms) ? snapshot.paymentTerms : [];
@@ -449,6 +459,7 @@ function renderCommercialSummary(snapshot) {
       ${defaultPayment ? `<li>${tr("Sinal de 50% para reservar; saldo de 50% até 72 horas antes do evento.", "50% deposit to book; remaining 50% due 72 hours before the event.")}</li>` : payment.map((term) => `<li>${escapeHtml(term)}</li>`).join("")}
       ${ticketExclusion ? `<li>${tr("Ingressos do teleférico não incluídos; compra separada.", "Cable car tickets are not included and must be purchased separately.")}</li>` : ""}
       ${standardCancellation ? `<li>${tr("Cancelamento: 25% com mais de 5 dias úteis; 50% até 48h; 100% com menos de 48h do evento.", "Cancellation: 25% more than 5 business days before; 50% between 5 business days and 48 hours; 100% within 48 hours of the event.")}</li>` : ""}
+      ${publicTariffApplicationNotice(snapshot) ? `<li>${escapeHtml(publicTariffApplicationNotice(snapshot))}</li>` : ""}
       ${terms ? `<li>${tr("Leia as regras de alteração e cancelamento em Condições comerciais abaixo.", "Read the change and cancellation terms in Commercial terms below.")}</li>` : ""}
     </ul>
     ${language === "en" && terms ? `<p>${tr("", "The detailed commercial terms provided by the team below remain in their original language. Ask us for an English copy before approving if needed.")}</p>` : ""}
@@ -677,7 +688,7 @@ function renderProposal(proposal) {
 
         ${
           snapshot.generalTerms
-            ? `<details class="public-proposal-terms" id="commercialTerms"><summary>${tr("Condições comerciais completas", "Full commercial terms")}</summary><p>${formatMultiline(snapshot.generalTerms)}</p></details>`
+            ? `<details class="public-proposal-terms" id="commercialTerms"><summary>${tr("Condições comerciais completas", "Full commercial terms")}</summary><p>${formatMultiline(snapshot.generalTerms)}</p>${publicTariffApplicationNotice(snapshot) ? `<p>${escapeHtml(publicTariffApplicationNotice(snapshot))}</p>` : ""}</details>`
             : ""
         }
       </aside>
