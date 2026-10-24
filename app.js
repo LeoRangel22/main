@@ -9680,11 +9680,8 @@ function getReportDefinitions(referenceDate = new Date()) {
     },
     approvedAwaitingSignal: {
       title: "Aprovadas aguardando sinal",
-      detail: "Cliente quer seguir; falta registrar sinal",
-      filter: (item) =>
-        item.kind === "proposal" &&
-        item.clientResponse === "confirmar" &&
-        ["proposta_enviada", "negociacao"].includes(getReportStatus(item)),
+      detail: "Cliente aprovou; sinal ainda não recebido nem em validação",
+      filter: isApprovedAwaitingSignal,
     },
     signalAwaitingFinal: {
       title: "Sinal pago aguardando saldo",
@@ -10018,6 +10015,12 @@ function getSalesFunnelState(item, conversation = null, now = Date.now()) {
   if (Number.isFinite(sent) && sent <= now) return result("waiting", "Envio registrado. Entrega, leitura e eventuais respostas devem ser conferidas na conversa.");
   if (item.status === "proposta_pronta" || item.publicationStatus === "ready") return result("ready", `Versão ${item.version || "atual"} pronta, ainda sem envio registrado desta versão. Envie pelo canal escolhido ou registre o envio que já fez fora do sistema.`);
   return result("review", "A etapa comercial, sozinha, não comprova envio da proposta.");
+}
+
+// Approval is classified before conversation state, so this shared predicate
+// does not depend on channel availability or the current conversation cache.
+function isApprovedAwaitingSignal(item) {
+  return item.kind === "proposal" && getSalesFunnelState(item)?.id === "approved";
 }
 
 function getSalesFunnelStateForItem(item) {
@@ -10550,9 +10553,8 @@ function getPipelineQuickFilterDefinitions() {
     },
     {
       id: "awaitingSignal",
-      label: "Aprovadas · falta sinal",
-      matches: (item) =>
-        getSalesFunnelStateForItem(item)?.id === "approved",
+      label: "Aprovadas · aguardam sinal",
+      matches: isApprovedAwaitingSignal,
     },
     {
       id: "awaitingRemaining",
@@ -11436,7 +11438,7 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
     return;
   }
   const proposals = items.filter((item) => item.kind === "proposal");
-  const awaitingSignal = proposals.filter((item) => ["proposta_enviada", "negociacao"].includes(item.status));
+  const awaitingSignal = proposals.filter(isApprovedAwaitingSignal);
   const awaitingRemaining = proposals.filter((item) => ["confirmado", "pagamento_final"].includes(item.status) && !item.hasPaymentComplete);
   const missingProof = proposals.filter(
     (item) =>
@@ -11458,7 +11460,7 @@ function renderFinanceCommandPanel(items = getPipelineItems()) {
       <strong>Pagamentos que pedem atenção</strong>
     </div>
     <div class="finance-command-grid">
-      <article><span>Aguardando sinal</span><strong>${awaitingSignal.length}</strong></article>
+      <article><span>Aprovadas · aguardam sinal</span><strong>${awaitingSignal.length}</strong></article>
       <article><span>Saldo pendente</span><strong>${awaitingRemaining.length}</strong></article>
       <article><span>Comprovante faltando</span><strong>${missingProof.length}</strong></article>
       <article><span>Recebido no mês</span><strong>${escapeHtml(formatMoney(receivedMonth))}</strong></article>
