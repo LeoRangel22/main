@@ -148,7 +148,8 @@ test('ficha de cliente não mistura homônimos ou contatos diferentes da mesma e
     const rows=[{...base,id:'a',opportunityId:'oa',email:'a@example.test'},{...base,id:'b',opportunityId:'ob',email:'b@example.test'},{...base,id:'c',opportunityId:'oc'},{...base,id:'d',opportunityId:'od'}];
     return {separate:getClientRegistry(rows).length,same:getClientRegistry([{...base,id:'e',email:' A@example.test '},{...base,id:'f',email:'a@example.test'}]).length,phone:getClientRegistry([{...base,id:'g',phone:'(21) 99999-1111'},{...base,id:'h',phone:'+55 21 99999-1111'}]).length};
   });
-  expect(lengths).toEqual({separate:4,same:1,phone:1});
+  // Without a supplied country code these remain separate identities.
+  expect(lengths).toEqual({separate:4,same:1,phone:2});
 });
 test('aprovação final mostra corpo e invalida mudança de dados durante revisão',async({page})=>{
   await inbox(page);
