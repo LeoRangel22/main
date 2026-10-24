@@ -6,6 +6,32 @@ vm.runInContext(source.slice(source.indexOf('function getSalesFunnelItems('),sou
 const now=Date.parse('2026-10-23T12:00:00Z');
 const proposal=changes=>({id:'p',kind:'proposal',status:'negociacao',snapshot:{},...changes});
 const stage=(p,wait)=>ctx.getSalesFunnelState(p,wait,now)?.id;
+
+const signalCases = [
+ ['approved without payment', {clientResponse:'confirmar'}, true],
+ ['approved without an event date', {clientResponse:'confirmar',date:null}, true],
+ ['proof attachment alone is not received money', {clientResponse:'confirmar',hasSignalProof:true}, true],
+ ['unapproved negotiation', {}, false],
+ ['sent without approval', {status:'proposta_enviada',sentAt:'2026-10-22T12:00:00Z'}, false],
+ ['change requested', {clientResponse:'alteracao'}, false],
+ ['draft with inherited approval', {clientResponse:'confirmar',isDraft:true}, false],
+ ['approved proof in validation', {clientResponse:'confirmar',snapshot:{pagamentoSinal:{valor:100,validacaoPendente:true}}}, false],
+ ['paid but commercial stage inconsistent', {clientResponse:'confirmar',paymentPaidTotal:100,snapshot:{pagamentoSinal:{valor:100}}}, false],
+ ['confirmed legacy without payment evidence', {status:'confirmado',clientResponse:'confirmar'}, false],
+ ['confirmed legacy with attachment only', {status:'confirmado',clientResponse:'confirmar',hasSignalProof:true}, false],
+ ['confirmed with validated payment', {status:'confirmado',clientResponse:'confirmar',paymentPaidTotal:100,snapshot:{pagamentoSinal:{valor:100}}}, false],
+ ...['cancelado','perdido','pos_venda','realizado'].map(status=>[status,{status,clientResponse:'confirmar'},false]),
+ ['pending outcome', {stage:'desfecho_pendente',clientResponse:'confirmar'}, false],
+ ['lead with approval-like legacy data', {kind:'request',clientResponse:'confirmar'}, false],
+];
+for (const [name, changes, expected] of signalCases) test(`shared signal criterion: ${name}`,()=>{
+ const item=proposal(changes),before=JSON.stringify(item);
+ assert.equal(ctx.isApprovedAwaitingSignal(item),expected);
+ for (const conversation of [null,{waiting:'unknown'},{waiting:'team',message:{occurred_at:'2026-10-23T11:00:00Z'}}]) {
+  assert.equal(stage(item,conversation)==='approved',expected);
+ }
+ assert.equal(JSON.stringify(item),before);
+});
 test('a lead and an unsent ready proposal have separate next steps',()=>{
  assert.equal(stage({kind:'request',status:'lead_recebido'}),'lead');
  assert.equal(stage(proposal({status:'proposta_pronta',publicationStatus:'ready'})),'ready');
