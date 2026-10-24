@@ -46,6 +46,7 @@ async function checks(c) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
+  await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {

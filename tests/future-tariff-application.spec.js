@@ -26,6 +26,15 @@ test('accept changes only applicability, not totals, terms or commercial approva
  expect(await page.evaluate(()=>state.sendReviewApproval)).toBeNull();
  await expect(page.locator('#proposalContent')).toContainText('Aplicação específica deste orçamento');
 });
+
+test('a saved 2025 table can be explicitly applied to a 2026 event and appears with quote-specific validity in the PDF preview',async({page})=>{
+ await setup(page);await page.evaluate(()=>{fields.eventDate.value='2026-11-12';fields.generalTerms.value='VALIDADE: este tarifário é válido exclusivamente para eventos realizados até o dia 31/12/2025.';clearTariffApplication();renderAll();});
+ const total=await page.evaluate(()=>getQuoteTotals().total);page.once('dialog',d=>d.accept());await page.locator('[data-tariff-confirm]').click();
+ await expect(page.locator('#proposalContent')).toContainText('Aplicação específica deste orçamento');
+ await expect(page.locator('#proposalContent')).toContainText('aplicam-se ao evento de 12/11/2026');
+ expect(await page.evaluate(()=>getQuoteTotals().total)).toBe(total);
+ expect(await page.evaluate(()=>getTariffApplication().validUntil)).toBe('2025-12-31');
+});
 test('date away and back invalidates a choice, while a genuine future-valid table needs none',async({page})=>{
  await setup(page);page.once('dialog',d=>d.accept());await page.locator('[data-tariff-confirm]').click();
  await page.locator('#eventDate').fill('2027-02-02');await page.locator('#eventDate').fill('2027-02-01');

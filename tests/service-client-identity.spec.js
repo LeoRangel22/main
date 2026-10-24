@@ -23,3 +23,15 @@ test('assisted sales keeps unrelated and shared-phone histories unlinked', async
   await expect(page.locator('.service-client-context')).not.toContainText('Total registrado');
   await expectNoBrowserErrors(errors);
 });
+
+test('registry does not invent a country code or merge shared-phone opportunities into safe history',async({page})=>{
+ await page.route('https://**',r=>r.abort());await page.goto('/index.html?qa=1');
+ const result=await page.evaluate(()=>{
+  const rows=[{id:'a',kind:'proposal',opportunityId:'a',name:'Fixture A',email:'',phone:'11900000001',total:100,status:'negociacao'},
+   {id:'b',kind:'proposal',opportunityId:'b',name:'Fixture B',email:'',phone:'5511900000001',total:200,status:'negociacao'}];
+  getPipelineItems=()=>rows;const distinct=getClientRegistry(rows).length;
+  rows.push({...rows[0],id:'c',opportunityId:'c',name:'Fixture C'});
+  return {distinct,shared:getServiceClientMatch({phone:'11900000001'}),full:getServiceClientMatch({phone:'5511900000001'})?.items.map(x=>x.id)};
+ });
+ expect(result).toEqual({distinct:2,shared:null,full:['b']});
+});

@@ -2305,7 +2305,12 @@ function getServiceClientMatch(context = getActiveServiceContext()) {
   }
   if (!/^\d{10,15}$/.test(phone)) return null;
   const matches = clients.filter((client) => String(client.phone || "").replace(/\D/g, "") === phone);
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length !== 1) return null;
+  const identities = new Set((matches[0].items || []).map(item => {
+    const email = String(item.email || "").trim().toLowerCase();
+    return isLikelyEmailAddress(email) ? `email:${email}` : `event:${item.opportunityId || item.id}`;
+  }));
+  return identities.size <= 1 ? matches[0] : null;
 }
 
 function getServiceTemplateRecommendation(context = getActiveServiceContext()) {
@@ -10692,7 +10697,7 @@ function getClientRegistry(items = getPipelineItems()) {
     const phoneDigits = String(item.phone || "").replace(/\D/g, "");
     const phoneKey = /^\d{10,15}$/.test(phoneDigits) ? phoneDigits : "";
     // Names and companies are display fields, never identity anchors.
-    const key = emailKey ? `email:${emailKey}` : phoneKey ? `phone:${phoneKey.length === 11 ? `55${phoneKey}` : phoneKey}` : `event:${item.opportunityId || item.id}`;
+    const key = emailKey ? `email:${emailKey}` : phoneKey ? `phone:${phoneKey}` : `event:${item.opportunityId || item.id}`;
     const current = registry.get(key) || {
       key,
       name: item.name || "Cliente",
@@ -12057,7 +12062,7 @@ function renderPipelineCard(item) {
   const topAction = remainingButton || remainingProofLink || (status === "confirmado" ? "" : signalProofLink);
   const openButton =
     item.kind === "proposal"
-      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" ${salesState?.id === "ready" ? 'data-open-send="true"' : ""} title="Abrir proposta">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`
+      ? `<button class="primary pipeline-open-button" type="button" data-proposal-id="${escapeHtml(item.id)}" ${salesState?.id === "ready" ? 'data-open-send="true"' : ""} title="Abrir proposta">${escapeHtml(salesState?.id === "ready" ? "Abrir envio" : getPipelineOpenButtonLabel(item, primaryAction))}</button>`
       : `<button class="primary pipeline-open-button" type="button" data-use-request="${escapeHtml(item.id)}" title="Abrir lead">${escapeHtml(getPipelineOpenButtonLabel(item, primaryAction))}</button>`;
   const cancelButton =
     item.status === "cancelado"

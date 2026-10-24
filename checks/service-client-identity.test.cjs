@@ -37,3 +37,9 @@ test('invalid email, incomplete phone and ambiguous email cannot select history'
   assert.equal(find({}),null);
   assert.equal(matcher([a,{...b,email:a.email}])({email:a.email}),null);
 });
+test('an aggregated shared phone without email cannot hide multiple opportunity identities',()=>{
+ const shared={...a,email:'',items:[{id:'one',opportunityId:'one'},{id:'two',opportunityId:'two'}]};
+ assert.equal(matcher([shared])({phone:a.phone}),null);
+ const sameEvent={...shared,items:[{id:'v1',opportunityId:'same'},{id:'v2',opportunityId:'same'}]};
+ assert.equal(matcher([sameEvent])({phone:a.phone}),sameEvent);
+});
