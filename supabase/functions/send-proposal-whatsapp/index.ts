@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
 import { dispatchProtectedBot, protectedBotConfig, botSendExpiry, botDestinationIsCanonical } from "../_shared/bot-dispatch.ts";
+import { prepareWhatsApp, claimPreparedWhatsApp, publicWhatsAppPreparation } from "../_shared/whatsapp-preparation.ts";
 const corsHeaders = { "Access-Control-Allow-Origin":"https://leorangel22.github.io", "Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type", "Access-Control-Allow-Methods":"POST,OPTIONS" };
 const jsonResponse=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json","Cache-Control":"no-store"}});
 function normalizePhone(value:unknown) { const digits=String(value||"").replace(/\D/g,""); return digits; }
@@ -42,8 +43,10 @@ Deno.serve(async(req:Request)=>{
   const raw=await req.text();if(raw.length>16000)return jsonResponse({ok:false,message:"Mensagem muito grande."},413);
   const payload=JSON.parse(raw);
   if(!payload||typeof payload!=="object"||Array.isArray(payload))return jsonResponse({ok:false},400);
-  const configured=protectedBotConfig().configured;
-  if(payload.dryRun)return jsonResponse({ok:configured,mode:"dry-run",configured:{bot:configured},message:configured?"Transporte do Bot configurado; permissões, limites e entrega ainda exigem validação.":"Transporte protegido do Bot ainda não habilitado. Nenhum envio realizado."},configured?200:409);
+  if(payload.dryRun){
+    const configured=protectedBotConfig().configured;
+    return jsonResponse({ok:configured,mode:"dry-run",configured:{bot:configured},message:configured?"Transporte do Bot configurado; permissões, limites e entrega ainda exigem validação.":"Transporte protegido do Bot ainda não habilitado. Nenhum envio realizado."},configured?200:409);
+  }
   if(!payload.proposalId)return jsonResponse({ok:false,message:"Proposta não informada."},400);
   const {data:proposal,error}=await caller.from("propostas").select("*").eq("id",payload.proposalId).single();
   if(error||!proposal)return jsonResponse({ok:false,message:"Proposta não encontrada ou sem permissão."},404);
@@ -51,10 +54,17 @@ Deno.serve(async(req:Request)=>{
   const message=safeText(payload.message)||buildDefaultMessage(payload,proposal);
   if(!botDestinationIsCanonical(destination))return jsonResponse({ok:false,message:"Revise o WhatsApp completo com DDI e DDD no formato atual. O número não será alterado após a aprovação."},400);
   if(message.length<10||message.length>6000)return jsonResponse({ok:false,message:"Confira o destinatário e a mensagem (10 a 6.000 caracteres)."},400);
+  let preparation;
+  if(payload.prepare === true || payload.preparation){
+    try { preparation=await prepareWhatsApp(caller,proposal,payload,destination,message,payload.title||"Proposta comercial"); }
+    catch(error){return jsonResponse({ok:false,message:String((error as Error).message||error)},409);}
+    if(payload.prepare === true)return jsonResponse({ok:true,mode:"preparation",preparation:publicWhatsAppPreparation(preparation),message:"Preparação consultada. Nenhum envio, grant ou tentativa foi criado."});
+  }
   // The disabled transport must not create claims or consume retry budgets.
+  const configured=protectedBotConfig().configured;
   if(!configured)return jsonResponse({ok:false,deliveryStatus:"paused",message:"Envio protegido pelo Bot ainda não habilitado. Nenhuma mensagem foi tentada."},409);
   let claim;
-  try { claim=await claimSend(caller,proposal,payload,"whatsapp",destination,message,payload.title||"Proposta comercial"); }
+  try { claim=preparation ? await claimPreparedWhatsApp(caller,preparation) : await claimSend(caller,proposal,payload,"whatsapp",destination,message,payload.title||"Proposta comercial"); }
   catch(error){return jsonResponse({ok:false,message:String((error as Error).message||error)},409);}
   if(!claim.claimed){const duplicate=duplicateResult(claim);return jsonResponse(duplicate,duplicate.ok?200:409);}
   const worker=createSendWorker();
@@ -77,7 +87,7 @@ Deno.serve(async(req:Request)=>{
     result={status:"paused" as const,providerId:null,detail:"A proposta mudou após a revisão. Nenhuma mensagem foi tentada."};
   }else{
     let expiresAt;
-    try { expiresAt=botSendExpiry(claim.send.created_at,fresh.public_token_expires_at); }
+    try { expiresAt=preparation?.expiresAt || botSendExpiry(claim.send.created_at,fresh.public_token_expires_at); }
     catch { expiresAt=""; }
     result=await dispatchProtectedBot(destination,message,{id:claim.send.id,contextId:proposal.id,revision:Number(proposal.revision),purpose:"event_proposal",expiresAt,attempt:Number(claim.send.attempts)||1});
   }

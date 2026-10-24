@@ -12,6 +12,8 @@ const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).fil
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }
 async function apply(c,file) {
+  const whatsappPreparation=file.startsWith('supabase/migrations/')&&file.endsWith('_whatsapp_readonly_preparation.sql');
+  if(whatsappPreparation) await apply(c,'checks/whatsapp-preparation-upgrade-setup.sql');
   const cohortReview=file.startsWith('supabase/migrations/')&&file.endsWith('_cohort_preparation_review.sql');
   const deferredSend=file.startsWith('supabase/migrations/')&&file.endsWith('_deferred_send_ledger.sql');
   const websiteAttribution=file.startsWith('supabase/migrations/')&&file.endsWith('_website_attribution_v1.sql');
@@ -25,6 +27,7 @@ async function apply(c,file) {
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(whatsappPreparation) { await apply(c,'checks/whatsapp-preparation-upgrade-assert.sql'); console.log('PASS preparation preserves history, existing claim OID/ACL and bridge configuration'); }
   if(websiteAttribution) { await apply(c,'checks/website-attribution-upgrade-assert.sql'); console.log('PASS website attribution preserves existing function identities and ACLs'); }
   if(futureTariff) { await apply(c,'checks/future-tariff-upgrade-assert.sql'); console.log('PASS tariff applicability upgrade preserves historical values, hashes and existing ACLs'); }
   if(deferredSend) { await apply(c,'checks/deferred-send-upgrade-assert.sql'); console.log('PASS deferred send upgrade preserves history, inactive configuration and existing ACLs'); }
@@ -47,10 +50,12 @@ async function checks(c) {
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
   await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
+  await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
+  await require('../checks/whatsapp-preparation-concurrency.cjs')(c,connect,name,actor);
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
   await require('../checks/public-form-attribution-concurrency.cjs')(c,connect,name);
   await require('../checks/future-tariff-concurrency.cjs')(c,connect,name,actor);
@@ -149,7 +154,8 @@ async function concurrent(c,name) {
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
     const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
     const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth)) await apply(c,`supabase/migrations/${f}`);
+    const whatsappPreparation=migrationFiles.find(f=>f.endsWith('_whatsapp_readonly_preparation.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation)) await apply(c,`supabase/migrations/${f}`);
     const legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
         approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
@@ -169,6 +175,7 @@ async function concurrent(c,name) {
     if(deferred) await apply(c,`supabase/migrations/${deferred}`);
     if(bridgeHealth) await apply(c,`supabase/migrations/${bridgeHealth}`);
     if(watchReadiness) await apply(c,`supabase/migrations/${watchReadiness}`);
+    if(whatsappPreparation) await apply(c,`supabase/migrations/${whatsappPreparation}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);

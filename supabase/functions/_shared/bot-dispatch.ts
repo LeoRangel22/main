@@ -32,6 +32,10 @@ export function protectedBotConfig() {
 async function botDigest(value: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+// Same byte contract for preparation and dispatch. No credentials or network.
+export async function botContentHash(destination: string, body: string, context: BotSendContext) {
+  return botDigest(JSON.stringify([2,botTenant,context.id,context.contextId,context.revision,context.purpose,destination,body,context.expiresAt]));
+}
 export async function botNoticeId(reference: string) {
   const h = await botDigest('events-notice-v2:' + reference);
   return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`;
@@ -68,7 +72,7 @@ export async function dispatchProtectedBot(destination: string, body: string, co
   const expiry=new Date(context?.expiresAt).getTime();
   if(!botUuid(context?.id)||!botUuid(context?.contextId)||!Number.isSafeInteger(context?.revision)||context.revision<1||!Number.isSafeInteger(context.attempt??1)||(context.attempt??1)<1||(context.attempt??1)>100000||!botPurposes.includes(context?.purpose)||!botDestinationIsCanonical(destination)||typeof body!=='string'||!body.trim()||body.length>6000||!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+86400000)
     return deferred('O contexto autorizado mudou ou expirou. Revise antes de tentar novamente.');
-  const contentHash=await botDigest(JSON.stringify([2,botTenant,context.id,context.contextId,context.revision,context.purpose,destination,body,context.expiresAt]));
+  const contentHash=await botContentHash(destination,body,context);
   const request={version:2,action:'events_send',tenant:botTenant,credential:config.secret,sentAt:new Date().toISOString(),id:context.id,attempt:context.attempt||1,contextId:context.contextId,revision:context.revision,purpose:context.purpose,destination,body,contentHash,expiresAt:context.expiresAt};
   try {
     const result=await botPostJson(config.url,request);
