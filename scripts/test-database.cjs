@@ -12,6 +12,8 @@ const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).fil
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }
 async function apply(c,file) {
+  const gerenciaIdentity=file.startsWith('supabase/migrations/')&&file.endsWith('_gerencia_operational_identity.sql');
+  if(gerenciaIdentity) await apply(c,'checks/gerencia-identity-upgrade-setup.sql');
   const whatsappPreparation=file.startsWith('supabase/migrations/')&&file.endsWith('_whatsapp_readonly_preparation.sql');
   if(whatsappPreparation) await apply(c,'checks/whatsapp-preparation-upgrade-setup.sql');
   const cohortReview=file.startsWith('supabase/migrations/')&&file.endsWith('_cohort_preparation_review.sql');
@@ -29,6 +31,7 @@ async function apply(c,file) {
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(gerenciaIdentity){await apply(c,'checks/gerencia-identity-upgrade-assert.sql');console.log('PASS Gerencia install empty, no grants/public RPC/user or business changes');}
   if(whatsappPreparation) { await apply(c,'checks/whatsapp-preparation-upgrade-assert.sql'); console.log('PASS preparation preserves history, existing claim OID/ACL and bridge configuration'); }
   if(websiteAttribution) { await apply(c,'checks/website-attribution-upgrade-assert.sql'); console.log('PASS website attribution preserves existing function identities and ACLs'); }
   if(futureTariff) { await apply(c,'checks/future-tariff-upgrade-assert.sql'); console.log('PASS tariff applicability upgrade preserves historical values, hashes and existing ACLs'); }
@@ -54,6 +57,7 @@ async function checks(c) {
   }
   await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
   await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
+  await apply(c,'checks/gerencia-identity.sql'); console.log('PASS Gerencia self-sign, authority boundaries, verification, authorship and revoke');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
@@ -61,6 +65,8 @@ async function concurrent(c,name) {
   await require('../checks/whatsapp-preparation-concurrency.cjs')(c,connect,name,actor);
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
   await require('../checks/private-operational-signoffs-concurrency.cjs')(c,connect,name,actor);
+  await require('../checks/gerencia-identity-concurrency.cjs')(c,sql,connect,name);
+  await require('../checks/gerencia-identity-rollback-concurrency.cjs')(c,sql,connect,name);
   await require('../checks/public-form-attribution-concurrency.cjs')(c,connect,name);
   await require('../checks/future-tariff-concurrency.cjs')(c,connect,name,actor);
   const claims=JSON.stringify({sub:actor,email:'leorangel@gmail.com',role:'authenticated'});
@@ -146,7 +152,7 @@ async function concurrent(c,name) {
     const after=(await c.query('select id,public_token,revision,snapshot from propostas where id=$1',[preserved.id])).rows[0];
     assert.equal(after.public_token,preserved.public_token); assert.equal(after.snapshot.historyMarker,'preserve'); assert.equal(Number(after.revision),1);
     console.log('PASS upgrade preserves history and links');
-    await checks(c); await concurrent(c,'events_test'); await require('../checks/private-operational-signoffs-rollback.cjs')(c,sql); await require('../checks/private-operational-signoffs-rollback-concurrency.cjs')(c,sql,connect,'events_test'); await c.end(); c=null;
+    await checks(c); await concurrent(c,'events_test'); await require('../checks/private-operational-signoffs-rollback.cjs')(c,sql); await require('../checks/private-operational-signoffs-rollback-concurrency.cjs')(c,sql,connect,'events_test'); await require('../checks/gerencia-identity-rollback.cjs')(c,sql); await c.end(); c=null;
     c=await create('events_fresh_test');
     for(const f of migrationFiles) await apply(c,`supabase/migrations/${f}`);
     await checks(c); console.log('PASS fresh installation');
@@ -160,7 +166,8 @@ async function concurrent(c,name) {
     const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
     const whatsappPreparation=migrationFiles.find(f=>f.endsWith('_whatsapp_readonly_preparation.sql'));
     const privateSignoffs=migrationFiles.find(f=>f.endsWith('_private_operational_signoffs.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs)) await apply(c,`supabase/migrations/${f}`);
+    const gerenciaIdentity=migrationFiles.find(f=>f.endsWith('_gerencia_operational_identity.sql'));
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity)) await apply(c,`supabase/migrations/${f}`);
     const legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
         approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
@@ -182,6 +189,7 @@ async function concurrent(c,name) {
     if(watchReadiness) await apply(c,`supabase/migrations/${watchReadiness}`);
     if(whatsappPreparation) await apply(c,`supabase/migrations/${whatsappPreparation}`);
     if(privateSignoffs) await apply(c,`supabase/migrations/${privateSignoffs}`);
+    if(gerenciaIdentity) await apply(c,`supabase/migrations/${gerenciaIdentity}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
