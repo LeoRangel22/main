@@ -1,0 +1,126 @@
+-- Disposable synthetic fixtures only. No HTTP, real consent or production writes.
+begin;
+do $$
+declare candidate auth.users; manager auth.users; finance auth.users; seller auth.users; outsider auth.users;
+ opp uuid; p public.propostas; h public.event_handoffs; task public.event_handoff_tasks;
+ cfg jsonb; contacts jsonb; evidence jsonb; before_snapshot jsonb; old_hash text; current_hash text;
+ signature_at timestamptz; bad jsonb; blocked boolean; role_name text; function_name text; table_name text;
+ users_count bigint; outbox_count bigint;
+begin
+ for candidate in select * from auth.users loop
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',candidate.id,'email',candidate.email,'role','authenticated')::text,true);
+  if public.is_super_admin() then manager:=candidate;
+  elsif event_private.journey_financial_operator() then finance:=candidate;
+  elsif public.is_team_member() then seller:=candidate;end if;
+ end loop;
+ assert manager.id is not null and finance.id is not null and seller.id is not null;
+ insert into auth.users(email,raw_user_meta_data) values('outsider@example.test','{"role":"master","financeiro":true,"gerencia":true}') returning * into outsider;
+ users_count:=(select count(*) from auth.users);
+ outbox_count:=(select count(*) from public.event_outbox);
+ contacts:='[{"role":"financeiro","email":"finance@example.test","whatsapp":null},{"role":"gerencia","email":null,"whatsapp":"+999000000001"},{"role":"salao","email":null,"whatsapp":null},{"role":"eventos","email":"events@example.test","whatsapp":null}]';
+ assert not (select enabled from event_private.operation_contact_config where id);
+ assert not exists(select 1 from event_private.operation_contacts where email is not null or whatsapp is not null);
+ assert not exists(select 1 from event_private.operation_signoffs);
+ foreach table_name in array array['operation_contact_config','operation_contacts','operation_signoffs'] loop
+  assert (select relrowsecurity from pg_class where oid=('event_private.'||table_name)::regclass);
+  foreach role_name in array array['anon','authenticated','service_role'] loop
+   assert not has_table_privilege(role_name,'event_private.'||table_name,'select,insert,update,delete');
+  end loop;
+ end loop;
+ foreach function_name in array array['get_event_operational_contacts()','configure_event_operational_contacts(integer,jsonb,boolean)','sign_event_operation(uuid,bigint,integer,text,text,boolean)'] loop
+  assert has_function_privilege('authenticated','public.'||function_name,'execute');
+  assert not has_function_privilege('anon','public.'||function_name,'execute');
+  assert not has_function_privilege('service_role','public.'||function_name,'execute');
+ end loop;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',outsider.id,'email',outsider.email,'role','authenticated','user_metadata',outsider.raw_user_meta_data)::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform public.get_event_operational_contacts();exception when others then blocked:=true;end;assert blocked,'Self-editable metadata must not create authority';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager.id,'email',manager.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ cfg:=public.get_event_operational_contacts();assert cfg->>'version'='0';assert jsonb_array_length(cfg->'contacts')=4;
+ foreach bad in array array['{}'::jsonb,'null'::jsonb,'[]'::jsonb,contacts||jsonb_build_array(contacts->0),jsonb_set(contacts,'{0,user_id}',to_jsonb(manager.id)),jsonb_set(contacts,'{1,role}','"financeiro"'),jsonb_set(contacts,'{0,email}','false')] loop
+  blocked:=false;begin perform public.configure_event_operational_contacts(0,bad,false);exception when others then blocked:=true;end;assert blocked,'Malformed or identity-bearing configuration rejected';
+  assert public.get_event_operational_contacts()->>'version'='0','Rejected write is atomic';
+ end loop;
+ cfg:=public.configure_event_operational_contacts(0,contacts,false);assert cfg->>'version'='1' and cfg->>'enabled'='false';
+ blocked:=false;begin perform public.configure_event_operational_contacts(0,contacts,true);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked,'Stale configuration cannot overwrite';
+ reset role;
+ perform set_config('request.jwt.claims','',true);
+ insert into public.oportunidades(cliente_nome,status) values('Operational signoff fixture','confirmado') returning id into opp;
+ insert into public.propostas(oportunidade_id,cliente_nome,status,publication_status,is_current,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,snapshot)
+ values(opp,'Operational signoff fixture','confirmado','ready',true,'2099-12-18','10:00',20,2,1000,120,1120,
+ '{"event":{"date":"2099-12-18","time":"10:00","guests":20,"duration":2},"totals":{"subtotal":1000,"serviceFee":120,"total":1120},"selectedItems":[{"nome":"Fixture","calc":{"total":1000}}],"pagamentoSinal":{"valor":560,"data":"2026-10-17"}}') returning * into p;
+ select * into h from public.event_handoffs where opportunity_id=opp;
+ before_snapshot:=p.snapshot;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',finance.id,'email',finance.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform public.get_event_operational_contacts();exception when insufficient_privilege then blocked:=true;end;assert blocked,'Finance role cannot read private directory';
+ blocked:=false;begin perform public.configure_event_operational_contacts(1,contacts,true);exception when insufficient_privilege then blocked:=true;end;assert blocked;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,repeat('0',64),'financeiro',true);exception when others then blocked:=true;end;assert blocked,'Dormant installation cannot sign';
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager.id,'email',manager.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ cfg:=public.configure_event_operational_contacts(1,contacts,true);assert cfg->>'version'='2' and cfg->>'enabled'='true';
+ blocked:=false;begin perform public.configure_event_operational_contacts(2,contacts,false);exception when others then blocked:=true;end;assert blocked,'Mandatory agreement cannot be disabled by routine UI';
+ foreach role_name in array array['gerencia','salao','eventos'] loop
+  blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,repeat('0',64),role_name,true);exception when insufficient_privilege then blocked:=true;end;assert blocked,'Manager cannot impersonate a configured contact';
+ end loop;
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',seller.id,'email',seller.email,'role','authenticated','user_metadata',jsonb_build_object('financeiro',true))::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,repeat('0',64),'financeiro',true);exception when insufficient_privilege then blocked:=true;end;assert blocked;
+ reset role;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',finance.id,'email',finance.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ evidence:=public.event_operation_readiness(p.id,p.revision);old_hash:=evidence->'operational_signoffs'->>'review_fingerprint';
+ assert evidence->'operational_signoffs'->'roles'->0->>'role'='financeiro';
+ assert evidence->'operational_signoffs'->'roles'->0->>'can_sign'='true';
+ assert evidence->'operational_signoffs'->'roles'->1->>'identity_pending'='true';
+ assert evidence->>'ready'='false';
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,old_hash,'financeiro',false);exception when others then blocked:=true;end;assert blocked;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision+1,h.version,old_hash,'financeiro',true);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version+1,old_hash,'financeiro',true);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,repeat('0',64),'financeiro',true);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked;
+ evidence:=public.sign_event_operation(p.id,p.revision,h.version,old_hash,'financeiro',true);
+ assert evidence->'operational_signoffs'->'roles'->0->>'signed'='true';assert evidence->>'ready'='false','Finance alone cannot release';
+ evidence:=public.sign_event_operation(p.id,p.revision,h.version,old_hash,'financeiro',true);
+ reset role;
+ assert (select count(*) from event_private.operation_signoffs where proposal_id=p.id)=1,'Duplicate request is idempotent';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager.id,'email',manager.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,old_hash,'financeiro',true);
+ exception when sqlstate 'PT409' then blocked:=true;end;
+ assert blocked,'Another authorized actor cannot receive a false own-signature success for the existing agreement';
+ set local role none;
+ assert (select signed_by from event_private.operation_signoffs where proposal_id=p.id)=finance.id,'Actor is the authenticated signer';
+ select signed_at into signature_at from event_private.operation_signoffs where proposal_id=p.id;
+ assert (select snapshot from public.propostas where id=p.id)=before_snapshot,'Signing cannot validate payment or change agreement';
+ assert not exists(select 1 from public.event_handoff_tasks where opportunity_id=opp and (acknowledged_at is not null or completed_at is not null));
+ assert users_count=(select count(*) from auth.users),'No account provisioned';
+ assert outbox_count=(select count(*) from public.event_outbox),'No message queued';
+ perform set_config('request.jwt.claims','',true);
+ update public.event_handoff_tasks set updated_at=clock_timestamp() where opportunity_id=opp;
+ assert event_private.operation_review_fingerprint(p)=old_hash,'Timestamp-only updates preserve the reviewed content';
+ update public.event_handoff_tasks set status='done',acknowledged_at=now(),acknowledged_by=manager.id,completed_at=now(),completed_by=manager.id where opportunity_id=opp and task_key='gerencia_go_no_go';
+ assert event_private.operation_review_fingerprint(p)=old_hash,'Final release stamps are not a circular signing dependency';
+ update public.event_handoff_tasks set notes='Changed synthetic instructions' where opportunity_id=opp and task_key='bar_bebidas';
+ current_hash:=event_private.operation_review_fingerprint(p);assert current_hash<>old_hash;
+ assert exists(select 1 from public.event_handoff_tasks where opportunity_id=opp and task_key='gerencia_go_no_go' and status='pending' and acknowledged_at is null and completed_at is null);
+ assert (select signed_at from event_private.operation_signoffs where proposal_id=p.id)=signature_at,'Historical signature remains intact';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',finance.id,'email',finance.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ evidence:=public.event_operation_readiness(p.id,p.revision);assert evidence->'operational_signoffs'->'roles'->0->>'signed'='false';
+ blocked:=false;begin perform public.sign_event_operation(p.id,p.revision,h.version,old_hash,'financeiro',true);exception when sqlstate 'PT409' then blocked:=true;end;assert blocked;
+ evidence:=public.sign_event_operation(p.id,p.revision,h.version,current_hash,'financeiro',true);
+ reset role;
+ assert (select count(*) from event_private.operation_signoffs where proposal_id=p.id)=2;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',manager.id,'email',manager.email,'role','authenticated')::text,true);
+ set local role authenticated;
+ cfg:=public.configure_event_operational_contacts(2,contacts,true);assert cfg->>'version'='2','No-op save preserves evidence';
+ contacts:=jsonb_set(contacts,'{0,email}','"updated-finance@example.test"');
+ cfg:=public.configure_event_operational_contacts(2,contacts,true);
+ evidence:=public.event_operation_readiness(p.id,p.revision);assert evidence->'operational_signoffs'->'roles'->0->>'signed'='false','Configuration revision invalidates prior signoff';
+ reset role;
+end $$;
+rollback;
