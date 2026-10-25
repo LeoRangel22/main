@@ -1,6 +1,6 @@
 {
-  "commit": "336a61e73f7f986f710fdc8cbeca4269847029f7",
-  "schemaHead": "20261024013801_future_tariff_application.sql",
+  "commit": "4c27386315cc86fe80c01395cd68a5deda4492fe",
+  "schemaHead": "20261024204435_whatsapp_readonly_preparation.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "aditivos.html": "54c8cdd4f27e1d65c50c025ae181ad4ec78a9d7fd334c6fef5b39018f74d92ca",
