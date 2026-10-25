@@ -146,7 +146,7 @@ async function concurrent(c,name) {
     const after=(await c.query('select id,public_token,revision,snapshot from propostas where id=$1',[preserved.id])).rows[0];
     assert.equal(after.public_token,preserved.public_token); assert.equal(after.snapshot.historyMarker,'preserve'); assert.equal(Number(after.revision),1);
     console.log('PASS upgrade preserves history and links');
-    await checks(c); await concurrent(c,'events_test'); await require('../checks/private-operational-signoffs-rollback.cjs')(c,sql); await c.end(); c=null;
+    await checks(c); await concurrent(c,'events_test'); await require('../checks/private-operational-signoffs-rollback.cjs')(c,sql); await require('../checks/private-operational-signoffs-rollback-concurrency.cjs')(c,sql,connect,'events_test'); await c.end(); c=null;
     c=await create('events_fresh_test');
     for(const f of migrationFiles) await apply(c,`supabase/migrations/${f}`);
     await checks(c); console.log('PASS fresh installation');

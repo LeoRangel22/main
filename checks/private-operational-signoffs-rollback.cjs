@@ -15,7 +15,9 @@ module.exports=async function verifySignoffRollback(c,sql){
  console.log('PASS activated policy refusal is atomic and preserves all functions, permissions and rows');
  await c.query(rollback);
  const after=(await c.query(functions)).rows,withdrawn=['get_event_operational_contacts','configure_event_operational_contacts','sign_event_operation'];
- assert.equal(after.length,before.length);
+ assert.equal(after.length,before.length+1,'Only the private retirement guard is added');
+ const guard=after.filter(x=>!before.some(p=>p.oid===x.oid));assert.equal(guard.length,1);assert.equal(guard[0].proname,'operation_signoffs_retired_guard');
+ for(const role of ['anon','authenticated','service_role'])assert.equal((await c.query('select has_function_privilege($1,$2::oid,\'execute\') ok',[role,guard[0].oid])).rows[0].ok,false);
  for(const prev of before){const next=after.find(x=>x.oid===prev.oid);assert.ok(next,'Preserve every function OID');assert.equal(next.args,prev.args);if(prev.proname!=='operation_readiness')assert.equal(next.definition,prev.definition);if(!withdrawn.includes(prev.proname))assert.equal(next.acl,prev.acl);}
  assert.equal((await c.query('select bool_and(event_private.operation_readiness(p)=event_private.operation_readiness_before_signoffs(p)) ok from public.propostas p')).rows[0].ok,true);
  for(const name of withdrawn)for(const role of ['anon','authenticated','service_role'])assert.equal((await c.query('select has_function_privilege($1,p.oid,\'execute\') ok from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=\'public\' and p.proname=$2',[role,name])).rows[0].ok,false);
