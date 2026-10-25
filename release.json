@@ -1,6 +1,6 @@
 {
-  "commit": "4c27386315cc86fe80c01395cd68a5deda4492fe",
-  "schemaHead": "20261024204435_whatsapp_readonly_preparation.sql",
+  "commit": "8e8ebfba89597dd95db8184c0db2b85cdfa099ae",
+  "schemaHead": "20261025154808_gerencia_operational_identity.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "aditivos.html": "54c8cdd4f27e1d65c50c025ae181ad4ec78a9d7fd334c6fef5b39018f74d92ca",
