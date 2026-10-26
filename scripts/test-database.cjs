@@ -12,6 +12,8 @@ const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).fil
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }
 async function apply(c,file) {
+  const whatsappPilot=file.startsWith('supabase/migrations/')&&file.endsWith('_single_whatsapp_pilot.sql');
+  if(whatsappPilot) await apply(c,'checks/whatsapp-pilot-upgrade-setup.sql');
   const gerenciaIdentity=file.startsWith('supabase/migrations/')&&file.endsWith('_gerencia_operational_identity.sql');
   if(gerenciaIdentity) await apply(c,'checks/gerencia-identity-upgrade-setup.sql');
   const whatsappPreparation=file.startsWith('supabase/migrations/')&&file.endsWith('_whatsapp_readonly_preparation.sql');
@@ -31,6 +33,7 @@ async function apply(c,file) {
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(whatsappPilot){await apply(c,'checks/whatsapp-pilot-upgrade-assert.sql');console.log('PASS isolated WhatsApp pilot installs empty, RLS and scoped RPC permissions only');}
   if(gerenciaIdentity){await apply(c,'checks/gerencia-identity-upgrade-assert.sql');console.log('PASS Gerencia install empty, no grants/public RPC/user or business changes');}
   if(whatsappPreparation) { await apply(c,'checks/whatsapp-preparation-upgrade-assert.sql'); console.log('PASS preparation preserves history, existing claim OID/ACL and bridge configuration'); }
   if(websiteAttribution) { await apply(c,'checks/website-attribution-upgrade-assert.sql'); console.log('PASS website attribution preserves existing function identities and ACLs'); }
@@ -58,10 +61,12 @@ async function checks(c) {
   await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
   await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
   await apply(c,'checks/gerencia-identity.sql'); console.log('PASS Gerencia self-sign, authority boundaries, verification, authorship and revoke');
+  await apply(c,'checks/whatsapp-single-pilot.sql'); console.log('PASS pilot owner, anonymous/other-account denial, once-only claim, uncertainty and immutable history');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
+  await require('../checks/whatsapp-pilot-concurrency.cjs')(c,sql,connect,name,actor);
   await require('../checks/whatsapp-preparation-concurrency.cjs')(c,connect,name,actor);
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
   await require('../checks/private-operational-signoffs-concurrency.cjs')(c,connect,name,actor);
