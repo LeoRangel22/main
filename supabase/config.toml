@@ -31,3 +31,7 @@ verify_jwt = false
 # Dormant mailbox pull worker. Private job key, not a public inbox or OAuth endpoint.
 [functions.event-mailbox-sync]
 verify_jwt = false
+
+# Dormant, owner-bound one-message pilot. No cron, proposals, email or generic sender.
+[functions.event-whatsapp-pilot]
+verify_jwt = true

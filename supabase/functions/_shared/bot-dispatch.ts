@@ -20,13 +20,32 @@ export function botDestinationIsCanonical(value: unknown) {
   else if(value.length===10)normalized=value.slice(0,2)+'9'+value.slice(2);
   return value===normalized;
 }
-export function protectedBotConfig() {
+export function botPilotMessage(id: string) {
+  return `TESTE CONTROLADO — Eventos via Bot.\nLeo, responda TESTE RECEBIDO a esta mensagem.\nEste teste não é proposta comercial e não gera reserva, aprovação ou cobrança.\nReferência de teste: ${id}`;
+}
+export function protectedBotConfig(context?: BotSendContext, destination?: string, body?: string) {
   const url = Deno.env.get('EVENT_BOT_SEND_URL') || '';
   const secret = Deno.env.get('EVENT_BOT_SEND_SECRET') || '';
   try {
     const u = new URL(url);
     if (u.protocol !== 'https:' || u.hostname !== 'script.google.com' || !/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u.pathname) || u.username || u.password || u.port || u.search || u.hash) throw Error('url');
-    return { configured: Deno.env.get('EVENT_BOT_SEND_ENABLED') === 'true' && secret.length >= 32, url, secret };
+    const mode=Deno.env.get('EVENT_BOT_SEND_MODE')||'live';
+    let scoped=mode==='live';
+    if(mode==='pilot') {
+      const id=Deno.env.get('EVENT_BOT_PILOT_ID')||'',phone=Deno.env.get('EVENT_BOT_PILOT_PHONE')||'';
+      const expiry=new Date(Deno.env.get('EVENT_BOT_PILOT_EXPIRES_AT')||'').getTime();
+      scoped=!!context&&botUuid(id)&&context.id===id&&context.contextId===id&&context.revision===1&&
+        context.purpose==='event_diagnostic'&&context.attempt===1&&destination===phone&&botDestinationIsCanonical(phone)&&
+        Number.isFinite(expiry)&&expiry>Date.now()&&expiry<=Date.now()+900000&&
+        context.expiresAt===new Date(expiry).toISOString()&&body===botPilotMessage(id)&&
+        url==='https://script.google.com/macros/s/AKfycbzNGnL3nMHDHX_xLfg7g-XpvAheJsoiyflp7yMW8vSjp9z5iOAjqPZ0TX9w_XAjkDzE/exec';
+    }
+    // The commercial flag stays OFF throughout a pilot. Older Edge bundles only
+    // understand that flag and therefore remain paused without a bulk redeploy.
+    const enabled=mode==='pilot'
+      ? Deno.env.get('EVENT_BOT_PILOT_ENABLED')==='true' && Deno.env.get('EVENT_BOT_SEND_ENABLED')!=='true'
+      : Deno.env.get('EVENT_BOT_SEND_ENABLED')==='true';
+    return { configured: enabled && secret.length >= 32 && scoped, url, secret };
   } catch { return { configured:false, url:'', secret:'' }; }
 }
 async function botDigest(value: string) {
@@ -67,7 +86,7 @@ export async function botPostJson(url: string, payload: unknown, timeoutMs=25000
 }
 export async function dispatchProtectedBot(destination: string, body: string, context: BotSendContext) {
   const deferred = (detail: string) => ({status:'paused' as const,providerId:null,attempted:false,detail});
-  const config=protectedBotConfig();
+  const config=protectedBotConfig(context,destination,body);
   if(!config.configured)return deferred('Envio pelo Bot ainda não habilitado. Nenhuma mensagem foi tentada.');
   const expiry=new Date(context?.expiresAt).getTime();
   if(!botUuid(context?.id)||!botUuid(context?.contextId)||!Number.isSafeInteger(context?.revision)||context.revision<1||!Number.isSafeInteger(context.attempt??1)||(context.attempt??1)<1||(context.attempt??1)>100000||!botPurposes.includes(context?.purpose)||!botDestinationIsCanonical(destination)||typeof body!=='string'||!body.trim()||body.length>6000||!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+86400000)
