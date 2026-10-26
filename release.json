@@ -1,8 +1,10 @@
 {
-  "commit": "8e8ebfba89597dd95db8184c0db2b85cdfa099ae",
-  "schemaHead": "20261025154808_gerencia_operational_identity.sql",
+  "commit": "54b358641935f4779f3ded71b282442eb0d06580",
+  "schemaHead": "20261026182628_single_whatsapp_pilot.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
+    "piloto-whatsapp.html": "574a944dbf91159bdc48269bb50abc1224d606cec3563f154e6449fa66234c37",
+    "piloto-whatsapp.js": "e067f3881388e092ce3cf03cc6b2dad0163c9eb3fac565dbb033c51a10a429c4",
     "aditivos.html": "54c8cdd4f27e1d65c50c025ae181ad4ec78a9d7fd334c6fef5b39018f74d92ca",
     "aditivos.js": "bd917e4792c3b1d8d9afff977e1454ed41f3570811945b8fccab80f065761775",
     "amendment-ui.js": "9a74eae2250de13a35378d2aa4beceb1fb25f81c0023db28086674f3ee6e30f4",

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Teste privado de WhatsApp | Eventos</title>
+<link rel="stylesheet" href="./approval.css?v=20261026-pilot&amp;h=5f8ceb8bed776d84"><style>main{max-width:48rem}input{box-sizing:border-box;max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}label{display:block;margin:1rem 0}.pilot-actions{display:flex;gap:.75rem;flex-wrap:wrap}</style>
+<script defer src="./vendor/supabase.js"></script><script defer src="./approval-config.js"></script><script defer src="./piloto-whatsapp.js?v=20261026-pilot&amp;h=e067f3881388e092"></script></head>
+<body><header><a href="./index.html">Eventos</a><h1>Teste privado de WhatsApp</h1></header><main>
+<p id="pilotStatus" role="status" aria-live="polite">Verificando acesso.</p>
+<section id="pilotLogin" hidden><p>Use sua conta existente de responsável. Esta página não cria usuários nem envia acesso por e-mail.</p><a href="./index.html">Entrar no sistema de Eventos</a></section>
+<section id="pilotWorkspace" hidden><p>Uma mensagem de teste, somente para o destinatário autorizado. Nenhuma proposta, reserva, aprovação comercial ou e-mail será criado.</p>
+<label for="pilotId">Referência do piloto autorizado</label><input id="pilotId" type="text" autocomplete="off" spellcheck="false" maxlength="36" pattern="[a-fA-F0-9-]{36}">
+<div class="pilot-actions"><button id="previewPilot" type="button">Conferir sem enviar</button></div>
+<article id="pilotReview" hidden><h2>Revise o único envio</h2><p id="pilotRecipient"></p><p id="pilotExpiry"></p><pre id="pilotBody"></pre>
+<p>O teste confere apenas envio pela ponte do Bot. Aceitação pelo provedor não confirma entrega, leitura, resposta nem a ponte de retorno ao Eventos.</p>
+<label><input id="pilotConfirm" type="checkbox"> Reconheço meu número e confirmo esta única mensagem de teste.</label>
+<button id="sendPilot" type="button" disabled>Enviar TESTE uma vez</button></article>
+<p id="pilotResult" role="status" aria-live="polite"></p></section></main></body></html>
