@@ -1,0 +1,53 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
+const file=path.join(__dirname,'../supabase/functions/_shared/diagnostic-receipt-client.ts'),source=fs.readFileSync(file,'utf8');
+const code=esbuild.buildSync({entryPoints:[file],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
+const m={exports:{}};new Function('module','exports',code)(m,m.exports);
+const {executeDiagnosticReceiptRead:run}=m.exports;
+const id='11111111-1111-4111-8111-111111111111',secret='SYNTHETIC_PRIVATE_CREDENTIAL_'.repeat(2);
+const fixed='https://script.google.com/macros/s/AKfycbzNGnL3nMHDHX_xLfg7g-XpvAheJsoiyflp7yMW8vSjp9z5iOAjqPZ0TX9w_XAjkDzE/exec';
+function fixture(){
+ const t=Date.now(),calls={owner:0,post:0,commit:0,reader:0},seen={};
+ const pilot={id,status:'accepted',attempts:1,network_attempted:true,provider_id:'SYNTHETIC_ORIGINAL',content_hash:'a'.repeat(64),claimed_at:new Date(t-120000).toISOString(),destination:'SYNTHETIC_PRIVATE_PHONE',body:'SYNTHETIC_PRIVATE_BODY'};
+ const event={key:'SYNTHETIC_EVENT',channel:'whatsapp',purpose:'event_diagnostic',kind:'inbound',send_id:id,context_id:id,revision:1,message_id:'SYNTHETIC_REPLY',reply_to_id:pilot.provider_id,occurred_at:new Date(t-60000).toISOString(),captured_at:new Date(t-59000).toISOString(),destination_match:true,expected_reply_match:true};
+ const page={ok:true,version:2,account:'bot:embaixada_urca',scope:id,content_hash:pilot.content_hash,events:[event]};
+ const receipt={pilotId:id,sendStatus:'accepted',attempts:1,deliveredAt:null,readAt:null,replyAt:event.occurred_at,deliveryConfirmed:false,replyConfirmed:true,replyImpliesReceipt:true};
+ const env={EVENT_BOT_DIAGNOSTIC_READ_ENABLED:'true',EVENT_BOT_DIAGNOSTIC_PILOT_ID:id,EVENT_BOT_DIAGNOSTIC_READ_STARTED_AT:new Date(t-1000).toISOString(),EVENT_BOT_DIAGNOSTIC_READ_EXPIRES_AT:new Date(t+60000).toISOString(),EVENT_BOT_SEND_ENABLED:'false',EVENT_BOT_PILOT_ENABLED:'false',EVENT_BOT_SEND_URL:fixed,EVENT_BOT_SEND_SECRET:secret};
+ const d={env:k=>env[k],now:()=>t,
+  caller:{rpc:async(name)=>{assert.equal(name,'get_event_whatsapp_pilot_receipt');if(calls.owner<2)calls.owner++;else calls.reader++;const {destination,body,...metadata}=pilot;return {data:{...receipt,context:metadata}};}},
+  worker:{rpc:async(name,args)=>{assert.equal(name,'reconcile_event_whatsapp_pilot');calls.commit++;seen.commit=args;return {data:{pilotId:id,inserted:1,sendStatus:'accepted',attempts:1}};}},
+  post:async(url,payload,timeout,max)=>{calls.post++;Object.assign(seen,{url,payload,timeout,max});return structuredClone(page);}};
+ return {t,calls,seen,pilot,event,page,receipt,env,d};
+}
+const request={action:'reconcileReceipt',pilotId:id};
+test('accepted metadata-only authenticated request persists and returns sanitized receipt',async()=>{const f=fixture(),r=await run(request,f.d);assert.equal(r.status,200);assert.equal(r.body.willSend,false);assert.deepEqual(f.calls,{owner:2,post:1,commit:1,reader:1});assert.equal(f.seen.url,fixed);assert.equal(f.seen.payload.credential,secret);assert.equal(f.seen.payload.contentHash,f.pilot.content_hash);assert.deepEqual(Object.keys(f.seen.payload).sort(),['action','contentHash','credential','originalProviderId','scope','sentAt','tenant','version'].sort());assert.ok(f.seen.timeout<=15000&&f.seen.max===262144);for(const raw of [secret,f.pilot.destination,f.pilot.body])assert.ok(!JSON.stringify(r).includes(raw));assert.ok(!JSON.stringify(f.seen.commit).includes('SYNTHETIC_PRIVATE'));assert.equal(r.body.receipt.readAt,null);assert.equal(r.body.receipt.deliveryConfirmed,false);});
+for(const extra of [{body:'PRIVATE'},{destination:'PRIVATE'},{endpoint:fixed},{credential:secret},{receipt:{destination_match:true}},{dryRun:true}])test('browser cannot inject '+Object.keys(extra)[0],async()=>{const f=fixture(),r=await run({...request,...extra},f.d);assert.equal(r.status,400);assert.equal(f.calls.post+f.calls.commit,0);});
+for(const patch of [
+ {EVENT_BOT_DIAGNOSTIC_READ_ENABLED:'false'}, {EVENT_BOT_DIAGNOSTIC_PILOT_ID:'22222222-2222-4222-8222-222222222222'},
+ {EVENT_BOT_SEND_ENABLED:'true'},{EVENT_BOT_PILOT_ENABLED:'true'},{EVENT_BOT_SEND_ENABLED:undefined},
+ {EVENT_BOT_SEND_URL:'https://example.invalid/exec'},{EVENT_BOT_SEND_URL:fixed+'?redirect=unsafe'},{EVENT_BOT_SEND_SECRET:'short'},
+ {EVENT_BOT_DIAGNOSTIC_READ_EXPIRES_AT:'2000-01-01T00:00:00.000Z'}, {EVENT_BOT_DIAGNOSTIC_READ_STARTED_AT:'2200-01-01T00:00:00.000Z'},
+ {EVENT_BOT_DIAGNOSTIC_READ_STARTED_AT:'2026-02-31T00:00:00.000Z'}
+])test('closed or incompatible configuration '+Object.keys(patch).join(','),async()=>{const f=fixture();Object.assign(f.env,patch);const r=await run(request,f.d);assert.equal(r.status,409);assert.deepEqual(f.calls,{owner:0,post:0,commit:0,reader:0});});
+test('window never exceeds 15 minutes from configured start',async()=>{const f=fixture();f.env.EVENT_BOT_DIAGNOSTIC_READ_EXPIRES_AT=new Date(f.t+900000).toISOString();assert.equal((await run(request,f.d)).status,409);assert.equal(f.calls.post,0);});
+test('foreign owner never fetches or writes',async()=>{const f=fixture();f.d.caller.rpc=async()=>({error:{message:secret}});const r=await run(request,f.d);assert.equal(r.status,403);assert.equal(f.calls.post+f.calls.commit,0);assert.ok(!JSON.stringify(r).includes(secret));});
+test('unconfirmed send is not a receipt source',async()=>{const f=fixture();f.pilot.status='uncertain';assert.equal((await run(request,f.d)).status,503);assert.equal(f.calls.post+f.calls.commit,0);});
+test('authentication/source failure never commits or echoes raw error',async()=>{const f=fixture();f.d.post=async()=>{throw Error(secret);};const r=await run(request,f.d);assert.equal(r.body.writeMayHaveOccurred,false);assert.equal(f.calls.commit,0);assert.ok(!JSON.stringify(r).includes(secret));});
+for(const patch of [{version:1},{account:'other'},{content_hash:'b'.repeat(64)},{body:'PRIVATE'}])test('invalid authenticated envelope '+Object.keys(patch)[0],async()=>{const f=fixture();Object.assign(f.page,patch);assert.equal((await run(request,f.d)).status,503);assert.equal(f.calls.commit,0);});
+for(const patch of [{destination_match:'true'},{expected_reply_match:false},{reply_to_id:'OTHER'},{body:'PRIVATE'},{purpose:'event_proposal'}])test('invalid correlation '+Object.keys(patch)[0],async()=>{const f=fixture();Object.assign(f.page.events[0],patch);assert.equal((await run(request,f.d)).status,503);assert.equal(f.calls.commit,0);});
+test('window close during request discards page without persistence',async()=>{const f=fixture();const post=f.d.post;f.d.post=async(...args)=>{const page=await post(...args);f.env.EVENT_BOT_DIAGNOSTIC_READ_ENABLED='false';return page;};assert.equal((await run(request,f.d)).status,503);assert.equal(f.calls.commit,0);});
+test('concurrent immutable context change blocks service write',async()=>{const f=fixture();const post=f.d.post;f.d.post=async(...args)=>{const page=await post(...args);f.pilot.content_hash='b'.repeat(64);return page;};const r=await run(request,f.d);assert.equal(r.status,503);assert.equal(f.calls.commit,0);});
+test('uncertain commit has no automatic retry',async()=>{const f=fixture();f.d.worker.rpc=async()=>{f.calls.commit++;throw Error(secret);};const r=await run(request,f.d);assert.equal(f.calls.post,1);assert.equal(f.calls.commit,1);assert.equal(r.body.writeMayHaveOccurred,true);assert.ok(!JSON.stringify(r).includes(secret));});
+test('post-commit read failure preserves confirmed persistence without retry',async()=>{const f=fixture(),rpc=f.d.caller.rpc;f.d.caller.rpc=async(name,...args)=>f.calls.commit>0?{error:{message:secret}}:rpc(name,...args);const r=await run(request,f.d);assert.equal(r.body.persistenceConfirmed,true);assert.equal(f.calls.commit,1);assert.equal(f.calls.post,1);assert.ok(!JSON.stringify(r).includes(secret));});
+test('unexpected reader fields never leak',async()=>{const f=fixture();f.receipt.body=secret;const r=await run(request,f.d);assert.equal(r.status,503);assert.ok(!JSON.stringify(r).includes(secret));});
+test('idempotent duplicate is persisted by the same RPC, with no send',async()=>{const f=fixture();f.d.worker.rpc=async(name)=>{assert.equal(name,'reconcile_event_whatsapp_pilot');return {data:{pilotId:id,inserted:0,sendStatus:'accepted',attempts:1}};};const r=await run(request,f.d);assert.equal(r.status,200);assert.equal(r.body.inserted,0);assert.equal(r.body.willSend,false);});
+test('consumer has no send/claim/flag mutation calls',()=>assert.doesNotMatch(source,/claim_event_whatsapp|dispatchProtectedBot|events_send|setProperty|Deno\.env\.set/));
+
+// Exercise actual Edge authorization/routing, with the existing external SDK
+// mocked at its boundary; no network or credential acquisition is performed.
+const edgeSource=fs.readFileSync(path.join(__dirname,'../supabase/functions/event-whatsapp-pilot/index.ts'),'utf8');
+const edgeCode=esbuild.transformSync(edgeSource.replace(/^import[^\n]*\n/gm,''),{loader:'ts',format:'cjs'}).code;
+function edge(auth=true,master=true){let handler;const hits={read:0,legacy:0};const env={SUPABASE_URL:'https://synthetic.invalid',SUPABASE_ANON_KEY:'SYNTHETIC_ANON',SUPABASE_SERVICE_ROLE_KEY:'SYNTHETIC_SERVICE'};const caller={auth:{getUser:async()=>auth?{data:{user:{id:'SYNTHETIC_OWNER'}}}:{error:true}},rpc:async()=>({data:master})};new Function('Deno','createClient','executeWhatsAppPilot','executeDiagnosticReceiptRead',edgeCode)({env:{get:k=>env[k]},serve:h=>handler=h},()=>caller,async()=>{hits.legacy++;return {status:400,body:{ok:false}};},async()=>{hits.read++;return {status:200,body:{ok:true,willSend:false}};});return {handler,hits};}
+test('Edge refuses anonymous before consumer',async()=>{const e=edge(false);assert.equal((await e.handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify(request)}))).status,401);assert.equal(e.hits.read+e.hits.legacy,0);});
+test('Edge refuses other role before consumer',async()=>{const e=edge(true,false);assert.equal((await e.handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify(request)}))).status,403);assert.equal(e.hits.read+e.hits.legacy,0);});
+test('Edge authenticated read does not enter legacy send branch',async()=>{const e=edge();assert.equal((await e.handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify(request)}))).status,200);assert.deepEqual(e.hits,{read:1,legacy:0});});
+test('Edge preserves legacy input routing',async()=>{const e=edge();await e.handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify({pilotId:id,dryRun:true})}));assert.deepEqual(e.hits,{read:0,legacy:1});});
