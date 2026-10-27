@@ -31,19 +31,23 @@ begin
  end if;
  for v in select value from jsonb_array_elements(receipt_events) loop
   if jsonb_typeof(v) is distinct from 'object'
-   or (v-array['key','kind','message_id','reply_to_id','destination','body','signal','occurred_at','captured_at'])<>'{}'::jsonb
+   or (v-array['key','kind','message_id','reply_to_id','send_id','context_id','revision','content_hash','destination_match','expected_reply_match','signal','occurred_at','captured_at'])<>'{}'::jsonb
    or coalesce(v->>'kind','') not in ('status','inbound')
    or length(coalesce(v->>'key','')) not between 1 and 500 or coalesce(v->>'key','') !~ '^[A-Za-z0-9_.:-]+$'
    or length(coalesce(v->>'message_id','')) not between 1 and 500 or coalesce(v->>'message_id','') !~ '^[A-Za-z0-9_.:-]+$'
-   or v->>'destination' is distinct from p.destination
+   or v->>'send_id' is distinct from p.id::text
+   or v->>'context_id' is distinct from p.id::text
+   or v->'revision' is distinct from '1'::jsonb
+   or v->>'content_hash' is distinct from p.content_hash
+   or v->'destination_match' is distinct from 'true'::jsonb
    or nullif(v->>'occurred_at','') is null or not isfinite((v->>'occurred_at')::timestamptz)
    or nullif(v->>'captured_at','') is null or not isfinite((v->>'captured_at')::timestamptz)
    or (v->>'occurred_at')::timestamptz<p.claimed_at-interval '5 minutes'
    or (v->>'occurred_at')::timestamptz>now()+interval '5 minutes'
    or (v->>'captured_at')::timestamptz>now()+interval '5 minutes'
    or (v->>'captured_at')::timestamptz<(v->>'occurred_at')::timestamptz-interval '5 minutes'
-   or (v->>'kind'='status' and (v->>'message_id' is distinct from p.provider_id or coalesce(v->>'signal','') not in ('accepted','delivered','read') or v->>'body' is not null or v->>'reply_to_id' is not null))
-   or (v->>'kind'='inbound' and (v->>'reply_to_id' is distinct from p.provider_id or v->>'body' is distinct from 'TESTE RECEBIDO' or v->>'signal' is not null)) then
+   or (v->>'kind'='status' and (v->>'message_id' is distinct from p.provider_id or coalesce(v->>'signal','') not in ('accepted','delivered','read') or v->>'expected_reply_match' is not null or v->>'reply_to_id' is not null))
+   or (v->>'kind'='inbound' and (v->>'reply_to_id' is distinct from p.provider_id or v->'expected_reply_match' is distinct from 'true'::jsonb or v->>'signal' is not null)) then
    raise exception using errcode='22023',message='Invalid diagnostic receipt correlation';
   end if;
   select * into previous from event_private.whatsapp_pilot_receipts where pilot_id=p.id and event_key=v->>'key';

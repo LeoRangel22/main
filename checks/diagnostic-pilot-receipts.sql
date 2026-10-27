@@ -16,11 +16,22 @@ begin
  assert has_function_privilege('service_role','public.reconcile_event_whatsapp_pilot(uuid,jsonb)','execute');
  assert not has_table_privilege('service_role','event_private.whatsapp_pilot_receipts','SELECT,INSERT,UPDATE,DELETE');
  assert (select relrowsecurity from pg_class where oid='event_private.whatsapp_pilot_receipts'::regclass);
- v:=jsonb_build_object('key','DIAGNOSTIC_TEST_EVENT','kind','status','message_id','DIAGNOSTIC_TEST_PROVIDER','reply_to_id',null,'destination','5511999999999','body',null,'signal','read','occurred_at',now()-interval '10 minutes','captured_at',now()-interval '9 minutes');
+ v:=jsonb_build_object('key','DIAGNOSTIC_TEST_EVENT','kind','status','message_id','DIAGNOSTIC_TEST_PROVIDER','reply_to_id',null,'send_id',target_id,'context_id',target_id,'revision',1,'content_hash',repeat('a',64),'destination_match',true,'expected_reply_match',null,'signal','read','occurred_at',now()-interval '10 minutes','captured_at',now()-interval '9 minutes');
  set local role service_role;
  r:=public.reconcile_event_whatsapp_pilot(target_id,jsonb_build_array(v));assert r->>'inserted'='1';
  r:=public.reconcile_event_whatsapp_pilot(target_id,jsonb_build_array(v));assert r->>'inserted'='0';
  reset role;
+ -- Metadata mismatches and raw personal fields must fail before insertion.
+ for bad in select value from jsonb_array_elements(jsonb_build_array(
+  v||jsonb_build_object('key','BAD_HASH','content_hash',repeat('b',64)),
+  v||jsonb_build_object('key','BAD_SCOPE','context_id',gen_random_uuid()),
+  v||jsonb_build_object('key','BAD_REVISION','revision','1'),
+  v||jsonb_build_object('key','BAD_DESTINATION','destination_match','true'),
+  v||jsonb_build_object('key','RAW_BODY','body','SYNTHETIC ONLY'),
+  v||jsonb_build_object('key','RAW_PHONE','destination','5511999999999')
+ )) loop
+  blocked:=false;begin perform public.reconcile_event_whatsapp_pilot(target_id,jsonb_build_array(bad));exception when sqlstate '22023' then blocked:=true;end;assert blocked;
+ end loop;
  select count(*) into before_count from event_private.whatsapp_pilot_receipts where pilot_id=target_id;
  bad:=v||jsonb_build_object('key','MALFORMED_TIMESTAMP','occurred_at','DO_NOT_ECHO_SYNTHETIC_PRIVATE_DETAIL');
  blocked:=false;
@@ -30,7 +41,7 @@ begin
  assert blocked and rejected_message='Invalid diagnostic receipt value';
  assert (select count(*)=before_count from event_private.whatsapp_pilot_receipts where pilot_id=target_id),'A malformed later event cannot partially commit';
  blocked:=false;begin perform public.reconcile_event_whatsapp_pilot(target_id,jsonb_build_array(v||'{"signal":"delivered"}'::jsonb));exception when sqlstate 'PT409' then blocked:=true;end;assert blocked;
- v:=v||jsonb_build_object('key','DIAGNOSTIC_TEST_REPLY','kind','inbound','message_id','DIAGNOSTIC_TEST_REPLY_ID','reply_to_id','DIAGNOSTIC_TEST_PROVIDER','signal',null,'body','TESTE RECEBIDO');
+ v:=v||jsonb_build_object('key','DIAGNOSTIC_TEST_REPLY','kind','inbound','message_id','DIAGNOSTIC_TEST_REPLY_ID','reply_to_id','DIAGNOSTIC_TEST_PROVIDER','signal',null,'expected_reply_match',true);
  perform public.reconcile_event_whatsapp_pilot(target_id,jsonb_build_array(v));
  assert not exists(select 1 from information_schema.columns where table_schema='event_private' and table_name='whatsapp_pilot_receipts' and column_name in ('body','destination'));
  perform set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'email',(select email from auth.users where id=owner_id),'role','authenticated')::text,true);
