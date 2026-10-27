@@ -48,6 +48,9 @@ begin
  set local role authenticated;
  r:=public.get_event_whatsapp_pilot_receipt(target_id);assert r->>'deliveryConfirmed'='true' and r->>'replyConfirmed'='true';
  assert not (r?'destination') and not (r?'body');
+ assert r->'context'->>'id'=target_id::text and r->'context'->>'content_hash'=repeat('a',64);
+ assert r->'context'->>'claimed_at' is not null and r->'context'->'network_attempted'='true'::jsonb;
+ assert not (r->'context'?'destination') and not (r->'context'?'body');
  reset role;
  assert (select status='accepted' and attempts=1 and not enabled from event_private.whatsapp_pilots where id=target_id),'Reconciliation must never reopen or reset sending';
 end $$;

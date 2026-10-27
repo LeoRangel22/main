@@ -83,7 +83,9 @@ begin
   'replyAt',min(occurred_at) filter(where kind='inbound'),
   'deliveryConfirmed',coalesce(bool_or(kind='status' and signal in ('delivered','read')),false),
   'replyConfirmed',coalesce(bool_or(kind='inbound'),false),
-  'replyImpliesReceipt',coalesce(bool_or(kind='inbound'),false)) into result
+  'replyImpliesReceipt',coalesce(bool_or(kind='inbound'),false),
+  'context',jsonb_build_object('id',p.id,'status',p.status,'attempts',p.attempts,'provider_id',p.provider_id,
+   'content_hash',p.content_hash,'claimed_at',p.claimed_at,'network_attempted',p.network_attempted)) into result
  from event_private.whatsapp_pilot_receipts where pilot_id=p.id;
  return result;
 end; $$;
