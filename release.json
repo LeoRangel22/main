@@ -1,6 +1,6 @@
 {
-  "commit": "54b358641935f4779f3ded71b282442eb0d06580",
-  "schemaHead": "20261026182628_single_whatsapp_pilot.sql",
+  "commit": "f14b1603fe4ed00b81637e6184b9c575916d454d",
+  "schemaHead": "20261027182526_diagnostic_pilot_receipts.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "piloto-whatsapp.html": "574a944dbf91159bdc48269bb50abc1224d606cec3563f154e6449fa66234c37",
