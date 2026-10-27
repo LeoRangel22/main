@@ -62,6 +62,7 @@ async function checks(c) {
   await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
   await apply(c,'checks/gerencia-identity.sql'); console.log('PASS Gerencia self-sign, authority boundaries, verification, authorship and revoke');
   await apply(c,'checks/whatsapp-single-pilot.sql'); console.log('PASS pilot owner, anonymous/other-account denial, once-only claim, uncertainty and immutable history');
+  await apply(c,'checks/diagnostic-pilot-receipts.sql'); console.log('PASS private diagnostic receipts, isolation, errors and history-preserving rollback');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
