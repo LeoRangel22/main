@@ -1,0 +1,18 @@
+# Operador de recibo diagnostico
+
+A pagina `recibo-whatsapp.html` usa o SDK e a sessao existentes. Nao cria conta, permissao, credencial, grant ou mensagem. Nenhum telefone, corpo ou UUID real de piloto fica no bundle ou nos exemplos.
+
+1. Entre no app com a conta Master existente. Abra a pagina e informe somente a referencia do piloto autorizado na coordenacao.
+2. Consulte o recibo salvo. A RPC existente exige simultaneamente Master e proprietario; essa prova e invalidada se a referencia ou sessao mudar. O campo de referencia nao altera o pin do servidor.
+3. Antes de abrir uma janela, comprove o fechamento dos controles em ambas as pontas e prepare o operador. O servidor exige o pin exato, prazo e controles de envio OFF.
+4. Durante a janela coordenada, confirme a caixa e clique uma unica vez em Conciliar recibo existente. Isso chama apenas `event-whatsapp-pilot` com `action=reconcileReceipt` e `pilotId`. Nao chama previa, envio ou criacao de grant.
+5. Se o resultado for incerto, nao repita a conciliacao. A pagina tenta somente ler o registro salvo e oferece consulta manual somente leitura. Um registro anterior ou a ausencia dele nao prova que uma chamada em voo terminou.
+6. Feche e confira os controles nas duas pontas; retire os temporarios GAS conforme o plano aprovado. A pagina nao abre nem fecha esses controles automaticamente.
+
+O marcador em sessionStorage e criado antes da invocacao e bloqueia repeticao nessa aba, inclusive apos recarga. E contencao de interface, nao contador global: nao impede uma chamada autorizada de outro navegador/aba. A idempotencia e a autorizacao continuam no servidor. Se o armazenamento falhar, a invocacao nao comeca. Nao limpar o marcador nem abrir outra aba para repetir resultado incerto.
+
+A interface projeta uma lista fechada de metadados. Nao mostra o contexto retornado pela RPC, hash, identificadores do provedor, erros brutos ou credenciais. Resposta registrada nao inventa callback de entrega/leitura. Troca de sessao apaga a evidencia visivel e nao repete a acao.
+
+Validacao: testes de navegador com SDK simulado e toda rede externa bloqueada cobrem negativas de autenticacao/papel/propriedade, alteracao da referencia, clique duplo, recarga, erro, resultado incerto, readback, troca de sessao, falha de armazenamento e teclado em viewport movel. Nao equivalem a homologacao real da janela.
+
+Reversao do app: retirar somente os dois assets e suas entradas na allowlist de build. Isso nao apaga recibos, modifica banco/Edge ou restaura uma versao antiga do GAS. Fechar controles antes de qualquer reversao. Nenhuma migracao ou grant faz parte desta entrega.

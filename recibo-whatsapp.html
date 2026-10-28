@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Recibo do teste | Eventos</title>
+<link rel="stylesheet" href="./approval.css?v=20261027-receipt"><style>main{max-width:46rem}button{margin:.5rem .5rem .5rem 0}dl{display:grid;grid-template-columns:minmax(8rem,1fr) 2fr;gap:.5rem}dd{margin:0;overflow-wrap:anywhere}[hidden]{display:none!important}</style>
+<script defer src="./vendor/supabase.js"></script><script defer src="./approval-config.js"></script><script defer src="./recibo-whatsapp.js?v=20261027-receipt"></script></head>
+<body><header><a href="./index.html">Eventos</a><h1>Recibo do teste j� enviado</h1></header><main>
+<p>Esta p�gina n�o envia mensagens, n�o abre a janela de leitura e n�o cria permiss�es. Aceita��o, entrega, leitura e resposta s�o evid�ncias diferentes.</p>
+<p id="receiptStatus" role="status" aria-live="polite">Verificando acesso.</p>
+<section id="receiptLogin" hidden><a href="./index.html">Entrar no Eventos com sua conta existente</a></section>
+<section id="receiptWorkspace" hidden aria-label="Concilia��o restrita do recibo">
+<p>Use somente durante a janela coordenada, depois da confirma��o dos controles nas duas pontas. O servidor confere propriet�rio, prazo e piloto autorizado.</p>
+<label for="receiptPilotId">Refer�ncia do piloto j� enviado e autorizado</label><input id="receiptPilotId" type="text" autocomplete="off" spellcheck="false" maxlength="36" aria-describedby="receiptPilotHelp"><p id="receiptPilotHelp">Informe a refer�ncia recebida na coordena��o e consulte o recibo salvo para conferir a propriedade. N�o informe telefone, mensagem ou chave.</p>
+<label><input id="receiptConfirm" type="checkbox"> Confirmo que a janela de leitura foi aberta e coordenada. N�o haver� novo envio.</label>
+<div><button id="reconcileReceipt" type="button" disabled>Conciliar recibo existente uma vez</button><button id="readReceipt" type="button">Consultar recibo salvo - sem consultar o Bot</button></div>
+<p id="receiptOutcome" role="status" aria-live="polite"></p>
+<dl id="receiptEvidence" aria-label="Evid�ncias persistidas"></dl>
+</section></main></body></html>
