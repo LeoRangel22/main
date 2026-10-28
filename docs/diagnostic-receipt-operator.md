@@ -16,3 +16,5 @@ A interface projeta uma lista fechada de metadados. Nao mostra o contexto retorn
 Validacao: testes de navegador com SDK simulado e toda rede externa bloqueada cobrem negativas de autenticacao/papel/propriedade, alteracao da referencia, clique duplo, recarga, erro, resultado incerto, readback, troca de sessao, falha de armazenamento e teclado em viewport movel. Nao equivalem a homologacao real da janela.
 
 Reversao do app: retirar somente os dois assets e suas entradas na allowlist de build. Isso nao apaga recibos, modifica banco/Edge ou restaura uma versao antiga do GAS. Fechar controles antes de qualquer reversao. Nenhuma migracao ou grant faz parte desta entrega.
+
+Espera limitada: identidade/autorizacao e leitura salva tem limite de 8 segundos por etapa; a conciliacao passa a resultado incerto apos 30 segundos sem resposta. Esse limite da interface nao cancela a operacao em voo nem prova rollback. Nao repetir: consultar somente o recibo salvo e encerrar os controles coordenados. Respostas tardias nao substituem o estado incerto automaticamente. Falha de inicializacao do SDK mostra orientacao sem liberar a area restrita.
