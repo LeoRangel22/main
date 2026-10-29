@@ -92,4 +92,47 @@ check('wait: late success cannot overwrite timeout uncertainty',async browser=>{
 check('public receipt assets preserve UTF-8 text',async()=>{
  const html=fs.readFileSync(path.join(candidate,'recibo-whatsapp.html'),'utf8'),js=fs.readFileSync(path.join(candidate,'recibo-whatsapp.js'),'utf8');assert.doesNotMatch(html,/\uFFFD/);assert.doesNotMatch(js,/\uFFFD/);assert.ok(html.includes('Recibo do teste já enviado'));assert.ok(js.includes('Já houve uma solicitação'));assert.ok(js.includes('Não foi possível iniciar'));
 });
+for(const event of ['SIGNED_IN','TOKEN_REFRESHED','INITIAL_SESSION'])check('auth: same owner '+event+' preserves reference and proof',async browser=>{
+ const f=await fixture(browser);await f.page.locator('#receiptConfirm').check();
+ const before=await f.page.evaluate(()=>({calls:__mock.calls.length,userCalls:__mock.userCalls}));
+ await f.page.evaluate(event=>__mock.listener(event,{user:{id:'synthetic-owner'}}),event);
+ await f.page.waitForTimeout(50);
+ assert.equal(await f.page.locator('#receiptPilotId').inputValue(),'11111111-1111-4111-8111-111111111111');
+ assert.equal(await f.page.locator('#receiptConfirm').isChecked(),true);assert.equal(await f.page.locator('#reconcileReceipt').isEnabled(),true);
+ assert.deepEqual(await f.page.evaluate(()=>({calls:__mock.calls.length,userCalls:__mock.userCalls})),before);
+ assert.equal((await f.invocations()).length,0);await f.context.close();
+});
+check('auth: repeated same-owner focus events still allow exactly one explicit reconciliation',async browser=>{
+ const f=await fixture(browser);await f.page.evaluate(()=>{for(let i=0;i<5;i++){__mock.listener('SIGNED_IN',{user:{id:'synthetic-owner'}});__mock.listener('TOKEN_REFRESHED',{user:{id:'synthetic-owner'}});}});
+ await reconcile(f.page);assert.equal((await f.invocations()).length,1);assert.match(await f.page.locator('#receiptOutcome').innerText(),/confirmada/);await f.context.close();
+});
+check('auth: same-owner focus never bypasses revoked Master permission',async browser=>{
+ const f=await fixture(browser);await f.page.evaluate(()=>{__mock.scenario.notMaster=true;__mock.listener('SIGNED_IN',{user:{id:'synthetic-owner'}});});
+ await reconcile(f.page);assert.equal((await f.invocations()).length,0);assert.match(await f.page.locator('#receiptOutcome').innerText(),/Nenhuma/);await f.context.close();
+});
+check('auth: same-owner refresh never bypasses revoked ownership',async browser=>{
+ const f=await fixture(browser);await f.page.evaluate(()=>{__mock.scenario.notOwner=true;__mock.listener('TOKEN_REFRESHED',{user:{id:'synthetic-owner'}});});
+ await reconcile(f.page);assert.equal((await f.invocations()).length,0);await f.context.close();
+});
+check('auth: same-owner refresh during invoke preserves result without retry',async browser=>{
+ const f=await fixture(browser);await f.page.locator('#receiptConfirm').check();await f.page.locator('#reconcileReceipt').click();
+ await f.page.waitForFunction(()=>__mock.calls.some(x=>x.kind==='invoke'));
+ await f.page.evaluate(()=>__mock.listener('TOKEN_REFRESHED',{user:{id:'synthetic-owner'}}));
+ await f.page.waitForFunction(()=>document.getElementById('receiptOutcome').textContent.includes('confirmada'));
+ assert.equal((await f.invocations()).length,1);assert.equal(await f.page.locator('#reconcileReceipt').isDisabled(),true);await f.context.close();
+});
+for(const event of ['SIGNED_OUT','TOKEN_REFRESHED','SIGNED_IN','USER_UPDATED','PASSWORD_RECOVERY'])check('auth: invalidating '+event+' clears proof synchronously',async browser=>{
+ const f=await fixture(browser);await f.page.locator('#receiptConfirm').check();
+ const state=await f.page.evaluate(event=>{__mock.listener(event,event==='SIGNED_OUT'?null:{user:{id:event==='USER_UPDATED'||event==='PASSWORD_RECOVERY'?'synthetic-owner':'different-user'}});return{reference:document.getElementById('receiptPilotId').value,checked:document.getElementById('receiptConfirm').checked,hidden:document.getElementById('receiptWorkspace').hidden,evidence:document.getElementById('receiptEvidence').textContent};},event);
+ assert.deepEqual(state,{reference:'',checked:false,hidden:true,evidence:''});assert.equal((await f.invocations()).length,0);await f.context.close();
+});
+check('auth: missing session refresh clears proof',async browser=>{
+ const f=await fixture(browser);await f.page.evaluate(()=>__mock.listener('TOKEN_REFRESHED',null));assert.equal(await f.page.locator('#receiptWorkspace').isVisible(),false);assert.equal((await f.invocations()).length,0);await f.context.close();
+});
+check('auth: focus after uncertain attempt cannot reset attempt marker',async browser=>{
+ const f=await fixture(browser,{uncertain:true});await reconcile(f.page);await f.page.waitForFunction(()=>!document.getElementById('readReceipt').disabled);
+ await f.page.evaluate(()=>__mock.listener('SIGNED_IN',{user:{id:'synthetic-owner'}}));
+ assert.equal(await f.page.locator('#reconcileReceipt').isDisabled(),true);assert.equal((await f.invocations()).length,1);assert.match(await f.page.locator('#receiptOutcome').innerText(),/confirmado/);await f.context.close();
+});
+
 for(const item of cases)test(item.name,async({browser})=>item.fn(browser));
