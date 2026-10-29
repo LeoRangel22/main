@@ -1,10 +1,10 @@
 {
-  "commit": "1b128697737d8c277f520df28a2808edfa88d565",
+  "commit": "d74ff22750e774512fcb294a8b3dfa810335ce59",
   "schemaHead": "20261027182526_diagnostic_pilot_receipts.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
-    "recibo-whatsapp.html": "b33a69af9660cb58d6df01b6515c9c917a64548bc88453862d026a13d1c89b38",
-    "recibo-whatsapp.js": "7db6c147dd00b3038ef5aac1b7ad2fb27d369b74efcfafd6e088f70732d3a2aa",
+    "recibo-whatsapp.html": "976f10454df3abcff385b5379e1f67da8a4e19d16d827a532f6c8fe01f1e7641",
+    "recibo-whatsapp.js": "15e72c99c260a49ba8a387353e1d758646345dc194e184c6dfcd1b13c9b0e3b2",
     "piloto-whatsapp.html": "574a944dbf91159bdc48269bb50abc1224d606cec3563f154e6449fa66234c37",
     "piloto-whatsapp.js": "e067f3881388e092ce3cf03cc6b2dad0163c9eb3fac565dbb033c51a10a429c4",
     "aditivos.html": "54c8cdd4f27e1d65c50c025ae181ad4ec78a9d7fd334c6fef5b39018f74d92ca",

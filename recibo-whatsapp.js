@@ -94,6 +94,10 @@
  try{
   client=window.supabase.createClient(window.APPROVAL_CONFIG.url,window.APPROVAL_CONFIG.key);
   client.auth.onAuthStateChange((event,session)=>{
+  // Focus/recovery of the same authenticated identity is not a user switch.
+  // Every explicit read/reconcile still verifies identity, Master and ownership.
+  // Keep this callback synchronous: do not call Auth/RPC while its lock is held.
+  if(state.user&&session?.user?.id===state.user&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED'].includes(event))return;
   if(event==='SIGNED_OUT'||event==='SIGNED_IN'||event==='USER_UPDATED'||event==='PASSWORD_RECOVERY'||session?.user?.id!==state.user){
    ++state.generation;clear();state.busy=false;$('receiptLogin').hidden=false;notice('Sessão alterada. Nenhuma ação será repetida automaticamente.');
    if(event!=='SIGNED_OUT'&&session?.user)setTimeout(()=>void load(),0);
