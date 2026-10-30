@@ -39,13 +39,16 @@ export async function executeDiagnosticReceiptRead(input:unknown,d:Dependencies)
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['action','pilotId'].includes(k))||
     (input as any).action!=='reconcileReceipt'||!uuid((input as any).pilotId))return reply(400,'INVALID_REQUEST','Solicita��o inv�lida.');
   const pilotId=(input as any).pilotId as string;
+  // Fixed stage names only: never log payloads, identities, credentials or errors.
+  const mark=(stage:'CONFIG_CONFIRMED'|'CONTEXT_CONFIRMED'|'BOT_REQUEST_STARTED'|'BOT_RESPONSE_RECEIVED'|'SOURCE_VALIDATED'|'WRITE_STARTED'|'WRITE_CONFIRMED'|'SOURCE_UNCONFIRMED'|'WRITE_UNCONFIRMED'|'READBACK_CONFIRMED'|'READBACK_UNCONFIRMED'|'BOT_DEADLINE_INVALID'|'BOT_FETCH_ABORTED'|'BOT_FETCH_FAILED'|'BOT_REDIRECT_MISSING'|'BOT_REDIRECT_INVALID'|'BOT_REDIRECT_REFUSED'|'BOT_REDIRECT_LIMIT'|'BOT_HTTP_ERROR'|'BOT_BODY_ABORTED'|'BOT_BODY_READ_FAILED'|'BOT_RESPONSE_TOO_LARGE'|'BOT_JSON_INVALID')=>{try{console.log(JSON.stringify({phase:'EVENT_DIAGNOSTIC_RECEIPT_STAGE',stage}));}catch{}};
   let initial:ReturnType<typeof config>;
   try{initial=config(d,pilotId);}catch{return reply(409,'DIAGNOSTIC_READ_CLOSED','Leitura diagn�stica fechada ou fora do escopo.');}
+  mark('CONFIG_CONFIRMED');
   let pilot:any;
   try {
     const r=await d.caller.rpc('get_event_whatsapp_pilot_receipt',{target_pilot:pilotId});
     if(r.error||!r.data)return reply(403,'PILOT_UNAVAILABLE','Piloto indispon�vel para esta conta.');
-    pilot=context(r.data.context);
+    pilot=context(r.data.context);mark('CONTEXT_CONFIRMED');
   }catch{return reply(503,'PILOT_CONTEXT_UNCONFIRMED','Contexto do piloto n�o confirmado.');}
   const sameWindow=()=>{const current=config(d,pilotId);if(current.start!==initial.start||current.end!==initial.end||current.url!==initial.url||current.secret!==initial.secret)throw Error('unavailable');return current;};
   let commit:any;
@@ -56,29 +59,34 @@ export async function executeDiagnosticReceiptRead(input:unknown,d:Dependencies)
         const current=sameWindow(),now=(d.now||Date.now)();
         const payload={version:2,action:'events_diagnostic_receipt',tenant:'embaixada_urca',scope:request.scope,
           contentHash:request.contentHash,originalProviderId:request.originalProviderId,sentAt:new Date(now).toISOString(),credential:current.secret};
-        const page=await (d.post||botPostJson)(current.url,payload,Math.min(15000,current.end-now),262144);
-        sameWindow();return page;
+        mark('BOT_REQUEST_STARTED');
+        const page=await (d.post||botPostJson)(current.url,payload,Math.min(15000,current.end-now),262144,stage=>mark(stage));
+        mark('BOT_RESPONSE_RECEIVED');sameWindow();return page;
       },
       commit:async(id,events)=>{
-        sameWindow();
+        mark('SOURCE_VALIDATED');sameWindow();
         // Recheck the owner-bound immutable context before a service write.
         const fresh=await d.caller.rpc('get_event_whatsapp_pilot_receipt',{target_pilot:id});
         if(fresh.error||JSON.stringify(context(fresh.data?.context))!==JSON.stringify(pilot))throw Error('unavailable');
         sameWindow();
+        mark('WRITE_STARTED');
         const r=await d.worker.rpc('reconcile_event_whatsapp_pilot',{target_pilot:id,receipt_events:events});
         if(r.error||!r.data||r.data.pilotId!==id||r.data.sendStatus!=='accepted'||r.data.attempts!==1||
           !Number.isSafeInteger(r.data.inserted)||r.data.inserted<0||r.data.inserted>100)throw Error('unavailable');
-        return {inserted:r.data.inserted};
+        mark('WRITE_CONFIRMED');return {inserted:r.data.inserted};
       }
     });
   }catch(e){
     const uncertain=(e as any)?.writeMayHaveOccurred===true;
+    mark(uncertain?'WRITE_UNCONFIRMED':'SOURCE_UNCONFIRMED');
     return reply(503,uncertain?'DIAGNOSTIC_RECEIPT_COMMIT_UNCONFIRMED':'DIAGNOSTIC_RECEIPT_SOURCE_UNCONFIRMED',
       uncertain?'Concilia��o sem confirma��o. Consulte o recibo antes de repetir.':'Origem ou correla��o n�o confirmada. Nenhuma concilia��o iniciada.',{writeMayHaveOccurred:uncertain});
   }
   try {
     const r=await d.caller.rpc('get_event_whatsapp_pilot_receipt',{target_pilot:pilotId});
     if(r.error)throw Error('unavailable');
-    return {status:200,body:{ok:true,willSend:false,inserted:commit.inserted,receipt:readback(r.data,pilotId,pilot)}};
-  }catch{return reply(503,'DIAGNOSTIC_RECEIPT_READBACK_UNCONFIRMED','Persist�ncia confirmada, mas leitura final indispon�vel. Consulte o recibo; n�o repetir automaticamente.',{writeMayHaveOccurred:true,persistenceConfirmed:true});}
+    const receipt=readback(r.data,pilotId,pilot);mark('READBACK_CONFIRMED');
+    return {status:200,body:{ok:true,willSend:false,inserted:commit.inserted,receipt}};
+  }catch{mark('READBACK_UNCONFIRMED');return reply(503,'DIAGNOSTIC_RECEIPT_READBACK_UNCONFIRMED','Persist�ncia confirmada, mas leitura final indispon�vel. Consulte o recibo; n�o repetir automaticamente.',{writeMayHaveOccurred:true,persistenceConfirmed:true});}
 }
+
