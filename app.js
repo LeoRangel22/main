@@ -10073,15 +10073,15 @@ function renderSalesFunnelOverview(items) {
   if (!state.session || !state.supabase) { root.hidden = true; root.innerHTML = ""; return; }
   root.hidden = false;
   const states = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
-  root.innerHTML = `<h2>Onde cada venda está</h2><p>Escolha uma etapa para ver as oportunidades e avançar o próximo passo. Cada oportunidade é contada uma vez.</p>
+  root.innerHTML = `<h2>Onde cada venda está</h2><p>Resumo de todas as oportunidades. Cada oportunidade é contada uma vez; o filtro selecionado abaixo afeta a lista, não este resumo.</p>
     <div class="sales-funnel-stages">${salesFunnelStages.map(stage=>`<button type="button" data-sales-funnel="${stage.id}" aria-pressed="${state.activePipelineFilter === `sales:${stage.id}`}">
       <span>${stage.label}</span><strong>${states.filter(s=>s.id===stage.id).length}</strong><small>${stage.action}</small></button>`).join("")}</div>
     <p class="sales-funnel-evidence">Leitura baseada nos registros disponíveis. Aprovação não confirma pagamento; envio registrado não comprova entrega ou leitura.</p>
     ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}`;
 }
 
-function renderPipelineMetrics(items = getPipelineItems(), visibleItems = items) {
-  renderSalesFunnelOverview(visibleItems);
+function renderPipelineMetrics(items = getPipelineItems()) {
+  renderSalesFunnelOverview(items);
   renderGlobalSearch(items);
   renderClientRegistry(items);
   if (!nodes.metricStageLead) return;
@@ -10097,13 +10097,13 @@ function renderPipelineMetrics(items = getPipelineItems(), visibleItems = items)
     posVenda: 0,
   };
 
-  const commercialStates = getSalesFunnelItems(visibleItems).map(getSalesFunnelStateForItem).filter(Boolean);
+  const commercialStates = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
   counts.lead = commercialStates.filter((entry) => entry.id === "lead").length;
   counts.pronta = commercialStates.filter((entry) => entry.id === "ready").length;
   counts.semResposta = commercialStates.filter((entry) => entry.id === "waiting").length;
   counts.negociacao = commercialStates.filter((entry) => ["changes","reply","approved"].includes(entry.id)).length;
   counts.sinal = commercialStates.filter((entry) => entry.id === "won").length;
-  visibleItems.forEach((item) => {
+  items.forEach((item) => {
     if (item.stage === "desfecho_pendente") return;
     const status = item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
 
@@ -12068,7 +12068,7 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && item.version
       ? `<small class="proposal-version-badge${item.isDraft ? " is-draft" : ""}">V${escapeHtml(item.version)}${item.isDraft ? " · rascunho" : ""}</small>`
       : "";
-  const stageChipLabel = needsOutcome ? "Desfecho pendente" : item.status === "cancelado" ? getProposalStatusLabel(item.status) : salesStage?.label || clientTypeLine || getProposalStatusLabel(item.status);
+  const stageChipLabel = needsOutcome ? "Desfecho pendente" : item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || salesStage?.label || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
@@ -12248,8 +12248,10 @@ function renderPipelineStage(stage, items) {
   const stageItems = stage.salesState ? getSalesFunnelItems(items).filter((item) => getSalesFunnelStateForItem(item)?.id === stage.salesState)
     : items.filter((item) => item.stage === stage.id);
   const dropAttribute = stage.salesState ? "" : ' data-pipeline-drop-status="' + escapeHtml(stage.statuses[0]) + '"';
-  const limit = commercialStageLimits[stage.id] || 20;
-  const stageCards = stageItems.slice(0, limit).map(renderPipelineCard).join("") + (stageItems.length > limit ? `<button class="secondary stage-more" type="button" data-stage-more="${escapeHtml(stage.id)}">Mostrar mais 20 · ${stageItems.length - limit} restantes</button>` : "");
+  const paginationKey = stage.legacyStage || stage.id;
+  const limit = commercialStageLimits[paginationKey] || 20;
+  const legacyClass = stage.legacyStage ? ` pipeline-stage-${escapeHtml(stage.legacyStage)}` : "";
+  const stageCards = stageItems.slice(0, limit).map(renderPipelineCard).join("") + (stageItems.length > limit ? `<button class="secondary stage-more" type="button" data-stage-more="${escapeHtml(paginationKey)}">Mostrar mais 20 · ${stageItems.length - limit} restantes</button>` : "");
   if (stage.row === "archive") {
     return `
       <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)} pipeline-column-collapsible">
@@ -12266,7 +12268,7 @@ function renderPipelineStage(stage, items) {
     `;
   }
   return `
-    <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}">
+    <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}${legacyClass}">
       <div class="pipeline-column-heading">
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
@@ -12308,13 +12310,13 @@ function renderPipeline() {
   const items = getPipelineItems();
   const filteredItems = getFilteredPipelineItems(items);
   renderPipelineQuickFilters(items);
-  renderPipelineMetrics(items, filteredItems);
+  renderPipelineMetrics(items);
   renderFinanceCommandPanel(items);
   renderOperationsAgenda(items);
   renderAvailabilityAlert();
 
   const allRows = [
-    { id: "commercial", title: "Comercial", stages: salesFunnelStages.map((stage) => ({id:"sales_"+stage.id,row:"commercial",title:stage.label,description:stage.action,salesState:stage.id,statuses:[]})) },
+    { id: "commercial", title: "Comercial", stages: salesFunnelStages.map((stage) => ({id:"sales_"+stage.id,row:"commercial",title:stage.label,description:stage.action,salesState:stage.id,legacyStage:({lead:"lead_recebido",ready:"proposta_pronta",waiting:"proposta_enviada",preparation:"negociacao"})[stage.id]||null,statuses:[]})) },
     { id: "operation", title: "Operação", stages: funnelStages.filter((stage) => stage.row === "operation") },
     { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
   ];
