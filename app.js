@@ -3137,11 +3137,18 @@ function getActiveProposal() {
   return state.proposals.find((item) => item.id === state.activeProposalId) || null;
 }
 
-function getQuickReplyRecommendation(status) {
+function getQuickReplyRecommendation(status, proposal = null) {
   const normalized = normalizeProposalStatus(status);
-  if (normalized === "proposta_enviada") return "followup";
-  if (normalized === "negociacao") return "sinal";
-  if (normalized === "confirmado") return "saldo";
+  const response = proposal?.cliente_resposta || proposal?.snapshot?.clienteResposta?.acao;
+  const signal = proposal?.snapshot?.pagamentoSinal;
+  if (proposal?.publication_status === "draft" || proposal?.is_current === false || ["cancelado", "pos_venda"].includes(normalized)) return null;
+  if (["alteracao", "cancelar"].includes(response) || signal?.validacaoPendente === true) return null;
+  if (normalized === "negociacao") return response === "confirmar" && !(Number(signal?.valor) > 0) ? "sinal" : null;
+  if (normalized === "proposta_enviada") return response ? null : "followup";
+  if (normalized === "confirmado") {
+    const coverage = getPaymentCoverage(proposal?.total || proposal?.snapshot?.totals?.total || 0, signal, proposal?.snapshot?.pagamentoRestante);
+    return Number(signal?.valor) > 0 && coverage.remainingDue > 0 ? "saldo" : null;
+  }
   if (["pagamento_final", "planejamento", "evento_proximo"].includes(normalized)) return "pre_evento";
   return "proposta";
 }
@@ -3166,7 +3173,7 @@ function getQuickReplyContext() {
     eventDate: getEventDateLabel(),
     eventTime: getEventTimeLabel(),
     guests: getGuestCount(),
-    duration: getDuration(),
+    duration: fields.eventDuration.value ? getDuration() : null,
     total: formatMoney(getQuoteTotals().total),
     investmentRange: qualification.faixaInvestimento || "",
     status: proposal?.status || request?.status || "lead_recebido",
@@ -3418,14 +3425,15 @@ function getCommunicationPlaceholderValues(context = getQuickReplyContext(), pro
 
 function renderCommunicationTemplateText(text, context, proposalUrl) {
   const values = getCommunicationPlaceholderValues(context, proposalUrl);
-  return String(text || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
+  const renderedText = context.duration === null ? String(text || "").replace(/\{\{\s*duracao\s*\}\}h\b/g, "A definir") : String(text || "");
+  return renderedText.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
     if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
     return match;
   });
 }
 
-function getQuickReplyPresets(status) {
-  const recommended = getQuickReplyRecommendation(status);
+function getQuickReplyPresets(status, proposal = null) {
+  const recommended = getQuickReplyRecommendation(status, proposal);
   return loadCommunicationTemplates().map((template) => ({
     id: template.id,
     title: template.title,
@@ -3440,7 +3448,7 @@ function getQuickReplyPresets(status) {
 }
 
 function getQuickReplyPayload(replyId, context, proposalUrl, channel = "whatsapp") {
-  const preset = getQuickReplyPresets(context.status).find((item) => item.id === replyId);
+  const preset = getQuickReplyPresets(context.status, context.proposal).find((item) => item.id === replyId);
   if (!preset) return null;
   return {
     ...preset,
@@ -3464,7 +3472,7 @@ function appendBotWhatsAppNotice(message) {
 
 async function runQuickReply(replyId, channel) {
   const context = getQuickReplyContext();
-  const preset = getQuickReplyPresets(context.status).find((item) => item.id === replyId);
+  const preset = getQuickReplyPresets(context.status, context.proposal).find((item) => item.id === replyId);
   const needsLink = preset?.needsLink;
   if (!preset) return;
   let share = null;
@@ -3572,7 +3580,11 @@ function renderQuickReplies() {
     return;
   }
 
-  nodes.quickReplies.innerHTML = getQuickReplyPresets(context.status)
+  const response = context.proposal?.cliente_resposta || context.proposal?.snapshot?.clienteResposta?.acao;
+  const guidance = response === "alteracao" ? "Cliente pediu ajuste. Responda ao pedido e prepare a revisão antes de orientar pagamento."
+    : context.proposal?.snapshot?.pagamentoSinal?.validacaoPendente === true ? "Comprovante em conferência. Aguarde a validação financeira; não solicite o mesmo pagamento novamente."
+    : normalizeProposalStatus(context.status) === "negociacao" && response !== "confirmar" ? "Negociação em andamento. Confirme o acordo atual antes de recomendar sinal." : "";
+  nodes.quickReplies.innerHTML = (guidance ? '<p role="status">' + escapeHtml(guidance) + '</p>' : '') + getQuickReplyPresets(context.status, context.proposal)
     .map(
       (preset) => `
         <article class="quick-reply-card${preset.recommended ? " is-recommended" : ""}">
@@ -4155,7 +4167,7 @@ function buildTechnicalSheetHtml(proposal = getActiveProposal(), options = {}) {
             { label: "Formato", value: context.event.type || "A definir" },
             { label: "Data e chegada", value: formatOperationalDateTime(context.event) },
             { label: "Convidados", value: `${context.event.guests || 0} pax` },
-            { label: "Duração", value: `${context.event.duration || 1}h` },
+            { label: "Duração", value: `${context.event.duration ? `${context.event.duration}h` : "A definir"}` },
             { label: "Motivo", value: context.event.reason || context.qualification.ocasiao || "Não informado" },
           ])}
         </section>
@@ -4257,7 +4269,7 @@ function buildOperationalSummaryText(proposal = getActiveProposal()) {
   return [
     `FICHA OPERACIONAL SEM VALORES - ${context.reference}`,
     `${context.client.name || "Cliente"} | ${context.event.type || "Evento"}`,
-    `${formatOperationalDateTime(context.event)} | ${context.event.guests || 0} pax | ${context.event.duration || 1}h`,
+    `${formatOperationalDateTime(context.event)} | ${context.event.guests || 0} pax | ${context.event.duration ? `${context.event.duration}h` : "A definir"}`,
     "",
     "Itens:",
     items,
@@ -4855,6 +4867,10 @@ function getDuration() {
   return Math.max(1, toNumber(fields.eventDuration.value) || 1);
 }
 
+function getDurationLabel() {
+  return fields.eventDuration.value ? `${getDuration()}h` : "A definir";
+}
+
 function getValidityDays() {
   const raw = fields.validity?.value || "";
   const match = String(raw).match(/\d+/);
@@ -5203,12 +5219,12 @@ function getProposalReviewItems() {
     {
       id: "guests",
       label: "Pax e duração",
-      status: guests > 0 && minimumWarnings.length === 0 ? "ok" : guests > 0 ? "warning" : "error",
+      status: !fields.eventDuration.value ? "error" : guests > 0 && minimumWarnings.length === 0 ? "ok" : guests > 0 ? "warning" : "error",
       detail:
-        guests > 0
+        !fields.eventDuration.value ? "Duração a definir. Confirme com o cliente antes de liberar a proposta." : guests > 0
           ? minimumWarnings.length
             ? `${guests} pax. Atenção aos mínimos: ${minimumWarnings.map((item) => item.nome).join(", ")}.`
-            : `${guests} pax · ${getDuration()}h.`
+            : `${guests} pax · ${getDurationLabel()}.`
           : "Informe a quantidade de convidados.",
       target: "client",
     },
@@ -5231,7 +5247,7 @@ function getProposalReviewItems() {
       id: "briefing",
       label: "Observações",
       status: hasNotes ? "ok" : "warning",
-      detail: hasNotes ? "Briefing e observações revisados." : "Sem observações. Se houver restrições, montagem ou pedido especial, registre.",
+      detail: hasNotes ? "Briefing e observações preenchidos; confira o pedido e os ajustes pendentes." : "Sem observações. Se houver restrições, montagem ou pedido especial, registre.",
       target: "notes",
     },
     {
@@ -6188,7 +6204,7 @@ function getLeadReadinessItems() {
       detail: conditions?.detail || "Confirme validade e prazo do sinal.",
       target: "review",
     },
-  ];
+  ].concat(review.filter((item) => item.status === "error" && !["contact", "client_context", "commercial_profile", "format", "date", "availability", "guests", "items", "value", "conditions", "briefing"].includes(item.id)));
 }
 
 function getProposalApprovalMessage(items = getLeadReadinessItems()) {
@@ -6329,7 +6345,8 @@ function getReviewWorkflowSteps(items = getLeadReadinessItems()) {
     { label: "Condições e envio", ids: ["brief", "briefing", "conditions"], target: "review" },
   ];
   return groups.map((group, index) => {
-    const groupItems = items.filter((item) => group.ids.includes(item.id));
+    const knownIds = groups.flatMap((entry) => entry.ids);
+    const groupItems = items.filter((item) => group.ids.includes(item.id) || (group.target === "review" && !knownIds.includes(item.id)));
     const blockingGroupItems = groupItems.filter((item) => !isOptionalReviewItem(item));
     const optionalGroupWarnings = groupItems.filter((item) => item.status === "warning" && isOptionalReviewItem(item));
     const status = groupItems.some((item) => item.status === "error")
@@ -6357,7 +6374,8 @@ function getSendReviewWorkflowSteps(items = getProposalSendReviewItems()) {
     { label: "Condições e envio", ids: ["briefing", "conditions"], target: "review" },
   ];
   return groups.map((group, index) => {
-    const groupItems = items.filter((item) => group.ids.includes(item.id));
+    const knownIds = groups.flatMap((entry) => entry.ids);
+    const groupItems = items.filter((item) => group.ids.includes(item.id) || (group.target === "review" && !knownIds.includes(item.id)));
     const status = groupItems.some((item) => item.status === "error")
       ? "error"
       : groupItems.some((item) => item.status === "warning")
@@ -7359,10 +7377,12 @@ function getPipelineStageTitle(stageId) {
 
 function jumpToPipelineStage(stageId) {
   if (!stageId) return;
-  state.activePipelineFilter = stageId;
+  const commercialMap = {lead_recebido:"lead",proposta_pronta:"ready",proposta_enviada:"waiting",negociacao:"negotiation",confirmado:"won"};
+  const commercialId = commercialMap[stageId];
+  state.activePipelineFilter = commercialId ? "sales:"+commercialId : stageId;
   renderPipeline();
   window.requestAnimationFrame(() => {
-    const safeStageId = String(stageId).replace(/[^a-z0-9_-]/gi, "");
+    const safeStageId = commercialId ? "sales_"+(commercialId === "negotiation" ? "changes" : commercialId) : String(stageId).replace(/[^a-z0-9_-]/gi, "");
     const stage = document.querySelector(`.pipeline-stage-${safeStageId}`);
     if (!stage) {
       showToast("Etapa ainda não encontrada no funil.");
@@ -7807,12 +7827,12 @@ function renderSummary() {
   nodes.grandTotal.textContent = formatMoney(totals.total);
   nodes.proposalTotal.textContent = formatMoney(totals.total);
   nodes.totalMeta.textContent = selected.length
-    ? `${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.`
+    ? `${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDurationLabel()}, taxa de 12% incluída.`
     : "Selecione itens para montar o orçamento.";
   if (selected.length) {
     const foodBeverage = Math.max(0, totals.total - totals.privatization.amount);
     nodes.totalMeta.innerHTML = `
-      <span>${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDuration()}h, taxa de 12% incluída.</span>
+      <span>${selected.length} ${selected.length === 1 ? "item" : "itens"}, ${getGuestCount()} convidado(s), ${getDurationLabel()}, taxa de 12% incluída.</span>
       <strong>A&amp;B ${formatMoney(foodBeverage)} · Priv. ${formatMoney(totals.privatization.amount)}</strong>
     `;
   }
@@ -8139,7 +8159,7 @@ function buildProposalText() {
     `Data: ${getEventDateLabel()}`,
     `Horário: ${getEventTimeLabel()}`,
     `Convidados: ${getGuestCount()}`,
-    `Duração: ${getDuration()}h`,
+    `Duração: ${getDurationLabel()}`,
     `Validade: ${fields.validity.value.trim() || "14 dias"}`,
     `Prazo para sinal: ${formatSignalDeadlineHours()}`,
   ];
@@ -8245,7 +8265,7 @@ function getProposalSnapshot() {
       date: fields.eventDate.value,
       time: fields.eventTime.value,
       guests: getGuestCount(),
-      duration: getDuration(),
+      duration: fields.eventDuration.value ? getDuration() : null,
       validity: fields.validity.value.trim(),
       signalDeadlineHours,
       signalDeadlineAt,
@@ -10060,8 +10080,8 @@ function renderSalesFunnelOverview(items) {
     ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}`;
 }
 
-function renderPipelineMetrics(items = getPipelineItems()) {
-  renderSalesFunnelOverview(items);
+function renderPipelineMetrics(items = getPipelineItems(), visibleItems = items) {
+  renderSalesFunnelOverview(visibleItems);
   renderGlobalSearch(items);
   renderClientRegistry(items);
   if (!nodes.metricStageLead) return;
@@ -10077,15 +10097,21 @@ function renderPipelineMetrics(items = getPipelineItems()) {
     posVenda: 0,
   };
 
-  items.forEach((item) => {
+  const commercialStates = getSalesFunnelItems(visibleItems).map(getSalesFunnelStateForItem).filter(Boolean);
+  counts.lead = commercialStates.filter((entry) => entry.id === "lead").length;
+  counts.pronta = commercialStates.filter((entry) => entry.id === "ready").length;
+  counts.semResposta = commercialStates.filter((entry) => entry.id === "waiting").length;
+  counts.negociacao = commercialStates.filter((entry) => ["changes","reply","approved"].includes(entry.id)).length;
+  counts.sinal = commercialStates.filter((entry) => entry.id === "won").length;
+  visibleItems.forEach((item) => {
     if (item.stage === "desfecho_pendente") return;
     const status = item.kind === "request" ? normalizeRequestStatus(item.status) : normalizeProposalStatus(item.status);
-    if (item.kind === "request" && status === "lead_recebido") counts.lead += 1;
+
     if (item.kind !== "proposal") return;
-    if (status === "proposta_pronta") counts.pronta += 1;
-    if (status === "proposta_enviada") counts.semResposta += 1;
-    if (status === "negociacao") counts.negociacao += 1;
-    if (status === "confirmado") counts.sinal += 1;
+
+
+
+
     if (status === "pagamento_final") counts.pgRestante += 1;
     if (status === "planejamento") counts.planejamento += 1;
     if (status === "evento_proximo") counts.quarentaOito += 1;
@@ -10601,6 +10627,7 @@ function getPipelineQuickFilterDefinitions() {
 
 function getFilteredPipelineItems(items = getPipelineItems()) {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter === "sales:negotiation") return getSalesFunnelItems(items).filter(item=>["changes","reply","approved"].includes(getSalesFunnelStateForItem(item)?.id));
   if (activeFilter.startsWith("sales:")) return getSalesFunnelItems(items).filter(item=>getSalesFunnelStateForItem(item)?.id === activeFilter.slice(6));
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
   if (activeFilter === "all") return items;
@@ -10613,6 +10640,7 @@ function getFilteredPipelineItems(items = getPipelineItems()) {
 
 function getActivePipelineFilterLabel() {
   const activeFilter = state.activePipelineFilter || "all";
+  if (activeFilter === "sales:negotiation") return "Negociação e retornos";
   if (activeFilter.startsWith("sales:")) return salesFunnelStages.find(stage=>stage.id === activeFilter.slice(6))?.label || "";
   if (activeFilter === "all") return "";
   const definition = getPipelineQuickFilterDefinitions().find((filter) => filter.id === activeFilter);
@@ -11017,7 +11045,7 @@ function getCurrentEditorSignature() {
     date: fields.eventDate?.value || "",
     time: fields.eventTime?.value || "",
     guests: getGuestCount(),
-    duration: getDuration(),
+    duration: fields.eventDuration.value ? getDuration() : null,
     validity: fields.validity?.value.trim() || "",
     signalDeadlineHours: fields.signalDeadlineHours?.value || "",
     adjustment: roundCurrency(getManualAdjustment()),
@@ -12040,7 +12068,7 @@ function renderPipelineCard(item) {
     item.kind === "proposal" && item.version
       ? `<small class="proposal-version-badge${item.isDraft ? " is-draft" : ""}">V${escapeHtml(item.version)}${item.isDraft ? " · rascunho" : ""}</small>`
       : "";
-  const stageChipLabel = needsOutcome ? "Desfecho pendente" : item.status === "cancelado" ? getProposalStatusLabel(item.status) : clientTypeLine || getProposalStatusLabel(item.status);
+  const stageChipLabel = needsOutcome ? "Desfecho pendente" : item.status === "cancelado" ? getProposalStatusLabel(item.status) : salesStage?.label || clientTypeLine || getProposalStatusLabel(item.status);
   const scoreTitle = commercialScore.reasons.length
     ? ` title="${escapeHtml(commercialScore.reasons.join(" · "))}"`
     : "";
@@ -12217,7 +12245,9 @@ function renderPipelineEmptyState(stage) {
 }
 
 function renderPipelineStage(stage, items) {
-  const stageItems = items.filter((item) => item.stage === stage.id);
+  const stageItems = stage.salesState ? getSalesFunnelItems(items).filter((item) => getSalesFunnelStateForItem(item)?.id === stage.salesState)
+    : items.filter((item) => item.stage === stage.id);
+  const dropAttribute = stage.salesState ? "" : ' data-pipeline-drop-status="' + escapeHtml(stage.statuses[0]) + '"';
   const limit = commercialStageLimits[stage.id] || 20;
   const stageCards = stageItems.slice(0, limit).map(renderPipelineCard).join("") + (stageItems.length > limit ? `<button class="secondary stage-more" type="button" data-stage-more="${escapeHtml(stage.id)}">Mostrar mais 20 · ${stageItems.length - limit} restantes</button>` : "");
   if (stage.row === "archive") {
@@ -12228,7 +12258,7 @@ function renderPipelineStage(stage, items) {
             <span>${escapeHtml(stage.title)}</span>
             <strong>${stageItems.length}</strong>
           </summary>
-          <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
+          <div class="pipeline-column-list" ${dropAttribute}>
             ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
           </div>
         </details>
@@ -12241,7 +12271,7 @@ function renderPipelineStage(stage, items) {
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
       </div>
-      <div class="pipeline-column-list" data-pipeline-drop-status="${escapeHtml(stage.statuses[0])}">
+      <div class="pipeline-column-list" ${dropAttribute}>
         ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
       </div>
     </section>
@@ -12278,13 +12308,13 @@ function renderPipeline() {
   const items = getPipelineItems();
   const filteredItems = getFilteredPipelineItems(items);
   renderPipelineQuickFilters(items);
-  renderPipelineMetrics(items);
+  renderPipelineMetrics(items, filteredItems);
   renderFinanceCommandPanel(items);
   renderOperationsAgenda(items);
   renderAvailabilityAlert();
 
   const allRows = [
-    { id: "commercial", title: "Comercial", stages: funnelStages.filter((stage) => stage.row === "commercial") },
+    { id: "commercial", title: "Comercial", stages: salesFunnelStages.map((stage) => ({id:"sales_"+stage.id,row:"commercial",title:stage.label,description:stage.action,salesState:stage.id,statuses:[]})) },
     { id: "operation", title: "Operação", stages: funnelStages.filter((stage) => stage.row === "operation") },
     { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
   ];
@@ -12453,10 +12483,10 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   fields.clientPhone.value = request.cliente_whatsapp || "";
   fields.eventType.value = request.tipo_evento || "";
   fields.eventDate.value = request.data_evento || "";
-  fields.eventTime.value = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "18:00";
+  fields.eventTime.value = request.horario_evento ? String(request.horario_evento).slice(0, 5) : "";
   syncDateTimeFromFields();
   fields.guestCount.value = request.convidados || 30;
-  fields.eventDuration.value = String(request.duracao || 1);
+  fields.eventDuration.value = request.duracao ? String(request.duracao) : "";
   fields.eventReason.value = request.motivo_evento || "";
   fields.notes.value = buildNotesFromRequest(request);
   const guidedKey = getGuidedEventKeyFromType(request.tipo_evento);
@@ -14027,10 +14057,10 @@ function applyProposalSnapshot(snapshot) {
   fields.clientPhone.value = snapshot.client?.phone || "";
   fields.eventType.value = snapshot.event?.type || "";
   fields.eventDate.value = snapshot.event?.date || "";
-  fields.eventTime.value = snapshot.event?.time || "18:00";
+  fields.eventTime.value = snapshot.event?.time || "";
   syncDateTimeFromFields();
   fields.guestCount.value = snapshot.event?.guests || 30;
-  fields.eventDuration.value = String(snapshot.event?.duration || 1);
+  fields.eventDuration.value = snapshot.event?.duration ? String(snapshot.event.duration) : "";
   fields.validity.value = snapshot.event?.validity || "14 dias";
   if (fields.signalDeadlineHours) {
     fields.signalDeadlineHours.value = String(snapshot.event?.signalDeadlineHours || DEFAULT_SIGNAL_DEADLINE_HOURS);
@@ -14198,7 +14228,7 @@ function renderProposal() {
       </div>
       <div class="proposal-grid">
         <div><span>Formato</span>${escapeHtml(getCurrentEventType() || "Evento")}</div>
-        <div><span>Duração</span>${getDuration()}h</div>
+        <div><span>Duração</span>${getDurationLabel()}</div>
         <div><span>Validade da proposta</span>${escapeHtml(fields.validity.value.trim() || "14 dias")}</div>
         <div><span>Prazo para sinal</span>${escapeHtml(formatSignalDeadlineHours())}</div>
         <div><span>Data da proposta</span>${escapeHtml(getTodayLabel())}</div>
