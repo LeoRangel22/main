@@ -1621,6 +1621,7 @@ function renderFinalReview() {
   };
   const selectedPreferences = getSelectedChipDisplayLabels(preferenceChips, "preference");
   const selectedExtras = getSelectedChipDisplayLabels(extraChips, "extra");
+  if (fields.preferences.value.trim()) selectedPreferences.push(fields.preferences.value.trim());
   const preferenceSummary = [
     selectedPreferences.length
       ? selectedPreferences.join(", ")
@@ -1637,7 +1638,7 @@ function renderFinalReview() {
     fields.email.value.trim(),
     fields.phone.value.trim(),
   ].filter(Boolean);
-  const contactReady = Boolean(fields.name.value.trim() && (fields.email.value.trim() || fields.phone.value.trim()));
+  const contactReady = hasUsableName(fields.name.value.trim()) && Boolean((fields.email.value.trim() && isValidEmail(fields.email.value.trim())) || (fields.phone.value.trim() && isValidContactPhone(fields.phone.value.trim()))) && (!fields.email.value.trim() || isValidEmail(fields.email.value.trim())) && (!fields.phone.value.trim() || isValidContactPhone(fields.phone.value.trim()));
   const dateReady = fields.date.value || fields.dateFlex.value.trim();
   const timeReady = fields.time.value;
   const clientTypeLabel = getClientTypeDisplayLabel();
@@ -1667,15 +1668,15 @@ function renderFinalReview() {
         fields.time.value || reviewCopy.timeMissing,
       ].join(" · "),
       step: "eventDetails",
-      status: dateReady ? reviewCopy.ok : reviewCopy.required,
-      state: dateReady ? "is-ok" : "is-required",
+      status: dateReady && timeReady ? reviewCopy.ok : dateReady ? reviewCopy.warning : reviewCopy.required,
+      state: dateReady && timeReady ? "is-ok" : dateReady ? "is-warning" : "is-required",
     },
     {
       label: localizedText("Guests and duration", "Convidados e duração"),
       value: `${fields.guests.value || 30} ${localizedText("guests", "pessoas")} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
-      status: reviewCopy.ok,
-      state: "is-ok",
+      status: fields.duration.value ? reviewCopy.ok : reviewCopy.warning,
+      state: fields.duration.value ? "is-ok" : "is-warning",
     },
     {
       label: localizedText("Preferences", "Preferências"),
@@ -2018,10 +2019,7 @@ function renderRecommendations() {
 
   const ids = getRecommendedFormatIds();
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
-  if (fields.eventType.value && !ids.includes(selectedFormatId)) fields.eventType.value = "";
-  if (!fields.eventType.value && fields.profile.value && ids.length) {
-    fields.eventType.value = formats[ids[0]].label;
-  }
+  // Keep an explicit choice even when exploring a different recommendation.
   const moment = current.momentOptions.find(item=>item.value===fields.moment.value)?.title || canonicalMomentLabels[fields.moment.value];
   recommendationIntro.textContent = current.recommendationReady(moment);
   recommendationList.innerHTML = ids
@@ -2048,6 +2046,8 @@ function selectFormat(formatId) {
   fields.eventType.value = formats[formatId].label;
   setStepValidity("recommendation", true);
   renderRecommendations();
+  renderFinalReview();
+  schedulePartialCapture();
   scrollToStep("briefing");
 }
 
@@ -2069,25 +2069,10 @@ function handleChoiceClick(event) {
 
   resetStatusIfError();
 
-  if (choiceGroup === "moment") {
-    const preferredRange = preferredTimeRangeByMoment[choiceValue];
-    if (preferredRange) {
-      fields.timeRange.value = preferredRange;
-      fillTimeOptions(preferredRange);
-    }
-    if (choiceValue === "weekday-lunch") {
-      fields.time.value = "11:30";
-      fields.duration.value = "1.5";
-    } else if (choiceValue === "weekday-morning") {
-      fields.time.value = "09:00";
-    } else if (choiceValue === "late-afternoon") {
-      fields.time.value = "17:00";
-    } else if (choiceValue === "night") {
-      fields.time.value = "19:00";
-    }
-  }
 
   renderRecommendations();
+  renderFinalReview();
+  schedulePartialCapture();
   if (choiceGroup === "moment") scrollToStep("profile");
 }
 
@@ -2128,7 +2113,7 @@ function getSnapshot(referenceCode) {
       faixaHorario: canonicalTimeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
       convidados: Math.min(500, Math.max(2, Math.floor(toNumber(fields.guests.value) || 30))),
-      duracao: toNumber(fields.duration.value),
+      duracao: fields.duration.value ? toNumber(fields.duration.value) : null,
       duracaoTexto: durationLabel,
       motivo: fields.reason.value.trim(),
       preferencias: [selectedPreferences.length ? `Preferências marcadas: ${selectedPreferences.join(", ")}` : "", preferenceText]
@@ -2656,7 +2641,7 @@ fields.date.min = getTodayInputValue();
 updateContactRequirements();
 updateContactGuidance();
 renderFinalReview();
-window.addEventListener("pageshow", resetFlexibleDateField);
+// Preserve the client's flexibility choice when restoring the page.
 form.addEventListener("click", handleChoiceClick);
 recommendationList.addEventListener("click", handleFormatClick);
 finalReviewGrid?.addEventListener("click", (event) => {
