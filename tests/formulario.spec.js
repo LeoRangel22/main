@@ -20,7 +20,7 @@ test.describe("Formulário público do cliente", () => {
 
     await expect(page.locator("#clientQuoteForm")).toBeVisible();
     await expect(page.locator("#requestDateIsFlexible")).toHaveValue("no");
-    await expect(page.locator("#requestDuration")).toHaveValue("1");
+    await expect(page.locator("#requestDuration")).toHaveValue("");
     await expect(page.locator("#requestGuestCount")).toHaveAttribute("inputmode", "numeric");
     await expect(page.locator("#phoneLabel")).toContainText("Celular/WhatsApp");
     await expect(page.locator("#leadSourceLabel")).toContainText(/Opcional/i);
@@ -30,8 +30,8 @@ test.describe("Formulário público do cliente", () => {
     await page.locator('[data-choice-group="clientType"][data-choice-value="agency-tourism"]').click();
     await page.locator('[data-choice-group="profile"][data-choice-value="travel"]').click();
     await expect(page.locator("#formatRecommendations .format-card")).toHaveCount(4);
-    await expect(page.locator("#requestTimeRange")).toHaveValue("morning");
-    await expect(page.locator("#requestEventTime")).toHaveValue("09:00");
+    await expect(page.locator("#requestTimeRange")).toHaveValue("");
+    await expect(page.locator("#requestEventTime")).toHaveValue("");
 
     await expect(page.locator("#endClientField")).not.toHaveClass(/is-hidden/);
     await expect(page.locator("#groupNameField")).not.toHaveClass(/is-hidden/);
