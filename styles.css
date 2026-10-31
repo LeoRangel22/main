@@ -13134,3 +13134,61 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
     flex-wrap: wrap;
   }
 }
+
+/* Intrinsic-size fixes also cover wider fallback-font metrics. */
+@media (max-width: 820px) {
+  body[data-page="app"] .sales-command-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body[data-page="app"] .sales-command-surface,
+  body[data-page="app"] .sales-command-grid > *,
+  body[data-page="app"] .action-center,
+  body[data-page="app"] .action-list,
+  body[data-page="app"] .action-focus-card,
+  body[data-page="app"] .action-task {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body[data-page="app"] .action-center-heading,
+  body[data-page="app"] .action-task-topline,
+  body[data-page="app"] .action-plan {
+    flex-wrap: wrap;
+  }
+  body[data-page="app"] .action-center-heading > *,
+  body[data-page="app"] .action-task-topline > *,
+  body[data-page="app"] .action-plan > *,
+  body[data-page="clientes"] .command-heading > *,
+  body[data-page="clientes"] .clients-hero-panel,
+  body[data-page="clientes"] .clients-hero-panel > *,
+  body[data-page="clientes"] .topbar h1 {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 480px) {
+  .public-form-body .contact-primary-grid label {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .public-form-body fieldset.preference-chips,
+  .public-form-body .preference-chips legend,
+  .public-form-body .preference-chips label,
+  .public-form-body .preference-chips label span,
+  .public-form-body h1,
+  .public-form-body h2 {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .public-form-body .preference-chips input[type="checkbox"] {
+    flex: 0 0 18px;
+    min-width: 18px;
+    max-width: 18px;
+  }
+}
+
+@media (max-width: 820px) {
+  .team-status { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+}
