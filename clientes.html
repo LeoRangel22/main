@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Clientes | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=1cd01322c52256b1" />
+    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=d517795a40d6da63" />
   </head>
   <body class="auth-locked clients-page" data-page="clientes">
     <main class="app-shell">
@@ -93,11 +93,11 @@
             <div class="command-heading">
               <div>
                 <span>Busca global</span>
-                <strong>Cliente, empresa, telefone, data ou referência</strong>
+                <strong id="globalSearchLabel">Cliente, empresa, telefone, data ou referência</strong>
               </div>
             </div>
             <label class="global-search-box">
-              <input id="globalSearchInput" type="search" placeholder="Buscar Leonardo, agência, 30/04, EC-..." autocomplete="off" />
+              <input id="globalSearchInput" aria-labelledby="globalSearchLabel" type="search" placeholder="Buscar Leonardo, agência, 30/04, EC-..." autocomplete="off" />
             </label>
             <div class="global-search-results" id="globalSearchResults">
               <p>Digite para encontrar leads, propostas e clientes.</p>
