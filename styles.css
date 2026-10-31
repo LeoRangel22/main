@@ -13089,3 +13089,111 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
 .proposal-send-feedback { margin:8px 0; padding:10px; border:1px solid #cf9d42; border-radius:8px; font-size:.85rem; line-height:1.45; overflow-wrap:anywhere; }
 .proposal-send-feedback strong { display:block; }
 .pipeline-card [data-proposal-send-feedback]:empty { display:none; }
+
+/* Preserve readable controls when text is enlarged on narrow viewports. */
+@media (max-width: 820px) {
+  body[data-page="app"] .quote-layout,
+  body[data-page="app"] .quote-form {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+  body[data-page="app"] .quote-form > *,
+  body[data-page="app"] .quote-form label,
+  body[data-page="app"] .quote-form button {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  body[data-page="app"] .quote-form button {
+    white-space: normal;
+  }
+  body[data-page="clientes"] .client-registry-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body[data-page="clientes"] .client-registry-topline,
+  body[data-page="clientes"] .client-registry-footer {
+    flex-wrap: wrap;
+  }
+  body[data-page="clientes"] .client-registry-topline > *,
+  body[data-page="clientes"] .client-registry-footer > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 480px) {
+  .public-form-body .event-details-grid,
+  .public-form-body .final-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .public-form-body .consult-step {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .public-form-body .guest-count-heading {
+    flex-wrap: wrap;
+  }
+}
+
+/* Intrinsic-size fixes also cover wider fallback-font metrics. */
+@media (max-width: 820px) {
+  body[data-page="app"] .sales-command-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body[data-page="app"] .sales-command-surface,
+  body[data-page="app"] .sales-command-grid > *,
+  body[data-page="app"] .action-center,
+  body[data-page="app"] .action-list,
+  body[data-page="app"] .action-focus-card,
+  body[data-page="app"] .action-task {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body[data-page="app"] .action-center-heading,
+  body[data-page="app"] .action-task-topline,
+  body[data-page="app"] .action-plan {
+    flex-wrap: wrap;
+  }
+  body[data-page="app"] .action-center-heading > *,
+  body[data-page="app"] .action-task-topline > *,
+  body[data-page="app"] .action-plan > *,
+  body[data-page="clientes"] .command-heading > *,
+  body[data-page="clientes"] .clients-hero-panel,
+  body[data-page="clientes"] .clients-hero-panel > *,
+  body[data-page="clientes"] .topbar h1 {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 480px) {
+  .public-form-body .contact-primary-grid label {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .public-form-body fieldset.preference-chips,
+  .public-form-body .preference-chips legend,
+  .public-form-body .preference-chips label,
+  .public-form-body .preference-chips label span,
+  .public-form-body h1,
+  .public-form-body h2 {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .public-form-body .preference-chips input[type="checkbox"] {
+    flex: 0 0 18px;
+    min-width: 18px;
+    max-width: 18px;
+  }
+}
+
+@media (max-width: 820px) {
+  .team-status { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+}
+
+@media (max-width: 820px) {
+  body[data-page="app"] .team-panel { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  body[data-page="app"] .team-panel > * { min-width: 0; }
+}
