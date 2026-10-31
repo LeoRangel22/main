@@ -1051,6 +1051,53 @@ textarea[aria-invalid="true"] {
   gap: 8px;
 }
 
+body[data-page="clientes"] .client-registry-panel,
+body[data-page="clientes"] .client-directory-list { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+body[data-page="clientes"] .client-registry-panel .command-heading { flex-wrap: wrap; }
+body[data-page="clientes"] .client-registry-panel .command-heading > div { min-width: 0; overflow-wrap: anywhere; }
+body[data-page="clientes"] .client-registry-card { min-width: 0; }
+@media (max-width: 900px) {
+  body[data-page="clientes"] .client-command-center { grid-template-columns: minmax(0, 1fr); }
+  body[data-page="clientes"] .global-search-panel { min-width: 0; }
+  body[data-page="clientes"] .command-heading { flex-wrap: wrap; }
+  body[data-page="clientes"] .command-heading > div { min-width: 0; overflow-wrap: anywhere; }
+  body[data-page="clientes"] .client-registry-main { min-width: 0; overflow-wrap: anywhere; }
+}
+.client-contact-review,
+.client-quote-comparison {
+  min-width: 0;
+  border: 1px solid rgba(24, 58, 45, 0.16);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+.client-contact-review summary,
+.client-quote-comparison summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: list-item;
+  list-style-position: inside;
+  padding: 12px 0;
+  box-sizing: border-box;
+  font-weight: 850;
+  color: var(--verde-escuro);
+}
+.client-contact-review summary:focus-visible,
+.client-quote-comparison summary:focus-visible,
+.client-comparison-scroll:focus-visible { outline: 3px solid var(--verde); outline-offset: 3px; }
+.client-contact-review p,
+.client-quote-comparison p { line-height: 1.5; overflow-wrap: anywhere; }
+.client-contact-review ul { padding-bottom: 10px; }
+.client-registry-card .client-contact-review li { display: block; white-space: normal; overflow-wrap: anywhere; }
+.client-registry-card .client-contact-review li small { display: block; white-space: normal; overflow: visible; }
+.client-comparison-scroll { max-width: 100%; overflow-x: auto; margin-bottom: 12px; }
+.client-comparison-scroll table { width: 100%; min-width: 570px; border-collapse: collapse; }
+.client-comparison-scroll caption { text-align: left; padding-bottom: 8px; line-height: 1.5; }
+.client-comparison-scroll th,
+.client-comparison-scroll td { padding: 8px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(24, 58, 45, 0.14); overflow-wrap: anywhere; }
+.client-comparison-scroll td small,
+.client-comparison-scroll th small { display: block; padding-top: 4px; }
+
 .search-empty-guide,
 .global-search-summary {
   background: rgba(24, 58, 45, 0.055);
