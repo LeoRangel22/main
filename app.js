@@ -10780,9 +10780,134 @@ function getClientRegistry(items = getPipelineItems()) {
     .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
 }
 
+function getClientReviewPhone(value) {
+  const text = String(value || "").trim();
+  if (!text || /[^\d\s()+.\-/]/.test(text)) return "";
+  const international = /^(?:\+|00)/.test(text);
+  let digits = text.replace(/\D/g, "");
+  if (text.startsWith("00")) digits = digits.slice(2);
+  if (!/^\d{10,15}$/.test(digits) || /^(\d)\1+$/.test(digits)) return "";
+  return `${international ? "international" : "unqualified"}:${digits}`;
+}
+
+function getClientReviewName(value) {
+  return (String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().match(/[\p{L}]+/gu) || [])
+    .filter(part => !["de", "da", "do", "das", "dos", "e"].includes(part));
+}
+
+function clientReviewNamesMatch(left, right) {
+  if (left.length < 2 || right.length < 2 || left[0] !== right[0]) return false;
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length <= right.length ? right : left;
+  let cursor = 0;
+  for (const part of longer) if (part === shorter[cursor]) cursor++;
+  return cursor === shorter.length;
+}
+
+function getClientRelationshipReviews(clients) {
+  // Read-only hints within the already-authorized loaded set. Never changes the registry,
+  // resolves identity, joins histories, fetches other clients or affects public access.
+  const signals = clients.map(client => {
+    const records = [client, ...(client.items || [])];
+    const names = [...new Set(records.map(r => String(r.name || "").trim()).filter(Boolean))];
+    return { client, names, tokens: names.map(getClientReviewName),
+      phones: new Set(records.map(r => getClientReviewPhone(r.phone)).filter(Boolean)),
+      emails: new Set(records.map(r => String(r.email || "").trim().toLowerCase()).filter(email => isLikelyEmailAddress(email))),
+      candidates: new Map(), sharedPhone: false, ambiguousName: false };
+  });
+  const phoneIndex = new Map(), nameIndex = new Map();
+  const add = (index, key, signal) => {
+    if (!index.has(key)) index.set(key, new Set());
+    index.get(key).add(signal);
+  };
+  for (const signal of signals) {
+    for (const phone of signal.phones) add(phoneIndex, phone, signal);
+    for (const tokens of signal.tokens) if (tokens.length >= 2) {
+      for (const surname of new Set(tokens.slice(1))) add(nameIndex, `${tokens[0]}|${surname}`, signal);
+    }
+  }
+  const namesMatch = (a, b) => a.tokens.some(left => b.tokens.some(right => clientReviewNamesMatch(left, right)));
+  for (const group of phoneIndex.values()) {
+    const members = [...group];
+    if (members.length < 2) continue;
+    for (const current of members) {
+      current.sharedPhone ||= members.length > 2;
+      // Bound review work for a widely shared corporate/agency channel.
+      for (const other of members.slice(0, 5)) {
+        if (current === other || current.client.key === other.client.key) continue;
+        const emailConflict = current.emails.size && other.emails.size && ![...current.emails].some(email => other.emails.has(email));
+        const nameConflict = current.tokens.some(n => n.length >= 2) && other.tokens.some(n => n.length >= 2) && !namesMatch(current, other);
+        current.candidates.set(other.client.key, { name: other.client.name || "Contato sem nome", kind: "phone",
+          reason: emailConflict ? "Telefone em comum; e-mails diferentes. Confira se o canal é compartilhado."
+            : nameConflict ? "Telefone em comum; nomes diferentes. Confirme a pessoa antes de associar."
+            : "Telefone em comum; confirme os dados antes de associar os contatos." });
+      }
+    }
+  }
+  for (const group of nameIndex.values()) {
+    const members = [...group];
+    if (members.length > 20) { members.forEach(s => { s.ambiguousName = true; }); continue; }
+    for (const current of members) for (const other of members) {
+      if (current === other || current.client.key === other.client.key || current.candidates.has(other.client.key) || !namesMatch(current, other)) continue;
+      current.candidates.set(other.client.key, { name: other.client.name || "Contato sem nome", kind: "name",
+        reason: "Apenas nome semelhante; isso não identifica a pessoa." });
+    }
+  }
+  return new Map(signals.map(signal => [signal.client.key, {
+    candidates: [...signal.candidates.values()].slice(0, 3),
+    moreCandidates: signal.candidates.size > 3 || signal.sharedPhone,
+    ambiguousName: signal.ambiguousName,
+    variants: signal.names.slice(0, 3),
+    hasNameVariants: signal.names.length > 1,
+  }]));
+}
+
+function renderClientRelationshipReview(client, review) {
+  if (!review || (!review.candidates.length && !review.hasNameVariants && !review.ambiguousName)) return "";
+  return `<details class="client-contact-review">
+    <summary>Conferir identidade do contato</summary>
+    <p>Coincidências não comprovam identidade. Nenhum cadastro ou histórico foi unido.</p>
+    ${review.hasNameVariants ? `<p>Nomes nos registros deste contato: ${review.variants.map(escapeHtml).join(" · ")}</p>` : ""}
+    ${review.candidates.length ? `<ul>${review.candidates.map(candidate => `<li><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(candidate.reason)}</small></li>`).join("")}</ul>` : ""}
+    ${review.moreCandidates ? "<p>Há outras coincidências; confira se é um canal compartilhado.</p>" : ""}
+    ${review.ambiguousName ? "<p>Nome frequente na lista: confirme e-mail e telefone; não associe somente pelo nome.</p>" : ""}
+  </details>`;
+}
+
+function renderClientQuoteComparison(client) {
+  const current = client.items.filter(item => item.kind === "proposal" && item.isCurrentVersion !== false && item.isCurrent !== false && item.is_current !== false)
+    .slice().sort((a, b) => (Number(b.version) || 0) - (Number(a.version) || 0) ||
+      (Date.parse(b.updatedAt || b.createdAt || "") || 0) - (Date.parse(a.updatedAt || a.createdAt || "") || 0));
+  const quotes = getSalesFunnelItems(current);
+  if (quotes.length < 2) return "";
+  const rows = quotes.slice(0, 8).map(item => {
+    const duration = Object.prototype.hasOwnProperty.call(item, "briefingDuration") ? item.briefingDuration
+      : item.duration !== undefined ? item.duration : item.snapshot?.event?.duration;
+    const guests = Object.prototype.hasOwnProperty.call(item, "briefingGuests") ? item.briefingGuests
+      : item.guests !== undefined ? item.guests : item.snapshot?.client?.guests;
+    const quantity = Number.isFinite(Number(guests)) && Number(guests) > 0 ? `${guests} pessoas` : "Quantidade a definir";
+    const timing = [item.date ? formatDateFromIso(item.date) : "Data a definir", item.time || "Horário a definir",
+      Number.isFinite(Number(duration)) && Number(duration) > 0 ? `${duration} h` : "Duração a definir"].join(" · ");
+    const quotedTotal = Object.prototype.hasOwnProperty.call(item, "briefingTotal") ? item.briefingTotal : item.total;
+    const hasTotal = quotedTotal !== null && quotedTotal !== undefined && String(quotedTotal).trim() !== "" && Number.isFinite(Number(quotedTotal)) && Number(quotedTotal) >= 0;
+    const reference = item.reference || String(item.id || "").slice(0, 8) || "Sem referência";
+    return `<tr><th scope="row">${escapeHtml(reference)}<small>Versão ${escapeHtml(item.version || "a conferir")}</small></th>
+      <td>${escapeHtml(timing)}</td><td>${escapeHtml(quantity)}<small>${escapeHtml(item.type || "Formato a definir")}</small></td>
+      <td>${hasTotal ? escapeHtml(formatMoney(quotedTotal)) : "A definir"}</td>
+      <td>${escapeHtml(getProposalStatusLabel(item.status))}</td></tr>`;
+  }).join("");
+  return `<details class="client-quote-comparison"><summary>Comparar cotações atuais (${quotes.length})</summary>
+    <p>Confira escopo, quantidade e duração antes de comparar preços. Mesmo contato não significa mesmo evento ou reserva.</p>
+    <div class="client-comparison-scroll" role="region" aria-label="Comparação das cotações atuais" tabindex="0">
+      <table><caption>Até oito cotações atuais por oportunidade; versões anteriores permanecem no histórico.</caption>
+      <thead><tr><th scope="col">Referência</th><th scope="col">Data e duração</th><th scope="col">Escopo</th><th scope="col">Total cotado</th><th scope="col">Etapa</th></tr></thead><tbody>${rows}</tbody></table>
+    </div></details>`;
+}
+
 function renderClientRegistry(items = getPipelineItems()) {
   if (!nodes.clientDirectory) return;
   const clients = getClientRegistry(items);
+  const relationshipReviews = document.body?.dataset?.page === "clientes" ? getClientRelationshipReviews(clients) : null;
   const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
   const filtered = term ? clients.filter((client) => client.searchText.includes(term)) : clients;
   const maxClients = document.body?.dataset?.page === "clientes" ? 24 : 6;
@@ -10794,7 +10919,7 @@ function renderClientRegistry(items = getPipelineItems()) {
     nodes.clientDirectory.innerHTML = `<p>Nenhum cliente carregado ainda.</p>`;
     return;
   }
-  nodes.clientDirectory.innerHTML = filtered.slice(0, maxClients).map(renderClientRegistryCard).join("") || `<p>Nenhum cliente encontrado.</p>`;
+  nodes.clientDirectory.innerHTML = filtered.slice(0, maxClients).map(client => renderClientRegistryCard(client, relationshipReviews?.get(client.key))).join("") || `<p>Nenhum cliente encontrado.</p>`;
 }
 
 function getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, realizedItems, canceledItems }) {
@@ -10815,15 +10940,15 @@ function getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, re
   if (openQuoteItems.length >= 2) {
     return {
       tone: "hot",
-      label: "Cliente recorrente em cotação",
-      detail: "Mais de uma oportunidade aberta. Priorize acompanhamento consultivo.",
+      label: "Mais de uma cotação aberta",
+      detail: "Confira se são alternativas do mesmo evento ou eventos distintos antes de orientar o cliente.",
     };
   }
   if (latest?.kind === "proposal" && normalizeProposalStatus(latest.status) === "negociacao") {
     return {
       tone: "hot",
       label: "Negociação ativa",
-      detail: "Ajuste pendências e conduza para sinal com próximo passo claro.",
+      detail: getClientNextAction(latest),
     };
   }
   if (canceledItems.length && !openQuoteItems.length) {
@@ -10840,7 +10965,7 @@ function getClientCommercialProfile({ latest, openQuoteItems, confirmedItems, re
   };
 }
 
-function renderClientRegistryCard(client) {
+function renderClientRegistryCard(client, relationshipReview = null) {
   const latest = client.items[0];
   const latestButton =
     latest.kind === "proposal"
@@ -10916,6 +11041,7 @@ function renderClientRegistryCard(client) {
         <span>Próximo passo</span>
         <strong>${escapeHtml(nextAction)}</strong>
       </div>
+      ${relationshipReview ? renderClientRelationshipReview(client, relationshipReview) + renderClientQuoteComparison(client) : ""}
       <ul>${history}</ul>
       <div class="client-registry-footer">
         <b>${escapeHtml(footerLabel)}</b>
@@ -10928,17 +11054,28 @@ function renderClientRegistryCard(client) {
 function getClientNextAction(item) {
   if (!item) return "Cadastrar primeiro contato.";
   const status = normalizeProposalStatus(item.status);
-  if (item.kind === "request" || status === "lead_recebido") return "Abrir lead e montar proposta.";
-  if (status === "proposta_pronta") return "Enviar proposta ao cliente.";
-  if (status === "proposta_enviada") return "Retomar contato e buscar resposta.";
-  if (status === "negociacao") return "Resolver ajustes e avançar para sinal.";
-  if (status === "confirmado") return "Registrar pagamento restante.";
+  if (item.isCurrentVersion === false || item.isCurrent === false || item.is_current === false) return "Consultar a versão atual antes de orientar o cliente.";
+  if (status === "cancelado") return "Arquivado; manter histórico para nova oportunidade.";
+  if (status === "pos_venda") return "Registrar pós-venda e oportunidade futura.";
+  const commercial = getSalesFunnelStateForItem(item);
+  const actions = {
+    lead: "Abrir lead e montar proposta.",
+    preparation: "Concluir e revisar o rascunho antes de enviar.",
+    validation: "Conferir o comprovante com o Financeiro; ainda não há recebimento ou reserva confirmados.",
+    changes: "Revisar o pedido de alteração e preparar a próxima versão, preservando o acordo anterior.",
+    approved: "Conferir a versão e as condições aceitas, depois verificar o sinal. Aceite não confirma reserva.",
+    reply: "Conferir a resposta do cliente e registrar o retorno da equipe.",
+    waiting: "Acompanhar o retorno da proposta enviada, sem presumir aceite.",
+    ready: "Conferir a versão pronta e registrar o envio pelo canal escolhido.",
+    review: "Conferir as evidências da etapa e as pendências antes de orientar cobrança ou reserva.",
+  };
+  if (commercial && actions[commercial.id]) return actions[commercial.id];
+  if (commercial?.id !== "won") return "Conferir a etapa comercial e os registros da versão atual.";
+  if (status === "confirmado") return "Conferir o saldo calculado e as condições antes de orientar o pagamento restante.";
   if (status === "pagamento_final") return "Avançar para planejamento.";
   if (status === "planejamento") return "Concluir checklist operacional.";
   if (status === "evento_proximo") return "Confirmar detalhes finais.";
-  if (status === "pos_venda") return "Registrar pós-venda e oportunidade futura.";
-  if (status === "cancelado") return "Arquivado; manter histórico para nova oportunidade.";
-  return "Atualizar etapa comercial.";
+  return "Conferir as pendências comerciais e operacionais da versão atual.";
 }
 
 function formatClientRegistrySummary(quoteCount, confirmedCount, realizedCount) {
@@ -16829,6 +16966,7 @@ renderAll();
 // Deferred extensions add fields to the editor signature. Establish the initial
 // baseline only after they have loaded; opening an existing record keeps its base.
 document.addEventListener("DOMContentLoaded", () => {
+  if (!fields.generalTerms || !fields.eventDuration) return;
   if (!state.loadedEditorSignature) state.loadedEditorSignature = getCurrentEditorSignature();
   syncEditorLeaveProtection();
 }, { once: true });
