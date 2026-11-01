@@ -13122,6 +13122,7 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
   }
 }
 @media (max-width: 480px) {
+  .public-form-body select { white-space: normal; }
   .public-form-body .event-details-grid,
   .public-form-body .final-review-grid {
     grid-template-columns: minmax(0, 1fr);
