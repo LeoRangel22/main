@@ -14676,6 +14676,7 @@ function startNewProposal(options = {}) {
     sourceLabel: isRealizedMode ? "Registro retroativo" : "Edição manual",
   });
   scrollToClientData();
+  fields.clientName?.focus?.({ preventScroll: true });
   showToast(isRealizedMode ? "Registro retroativo pronto. Preencha o essencial e salve como realizado." : "Nova proposta pronta para preencher.");
 }
 
