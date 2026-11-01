@@ -326,9 +326,9 @@
                   <span id="emailLabel">E-mail</span>
                   <input
                     id="requestClientEmail"
+                    aria-describedby="emailHelp contactRequirementNote"
                     name="email"
                     type="email"
-                    required
                     autocomplete="email"
                     spellcheck="false"
                     placeholder="Ex.: marina@empresa.com.br…"
@@ -339,10 +339,10 @@
                   <span id="phoneLabel">Celular/WhatsApp</span>
                   <input
                     id="requestClientPhone"
+                    aria-describedby="phoneHelp contactRequirementNote"
                     name="whatsapp"
                     type="tel"
                     inputmode="tel"
-                    required
                     autocomplete="tel"
                     placeholder="Ex.: +55 21 99999-9999"
                   />
@@ -395,8 +395,10 @@
               </details>
             </div>
             <div class="contact-reassurance">
+              <p id="partialCaptureStatus" class="partial-capture-status" role="status" aria-live="polite" aria-atomic="true"></p>
+              <button id="retryPartialCaptureBtn" class="secondary" type="button" hidden>Tentar salvar as alterações desta aba</button>
               <p class="contact-promise" id="contactPromise">Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.</p>
-              <p class="contact-assurance"><span id="contactAssurance">Sem compromisso. Usamos seus dados só para a proposta do evento. Ao informar nome e e-mail ou telefone, o que já foi preenchido fica salvo, mesmo sem envio.</span> <a id="privacyPolicyLink" href="https://www.embaixadacarioca.com/politica-de-privacidade.html" target="_blank" rel="noopener">Política de privacidade</a></p>
+              <p class="contact-assurance"><span id="contactAssurance">Sem compromisso. Usamos seus dados só para a proposta do evento. Ao informar nome e e-mail ou telefone, tentamos salvar o rascunho; confira a confirmação de salvamento abaixo, mesmo sem enviar o pedido.</span> <a id="privacyPolicyLink" href="https://www.embaixadacarioca.com/politica-de-privacidade.html" target="_blank" rel="noopener">Política de privacidade</a></p>
             </div>
           </section>
 

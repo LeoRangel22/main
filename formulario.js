@@ -508,7 +508,7 @@ const copy = {
       contactRequirementNote:
         "Nome + e-mail ou WhatsApp já são suficientes para salvar seu pedido. Empresa, cliente final e grupo ajudam a equipe a responder mais rápido.",
       contactPromise: "Nossa equipe responde em até 2 dias úteis com uma proposta sob medida.",
-      contactAssurance: "Sem compromisso. Usamos seus dados só para a proposta do evento. Ao informar nome e e-mail ou telefone, o que já foi preenchido fica salvo, mesmo sem envio.",
+      contactAssurance: "Sem compromisso. Usamos seus dados só para a proposta do evento. Ao informar nome e e-mail ou telefone, tentamos salvar o rascunho; confira a confirmação de salvamento abaixo, mesmo sem enviar o pedido.",
       privacyPolicyLink: "Política de privacidade",
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
       finalReviewEyebrow: "Revisão final",
@@ -686,7 +686,7 @@ const copy = {
       contactRequirementNote:
         "Name plus e-mail or WhatsApp is enough to send your request. Company, final client and group help our team reply faster.",
       contactPromise: "Our team replies within 2 business days with a tailored proposal.",
-      contactAssurance: "No commitment. We use your details only for your event proposal. Once you enter your name and email or phone, what you have filled in is saved, even if you don't submit.",
+      contactAssurance: "No commitment. We use your details only for your event proposal. After you enter your name and e-mail or phone, we try to save the draft; check the saving confirmation below, even before submitting.",
       privacyPolicyLink: "Privacy policy (in Portuguese)",
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
       finalReviewEyebrow: "Final review",
@@ -866,7 +866,7 @@ copy.es = {
       contactRequirementNote:
         "Tu nombre y un correo electrónico o WhatsApp bastan para enviar la solicitud. La empresa, el cliente final y el grupo ayudan a nuestro equipo a responder más rápido.",
       contactPromise: "Nuestro equipo responde en un plazo de 2 días hábiles con una propuesta personalizada.",
-      contactAssurance: "Sin compromiso. Usamos tus datos solo para la propuesta de tu evento. Cuando introduces tu nombre y correo electrónico o teléfono, la información que has completado se guarda, aunque no envíes el formulario.",
+      contactAssurance: "Sin compromiso. Usamos tus datos solo para la propuesta de tu evento. Al indicar nombre y correo o teléfono, intentamos guardar el borrador; comprueba la confirmación de guardado abajo, incluso antes de enviarlo.",
       privacyPolicyLink: "Política de privacidad (en portugués)",
       defaultStatus: "El equipo de eventos de Embaixada Carioca revisará tu solicitud.",
       finalReviewEyebrow: "Revisión final",
@@ -1369,6 +1369,13 @@ function setLanguage(language) {
   renderLocalizedChoices();
   applyStaticCopy();
   applyLocalizedAria();
+  updateContactRequirements();
+  Object.values(fields).filter((field) => field?.getAttribute("aria-invalid") === "true").forEach((field) => {
+    const missingContact = (field === fields.email || field === fields.phone) && !fields.email.value && !fields.phone.value;
+    const message = missingContact ? getPartialCaptureCopy().contact
+      : field === fields.name && !field.value ? getCopy().messages.requiredName : "";
+    setFieldValidity(field, false, message);
+  });
   const compactCopy = uiState.language !== "pt"
     ? { formContactNav: "Contact", formPersonalizeNav: "Personalize", personalizeTitle: "Personalize your event (optional)", personalizeDescription: "Explore formats, occasions and preferences.", contactOptionalSummary: "Budget and referral (optional)" }
     : { formContactNav: "Contato", formPersonalizeNav: "Personalizar", personalizeTitle: "Personalize seu evento (opcional)", personalizeDescription: "Explore formatos, ocasião e preferências.", contactOptionalSummary: "Investimento e origem (opcional)" };
@@ -1378,6 +1385,7 @@ function setLanguage(language) {
   updateGuestOutput();
   renderFinalReview();
   renderReturningClientCopy();
+  if (typeof partialCaptureState !== "undefined") { renderPartialCaptureStatus(); schedulePartialCapture(); }
   if (statusNode.dataset.status === "error" && statusNode.querySelector("ul")) {
     setStatus(getCopy().labels.defaultStatus, "neutral");
     validateSnapshot(getSnapshot(getOrCreateReferenceCode()));
@@ -1472,23 +1480,97 @@ function resetCaptureIdentity() {
   partialCaptureTimer = null;
 }
 
+const partialCaptureState = {
+  phase: "unsaved", fingerprint: "", confirmedFingerprint: "", epoch: 0,
+  pending: null, queued: false, external: false, submitting: false, completed: false, channel: null,
+  submissionUncertain: false, submissionFingerprint: null, submissionSnapshot: null,
+  sharedIdentity: false,
+};
+
+function getPartialCaptureCopy() {
+  const messages = {
+    pt: {
+      unsaved: "Alterações ainda não salvas. Informe seu nome e um e-mail ou telefone válido para salvar.",
+      saving: "Salvando as alterações desta aba…",
+      saved: "Rascunho desta aba salvo e confirmado. Você pode continuar preenchendo.",
+      error: "Não foi possível confirmar o salvamento. Seus dados continuam nesta aba. Tente novamente ou envie o pedido.",
+      external: "Este pedido foi alterado em outra aba. Seus dados continuam aqui; confira qual aba deseja usar antes de salvar novamente.",
+      submitted: "Pedido enviado. Nenhum rascunho está sendo salvo.",
+      externalSubmitted: "Este pedido foi enviado em outra aba. Estas alterações não foram enviadas. Preserve-as antes de abrir um novo formulário.",
+      identityChanged: "A referência compartilhada mudou em outra aba. Seus dados continuam aqui; confirme qual pedido deseja continuar antes de prosseguir.",
+      submittedChanges: "Pedido enviado, mas alterações feitas durante o envio permanecem nesta aba e não foram enviadas. Preserve-as antes de abrir um novo formulário.",
+      submitting: "Enviando o pedido. O salvamento de rascunho está pausado.",
+      submissionUncertain: "Não foi possível confirmar o envio. Os dados continuam nesta aba. Se não os alterou, pode repetir o envio com a mesma referência; se alterou ou reabriu a página, confirme o pedido com a equipe antes de prosseguir.",
+      retry: "Tentar salvar as alterações desta aba", contact: "Informe um e-mail ou telefone válido; não é necessário preencher os dois.",
+    },
+    en: {
+      unsaved: "Changes not saved yet. Enter your name and a valid e-mail or phone number to save.",
+      saving: "Saving changes from this tab…",
+      saved: "Changes from this tab saved and confirmed. You can continue filling in the form.",
+      error: "We could not confirm saving. Your entries remain in this tab. Try again or submit the request.",
+      external: "This request changed in another tab. Your entries remain here; choose which tab to use before saving again.",
+      submitted: "Request sent. No draft is being saved.",
+      externalSubmitted: "This request was sent from another tab. These changes were not sent. Preserve them before opening a new form.",
+      identityChanged: "The shared reference changed in another tab. Your entries remain here; confirm which request to continue before proceeding.",
+      submittedChanges: "Request sent, but changes made while sending remain in this tab and were not sent. Preserve them before opening a new form.",
+      submitting: "Sending the request. Draft saving is paused.",
+      submissionUncertain: "We could not confirm sending. Your entries remain in this tab. If unchanged, you can retry with the same reference; if edited or the page was reopened, confirm the request with the team before continuing.",
+      retry: "Try saving changes from this tab", contact: "Enter a valid e-mail or phone number; both are not required.",
+    },
+    es: {
+      unsaved: "Cambios aún no guardados. Indica tu nombre y un correo o teléfono válido para guardar.",
+      saving: "Guardando los cambios de esta pestaña…",
+      saved: "Cambios de esta pestaña guardados y confirmados. Puedes seguir completando el formulario.",
+      error: "No pudimos confirmar el guardado. Tus datos siguen en esta pestaña. Inténtalo de nuevo o envía la solicitud.",
+      external: "Esta solicitud cambió en otra pestaña. Tus datos siguen aquí; elige qué pestaña usar antes de guardar de nuevo.",
+      submitted: "Solicitud enviada. No se está guardando ningún borrador.",
+      externalSubmitted: "Esta solicitud se envió desde otra pestaña. Estos cambios no se enviaron. Consérvalos antes de abrir otro formulario.",
+      identityChanged: "La referencia compartida cambió en otra pestaña. Tus datos siguen aquí; confirma qué solicitud deseas continuar antes de seguir.",
+      submittedChanges: "Solicitud enviada, pero los cambios realizados durante el envío siguen aquí y no se enviaron. Consérvalos antes de abrir otro formulario.",
+      submitting: "Enviando la solicitud. El guardado del borrador está pausado.",
+      submissionUncertain: "No pudimos confirmar el envío. Tus datos siguen aquí. Si no los cambiaste, puedes reintentar con la misma referencia; si los editaste o reabriste la página, confirma la solicitud con el equipo antes de continuar.",
+      retry: "Intentar guardar los cambios de esta pestaña", contact: "Indica un correo o teléfono válido; no es necesario completar ambos.",
+    },
+  };
+  return messages[uiState.language] || messages.pt;
+}
+
 function getPartialCaptureStatusNode() {
   let node = document.querySelector("#partialCaptureStatus");
-  if (node) return node;
-  node = document.createElement("p");
-  node.id = "partialCaptureStatus";
-  node.className = "partial-capture-status";
-  const reassurance = document.querySelector(".contact-reassurance");
-  reassurance?.prepend(node);
+  if (!node) {
+    node = document.createElement("p");
+    node.id = "partialCaptureStatus";
+    node.className = "partial-capture-status";
+    document.querySelector(".contact-reassurance")?.prepend(node);
+  }
+  node.setAttribute("role", "status");
+  node.setAttribute("aria-live", "polite");
+  node.setAttribute("aria-atomic", "true");
   return node;
 }
 
+function renderPartialCaptureStatus() {
+  const node = getPartialCaptureStatusNode();
+  const copy = getPartialCaptureCopy();
+  node.textContent = copy[partialCaptureState.phase] || copy.unsaved;
+  node.dataset.state = partialCaptureState.phase;
+  const retry = document.querySelector("#retryPartialCaptureBtn");
+  if (retry) {
+    retry.textContent = copy.retry;
+    retry.hidden = !["error", "external"].includes(partialCaptureState.phase);
+    retry.disabled = Boolean(partialCaptureState.pending || partialCaptureState.submitting);
+  }
+}
+
+function getPartialCaptureFingerprint(snapshot = getSnapshot(getOrCreateReferenceCode())) {
+  const { enviadoEm, ...content } = snapshot;
+  return JSON.stringify(content);
+}
+
 function canCapturePartialLead() {
-  const name = fields.name.value.trim();
-  const email = fields.email.value.trim();
-  const phone = fields.phone.value.trim();
-  if (!hasUsableName(name)) return false;
-  return (email && isValidEmail(email)) || (phone && isValidContactPhone(phone));
+  const name = fields.name.value.trim(), email = fields.email.value.trim(), phone = fields.phone.value.trim();
+  return hasUsableName(name) && Boolean(email || phone)
+    && (!email || isValidEmail(email)) && (!phone || isValidContactPhone(phone));
 }
 
 function getCurrentProgressStep() {
@@ -1496,35 +1578,171 @@ function getCurrentProgressStep() {
   return stepOrder[Math.max(0, index)] || "contact";
 }
 
-async function savePartialLead() {
-  if (!canCapturePartialLead()) return;
-  const client = getPublicSupabaseClient();
-  if (!client) return;
-  const snapshot = getSnapshot(getOrCreateReferenceCode());
-  const node = getPartialCaptureStatusNode();
+function notifyPartialCapture(kind, token) {
+  // Coordination metadata only: never send contact details or snapshots between tabs.
+  const message = { kind, token };
   try {
-    const { error } = await client.rpc("upsert_public_quote_draft", {
-      p_capture_token: getCaptureToken(),
-      p_snapshot: snapshot,
-      p_last_step: getCurrentProgressStep(),
-    });
-    if (error) {
-      if (!/function|42883|schema cache/i.test(String(error.message || error.code || ""))) {
-        console.warn("Falha ao salvar lead parcial.", error);
-      }
-      return;
-    }
-    if (node) node.textContent = localizedText("Request saved. You can continue without starting over.", "Pedido salvo. Você pode continuar sem começar de novo.");
-  } catch (error) {
-    console.warn("Falha silenciosa na captura parcial.", error);
+    if (partialCaptureState.channel) partialCaptureState.channel.postMessage(message);
+    else localStorage.setItem("embaixada_form_capture_activity_v1", JSON.stringify({ ...message, nonce: `${Date.now()}-${Math.random()}` }));
+  } catch (_) { /* Saving remains usable when browser coordination is unavailable. */ }
+}
+
+function readPartialCaptureFence(token = getCaptureToken()) {
+  try {
+    if (localStorage.getItem("embaixada_form_submit_pending_v1") === token) return "pending";
+    if (partialCaptureState.sharedIdentity && localStorage.getItem(CAPTURE_TOKEN_KEY) !== token) return "changed";
+  } catch (_) { /* Browser storage may be unavailable; in-memory guards remain active. */ }
+  return "none";
+}
+
+function applyPartialCaptureFence(token = getCaptureToken()) {
+  const fence = readPartialCaptureFence(token);
+  if (fence === "none") return false;
+  partialCaptureState.epoch += 1;
+  partialCaptureState.external = true;
+  partialCaptureState.queued = false;
+  if (fence === "changed") {
+    partialCaptureState.completed = true;
+    partialCaptureState.phase = "identityChanged";
+  } else {
+    partialCaptureState.submissionUncertain = true;
+    partialCaptureState.phase = "submissionUncertain";
   }
+  renderPartialCaptureStatus();
+  return true;
+}
+
+function handleOtherPartialCapture(message) {
+  if (!message || !["writing", "saved", "submitting", "submitted"].includes(message.kind)
+    || !message.token || message.token !== formStorageMemory[CAPTURE_TOKEN_KEY]) return;
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+  partialCaptureState.epoch += 1;
+  partialCaptureState.external = true;
+  partialCaptureState.queued = false;
+  if (message.kind === "submitting") partialCaptureState.submissionUncertain = true;
+  if (message.kind === "submitted") partialCaptureState.completed = true;
+  partialCaptureState.phase = partialCaptureState.completed ? "externalSubmitted"
+    : partialCaptureState.submissionUncertain ? "submissionUncertain" : "external";
+  renderPartialCaptureStatus();
+}
+
+async function savePartialLead({ retry = false } = {}) {
+  if (!partialCaptureState.submitting && !partialCaptureState.completed && applyPartialCaptureFence()) return;
+  if (partialCaptureState.pending) { partialCaptureState.queued = true; return partialCaptureState.pending; }
+  if (partialCaptureState.submitting || partialCaptureState.completed || partialCaptureState.submissionUncertain || (partialCaptureState.external && !retry)) return;
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+  if (!canCapturePartialLead()) { partialCaptureState.phase = "unsaved"; renderPartialCaptureStatus(); return; }
+  const snapshot = getSnapshot(getOrCreateReferenceCode());
+  const fingerprint = getPartialCaptureFingerprint(snapshot);
+  if (!retry && partialCaptureState.phase === "saved" && partialCaptureState.confirmedFingerprint === fingerprint) return;
+  partialCaptureState.external = false;
+  partialCaptureState.queued = false;
+  partialCaptureState.fingerprint = fingerprint;
+  const epoch = partialCaptureState.epoch, token = getCaptureToken();
+  partialCaptureState.phase = "saving";
+  notifyPartialCapture("writing", token);
+  const run = async () => {
+    let timeout;
+    try {
+      const client = getPublicSupabaseClient();
+      if (!client) throw new Error("DRAFT_CLIENT_UNAVAILABLE");
+      let request = client.rpc("upsert_public_quote_draft", {
+        p_capture_token: token, p_snapshot: snapshot, p_last_step: getCurrentProgressStep(),
+      });
+      if (typeof request.abortSignal === "function" && typeof AbortController === "function") {
+        const controller = new AbortController();
+        request = request.abortSignal(controller.signal);
+        timeout = window.setTimeout(() => controller.abort(), 12000);
+      }
+      const { data, error } = await request;
+      const receipt = Array.isArray(data) && data.length === 1 ? data[0] : null;
+      if (error || typeof receipt?.request_id !== "string" || !receipt.request_id
+        || typeof receipt?.opportunity_id !== "string" || !receipt.opportunity_id
+        || (receipt.capture_token && receipt.capture_token !== token)) throw new Error("DRAFT_SAVE_UNCONFIRMED");
+      notifyPartialCapture("saved", token);
+      if (epoch !== partialCaptureState.epoch || partialCaptureState.submitting || partialCaptureState.completed || partialCaptureState.submissionUncertain) return;
+      if (applyPartialCaptureFence(token)) return;
+      if (fingerprint !== getPartialCaptureFingerprint()) {
+        partialCaptureState.phase = "unsaved";
+        partialCaptureState.queued = true;
+      } else {
+        partialCaptureState.confirmedFingerprint = fingerprint;
+        partialCaptureState.phase = "saved";
+      }
+    } catch (_) {
+      if (epoch === partialCaptureState.epoch && !partialCaptureState.submitting && !partialCaptureState.completed && !partialCaptureState.submissionUncertain) {
+        partialCaptureState.phase = "error";
+      }
+    } finally {
+      if (timeout) window.clearTimeout(timeout);
+      partialCaptureState.pending = null;
+      renderPartialCaptureStatus();
+      if (partialCaptureState.queued && partialCaptureState.phase === "unsaved"
+        && !partialCaptureState.external && !partialCaptureState.submitting && !partialCaptureState.completed && !partialCaptureState.submissionUncertain) {
+        partialCaptureTimer = window.setTimeout(savePartialLead, 0);
+      }
+    }
+  };
+  partialCaptureState.pending = Promise.resolve().then(run);
+  renderPartialCaptureStatus();
+  return partialCaptureState.pending;
 }
 
 function schedulePartialCapture() {
-  if (!canCapturePartialLead()) return;
   if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+  if (partialCaptureState.completed && partialCaptureState.phase === "submitted") {
+    partialCaptureState.completed = false;
+    partialCaptureState.external = false;
+    partialCaptureState.fingerprint = "";
+    partialCaptureState.confirmedFingerprint = "";
+    partialCaptureState.submissionUncertain = false;
+    partialCaptureState.submissionFingerprint = null;
+    partialCaptureState.submissionSnapshot = null;
+    partialCaptureState.sharedIdentity = false;
+    partialCaptureState.epoch += 1;
+  }
+  if (partialCaptureState.completed) return;
+  if (partialCaptureState.submissionUncertain) { partialCaptureState.phase = "submissionUncertain"; renderPartialCaptureStatus(); return; }
+  const fingerprint = getPartialCaptureFingerprint();
+  try { partialCaptureState.sharedIdentity ||= localStorage.getItem(CAPTURE_TOKEN_KEY) === getCaptureToken(); } catch (_) { /* In-memory capture is supported. */ }
+  if (fingerprint !== partialCaptureState.fingerprint) {
+    partialCaptureState.fingerprint = fingerprint;
+    if (!partialCaptureState.external && !partialCaptureState.submitting) partialCaptureState.phase = "unsaved";
+  }
+  renderPartialCaptureStatus();
+  if (partialCaptureState.submitting || partialCaptureState.external || !canCapturePartialLead()) return;
   partialCaptureTimer = window.setTimeout(savePartialLead, 1000);
 }
+
+function initPartialCaptureFeedback() {
+  try {
+    partialCaptureState.sharedIdentity = localStorage.getItem(CAPTURE_TOKEN_KEY) === getCaptureToken();
+    if (localStorage.getItem("embaixada_form_submit_pending_v1") === getCaptureToken()) {
+      partialCaptureState.submissionUncertain = true;
+      partialCaptureState.external = true;
+      partialCaptureState.phase = "submissionUncertain";
+    }
+  } catch (_) { /* In-memory protection still applies in this tab. */ }
+  document.querySelector("#retryPartialCaptureBtn")?.addEventListener("click", () => savePartialLead({ retry: true }));
+  try {
+    if (typeof BroadcastChannel === "function") {
+      partialCaptureState.channel = new BroadcastChannel("embaixada_form_capture_activity_v1");
+      partialCaptureState.channel.onmessage = (event) => handleOtherPartialCapture(event.data);
+    }
+  } catch (_) { /* Use the storage-event fallback. */ }
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "embaixada_form_capture_activity_v1" || !event.newValue) return;
+    try { handleOtherPartialCapture(JSON.parse(event.newValue)); } catch (_) { /* Ignore malformed coordination metadata. */ }
+  });
+  window.addEventListener("online", () => {
+    if (partialCaptureState.phase === "error") schedulePartialCapture();
+  });
+  renderPartialCaptureStatus();
+}
+
 
 function createReferenceCode() {
   const now = new Date();
@@ -1814,6 +2032,11 @@ function setHelperState(node, message, tone = "neutral") {
 
 function updateContactRequirements() {
   const current = getCopy();
+  fields.email.required = false;
+  fields.phone.required = false;
+  fields.email.setAttribute("aria-required", "false");
+  fields.phone.setAttribute("aria-required", "false");
+  if (contactRequirementNote) contactRequirementNote.textContent = getPartialCaptureCopy().contact;
   const companyRequired = isCompanyRequired();
   const agencyClient = isAgencyClient();
   const tourismAgency = isTourismAgencyClient();
@@ -1897,9 +2120,35 @@ function updateContactGuidance() {
   }
 }
 
-function setFieldValidity(field, isValid) {
+function setFieldValidity(field, isValid, message = "") {
   if (!field) return;
-  field.toggleAttribute("aria-invalid", !isValid);
+  const id = field.id + "Error";
+  let error = document.getElementById(id);
+  const described = new Set((field.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+  if (isValid) {
+    field.removeAttribute("aria-invalid");
+    field.removeAttribute("aria-errormessage");
+    described.delete(id);
+    if (error) { error.textContent = ""; error.hidden = true; }
+  } else {
+    if (!error) {
+      error = document.createElement("small");
+      error.id = id;
+      error.className = "public-field-error";
+      error.setAttribute("aria-live", "polite");
+      field.insertAdjacentElement("afterend", error);
+    }
+    const current = getCopy();
+    const defaults = new Map([[fields.name, current.messages.invalidName], [fields.email, current.messages.invalidEmail],
+      [fields.phone, current.messages.invalidPhone], [fields.date, current.messages.missingDate], [fields.dateFlex, current.messages.missingDate]]);
+    error.textContent = message || defaults.get(field) || current.messages.submitError;
+    error.hidden = false;
+    described.add(id);
+    field.setAttribute("aria-invalid", "true");
+    field.setAttribute("aria-errormessage", id);
+  }
+  if (described.size) field.setAttribute("aria-describedby", [...described].join(" "));
+  else field.removeAttribute("aria-describedby");
 }
 
 function setStepValidity(stepName, isValid) {
@@ -2179,7 +2428,7 @@ function failValidation(field, stepName, message) {
   const current = getCopy();
   setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [message], current.messages.fixThisPointFooter || "");
   setStepValidity(stepName, false);
-  setFieldValidity(field, false);
+  setFieldValidity(field, false, message);
   field?.focus();
   scrollToStep(stepName, true);
   return false;
@@ -2199,6 +2448,7 @@ function getFriendlySubmitError(error, current) {
 function validateSnapshot(snapshot) {
   const current = getCopy();
   clearAllStepValidity();
+  Object.values(fields).forEach((field) => setFieldValidity(field, true));
   applyLeadFallbacks(snapshot);
   const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
 
@@ -2222,7 +2472,9 @@ function validateSnapshot(snapshot) {
   const hasEmail = Boolean(snapshot.cliente.email);
   const hasPhone = Boolean(snapshot.cliente.whatsapp);
   if (!hasEmail && !hasPhone) {
-    return failValidation(fields.email, "contact", localizedText("Share an e-mail or WhatsApp so our team can reply.", "Informe um e-mail ou WhatsApp para a equipe retornar."));
+    const message = getPartialCaptureCopy().contact;
+    setFieldValidity(fields.phone, false, message);
+    return failValidation(fields.email, "contact", message);
   }
 
   if (hasEmail && !isValidEmail(snapshot.cliente.email)) {
@@ -2551,6 +2803,14 @@ async function submitRequest(event) {
   event.preventDefault();
   if (submitButton.disabled) return;
   const current = getCopy();
+  if (!partialCaptureState.submissionFingerprint && applyPartialCaptureFence()) {
+    setStatus(getPartialCaptureCopy()[partialCaptureState.phase], "error");
+    return;
+  }
+  if (partialCaptureState.completed && partialCaptureState.phase !== "submitted") {
+    setStatus(getPartialCaptureCopy()[partialCaptureState.phase], "error");
+    return;
+  }
 
   if (!window.supabase?.createClient) {
     setStatus(current.messages.loadError, "error");
@@ -2559,17 +2819,41 @@ async function submitRequest(event) {
 
   const referenceCode = getOrCreateReferenceCode();
   const snapshot = getSnapshot(referenceCode);
+  const editingFingerprint = getPartialCaptureFingerprint(snapshot);
   if (!validateSnapshot(snapshot)) return;
 
+  if (partialCaptureState.submissionUncertain && editingFingerprint !== partialCaptureState.submissionFingerprint) {
+    setStatus(getPartialCaptureCopy().submissionUncertain, "error");
+    renderPartialCaptureStatus();
+    return;
+  }
+  if (!partialCaptureState.submissionFingerprint) {
+    partialCaptureState.submissionFingerprint = editingFingerprint;
+    partialCaptureState.submissionSnapshot = snapshot;
+  }
+  const submittedFingerprint = partialCaptureState.submissionFingerprint;
+  const submittedToken = getCaptureToken();
+  if (partialCaptureTimer) window.clearTimeout(partialCaptureTimer);
+  partialCaptureTimer = null;
+  partialCaptureState.epoch += 1;
+  partialCaptureState.submitting = true;
+  partialCaptureState.external = false;
+  partialCaptureState.queued = false;
+  partialCaptureState.phase = "submitting";
+  renderPartialCaptureStatus();
+  // Metadata only: a reload must not autosave over an ambiguously completed request.
+  try { localStorage.setItem("embaixada_form_submit_pending_v1", submittedToken); } catch (_) { /* Keep the same in-memory fence. */ }
+  notifyPartialCapture("submitting", submittedToken);
   submitButton.disabled = true;
   setStatus(current.messages.submitting, "neutral");
   let submittedOpportunityId = null;
+  let submissionConfirmed = false;
 
   try {
     const client = getPublicSupabaseClient();
     const { data, error } = await client.rpc("submit_public_quote_request", {
       p_capture_token: getCaptureToken(),
-      p_snapshot: snapshot,
+      p_snapshot: partialCaptureState.submissionSnapshot,
     });
 
 
@@ -2581,6 +2865,7 @@ async function submitRequest(event) {
       return;
     }
     submittedOpportunityId = data?.[0]?.opportunity_id || null;
+    submissionConfirmed = true;
   } catch (error) {
     captureLeadAnalytics("lead_submit_failed", { reason_code: "request_unavailable" });
     console.warn("Falha inesperada ao enviar solicitacao.", error);
@@ -2589,9 +2874,22 @@ async function submitRequest(event) {
     return;
   } finally {
     submitButton.disabled = false;
+    partialCaptureState.submitting = false;
+    if (!submissionConfirmed) {
+      partialCaptureState.submissionUncertain = true;
+      partialCaptureState.phase = "submissionUncertain";
+      renderPartialCaptureStatus();
+    }
   }
 
-  resetCaptureIdentity();
+  const changedDuringSubmit = submittedFingerprint !== getPartialCaptureFingerprint() || partialCaptureState.external;
+  partialCaptureState.completed = true;
+  partialCaptureState.phase = changedDuringSubmit ? "submittedChanges" : "submitted";
+  notifyPartialCapture("submitted", submittedToken);
+  try {
+    if (!changedDuringSubmit && localStorage.getItem("embaixada_form_submit_pending_v1") === submittedToken) localStorage.removeItem("embaixada_form_submit_pending_v1");
+  } catch (_) { /* Never clear another tab's newer pending identity. */ }
+  if (!changedDuringSubmit) resetCaptureIdentity();
   analyticsFormState.submitted = true;
   captureLeadAnalytics("lead_created", {
     entity_key_kind: submittedOpportunityId ? "opportunity" : "legacy_reference",
@@ -2599,6 +2897,14 @@ async function submitRequest(event) {
     entityId: submittedOpportunityId || referenceCode,
     dedupeKey: `lead-created:${referenceCode}`,
   }, snapshot);
+  if (changedDuringSubmit) {
+    renderSuccessStatus(referenceCode);
+    const notice = document.createElement("p");
+    notice.textContent = getPartialCaptureCopy().submittedChanges;
+    statusNode.appendChild(notice);
+    renderPartialCaptureStatus();
+    return;
+  }
   form.reset();
   fields.moment.value = "";
   fields.clientType.value = "";
@@ -2615,6 +2921,7 @@ async function submitRequest(event) {
   updateContactGuidance();
   renderFinalReview();
   renderSuccessStatus(referenceCode);
+  renderPartialCaptureStatus();
 }
 
 applyConversionStepOrder();
@@ -2661,6 +2968,7 @@ fields.timeRange.addEventListener("change", () => {
 });
 fields.phone.addEventListener("input", () => {
   fields.phone.value = formatPhoneInput(fields.phone.value);
+  if (isValidContactPhone(fields.phone.value) && !fields.email.value) setFieldValidity(fields.email, true);
   setFieldValidity(fields.phone, !fields.phone.value || isValidContactPhone(fields.phone.value));
   setStepValidity("contact", true);
   updateContactGuidance();
@@ -2678,6 +2986,11 @@ fields.name.addEventListener("blur", () => {
 });
 fields.guests.addEventListener("input", updateGuestOutput);
 fields.guestSlider?.addEventListener("input", () => updateGuestOutput("slider"));
+fields.email.addEventListener("input", () => {
+  setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
+  if (isValidEmail(fields.email.value) && !fields.phone.value) setFieldValidity(fields.phone, true);
+  resetStatusIfError();
+});
 fields.email.addEventListener("blur", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   setStepValidity("contact", true);
@@ -2733,6 +3046,7 @@ langButtons.forEach((button) =>
   }),
 );
 initializeCaptureIdentity();
+initPartialCaptureFeedback();
 setLanguage(uiState.language);
 captureLeadAnalytics("lead_form_viewed", {}, { dedupeKey: `lead-form-viewed:${uiState.language}` });
 window.addEventListener("pagehide", () => {
