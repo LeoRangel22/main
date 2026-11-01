@@ -13198,3 +13198,7 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
   body[data-page="app"] .team-panel { min-width: 0; grid-template-columns: minmax(0, 1fr); }
   body[data-page="app"] .team-panel > * { min-width: 0; }
 }
+
+/* Explicit form errors stay associated with their controls at every text size. */
+.public-form-body .public-field-error { color: #8b2828; line-height: 1.5; overflow-wrap: anywhere; }
+.public-form-body .public-field-error[hidden], #retryPartialCaptureBtn[hidden] { display: none; }

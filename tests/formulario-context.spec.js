@@ -31,5 +31,36 @@ test('Spanish mobile form renders choices, formats, review, errors and accessibl
 test('language changes keep the selected format canonical',async({page})=>{await isolate(page);await page.goto('/formulario.html?lang=es');await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="evaluating"]').click();await page.locator('[data-format-id="cocktail"]').click();await expect(page.locator('#requestEventType')).toHaveValue('Coquetel');await page.locator('#langEnBtn').click();await expect(page.locator('#requestEventType')).toHaveValue('Coquetel');await expect(page.locator('#finalReviewGrid')).toContainText('Cocktail Reception')});
 test('invalid and duplicate attribution stays absent',async({page})=>{const f=await isolate(page);await page.goto('/formulario.html?lang=es&'+utm+'&utm_source=duplicate');await essentials(page);await page.locator('#submitClientQuoteBtn').click();await expect.poll(()=>f.calls.some(c=>c.name==='submit_public_quote_request')).toBe(true);expect(f.calls.find(c=>c.name==='submit_public_quote_request').payload.p_snapshot).not.toHaveProperty('attribution')});
 test('double click submits only once',async({page})=>{const f=await isolate(page);await page.goto('/formulario.html?lang=es');await essentials(page);await page.evaluate(()=>{const form=document.querySelector('#clientQuoteForm');form.dispatchEvent(new Event('submit',{cancelable:true}));form.dispatchEvent(new Event('submit',{cancelable:true}))});await expect.poll(()=>f.calls.filter(c=>c.name==='submit_public_quote_request').length).toBe(1);await expect(page.locator('#clientFormStatus')).toContainText('enviada')});
-test('idle second tab retains original token and reference after first succeeds',async({page,context})=>{const a=await isolate(page);await page.goto('/formulario.html?lang=es&'+utm);await essentials(page);const second=await context.newPage();const b=await isolate(second);await second.goto('/formulario.html?lang=es&'+utm);await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText('enviada');await essentials(second);await second.locator('#submitClientQuoteBtn').click();await expect(second.locator('#clientFormStatus')).toContainText('enviada');const first=a.calls.find(c=>c.name==='submit_public_quote_request').payload,other=b.calls.find(c=>c.name==='submit_public_quote_request').payload;expect(other.p_capture_token).toBe(first.p_capture_token);expect(other.p_snapshot.referencia).toBe(first.p_snapshot.referencia);await second.close()});
-test('late old-tab completion does not clear a newer capture',async({page,context})=>{const a=await isolate(page);await page.goto('/formulario.html?lang=es&'+utm);const second=await context.newPage();await isolate(second);await second.goto('/formulario.html?lang=es&'+utm);await essentials(page);await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText('enviada');await page.reload();const newer=await page.evaluate(()=>localStorage.getItem('embaixada_form_capture_token_v1'));await essentials(second);await second.locator('#submitClientQuoteBtn').click();await expect(second.locator('#clientFormStatus')).toContainText('enviada');expect(await page.evaluate(()=>localStorage.getItem('embaixada_form_capture_token_v1'))).toBe(newer);expect(a.errors).toEqual([]);await second.close()});
+test('an idle second tab keeps its identity and fields without resubmitting a completed capture',async({page,context})=>{
+ const a=await isolate(page);await page.goto('/formulario.html?lang=es&'+utm);await essentials(page);
+ const second=await context.newPage(),b=await isolate(second);await second.goto('/formulario.html?lang=es&'+utm);
+ const original=await second.evaluate(()=>({token:getCaptureToken(),reference:getOrCreateReferenceCode()}));
+ await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText('enviada');
+ const submitted=a.calls.find(c=>c.name==='submit_public_quote_request').payload;
+ expect(original).toEqual({token:submitted.p_capture_token,reference:submitted.p_snapshot.referencia});
+ await essentials(second);await second.locator('#submitClientQuoteBtn').click();
+ await expect(second.locator('#partialCaptureStatus')).toHaveAttribute('data-state',/externalSubmitted|identityChanged/);
+ await expect(second.locator('#clientFormStatus')).toHaveAttribute('data-status','error');
+ await expect(second.locator('#requestClientName')).toHaveValue('Synthetic Visitor');
+ await expect(second.locator('#requestClientEmail')).toHaveValue('visitor@example.invalid');
+ expect(await second.evaluate(()=>({token:getCaptureToken(),reference:getOrCreateReferenceCode()}))).toEqual(original);
+ expect(b.calls.filter(c=>['submit_public_quote_request','upsert_public_quote_draft'].includes(c.name))).toEqual([]);
+ expect(a.errors).toEqual([]);expect(b.errors).toEqual([]);await second.close();
+});
+
+test('a blocked old tab does not clear a newer capture token or reference',async({page,context})=>{
+ const a=await isolate(page);await page.goto('/formulario.html?lang=es&'+utm);
+ const second=await context.newPage(),b=await isolate(second);await second.goto('/formulario.html?lang=es&'+utm);
+ const old=await second.evaluate(()=>({token:getCaptureToken(),reference:getOrCreateReferenceCode()}));
+ await essentials(page);await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText('enviada');
+ await page.reload();const newer=await page.evaluate(()=>({token:localStorage.getItem('embaixada_form_capture_token_v1'),reference:localStorage.getItem('embaixada_form_reference_v1')}));
+ expect(newer.token).not.toBe(old.token);expect(newer.reference).not.toBe(old.reference);
+ await essentials(second);await second.locator('#submitClientQuoteBtn').click();
+ await expect(second.locator('#partialCaptureStatus')).toHaveAttribute('data-state',/externalSubmitted|identityChanged/);
+ await expect(second.locator('#clientFormStatus')).toHaveAttribute('data-status','error');
+ await expect(second.locator('#requestClientName')).toHaveValue('Synthetic Visitor');
+ expect(await second.evaluate(()=>({token:getCaptureToken(),reference:getOrCreateReferenceCode()}))).toEqual(old);
+ expect(await page.evaluate(()=>({token:localStorage.getItem('embaixada_form_capture_token_v1'),reference:localStorage.getItem('embaixada_form_reference_v1')}))).toEqual(newer);
+ expect(b.calls.filter(c=>['submit_public_quote_request','upsert_public_quote_draft'].includes(c.name))).toEqual([]);
+ expect(a.errors).toEqual([]);expect(b.errors).toEqual([]);await second.close();
+});
