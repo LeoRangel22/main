@@ -1484,7 +1484,7 @@ const partialCaptureState = {
   phase: "unsaved", fingerprint: "", confirmedFingerprint: "", epoch: 0,
   pending: null, queued: false, external: false, submitting: false, completed: false, channel: null,
   submissionUncertain: false, submissionFingerprint: null, submissionSnapshot: null,
-  sharedIdentity: false,
+  sharedIdentity: false, confirmedAt: null, offline: false,
 };
 
 function getPartialCaptureCopy() {
@@ -1493,6 +1493,8 @@ function getPartialCaptureCopy() {
       unsaved: "Alterações ainda não salvas. Informe seu nome e um e-mail ou telefone válido para salvar.",
       saving: "Salvando as alterações desta aba…",
       saved: "Rascunho desta aba salvo e confirmado. Você pode continuar preenchendo.",
+      confirmationTime: "Confirmação recebida às {time} (horário deste dispositivo).",
+      confirmationTimeUnavailable: "Horário da confirmação indisponível neste dispositivo.",
       error: "Não foi possível confirmar o salvamento. Seus dados continuam nesta aba. Tente novamente ou envie o pedido.",
       external: "Este pedido foi alterado em outra aba. Seus dados continuam aqui; confira qual aba deseja usar antes de salvar novamente.",
       submitted: "Pedido enviado. Nenhum rascunho está sendo salvo.",
@@ -1507,6 +1509,8 @@ function getPartialCaptureCopy() {
       unsaved: "Changes not saved yet. Enter your name and a valid e-mail or phone number to save.",
       saving: "Saving changes from this tab…",
       saved: "Changes from this tab saved and confirmed. You can continue filling in the form.",
+      confirmationTime: "Confirmation received at {time} (this device's local time).",
+      confirmationTimeUnavailable: "Confirmation time is unavailable on this device.",
       error: "We could not confirm saving. Your entries remain in this tab. Try again or submit the request.",
       external: "This request changed in another tab. Your entries remain here; choose which tab to use before saving again.",
       submitted: "Request sent. No draft is being saved.",
@@ -1521,6 +1525,8 @@ function getPartialCaptureCopy() {
       unsaved: "Cambios aún no guardados. Indica tu nombre y un correo o teléfono válido para guardar.",
       saving: "Guardando los cambios de esta pestaña…",
       saved: "Cambios de esta pestaña guardados y confirmados. Puedes seguir completando el formulario.",
+      confirmationTime: "Confirmación recibida a las {time} (hora de este dispositivo).",
+      confirmationTimeUnavailable: "La hora de confirmación no está disponible en este dispositivo.",
       error: "No pudimos confirmar el guardado. Tus datos siguen en esta pestaña. Inténtalo de nuevo o envía la solicitud.",
       external: "Esta solicitud cambió en otra pestaña. Tus datos siguen aquí; elige qué pestaña usar antes de guardar de nuevo.",
       submitted: "Solicitud enviada. No se está guardando ningún borrador.",
@@ -1543,20 +1549,42 @@ function getPartialCaptureStatusNode() {
     node.className = "partial-capture-status";
     document.querySelector(".contact-reassurance")?.prepend(node);
   }
-  node.setAttribute("role", "status");
-  node.setAttribute("aria-live", "polite");
-  node.setAttribute("aria-atomic", "true");
+  if (node.getAttribute("role") !== "status") node.setAttribute("role", "status");
+  if (node.getAttribute("aria-live") !== "polite") node.setAttribute("aria-live", "polite");
+  if (node.getAttribute("aria-atomic") !== "true") node.setAttribute("aria-atomic", "true");
   return node;
+}
+
+function formatPartialCaptureConfirmationTime(timestamp) {
+  if (!Number.isFinite(timestamp)) return "";
+  const locale = { pt: "pt-BR", en: "en-US", es: "es-ES" }[uiState.language] || "pt-BR";
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hourCycle: uiState.language === "en" ? "h12" : "h23",
+    }).format(timestamp);
+  } catch (_) { return ""; }
 }
 
 function renderPartialCaptureStatus() {
   const node = getPartialCaptureStatusNode();
   const copy = getPartialCaptureCopy();
-  node.textContent = copy[partialCaptureState.phase] || copy.unsaved;
-  node.dataset.state = partialCaptureState.phase;
+  if (partialCaptureState.phase === "saved") {
+    if (partialCaptureState.offline) partialCaptureState.phase = "error";
+    else if (partialCaptureState.confirmedFingerprint !== getPartialCaptureFingerprint()) partialCaptureState.phase = "unsaved";
+  }
+  if (partialCaptureState.phase !== "saved") partialCaptureState.confirmedAt = null;
+  let message = copy[partialCaptureState.phase] || copy.unsaved;
+  if (partialCaptureState.phase === "saved") {
+    const time = formatPartialCaptureConfirmationTime(partialCaptureState.confirmedAt);
+    message += ` ${time ? copy.confirmationTime.replace("{time}", time) : copy.confirmationTimeUnavailable}`;
+  }
+  // A stable confirmation does not announce itself again on every render or clock tick.
+  if (node.textContent !== message) node.textContent = message;
+  if (node.dataset.state !== partialCaptureState.phase) node.dataset.state = partialCaptureState.phase;
   const retry = document.querySelector("#retryPartialCaptureBtn");
   if (retry) {
-    retry.textContent = copy.retry;
+    if (retry.textContent !== copy.retry) retry.textContent = copy.retry;
     retry.hidden = !["error", "external"].includes(partialCaptureState.phase);
     retry.disabled = Boolean(partialCaptureState.pending || partialCaptureState.submitting);
   }
@@ -1667,8 +1695,12 @@ async function savePartialLead({ retry = false } = {}) {
       if (fingerprint !== getPartialCaptureFingerprint()) {
         partialCaptureState.phase = "unsaved";
         partialCaptureState.queued = true;
+      } else if (partialCaptureState.offline) {
+        partialCaptureState.phase = "error";
       } else {
         partialCaptureState.confirmedFingerprint = fingerprint;
+        // Browser receipt time after a valid acknowledgement of the current revision; not server commit time.
+        partialCaptureState.confirmedAt = Date.now();
         partialCaptureState.phase = "saved";
       }
     } catch (_) {
@@ -1718,6 +1750,7 @@ function schedulePartialCapture() {
 }
 
 function initPartialCaptureFeedback() {
+  partialCaptureState.offline = typeof navigator !== "undefined" && navigator.onLine === false;
   try {
     partialCaptureState.sharedIdentity = localStorage.getItem(CAPTURE_TOKEN_KEY) === getCaptureToken();
     if (localStorage.getItem("embaixada_form_submit_pending_v1") === getCaptureToken()) {
@@ -1737,7 +1770,16 @@ function initPartialCaptureFeedback() {
     if (event.key !== "embaixada_form_capture_activity_v1" || !event.newValue) return;
     try { handleOtherPartialCapture(JSON.parse(event.newValue)); } catch (_) { /* Ignore malformed coordination metadata. */ }
   });
+  window.addEventListener("offline", () => {
+    partialCaptureState.offline = true;
+    partialCaptureState.confirmedAt = null;
+    if (partialCaptureState.phase === "saved") {
+      partialCaptureState.phase = "error";
+      renderPartialCaptureStatus();
+    }
+  });
   window.addEventListener("online", () => {
+    partialCaptureState.offline = false;
     if (partialCaptureState.phase === "error") schedulePartialCapture();
   });
   renderPartialCaptureStatus();
