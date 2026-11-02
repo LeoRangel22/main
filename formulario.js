@@ -2906,7 +2906,13 @@ async function submitRequest(event) {
       scrollToStep("contact", true);
       return;
     }
-    submittedOpportunityId = data?.[0]?.opportunity_id || null;
+    const receipt = Array.isArray(data) && data.length === 1 ? data[0] : null;
+    // An HTTP success alone does not confirm this request. Preserve the existing
+    // uncertain-submission fence and entries unless the RPC acknowledges this identity.
+    if (typeof receipt?.request_id !== "string" || !receipt.request_id.trim()
+      || typeof receipt?.opportunity_id !== "string" || !receipt.opportunity_id.trim()
+      || receipt.capture_token !== submittedToken) throw new Error("SUBMIT_RECEIPT_UNCONFIRMED");
+    submittedOpportunityId = receipt.opportunity_id;
     submissionConfirmed = true;
   } catch (error) {
     captureLeadAnalytics("lead_submit_failed", { reason_code: "request_unavailable" });

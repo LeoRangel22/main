@@ -34,6 +34,29 @@ async function beginSave(page){await page.evaluate(()=>{window.syntheticDraftSav
 async function saved(page){await expect(page.locator('#partialCaptureStatus')).toHaveAttribute('data-state','saved');}
 function clean(c){expect(c.external).toEqual([]);expect(c.errors).toEqual([]);}
 
+for (const [label, reply] of [
+ ['empty', () => []],
+ ['missing request', body => [{opportunity_id:row(body)[0].opportunity_id,capture_token:body.p_capture_token}]],
+ ['missing opportunity', body => [{request_id:row(body)[0].request_id,capture_token:body.p_capture_token}]],
+ ['missing token', body => [{request_id:row(body)[0].request_id,opportunity_id:row(body)[0].opportunity_id}]],
+ ['different token', body => [{...row(body)[0],capture_token:'00000000-0000-4000-8000-000000000099'}]],
+ ['multiple', body => [...row(body),...row(body)]],
+]) test(`final receipt ${label} preserves entries and blocks blind draft recovery`, async ({page}) => {
+ const c=await setup(page,{submit:body=>({data:reply(body)})});
+ await fill(page);await page.locator('#requestEventDate').fill('2099-11-20');
+ const token=await page.evaluate(()=>getCaptureToken());
+ await page.locator('#submitClientQuoteBtn').click();
+ await expect(page.locator('#partialCaptureStatus')).toHaveAttribute('data-state','submissionUncertain');
+ await expect(page.locator('#requestClientName')).toHaveValue('Pessoa Sintetica');
+ await expect(page.locator('#requestClientEmail')).toHaveValue('person@example.test');
+ expect(await page.evaluate(()=>getCaptureToken())).toBe(token);
+ expect(await page.evaluate(()=>localStorage.getItem('embaixada_form_submit_pending_v1'))).toBe(token);
+ const count=c.calls.length;await beginSave(page);expect(c.calls.length).toBe(count);
+ expect(c.calls.filter(r=>r.name==='submit_public_quote_request')).toHaveLength(1);
+ await page.reload();await expect(page.locator('#partialCaptureStatus')).toHaveAttribute('data-state','submissionUncertain');
+ expect(c.calls.length).toBe(count);clean(c);
+});
+
 test('saved feedback belongs to the current revision and a later error clears old success',async({page})=>{
  let fail=false;const c=await setup(page,{draft:body=>fail?{status:503,error:{message:'Synthetic unavailable'}}:{data:row(body)}});
  await fill(page);await beginSave(page);await saved(page);
