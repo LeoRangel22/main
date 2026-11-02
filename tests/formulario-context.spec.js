@@ -8,7 +8,7 @@ async function isolate(page){
     if(url.hostname==='127.0.0.1'||url.hostname==='localhost')return route.continue();
     unexpected.push(url.origin+url.pathname);return route.fulfill({status:200,contentType:'application/json',body:'{}'});
   });
-  await page.exposeFunction('__fixtureRpc',async(name,payload)=>{calls.push({name,payload});await new Promise(r=>setTimeout(r,30));return {data:[{request_id:'00000000-0000-4000-8000-000000000101',opportunity_id:'00000000-0000-4000-8000-000000000102'}],error:null}});
+  await page.exposeFunction('__fixtureRpc',async(name,payload)=>{calls.push({name,payload});await new Promise(r=>setTimeout(r,30));return {data:[{request_id:'00000000-0000-4000-8000-000000000101',opportunity_id:'00000000-0000-4000-8000-000000000102',capture_token:payload.p_capture_token}],error:null}});
   return {calls,unexpected,errors};
 }
 async function essentials(page){await page.locator('#requestEventDate').fill('2027-02-20');await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid')}

@@ -13,7 +13,7 @@ for (const failure of ['throw', 'reject', 'pending', 'missing']) {
     await page.route('**/rest/v1/rpc/upsert_public_quote_draft**', route => route.fulfill({ status:404, contentType:'application/json', body:'{}' }));
     await page.route('**/rest/v1/rpc/submit_public_quote_request**', route => {
       calls.push(route.request().postDataJSON());
-      return route.fulfill({ contentType:'application/json', body:JSON.stringify([{opportunity_id:opportunityId}]) });
+      return route.fulfill({ contentType:'application/json', body:JSON.stringify([{request_id:'00000000-0000-4000-8000-000000000554',opportunity_id:opportunityId,capture_token:calls[calls.length-1].p_capture_token}]) });
     });
     await page.goto('/formulario.html');
     await page.locator('#requestEventDate').fill('2026-12-20');
@@ -36,7 +36,7 @@ test('lead usa oportunidade retornada pelo banco sem enviar referência ou conta
   await page.addInitScript(() => { window.__EVENT_ANALYTICS_FORCE__=true; });
   await page.route('https://us.i.posthog.com/**', route => { events.push(route.request().postDataJSON()); return route.fulfill({contentType:'application/json',body:'{"status":1}'}); });
   await page.route('**/rest/v1/rpc/upsert_public_quote_draft**', route => route.fulfill({status:404,contentType:'application/json',body:'{}'}));
-  await page.route('**/rest/v1/rpc/submit_public_quote_request**', route => route.fulfill({contentType:'application/json',body:JSON.stringify([{opportunity_id:opportunityId}])}));
+  await page.route('**/rest/v1/rpc/submit_public_quote_request**', route => route.fulfill({contentType:'application/json',body:JSON.stringify([{request_id:'00000000-0000-4000-8000-000000000554',opportunity_id:opportunityId,capture_token:route.request().postDataJSON().p_capture_token}])}));
   await page.goto('/formulario.html');
   await page.locator('#requestEventDate').fill('2026-12-20');
   await page.locator('#requestClientName').fill('Cliente confidencial');

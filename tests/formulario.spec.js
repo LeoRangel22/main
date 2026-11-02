@@ -71,7 +71,7 @@ test.describe("Formulário público do cliente", () => {
     let payload;
     await page.route("**/rest/v1/rpc/submit_public_quote_request**", (route) => {
       payload = route.request().postDataJSON();
-      return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{request_id:"00000000-0000-4000-8000-000000000002",opportunity_id:"00000000-0000-4000-8000-000000000003",capture_token:payload.p_capture_token}]) });
     });
     await page.goto("/formulario.html");
     await page.getByRole("button", { name: "EN", exact: true }).click();
@@ -107,7 +107,7 @@ test.describe("Formulário público do cliente", () => {
 
     await page.route("**/rest/v1/rpc/submit_public_quote_request**", async (route) => {
       payload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{request_id:"00000000-0000-4000-8000-000000000002",opportunity_id:"00000000-0000-4000-8000-000000000003",capture_token:payload.p_capture_token}]) });
     });
 
     await page.goto("/formulario.html");
