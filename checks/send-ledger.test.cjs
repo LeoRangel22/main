@@ -7,10 +7,13 @@ const { stripTypeScriptTypes } = require('node:module');
 async function run(channel, scenario = {}) {
   const calls = { fetch: 0, begin: [], finish: [] };
   const proposal = { id: '00000000-0000-4000-8000-000000000111', revision: 3, is_current:true, status:'proposta_pronta', oportunidade_id:'00000000-0000-4000-8000-000000000113', public_token: 'token', cliente_nome: 'Cliente', total: 1120, snapshot: { event: {signalDeadlineHours:72}, selectedItems:[{nome:'Coffee Break aprovado',descricao:'Café e frutas',calc:{total:1000}}] } };
+  if(scenario.neutral){proposal.revision=1;proposal.total=0;proposal.cliente_email='client@example.test';proposal.snapshot={communicationTest:{id:'QA-COM-EMAIL-01',neutral:true},totals:{total:0},selectedItems:[]};}
+  if(scenario.proposal)Object.assign(proposal,scenario.proposal);
   const client = {
-    auth: { getUser: async () => ({ data: { user: { id: 'user' } } }) },
+    auth: { getUser: async () => ({ data: { user: { id: 'user', email:'client@example.test', email_confirmed_at:scenario.unconfirmed?null:'2026-01-01T00:00:00Z' } } }) },
     from: table => ({ select: () => ({ eq: () => ({ single: async () => ({data:table==='oportunidades'?{ultima_resposta_cliente_em:scenario.newResponse?'2026-10-21T00:00:00Z':'2026-10-06T00:00:00Z'}:calls.begin.length?{...proposal,...scenario.fresh}:proposal}) }) }) }),
     rpc: async (name, body) => {
+      if (name === 'is_super_admin') return {data:scenario.owner!==false,error:scenario.ownerError?{}:null};
       if (name === 'is_team_member') return { data: scenario.outsider !== true };
       if (name === 'begin_event_send_reviewed') {
         calls.begin.push(body);
@@ -26,6 +29,9 @@ async function run(channel, scenario = {}) {
   };
   let handler;
   const env = { SUPABASE_URL: 'https://example.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'worker', EVENT_BOT_SEND_ENABLED:'true',EVENT_BOT_SEND_URL:'https://script.google.com/macros/s/fixture/exec',EVENT_BOT_SEND_SECRET:'s'.repeat(40),ZAPI_INSTANCE_ID: 'instance', ZAPI_TOKEN: 'token', ZAPI_CLIENT_TOKEN: 'client', ZEPTO_MAIL_TOKEN: 'email-token', PROPOSAL_FROM_EMAIL: 'events@example.test' };
+  if(scenario.neutral)env.PROPOSAL_FROM_EMAIL='leads@embaixadacarioca.com.br';
+  if(scenario.sender)env.PROPOSAL_FROM_EMAIL=scenario.sender;
+  if(scenario.replyTo)env.PROPOSAL_REPLY_TO_EMAIL=scenario.replyTo;
   const context = vm.createContext({ crypto: require('node:crypto').webcrypto, TextEncoder, Request, Response, URL, AbortSignal, Intl, Date, console: { error() {} }, createClient: () => client, Deno: { env: { get: key => env[key] }, serve: fn => handler = fn }, fetch: async (url, options) => {
     calls.fetch++; calls.providerPayload=JSON.parse(options.body);
     if (scenario.timeout) throw new Error('Timeout');
@@ -39,6 +45,7 @@ async function run(channel, scenario = {}) {
     vm.runInContext(stripTypeScriptTypes(source), context);
   }
   const payload = { proposalId: '00000000-0000-4000-8000-000000000111', approved: true, reviewedRevision: 3, reviewedResponseAt: '2026-10-06T00:00:00Z', email: 'client@example.test', phone: '5521999999999', proposalUrl: 'https://leorangel22.github.io/main/proposta.html?p=token', message: 'Mensagem revisada pela equipe' };
+  if(scenario.neutral){payload.reviewedRevision=1;payload.message='';}
   let preview;
   if (channel === 'email' && !scenario.skipPreview && !scenario.payload?.preview) {
     const response = await handler(new Request('https://example.test/send', {method:'POST',headers:{Authorization:'Bearer test','Content-Type':'application/json'},body:JSON.stringify({...payload,preview:true})}));
@@ -141,3 +148,49 @@ test('email: finalizer failure does not claim success or repeat the provider cal
  const ledger={};const r=await run('email',{finishError:true,ledger});assert.equal(r.status,500);assert.equal(r.body.ok,false);assert.equal(r.calls.fetch,1);
  const afterReload=await run('email',{ledger});assert.equal(afterReload.calls.fetch,0);assert.equal(afterReload.body.deliveryStatus,'sending');
 });
+
+const neutralBody="Olá, Leo. Esta é uma mensagem controlada para validar a comunicação do Sistema de Eventos. Não constitui proposta comercial, reserva, cobrança ou confirmação de evento. Para validar o retorno, responda a este mesmo e-mail com: TESTE RECEBIDO QA-COM-EMAIL-01. Não encaminhe dados pessoais ou documentos neste teste.";
+test('email neutral: exact reviewed text, subject and one recipient, no commercial template',async()=>{
+ const ledger={};const r=await run('email',{neutral:true,ledger});assert.equal(r.status,200);
+ assert.equal(r.preview.text,neutralBody);assert.equal(r.calls.providerPayload.textbody,neutralBody);
+ assert.equal(r.calls.providerPayload.subject,'[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial');
+ assert.equal(r.calls.providerPayload.to.length,1);assert.equal(r.calls.providerPayload.to[0].email_address.address,'client@example.test');
+ assert.equal(r.calls.providerPayload.bcc,undefined);assert.equal(r.calls.providerPayload.cc,undefined);
+ assert.equal(r.calls.providerPayload.reply_to[0].address,'eventos@embaixadacarioca.com.br');
+ assert.doesNotMatch(r.preview.html,/Total estimado|Prazo do sinal|Ver e responder|após validação/);
+ assert.equal(r.calls.begin[0].reviewed_revision,1);assert.equal(r.calls.begin[0].send_body,neutralBody);
+ const reload=await run('email',{neutral:true,ledger});assert.equal(reload.calls.fetch,0);assert.equal(reload.body.sendId,r.body.sendId);
+});
+for(const scenario of [{owner:false},{ownerError:true},{unconfirmed:true},{sender:'other@example.test'},{replyTo:'other@example.test'},{proposal:{revision:2}},{proposal:{total:1}},{proposal:{total:null}},{proposal:{cliente_email:'other@example.test'}},{payload:{email:'other@example.test'}},{payload:{title:'Commercial'}},{payload:{message:'Changed after review'}},{payload:{approved:false}},{payload:{reviewedRevision:2}},{payload:{reviewedContentHash:'incorrect'}},{skipPreview:true}])
+ test('email neutral: safety refusal '+JSON.stringify(scenario),async()=>{
+  const r=await run('email',{neutral:true,...scenario});assert.ok([401,403,409].includes(r.status));assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+ });
+test('email neutral: uncertain provider result persists across reload without replay',async()=>{
+ const ledger={};const r=await run('email',{neutral:true,timeout:true,ledger});assert.equal(r.status,409);assert.equal(r.calls.fetch,1);assert.equal(r.body.deliveryStatus,'uncertain');
+ const reload=await run('email',{neutral:true,ledger});assert.equal(reload.calls.fetch,0);assert.equal(reload.body.sendId,r.body.sendId);assert.equal(reload.body.deliveryStatus,'uncertain');
+});
+for(const change of [
+ {communicationTest:{id:'OTHER',neutral:true}},
+ {communicationTest:{id:'QA-COM-EMAIL-01',neutral:false}},
+ {totals:{total:1}}, {totals:{total:null}}, {selectedItems:[{name:'priced'}]},
+ {selectedItems:null}, {selectedItems:undefined}
+])test('email neutral: malformed or commercial snapshot refuses '+JSON.stringify(change),async()=>{
+ const snapshot={communicationTest:{id:'QA-COM-EMAIL-01',neutral:true},totals:{total:0},selectedItems:[],...change};
+ const r=await run('email',{neutral:true,proposal:{snapshot}});assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
+test('email neutral: concurrent handlers share the existing ledger and attempt once',async()=>{
+ const ledger={};const results=await Promise.all([run('email',{neutral:true,ledger}),run('email',{neutral:true,ledger})]);
+ assert.equal(results.reduce((n,r)=>n+r.calls.fetch,0),1);assert.equal(results[0].body.sendId,results[1].body.sendId);
+});
+for(const marker of [false,null,0,'',undefined])test('email neutral: invalid or absent marker never falls back to a commercial preview '+String(marker),async()=>{
+ const snapshot={totals:{total:0},selectedItems:[],...(marker===undefined?{}:{communicationTest:marker})};
+ const r=await run('email',{neutral:true,proposal:{snapshot},payload:{preview:true,title:'[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial'}});
+ assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
+for(const field of ['title','message'])test('email neutral: whitespace never disguises neutral intent '+field,async()=>{
+ const snapshot={totals:{total:0},selectedItems:[]};
+ const content=field==='title'?'[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial':neutralBody;
+ const r=await run('email',{neutral:true,proposal:{snapshot},payload:{preview:true,[field]:' \n'+content+'\n '}});
+ assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
+

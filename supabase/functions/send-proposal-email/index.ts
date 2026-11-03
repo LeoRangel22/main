@@ -23,6 +23,30 @@ type SendPayload = {
   message?: string;
 };
 
+// A controlled self-test is distinct from the normal commercial proposal renderer.
+// No activation, alternate destination, new credential or ledger bypass.
+const NEUTRAL_PILOT_ID = "QA-COM-EMAIL-01";
+const NEUTRAL_PILOT_SUBJECT = "[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial";
+const NEUTRAL_PILOT_BODY = "Olá, Leo. Esta é uma mensagem controlada para validar a comunicação do Sistema de Eventos. Não constitui proposta comercial, reserva, cobrança ou confirmação de evento. Para validar o retorno, responda a este mesmo e-mail com: TESTE RECEBIDO QA-COM-EMAIL-01. Não encaminhe dados pessoais ou documentos neste teste.";
+function neutralEmailPilot(proposal:any,payload:any,destination:string,sender:string,replyTo:string,ownerEmail:unknown,ownerConfirmed:boolean){
+ const snapshot=proposal?.snapshot,marker=snapshot?.communicationTest;
+ const marked=snapshot&&Object.hasOwn(snapshot,'communicationTest');
+ const requested=(typeof payload.title==='string'&&payload.title.trim()===NEUTRAL_PILOT_SUBJECT)||
+   (typeof payload.message==='string'&&payload.message.trim()===NEUTRAL_PILOT_BODY);
+ if(!marked&&!requested)return null;
+ const normalize=(v:unknown)=>typeof v==="string"?v.trim().toLowerCase():"";
+ if(!marker||marker.id!==NEUTRAL_PILOT_ID||marker.neutral!==true||proposal.revision!==1||
+    !ownerConfirmed||!normalize(ownerEmail)||normalize(destination)!==normalize(ownerEmail)||
+    normalize(proposal.cliente_email)!==normalize(ownerEmail)||normalize(sender)!=="leads@embaixadacarioca.com.br"||
+    normalize(replyTo)!=="eventos@embaixadacarioca.com.br"||
+    proposal.total!==0||proposal.snapshot?.totals?.total!==0||
+    !Array.isArray(proposal.snapshot?.selectedItems)||proposal.snapshot.selectedItems.length!==0||
+    (payload.title!=null&&payload.title!==""&&payload.title!==NEUTRAL_PILOT_SUBJECT)||
+    (payload.message!=null&&payload.message!==""&&payload.message!==NEUTRAL_PILOT_BODY))throw Error("neutral_pilot_invalid");
+ const escaped=NEUTRAL_PILOT_BODY.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+ return {subject:NEUTRAL_PILOT_SUBJECT,text:NEUTRAL_PILOT_BODY,html:'<div lang="pt-BR"><p>'+escaped+'</p></div>'};
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -281,15 +305,15 @@ function buildProposalEmailText(proposal: any, proposalUrl: string, customMessag
 
 // The preview and delivery use this same object. Changes in content, destination,
 // sender, reply-to, URL or proposal revision require a new human review.
-async function prepareReviewedEmail(proposal: any, payload: SendPayload, email: string, sender: { address: string; name: string }, replyTo: string) {
+async function prepareReviewedEmail(proposal: any, payload: SendPayload, email: string, sender: { address: string; name: string }, replyTo: string, neutral: any = null) {
   const proposalUrl = safeText(payload.proposalUrl);
   const content = {
     proposalId: proposal.id,
     reviewedRevision: Number(proposal.revision),
     email,
-    subject: safeText(payload.title, "Sua proposta de evento na Embaixada Carioca"),
-    html: buildProposalEmailHtml(proposal, proposalUrl, payload.message),
-    text: buildProposalEmailText(proposal, proposalUrl, payload.message),
+    subject: neutral?.subject || safeText(payload.title, "Sua proposta de evento na Embaixada Carioca"),
+    html: neutral?.html || buildProposalEmailHtml(proposal, proposalUrl, payload.message),
+    text: neutral?.text || buildProposalEmailText(proposal, proposalUrl, payload.message),
     sender,
     replyTo,
   };
@@ -391,7 +415,15 @@ Deno.serve(async (req) => {
     if ((payload.message != null && typeof payload.message !== "string") || (payload.title != null && typeof payload.title !== "string")) {
       return jsonResponse({ ok: false, message: "Mensagem ou assunto inválido." }, 400);
     }
-    const emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, Deno.env.get("PROPOSAL_REPLY_TO_EMAIL") || "eventos@embaixadacarioca.com.br");
+    const replyTo = Deno.env.get("PROPOSAL_REPLY_TO_EMAIL") || "eventos@embaixadacarioca.com.br";
+    let neutral;
+    try { neutral = neutralEmailPilot(proposal, payload, email, fromEmail, replyTo, userData.user.email, Boolean(userData.user.email_confirmed_at)); }
+    catch { return jsonResponse({ok:false,message:"Confira o caso controlado e o conteúdo neutro do teste."},409); }
+    if (neutral) {
+      const {data:owner,error:ownerError}=await supabase.rpc("is_super_admin");
+      if(ownerError||owner!==true)return jsonResponse({ok:false,message:"O teste controlado exige o proprietário Master."},403);
+    }
+    const emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
     if (emailContent.text.length > 12000) return jsonResponse({ ok: false, message: "O e-mail completo excede 12.000 caracteres. Reduza a mensagem antes de revisar." }, 400);
     if (payload.preview === true) {
       return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash });
@@ -485,3 +517,4 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, message: "Erro interno ao enviar e-mail." }, 500);
   }
 });
+
