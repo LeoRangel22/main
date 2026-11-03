@@ -1,5 +1,5 @@
 {
-  "commit": "077306fad6a9a2ca7d45dd20bb0978969203ea68",
+  "commit": "a8a31953d210d28126f0bff175c8b7cc5b6c21d7",
   "schemaHead": "20261027182526_diagnostic_pilot_receipts.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
@@ -11,7 +11,7 @@
     "aditivos.js": "bd917e4792c3b1d8d9afff977e1454ed41f3570811945b8fccab80f065761775",
     "amendment-ui.js": "9a74eae2250de13a35378d2aa4beceb1fb25f81c0023db28086674f3ee6e30f4",
     "amendment.css": "2d1c75bf1432f318407aaba95c52850c4d0803926b533cc2419e960d898b5ffb",
-    "index.html": "37da502bf4169a1f7f75e8d6fd342c865f9a861dbb2ed40cfaf8d51e7dceb806",
+    "index.html": "1acbef1d201f73b2ebe74fa7d2b8ee26912991f158abd661e0d1247e63a5bb3c",
     "aprovacoes.html": "0d8f18ccd2f03bbb1947047afe675f6dce2281ccb652faaecef413c38b1efd65",
     "aprovacoes.js": "44967ae560174a8ebb65bbecd1ed7ca46fd380644ce94a8a44f04a8232c9d93b",
     "approval-config.js": "4067d25492a129f829e7626027946cbbb63b704a16ca7151b5a5fc58b626d310",
@@ -25,7 +25,7 @@
     "styles.css": "9db00e99247466e48e6cf03afa2ca46e95b7512605e4e28a4d00d5ebed3460e3",
     "app.js": "373de8e98e395cf7c85b189aa67a901c49b38119fe450971869d9142971d6397",
     "event-readiness.js": "581409bd23329de23e79064a6f4caabfb2b0a776457d7bcb95860cf99981ec39",
-    "event-operations.js": "98895262be8fe7836761e21954c06cb77b5007af2406c63eb67b9b9b1b784fee",
+    "event-operations.js": "059c2c7eea4b1eb5e3d28952ee72affe1867d8e79ec2d1bd1549b926b6728d75",
     "analytics.js": "0ad4d90cb1097a990df4a98efa5800cb6d52fb5e82d1c7e25fedde7b41e2f278",
     "formulario.js": "35f2f4846d0359b343afdcb79035edc5e1a24050f6828454e9c5c7d40ebd2ba4",
     "proposta.js": "f8d9f285ab3220273e834eac4eeee93708bff1bfd561defb0561fe86a90a64db",
