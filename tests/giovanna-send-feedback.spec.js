@@ -35,3 +35,23 @@ test('manual confirmation cannot stamp a changed proposal or new session',async(
  await page.evaluate(()=>{state.session.user.id='other-user';});await d.getByRole('button',{name:'Registrar envio',exact:true}).click();
  await expect(d.locator('.manual-send-error')).toContainText('sessão mudou');expect(await page.evaluate(()=>state.proposals.find(p=>p.id===window.fixtureProposal.id).sent_at)).toBeNull();
 });
+
+for(const width of [390,1440])test(`unconfirmed email receipt preserves the proposal and error history after reload at ${width}px`,async({page})=>{
+ const errors=collectBrowserErrors(page,{sandboxedPreview:true});await page.setViewportSize({width,height:1000});await open(page);
+ await page.evaluate(()=>{
+  window.emailSendCalls=0;remoteProposalApprovalEnabled=async()=>false;
+  state.supabase.functions.invoke=async(name,{body})=>{
+   if(body.preview)return{data:{ok:true,mode:'preview',reviewedRevision:window.fixtureProposal.revision,contentHash:'reviewed',html:'<p>Proposta sintética</p>',text:'Proposta sintética',subject:'Teste controlado',sender:'fixture@example.test'}};
+   window.emailSendCalls++;return{data:null,error:{message:'non-2xx',context:new Response(JSON.stringify({ok:false,sendId:'synthetic-send',deliveryStatus:'uncertain',message:'Envio não confirmado pelo provedor. Confira o histórico e o provedor antes de repetir.'}),{status:409,headers:{'Content-Type':'application/json'}})}};
+  };
+  window.attempt=sendProposalEmailViaZepto({proposal:window.fixtureProposal,proposalUrl:'https://example.test/proposta',email:'fixture@example.test',message:'Teste sintético sem envio externo'});
+ });
+ const confirm=page.locator('.send-confirm-dialog');await expect(confirm.locator('iframe')).toHaveAttribute('sandbox','');await confirm.locator('input[type=checkbox]').check();await confirm.getByRole('button',{name:'Confirmar envio',exact:true}).click();
+ await expect(page.locator('.proposal-send-result')).toContainText('Envio não confirmado');
+ const result=await page.evaluate(async()=>{await window.attempt;const p=state.proposals.find(p=>p.id===window.fixtureProposal.id);return{calls:window.emailSendCalls,sent:p.sent_at,publication:p.publication_status,revision:p.revision,signal:p.snapshot.event.signalDeadlineAt||null,beforeSignal:window.fixtureProposal.snapshot.event.signalDeadlineAt||null,logs:state.integrationLogs.filter(l=>l.channel==='email').map(l=>({status:l.status,detail:l.detail}))};});
+ expect(result.calls).toBe(1);expect(result.sent).toBeNull();expect(result.publication).toBe('ready');expect(result.revision).toBe(1);expect(result.signal).toBe(result.beforeSignal);expect(result.logs.some(l=>l.status==='error'&&l.detail.includes('não confirmado'))).toBe(true);expect(result.logs.some(l=>l.status==='success')).toBe(false);
+ await page.getByRole('button',{name:'Entendi, voltar ao orçamento'}).click();await expectNoHorizontalOverflow(page);
+ let reloadPosts=0;page.on('request',r=>{if(r.method()==='POST')reloadPosts++;});await page.reload();
+ const logs=await page.evaluate(()=>state.integrationLogs.filter(l=>l.channel==='email').map(l=>({status:l.status,detail:l.detail})));
+ expect(logs).toEqual(result.logs);expect(reloadPosts).toBe(0);await expectNoBrowserErrors(errors);
+});

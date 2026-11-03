@@ -441,7 +441,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Resultado incerto. Confira o e-mail antes de repetir." }, 409);
     }
 
-    const rawBody = await zeptoResponse.text();
+    let rawBody = "";
+    try { rawBody = await zeptoResponse.text(); }
+    catch (_) { /* An unreadable body is not an acknowledgement; retain HTTP error classification below. */ }
     let zeptoBody: unknown = rawBody;
     try {
       zeptoBody = JSON.parse(rawBody);
@@ -467,7 +469,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const providerId = typeof zeptoBody === "object" && zeptoBody ? String((zeptoBody as any).request_id || "") || null : null;
+    // ZeptoMail returns an object with a top-level string request_id, not an RPC row array.
+    const receipt = typeof zeptoBody === "object" && zeptoBody && !Array.isArray(zeptoBody) ? zeptoBody as Record<string, unknown> : null;
+    const providerId = typeof receipt?.request_id === "string" ? receipt.request_id.trim() : "";
+    const explicitError = receipt && (Object.hasOwn(receipt, "error") ||
+      (typeof receipt.data === "object" && receipt.data && !Array.isArray(receipt.data) && Object.hasOwn(receipt.data, "error_code")));
+    if (!providerId || explicitError) {
+      await finishSend(worker, claim.send.id, "uncertain", null, "Resposta do provedor sem confirmação válida. Conferir antes de repetir.");
+      return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Envio não confirmado pelo provedor. Confira o histórico e o provedor antes de repetir." }, 409);
+    }
     await finishSend(worker, claim.send.id, "accepted", providerId);
     return jsonResponse({ ok: true, email, sendId: claim.send.id, deliveryStatus: "accepted", message: "Aceito pelo ZeptoMail. Entrega não confirmada." });
   } catch (error) {
