@@ -9,7 +9,7 @@
   --amarelo-claro: #f6edda;
   --areia: #ede2c9;
   --cinza-1: #485156;
-  --cinza-2: #7d8386;
+  --cinza-2: #52605b;
   --cinza-3: #b1b7bc;
   --ink: var(--verde-escuro);
   --muted: var(--cinza-2);
@@ -826,7 +826,7 @@ textarea[aria-invalid="true"] {
 }
 
 .owner-metrics span {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--white);
   font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0;
@@ -849,6 +849,10 @@ textarea[aria-invalid="true"] {
 
 .owner-metrics .metric-stage-sinal strong {
   color: var(--verde-escuro);
+}
+
+.owner-metrics :is(.metric-stage-pronta, .metric-stage-sem-resposta, .metric-stage-negociacao, .metric-stage-pg-restante) :is(span, strong) {
+  color: #0b1b14;
 }
 
 .pipeline-column.is-stage-focus {
@@ -5728,7 +5732,7 @@ label.pipeline-status-control:focus-within select {
 }
 
 .section-heading span {
-  color: var(--amarelo);
+  color: #875015;
   font-size: 0.84rem;
   font-weight: 900;
 }
@@ -7510,7 +7514,7 @@ textarea {
 
 .values-command-panel span,
 .product-types-panel .section-heading span {
-  color: var(--amarelo);
+  color: #875015;
   display: inline-block;
   font-size: 0.72rem;
   font-weight: 900;
@@ -8089,7 +8093,7 @@ td:nth-child(9) {
 }
 
 .proposal-section-title span {
-  color: var(--amarelo);
+  color: #875015;
 }
 
 .proposal-section-title h3 {
