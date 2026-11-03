@@ -1,3 +1,4 @@
+import { mailboxTokenEnvironment } from '../_shared/mailbox-token-source.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { sameSecret } from '../_shared/channel-events.ts';
 import { ZOHO_MAILBOX, mailboxBoundedText, mailboxToken, mailboxJson, verifyMailboxAccount, mailboxFolders, collectMailboxWindow } from '../_shared/zoho-mailbox.ts';
@@ -19,10 +20,12 @@ Deno.serve(async(req:Request)=>{
     if(!sameSecret(req.headers.get('x-event-job-key')||'',cfg.job_key))return respond(401,{ok:false,code:'origin_unauthenticated'});
     let scope; if(body.action==='sync'){try{scope=mailboxCaptureScope(cfg);}catch{return respond(409,{ok:false,code:'mailbox_capture_inactive'});}}
     if(scope&&scope.remaining===0)return respond(200,{ok:true,processed:0,hasMore:false,code:'capture_limit'});
-    const configured=['EVENT_MAILBOX_CLIENT_ID','EVENT_MAILBOX_CLIENT_SECRET','EVENT_MAILBOX_REFRESH_TOKEN'].every(k=>Boolean(Deno.env.get(k)));
+    const tokenEnv=await mailboxTokenEnvironment(worker,cfg.account_id,k=>Deno.env.get(k));
+    const configured=['EVENT_MAILBOX_CLIENT_ID','EVENT_MAILBOX_CLIENT_SECRET','EVENT_MAILBOX_REFRESH_TOKEN'].every(k=>Boolean(tokenEnv(k)));
+
     if(body.action==='sync' && (cfg.enabled!==true||cfg.channel_enabled!==true))return respond(409,{ok:false,code:'mailbox_disabled'});
     if(!configured||!cfg.account_id||cfg.mailbox!==ZOHO_MAILBOX||cfg.expected_account!==ZOHO_MAILBOX)return respond(409,{ok:false,code:'mailbox_setup_pending',diagnostic:{oauth_configured:configured,account_pinned:Boolean(cfg.account_id),mailbox_verified:false}});
-    const auth=await mailboxToken(k=>Deno.env.get(k)),base=`${auth.api}/api/accounts/${cfg.account_id}`;
+    const auth=await mailboxToken(tokenEnv),base=`${auth.api}/api/accounts/${cfg.account_id}`;
     const account=await mailboxJson(auth.api+'/api/accounts',{method:'GET',headers:auth.headers});
     const owned=verifyMailboxAccount(account,cfg.account_id,cfg.mailbox);
     if(body.action==='diagnose')return respond(200,{ok:true,diagnostic:{oauth_configured:true,mailbox_verified:true,provider:'zoho_mail',enabled:cfg.enabled===true&&cfg.channel_enabled===true}});

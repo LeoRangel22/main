@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Conectar leitura do e-mail — Eventos</title><link rel="stylesheet" href="styles.css?v=mail-connect1"><script defer src="vendor/supabase.js"></script><script defer src="approval-config.js?v=mail-connect1"></script><script defer src="conectar-email.js?v=mail-connect1"></script></head>
+<body><main style="max-width:48rem;margin:auto;padding:1rem"><a href="index.html">Voltar ao Eventos</a><h1>Conectar leitura do e-mail</h1><p>Conta: eventos@embaixadacarioca.com.br. Esta página não envia mensagens e não ativa captura. ID e Secret permanecem no servidor.</p>
+<p id="connectionStatus" role="status" aria-live="polite">Verificando sessão.</p>
+<section id="connectionWorkspace" hidden><p>O acesso de leitura permanece válido até ser revogado. O servidor verificará a conta antes de guardar o refresh token criptografado no Vault.</p>
+<p>No Self Client da conta Eventos, use somente:</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">ZohoMail.accounts.READ,ZohoMail.folders.READ,ZohoMail.messages.READ</pre>
+<label><input type="checkbox" id="scopeConfirmed"> Confirmei a conta Eventos e exatamente os três escopos READ acima.</label>
+<p><button type="button" id="prepareConnection" disabled>Preparar conexão sem gerar código</button> <button type="button" id="readConnection" disabled>Consultar estado sem repetir a troca</button></p>
+<form id="connectionForm" autocomplete="off"><label for="authorizationCode">Código temporário novo do Zoho</label><input id="authorizationCode" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="codeHelp" disabled><p id="codeHelp">Gere somente depois de “Preparado”. Cole aqui, nunca no chat. O código será apagado da tela ao solicitar a conexão.</p><button id="completeConnection" type="submit" disabled>Conectar leitura uma vez</button></form>
+<p id="connectionOutcome" role="status" aria-live="polite"></p></section></main></body></html>

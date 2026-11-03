@@ -23,3 +23,10 @@ create schema cron;
 create table cron.job(jobid bigserial primary key,jobname text unique,schedule text,command text);
 create function cron.schedule(job_name text,job_schedule text,job_command text) returns bigint language sql as $$ insert into cron.job(jobname,schedule,command) values(job_name,job_schedule,job_command) on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command returning jobid $$;
 insert into auth.users(email) values('leorangel@gmail.com'),('eventos@embaixadacarioca.com.br'),('financeiro@embaixadacarioca.com.br');
+
+-- CI ONLY: synthetic Vault interface, NOT encryption or credential proof.
+create schema vault;
+create table vault.secrets(id uuid primary key default gen_random_uuid(),name text unique,secret text);
+create view vault.decrypted_secrets as select id,name,secret as decrypted_secret from vault.secrets;
+create function vault.create_secret(value text,name text,description text) returns uuid language plpgsql as $$declare v uuid;begin insert into vault.secrets(name,secret)values($2,$1)returning id into v;return v;end$$;
+revoke all on all tables in schema vault from public,anon,authenticated,service_role;
