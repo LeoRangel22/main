@@ -1,5 +1,5 @@
 {
-  "commit": "ca2eb8cc7f8aac440e958349d469611082a6b55b",
+  "commit": "f2d552a3c2b90ad808d156cf9ef3d8e02f25522c",
   "schemaHead": "20261103180038_mailbox_oauth_vault.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
