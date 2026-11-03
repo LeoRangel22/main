@@ -1,6 +1,6 @@
 {
-  "commit": "a8a31953d210d28126f0bff175c8b7cc5b6c21d7",
-  "schemaHead": "20261027182526_diagnostic_pilot_receipts.sql",
+  "commit": "ff6f196cb7c8983214d6282e0cebcb880e643b9f",
+  "schemaHead": "20261103113008_bound_mailbox_capture.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "recibo-whatsapp.html": "976f10454df3abcff385b5379e1f67da8a4e19d16d827a532f6c8fe01f1e7641",
