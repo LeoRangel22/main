@@ -35,3 +35,8 @@ verify_jwt = false
 # Dormant, owner-bound one-message pilot. No cron, proposals, email or generic sender.
 [functions.event-whatsapp-pilot]
 verify_jwt = true
+
+# Owner-only OAuth setup, separate from the dormant mailbox worker.
+[functions.event-mailbox-connect]
+verify_jwt = true
+
