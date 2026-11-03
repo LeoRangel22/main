@@ -1,4 +1,5 @@
 import { providerFetch, syncEmailDeliveries } from '../_shared/email-delivery.ts';
+import { reconcileScopedEmailDeliveries } from '../_shared/email-delivery-scope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { botBridgeUrl, fetchBotBridge, normalizeBotBridgeResult, verifyBotCallbacks } from '../_shared/bot-bridge.ts';
 
@@ -23,6 +24,10 @@ Deno.serve(async (req: Request) => {
     }
     const { data: manager } = await caller.rpc('is_super_admin');
     if (!manager) return respond(403, { ok: false, message: 'Configuração exclusiva do gestor' });
+    if (payload.action === 'reconcile-email-scoped') {
+      const result = await reconcileScopedEmailDeliveries(worker, payload);
+      return respond(result.ok ? 200 : 409, result);
+    }
     if (!['inspect-zapi', 'activate-zapi', 'inspect-bot-bridge', 'activate-bot-bridge'].includes(payload.action)) return respond(400, { ok: false, message: 'Ação desconhecida' });
     if (payload.action === 'activate-zapi') return respond(409,{ok:false,message:'O Bot é o único responsável pelos callbacks. Use a ponte de leitura restrita.'});
     if (payload.action === 'inspect-bot-bridge' || payload.action === 'activate-bot-bridge') {
