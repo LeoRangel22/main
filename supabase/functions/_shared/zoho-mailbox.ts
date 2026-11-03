@@ -27,7 +27,9 @@ function email(value: unknown) {
 export function verifyMailboxAccount(response: any, accountId: string, mailbox: string) {
   if(mailbox!==ZOHO_MAILBOX || !Array.isArray(response?.data)) throw new Error('account_invalid');
   mailboxId(accountId);
-  const matches=response.data.filter((a:any)=>a?.accountId===accountId && a.type==='ZOHO_ACCOUNT' && a.enabled===true && a.mailboxStatus==='enabled' && a.incomingBlocked===false && Array.isArray(a.emailAddress) && a.emailAddress.some((v:any)=>v?.isConfirmed===true && typeof v.mailId==='string' && v.mailId.trim().toLowerCase()===mailbox));
+  const matches=response.data.filter((a:any)=>a?.accountId===accountId && a.type==='ZOHO_ACCOUNT' &&
+    (Object.hasOwn(a,'enabled')?a.enabled===true:a.status===true) && (!Object.hasOwn(a,'status')||a.status===true) &&
+    a.mailboxStatus==='enabled' && a.incomingBlocked===false && Array.isArray(a.emailAddress) && a.emailAddress.some((v:any)=>v?.isConfirmed===true && typeof v.mailId==='string' && v.mailId.trim().toLowerCase()===mailbox));
   if(matches.length!==1) throw new Error('account_mismatch');
   const owned=new Set<string>();
   for(const a of matches[0].emailAddress) if(a?.isConfirmed===true) owned.add(email(a.mailId));
@@ -180,3 +182,19 @@ export function normalizeZohoMail(row:any,headerResponse:any,contentResponse:any
   if(!text)throw new Error('content_empty');
   return {...preflight,text};
 }
+
+// Read-only thread metadata. It is not a provider-ID-to-RFC-ID conversion.
+// Keep opaque ID case, reject ambiguous headers, and never infer from subject/name.
+export function mailboxThreadHeaders(row:any,headerResponse:any,mailbox:string,owned:Set<string>) {
+  const preflight=mailboxHeaderPreflight(row,headerResponse,mailbox,owned);
+  if(!preflight)return null;
+  const headers=headerMap(headerResponse),raw=uniqueHeader(headers,'references');
+  if(headers.has('references')&&raw===null)throw new Error('references_invalid');
+  const references=raw===null?[]:raw.split(/\s+/);
+  if(references.length>32||references.some(id=>!id||rfcId(id,true)!==id))throw new Error('references_invalid');
+  const preferred=[preflight.in_reply_to,...references.slice().reverse()].filter((id):id is string=>id!==null);
+  const reply_candidates=[...new Set(preferred)];
+  if(reply_candidates.includes(preflight.message_id!))throw new Error('thread_self_reference');
+  return {...preflight,references:[...new Set(references)],reply_candidates};
+}
+

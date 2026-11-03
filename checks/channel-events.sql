@@ -40,7 +40,7 @@ begin
   assert (select state='applied' and opportunity_id=o2 and resolved_by=actor from public.event_provider_events where id=ev),'Human link audited';
   perform public.ingest_event_provider_events('zapi',payload);
   assert (select count(*)=1 from public.event_messages where external_id='zapi:fixture-ambiguous'),'Inbound retry does not duplicate thread';
-  result:=public.ingest_event_provider_events('mailbox',jsonb_build_array(jsonb_build_object('key','fixture-unknown','channel','email','kind','inbound','message_id','fixture-unknown','destination','unknown-channel@example.test','body','Olá','occurred_at',clock_timestamp())));
+  result:=public.ingest_event_provider_events('zapi',jsonb_build_array(jsonb_build_object('key','fixture-unknown','channel','whatsapp','kind','inbound','message_id','fixture-unknown','destination','5511000000000','body','Olá','occurred_at',clock_timestamp())));
   ev:=(result->>0)::uuid;
   perform public.resolve_event_inbound(ev,null,true);
   assert (select state='ignored' and opportunity_id is null from public.event_provider_events where id=ev),'Ignoring creates no event';
@@ -53,8 +53,9 @@ begin
   assert (select engagement='opened' and delivery_status is null from public.event_outbox where id=eb),'Open is not delivery proof';
   perform public.ingest_event_provider_events('zepto',jsonb_build_array(jsonb_build_object('key','fixture-email-delivery','channel','email','kind','status','message_id','fixture-email-provider','destination',test_email,'signal','delivered','occurred_at',clock_timestamp())));
   assert (select delivery_status='delivered' from public.event_outbox where id=eb),'Exact receipt confirms email delivery';
-  result:=public.ingest_event_provider_events('mailbox',jsonb_build_array(jsonb_build_object('key','fixture-email-reply','channel','email','kind','inbound','message_id','fixture-email-reply','reply_to_id','fixture-email@example.test','destination',test_email,'body','Pode enviar opções?','occurred_at',clock_timestamp())));
-  assert (select opportunity_id=o1 and state='applied' from public.event_provider_events where id=(result->>0)::uuid),'RFC Message-ID alias links mail response';
+  blocked:=false;begin perform public.ingest_event_provider_events('mailbox',jsonb_build_array(jsonb_build_object('key','fixture-email-reply','channel','email','kind','inbound','message_id','fixture-email-reply','reply_to_id','fixture-email@example.test','destination',test_email,'body','Synthetic reply','occurred_at',clock_timestamp())));exception when others then blocked:=sqlerrm='mailbox_bound_path_required';end;
+  assert blocked,'Opaque provider reference must not bypass the bound mailbox path';
+  assert not exists(select 1 from public.event_messages where external_id='mailbox:fixture-email-reply'),'No fallback email message created';
   update public.event_outbox set status='failed' where id=eb;
   result:=public.begin_event_send(p,'email',test_email,'Email fixture','Fixture',(select ultima_resposta_cliente_em from public.oportunidades where id=o1));
   assert not (result->>'claimed')::boolean,'Proven delivery never reclaims a failed send';
