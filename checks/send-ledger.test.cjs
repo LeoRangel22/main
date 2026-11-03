@@ -182,4 +182,15 @@ test('email neutral: concurrent handlers share the existing ledger and attempt o
  const ledger={};const results=await Promise.all([run('email',{neutral:true,ledger}),run('email',{neutral:true,ledger})]);
  assert.equal(results.reduce((n,r)=>n+r.calls.fetch,0),1);assert.equal(results[0].body.sendId,results[1].body.sendId);
 });
+for(const marker of [false,null,0,'',undefined])test('email neutral: invalid or absent marker never falls back to a commercial preview '+String(marker),async()=>{
+ const snapshot={totals:{total:0},selectedItems:[],...(marker===undefined?{}:{communicationTest:marker})};
+ const r=await run('email',{neutral:true,proposal:{snapshot},payload:{preview:true,title:'[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial'}});
+ assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
+for(const field of ['title','message'])test('email neutral: whitespace never disguises neutral intent '+field,async()=>{
+ const snapshot={totals:{total:0},selectedItems:[]};
+ const content=field==='title'?'[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial':neutralBody;
+ const r=await run('email',{neutral:true,proposal:{snapshot},payload:{preview:true,[field]:' \n'+content+'\n '}});
+ assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
 

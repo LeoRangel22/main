@@ -29,10 +29,13 @@ const NEUTRAL_PILOT_ID = "QA-COM-EMAIL-01";
 const NEUTRAL_PILOT_SUBJECT = "[TESTE EVENTOS] QA-COM-EMAIL-01 — sem valor comercial";
 const NEUTRAL_PILOT_BODY = "Olá, Leo. Esta é uma mensagem controlada para validar a comunicação do Sistema de Eventos. Não constitui proposta comercial, reserva, cobrança ou confirmação de evento. Para validar o retorno, responda a este mesmo e-mail com: TESTE RECEBIDO QA-COM-EMAIL-01. Não encaminhe dados pessoais ou documentos neste teste.";
 function neutralEmailPilot(proposal:any,payload:any,destination:string,sender:string,replyTo:string,ownerEmail:unknown,ownerConfirmed:boolean){
- const marker=proposal?.snapshot?.communicationTest;
- if(!marker)return null;
+ const snapshot=proposal?.snapshot,marker=snapshot?.communicationTest;
+ const marked=snapshot&&Object.hasOwn(snapshot,'communicationTest');
+ const requested=(typeof payload.title==='string'&&payload.title.trim()===NEUTRAL_PILOT_SUBJECT)||
+   (typeof payload.message==='string'&&payload.message.trim()===NEUTRAL_PILOT_BODY);
+ if(!marked&&!requested)return null;
  const normalize=(v:unknown)=>typeof v==="string"?v.trim().toLowerCase():"";
- if(marker.id!==NEUTRAL_PILOT_ID||marker.neutral!==true||proposal.revision!==1||
+ if(!marker||marker.id!==NEUTRAL_PILOT_ID||marker.neutral!==true||proposal.revision!==1||
     !ownerConfirmed||!normalize(ownerEmail)||normalize(destination)!==normalize(ownerEmail)||
     normalize(proposal.cliente_email)!==normalize(ownerEmail)||normalize(sender)!=="leads@embaixadacarioca.com.br"||
     normalize(replyTo)!=="eventos@embaixadacarioca.com.br"||
