@@ -66,6 +66,7 @@ async function checks(c) {
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
+  await require('../checks/mailbox-capture-concurrency.cjs')(c,connect,name);
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
   await require('../checks/whatsapp-pilot-concurrency.cjs')(c,sql,connect,name,actor);
   await require('../checks/whatsapp-preparation-concurrency.cjs')(c,connect,name,actor);

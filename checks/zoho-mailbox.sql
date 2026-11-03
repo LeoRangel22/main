@@ -1,59 +1,64 @@
+-- Synthetic DB fixtures only. No HTTP, credentials or scheduled execution.
 begin;
 do $$
-declare activation bigint:=floor(extract(epoch from now())*1000)-3600000;
- received bigint:=activation+1000; initial_events bigint; before_seen bigint; current_version bigint; next_time bigint; event jsonb; items jsonb; blocked boolean;
+declare actor uuid;o uuid;p uuid;b uuid;other_b uuid;result jsonb;binding jsonb;event jsonb;item jsonb;dupe jsonb;before_o jsonb;blocked boolean;
+ activation bigint:=floor(extract(epoch from now())*1000)-3600000;received bigint:=floor(extract(epoch from now())*1000)-60000;
+ original_version bigint;original_watermark bigint;initial_messages bigint;
 begin
- if has_function_privilege('anon','public.event_mailbox_worker_config()','EXECUTE')
-  or has_function_privilege('authenticated','public.event_mailbox_worker_config()','EXECUTE')
-  or has_function_privilege('authenticated','public.event_mailbox_seen(jsonb)','EXECUTE')
-  or has_function_privilege('authenticated','public.event_mailbox_commit(bigint,text,bigint,bigint,jsonb)','EXECUTE')
-  or has_function_privilege('anon','event_private.queue_mailbox_sync()','EXECUTE') then raise exception 'Mailbox worker exposed'; end if;
- if has_table_privilege('authenticated','event_private.mailbox_sync_state','SELECT')
-  or has_table_privilege('authenticated','event_private.mailbox_seen','SELECT') then raise exception 'Mailbox private state exposed'; end if;
- if exists(select 1 from event_private.mailbox_sync_state where enabled or account_id is not null or watermark_ms is not null) then raise exception 'Mailbox must install dormant'; end if;
- if not (select relrowsecurity from pg_class where oid='event_private.mailbox_sync_state'::regclass)
-  or not (select relrowsecurity from pg_class where oid='event_private.mailbox_seen'::regclass) then raise exception 'Mailbox RLS missing'; end if;
- select count(*) into initial_events from public.event_provider_events where provider='mailbox';
- event:=jsonb_build_object('key','<mailbox-fixture-transaction@example.test>','message_id','<mailbox-fixture-transaction@example.test>','kind','inbound','channel','email','destination','mailbox-fixture-client@example.test','body','Isolated mailbox fixture','occurred_at',to_timestamp(received/1000.0));
- items:=jsonb_build_array(jsonb_build_object('provider_id','1709876190693100009','received_at_ms',received,'event',event));
- blocked:=false;
- begin perform public.event_mailbox_commit(0,'2560636000000008002',activation,received,items); exception when others then blocked:=true; end;
- if not blocked then raise exception 'Disabled mailbox committed'; end if;
- -- Explicit isolated fixture, not production activation.
+ assert not has_function_privilege('anon','public.event_mailbox_resolve_binding(text,text,text,text,jsonb)','EXECUTE'),'Anonymous resolver denied';
+ assert not has_function_privilege('authenticated','public.event_mailbox_commit_bound(bigint,text,bigint,bigint,jsonb)','EXECUTE'),'Seller commit denied';
+ assert not has_function_privilege('service_role','public.event_mailbox_commit(bigint,text,bigint,bigint,jsonb)','EXECUTE'),'Legacy commit denied';
+ assert not has_function_privilege('service_role','event_private.ingest_event_provider_events(text,jsonb)','EXECUTE'),'Generic private bypass denied';
+ assert not has_table_privilege('authenticated','event_private.mailbox_bound_receipts','SELECT'),'Receipts private';
+ assert not has_table_privilege('service_role','event_private.mailbox_outbound_headers','INSERT'),'Header provenance cannot be client registered';
+ assert (select relrowsecurity from pg_class where oid='event_private.mailbox_outbound_headers'::regclass),'Headers RLS';
+ assert (select relrowsecurity from pg_class where oid='event_private.mailbox_bound_receipts'::regclass),'Receipt RLS';
+ assert not exists(select 1 from event_private.mailbox_sync_state where enabled or cardinality(capture_send_ids)>0 or capture_started_at is not null),'Dormant install';
+ select id into actor from auth.users where email='leorangel@gmail.com';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'email','leorangel@gmail.com','role','authenticated')::text,true);
+ insert into public.oportunidades(cliente_nome,cliente_email,data_evento,status) values('Bound mail fixture','bound-client@example.test','2099-12-01','proposta_pronta') returning id into o;
+ insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,privatizacao,total,status,publication_status,snapshot)
+ values(o,'Bound mail fixture','bound-client@example.test','2099-12-01','10:00',20,2,1000,120,0,1120,'proposta_pronta','ready','{"event":{},"totals":{"adjustment":0}}') returning id into p;
+ result:=public.begin_event_send(p,'email','bound-client@example.test','Synthetic bound email','Fixture',null);b:=(result#>>'{send,id}')::uuid;
+ perform public.finish_event_send(b,'accepted','opaque-provider-request-id');
  update event_private.channel_credentials set enabled=true,expected_account='eventos@embaixadacarioca.com.br' where provider='mailbox';
- update event_private.mailbox_sync_state set enabled=true,account_id='2560636000000008002',mailbox='eventos@embaixadacarioca.com.br',activated_at_ms=activation,watermark_ms=activation where singleton;
- perform public.event_mailbox_commit(0,'2560636000000008002',activation,received,items);
- if (select version<>1 or watermark_ms<>received or last_success_at is null from event_private.mailbox_sync_state where singleton) then raise exception 'Atomic cursor not committed'; end if;
- if (select count(*) from public.event_provider_events where provider='mailbox')<>initial_events+1 then raise exception 'Inbound missing'; end if;
- if (select count(*) from event_private.mailbox_seen)<>1 then raise exception 'Dedup marker missing'; end if;
- if public.event_mailbox_seen('["1709876190693100009","1709876190693100008"]')<>'["1709876190693100009"]'::jsonb then raise exception 'Seen identity invalid'; end if;
- -- Replay is idempotent, including same RFC ID under a different provider ID.
- perform public.event_mailbox_commit(1,'2560636000000008002',received,received,items);
- items:=jsonb_build_array(jsonb_build_object('provider_id','1709876190693100010','received_at_ms',received,'event',event));
- perform public.event_mailbox_commit(2,'2560636000000008002',received,received,items);
- if (select count(*) from public.event_provider_events where provider='mailbox')<>initial_events+1 then raise exception 'RFC replay duplicated inbound'; end if;
- -- A stale racing worker cannot commit even if its message is new.
- blocked:=false;
- begin perform public.event_mailbox_commit(2,'2560636000000008002',received,received+1,'[]'); exception when sqlstate 'PT409' then blocked:=true; end;
- if not blocked or (select version from event_private.mailbox_sync_state where singleton)<>3 then raise exception 'CAS accepted stale worker'; end if;
- -- Failure in canonical ingestion rolls back seen markers and watermark as one unit.
- select count(*) into before_seen from event_private.mailbox_seen;
- event:=event||jsonb_build_object('key','<mailbox-fixture-invalid@example.test>','message_id','<mailbox-fixture-invalid@example.test>','destination',repeat('x',321));
- items:=jsonb_build_array(jsonb_build_object('provider_id','1709876190693100011','received_at_ms',received,'event',event));
- blocked:=false;
- begin perform public.event_mailbox_commit(3,'2560636000000008002',received,received+1,items); exception when others then blocked:=true; end;
- if not blocked or (select count(*) from event_private.mailbox_seen)<>before_seen or (select version from event_private.mailbox_sync_state where singleton)<>3 then raise exception 'Failed ingestion partially committed'; end if;
- -- Header-only exclusions are deduplicated without creating public inbound records.
- items:=jsonb_build_array(jsonb_build_object('provider_id','1709876190693100012','received_at_ms',received,'event',null));
- perform public.event_mailbox_commit(3,'2560636000000008002',received,received+1,items);
- if (select count(*) from public.event_provider_events where provider='mailbox')<>initial_events+1 then raise exception 'Ignored alias became inbound'; end if;
- blocked:=false;
- begin perform public.event_mailbox_commit(4,'0000000000000000001',received+1,received+2,'[]'); exception when sqlstate 'PT409' then blocked:=true; end;
- if not blocked then raise exception 'Wrong account accepted'; end if;
- -- Channel disablement gates pending sync independently of private state.
+ update event_private.mailbox_sync_state set enabled=true,account_id='123',mailbox='eventos@embaixadacarioca.com.br',activated_at_ms=activation,watermark_ms=activation where singleton;
+ blocked:=false;begin perform public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]');exception when others then blocked:=true;end;assert blocked,'Enabled flag without bounded scope is insufficient';
+ update event_private.mailbox_sync_state set capture_send_ids=array[b],capture_started_at=now()-interval '2 minutes',capture_expires_at=now()+interval '10 minutes',capture_message_limit=1;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]') is null,'No inferred Message-ID mapping';
+ insert into event_private.mailbox_outbound_headers select '123','<proposal@example.test>',b,attempts,reviewed_revision,repeat('a',64) from public.event_outbox where id=b;
+ binding:=public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]');
+ -- Known but out-of-scope ancestor must remain ambiguous, never disappear before count.
+ insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,attempts,approved_by,reviewed_revision)
+ select proposal_id,opportunity_id,fingerprint||':out-of-scope',channel,destination,body,status,attempts,approved_by,reviewed_revision from public.event_outbox where id=b returning id into other_b;
+ insert into event_private.mailbox_outbound_headers select '123','<other-proposal@example.test>',other_b,attempts,reviewed_revision,repeat('b',64) from public.event_outbox where id=other_b;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>","<other-proposal@example.test>"]')->>'code'='ambiguous','Complete chain checked before allowlist';
+ delete from event_private.mailbox_outbound_headers where outbound_message_id='<other-proposal@example.test>';
+ assert binding->>'send_id'=b::text and (binding->>'proposal_revision')::bigint=(select reviewed_revision from public.event_outbox where id=b),'Exact immutable revision binding';
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','other@example.test','<reply@example.test>','["<proposal@example.test>"]') is null,'Sender mismatch denied';
+ event:=jsonb_build_object('key','<reply@example.test>','message_id','<reply@example.test>','kind','inbound','channel','email','destination','bound-client@example.test','body','Synthetic bound reply','occurred_at',to_timestamp(received/1000.0));
+ item:=jsonb_build_object('provider_id','100','received_at_ms',received,'state','prepared','reason',null,'inbound_message_id','<reply@example.test>','sender','bound-client@example.test','reply_candidates',jsonb_build_array('<proposal@example.test>'),'binding',binding,'event',event);
+ select version,watermark_ms into original_version,original_watermark from event_private.mailbox_sync_state;
+ update event_private.mailbox_sync_state set capture_send_ids=array[gen_random_uuid()];
+ blocked:=false;begin perform public.event_mailbox_commit_bound(original_version,'123',original_watermark,received,jsonb_build_array(item));exception when others then blocked:=true;end;assert blocked,'Unlisted send cannot persist';
+ update event_private.mailbox_sync_state set capture_send_ids=array[b];
+ perform public.event_mailbox_commit_bound(original_version,'123',original_watermark,received,jsonb_build_array(item));
+ assert (select count(*)=1 from public.event_messages where opportunity_id=o and direction='inbound' and proposal_id=p and proposal_revision=(binding->>'proposal_revision')::bigint),'One message with exact revision';
+ select to_jsonb(x) into before_o from public.oportunidades x where id=o;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<new-reply@example.test>','["<proposal@example.test>"]')->>'code'='capture_limit','New reply beyond cap rejected before content';
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]')->>'code'='duplicate','RFC dedup before body despite exhausted cap';
+ dupe:=item||jsonb_build_object('provider_id','101','state','duplicate','event',null);
+ perform public.event_mailbox_commit_bound(original_version+1,'123',received,received,jsonb_build_array(dupe));
+ assert (select to_jsonb(x)=before_o from public.oportunidades x where id=o),'Duplicate preserves entire opportunity';
+ assert (select count(*)=1 from public.event_messages where opportunity_id=o and direction='inbound'),'RFC alias never duplicates content';
+ assert (select count(*)=2 from event_private.mailbox_seen where account_id='123'),'Both provider IDs tracked';
+ blocked:=false;begin perform public.event_mailbox_commit_bound(original_version+1,'123',received,received,'[]');exception when others then blocked:=true;end;assert blocked,'Stale cursor denied';
+ update event_private.mailbox_sync_state set capture_started_at=now()-interval '3 minutes',capture_expires_at=now()-interval '1 minute';
+ blocked:=false;begin perform public.event_mailbox_commit_bound(original_version+2,'123',received,received,'[]');exception when others then blocked:=true;end;assert blocked,'Expired capture cannot commit';
+ blocked:=false;begin update event_private.mailbox_sync_state set capture_started_at=now(),capture_expires_at=now()+interval '16 minutes';exception when others then blocked:=true;end;assert blocked,'Overlong capture prohibited';
+ update event_private.mailbox_sync_state set capture_started_at=now()-interval '2 minutes',capture_expires_at=now()+interval '10 minutes';
  update event_private.channel_credentials set enabled=false where provider='mailbox';
- blocked:=false;
- begin perform public.event_mailbox_commit(4,'2560636000000008002',received+1,received+2,'[]'); exception when others then blocked:=true; end;
- if not blocked then raise exception 'Disabled channel accepted'; end if;
-end; $$;
+ blocked:=false;begin perform public.event_mailbox_commit_bound(original_version+2,'123',received,received,'[]');exception when others then blocked:=true;end;assert blocked,'Channel OFF denies commit';
+ blocked:=false;begin perform public.ingest_event_provider_events('mailbox',jsonb_build_array(event));exception when others then blocked:=sqlerrm='mailbox_bound_path_required';end;assert blocked,'Generic mailbox fallback blocked';
+end $$;
 rollback;
