@@ -92,7 +92,7 @@ async function handler(options={}){
  const rows=options.rows||[row()];
  const cfg={enabled:true,channel_enabled:true,job_key:'job-key',account_id:accountId,mailbox,expected_account:mailbox,watermark_ms:now-600000,activated_at_ms:now-3600000,version:4,capture_send_ids:['00000000-0000-4000-8000-000000000001'],capture_started_at_ms:now-60000,capture_expires_at_ms:now+600000,capture_message_limit:20,capture_used_messages:0,...options.config};
  const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'never-visible',EVENT_MAILBOX_CLIENT_ID:'client',EVENT_MAILBOX_CLIENT_SECRET:'never-visible-client',EVENT_MAILBOX_REFRESH_TOKEN:'never-visible-refresh',...options.env};
- const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_resolve_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
+ const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
  const sandbox=vm.createContext({...native,Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
@@ -103,13 +103,13 @@ async function handler(options={}){
    if(url.endsWith('/content?includeBlockContent=false'))return json(content);
    throw Error('Unexpected endpoint');
  }});
- for(const f of ['_shared/channel-events.ts','_shared/zoho-mailbox.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
+ for(const f of ['_shared/channel-events.ts','_shared/zoho-mailbox.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
  const response=await serve(new Request('https://example.test/worker',{method:options.method||'POST',headers:{'x-event-job-key':options.key||'job-key'},body:options.method==='GET'?undefined:(options.body??JSON.stringify({action:options.action||'sync'}))}));
  return{status:response.status,body:await response.json(),fetches,rpcCalls,events};
 }
 test('Dormant sync and unauthorized request make zero provider calls',async()=>{for(const options of [{config:{enabled:false}},{config:{channel_enabled:false}},{key:'bad'}]){const r=await handler(options);assert.ok([401,409].includes(r.status));assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);}});
 test('Malformed, unknown and large requests cannot invoke configuration or providers',async()=>{for(const body of ['null','[]','bad','{"action":"activate"}','{"action":"sync","approved":true}','x'.repeat(3000)]){const r=await handler({body});assert.equal(r.status,400);assert.equal(r.rpcCalls.length,0);assert.equal(r.fetches.length,0);}});
-test('Diagnose verifies account but never reads messages or writes state, even disabled',async()=>{const r=await handler({action:'diagnose',config:{enabled:false}});assert.equal(r.status,200);assert.equal(r.body.diagnostic.mailbox_verified,true);assert.equal(r.fetches.length,2);assert.equal(r.rpcCalls.length,1);assert.equal(JSON.stringify(r.body).includes('never-visible'),false);});
+test('Diagnose verifies account but never reads messages or writes state, even disabled',async()=>{const r=await handler({action:'diagnose',config:{enabled:false}});assert.equal(r.status,200);assert.equal(r.body.diagnostic.mailbox_verified,true);assert.equal(r.fetches.length,2);assert.deepEqual(r.rpcCalls.map(c=>c.name),['event_mailbox_worker_config','event_mailbox_oauth_worker_credential']);assert.equal(r.rpcCalls[1].args.target_account,accountId);assert.equal(JSON.stringify(r.body).includes('never-visible'),false);});
 test('Missing OAuth/config rejects before provider access',async()=>{const r=await handler({env:{EVENT_MAILBOX_REFRESH_TOKEN:undefined}});assert.equal(r.status,409);assert.equal(r.fetches.length,0);});
 test('Sync uses only OAuth POST and provider GET, then one atomic commit',async()=>{const r=await handler();assert.equal(r.status,200);assert.equal(r.events.length,1);assert.equal(r.events[0].event.reply_to_id,'proposal@example.test');assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_commit_bound').length,1);assert.ok(r.fetches.every(c=>c.url.includes('/oauth/')?c.opts.method==='POST':c.opts.method==='GET'));assert.ok(r.fetches.every(c=>!c.url.includes('attachments')));});
 test('A quoted comma in an ordinary sender name does not stall the entire sync batch',async()=>{
@@ -147,3 +147,22 @@ test('capture quota reached yields metadata only without body',async()=>{const r
 test('partially used cap selects only remaining rows and does not reread excess',async()=>{const r=await handler({config:{capture_message_limit:2,capture_used_messages:1},rows:[row('100'),row('101')]});assert.equal(r.status,200);assert.equal(r.events.length,1);assert.equal(r.body.hasMore,true);assert.equal(r.fetches.filter(f=>f.url.includes('/content?')).length,1);});
 test('exhausted cap performs no provider query',async()=>{const r=await handler({config:{capture_message_limit:1,capture_used_messages:1}});assert.equal(r.status,200);assert.equal(r.body.code,'capture_limit');assert.equal(r.fetches.length,0);});
 test('out-of-scope reply never reads body',async()=>{const r=await handler({binding:{code:'out_of_scope'}});assert.equal(r.status,200);assert.equal(r.events[0].reason,'out_of_scope');assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);});
+
+test('Vault credential supplies the same verified mailbox path without exposing token metadata',async()=>{
+ const r=await handler({env:{EVENT_MAILBOX_REFRESH_TOKEN:undefined},vaultCredential:{available:true,refresh_token:'never-visible-vault'}});
+ assert.equal(r.status,200);assert.equal(r.events.length,1);
+ assert.equal(r.fetches[0].opts.body.get('refresh_token'),'never-visible-vault');
+ assert.equal(JSON.stringify(r.body).includes('never-visible'),false);
+ assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_commit_bound').length,1);
+});
+test('Conflicting ENV and Vault credentials refuse provider access and cursor commit',async()=>{
+ const r=await handler({vaultCredential:{available:true,refresh_token:'never-visible-vault'}});
+ assert.equal(r.status,503);assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);
+ assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+});
+test('Vault lookup failure or malformed token cannot fall back or reach a provider',async()=>{
+ for(const options of [{vaultFailure:true},{env:{EVENT_MAILBOX_REFRESH_TOKEN:undefined},vaultCredential:{available:true,refresh_token:'bad\nvalue'}}]){
+  const r=await handler(options);assert.equal(r.status,503);assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);
+  assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+ }
+});
