@@ -4,6 +4,31 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const fields = (value: any, keys: string[]) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k));
 const safeText = (v: any) => typeof v === 'string' && v.length > 0 && v.length <= 500 && v === v.trim() && !/[\r\n\x00]/.test(v);
 
+// Master-only metadata preparation. It never refreshes OAuth, queries the
+// provider, changes readiness, claims an attempt or returns recipient/body/key.
+export async function prepareScopedEmailDeliveries(worker: any, payload: any) {
+  if (!fields(payload, ['action', 'sendIds']) || payload.action !== 'prepare-email-scoped' || !Array.isArray(payload.sendIds) || payload.sendIds.length !== 2 || payload.sendIds.some((v: any) => typeof v !== 'string' || !uuid.test(v)) || new Set(payload.sendIds).size !== 2) return { ok: false, code: 'scope_invalid' };
+  const presence = (prefix: string) => ({ clientId: Boolean(Deno.env.get(prefix + '_CLIENT_ID')), clientSecret: Boolean(Deno.env.get(prefix + '_CLIENT_SECRET')), refreshToken: Boolean(Deno.env.get(prefix + '_REFRESH_TOKEN')) });
+  const diagnostic: any = { deliveryRead: presence('EVENT_ZOHO'), mailboxRead: presence('EVENT_MAILBOX'), agentPinned: false, automaticSyncOff: false };
+  try {
+    const cfg = await worker.rpc('event_channel_worker_config', { target_provider: 'zepto' });
+    if (cfg.error || !cfg.data) return { ok: false, code: 'configuration_unavailable', diagnostic };
+    diagnostic.agentPinned = safeText(cfg.data.expected_account);
+    diagnostic.automaticSyncOff = cfg.data.enabled === false && cfg.data.delivery_sync_ready === false;
+    if (!diagnostic.automaticSyncOff) return { ok: false, code: 'configuration_conflict', diagnostic };
+    if (!diagnostic.agentPinned || !Object.values(diagnostic.deliveryRead).every(Boolean)) return { ok: false, code: 'setup_pending', diagnostic };
+    const r = await worker.from('event_outbox').select('id,proposal_id,reviewed_revision,provider_id,attempts,channel,status,delivery_status,delivery_checked_at').in('id', payload.sendIds);
+    if (r.error || !Array.isArray(r.data) || r.data.length !== 2) return { ok: false, code: 'scope_conflict', diagnostic };
+    const references = [];
+    for (const id of payload.sendIds) {
+      const matches = r.data.filter((row: any) => row.id === id), row = matches[0];
+      if (matches.length !== 1 || !uuid.test(row.proposal_id) || !Number.isSafeInteger(row.reviewed_revision) || row.reviewed_revision < 1 || !safeText(row.provider_id) || row.attempts !== 1 || row.channel !== 'email' || row.status !== 'accepted' || row.delivery_checked_at !== null || ![null, 'accepted', 'uncertain'].includes(row.delivery_status)) return { ok: false, code: 'scope_conflict', diagnostic };
+      references.push({ sendId: row.id, proposalId: row.proposal_id, revision: row.reviewed_revision, providerId: row.provider_id, attempt: 1 });
+    }
+    return { ok: true, diagnostic, agent: cfg.data.expected_account, references };
+  } catch { return { ok: false, code: 'preparation_unavailable', diagnostic }; }
+}
+
 // The existing scheduler and broad sync function are deliberately not used here.
 // A checked_at claim is durable: failure/abort cannot cause this path to replay a GET.
 export async function reconcileScopedEmailDeliveries(worker: any, scope: any) {
