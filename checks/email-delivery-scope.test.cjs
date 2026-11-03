@@ -44,13 +44,28 @@ function fixture(options={}) {
   if(options.mismatch)data[options.mismatch]='other';
   return options.malformed?{status:'success',data:{}}:options.duplicate?{status:'success',data:[data,data]}:{status:options.failureStatus?'failure':'success',...(options.explicitError?{error:{code:'synthetic'}}:{}),data:[data]};
  };
- const context=vm.createContext({URL,URLSearchParams,Date:Clock,Set,Number,providerFetch,Deno:{env:{get:k=>options.missingOAuth?undefined:k.includes('URL')?undefined:'synthetic-not-a-credential'}}});
+ const context=vm.createContext({URL,URLSearchParams,Date:Clock,Set,Number,providerFetch,Deno:{env:{get:k=>options.missingOAuth||options.missingNames?.includes(k)?undefined:k.includes('URL')?undefined:'synthetic-not-a-credential'}}});
  vm.runInContext(source('_shared/email-delivery-scope.ts'),context);
  const run=()=>vm.runInContext('reconcileScopedEmailDeliveries',context)(worker,payload);
  const assertIsolated=()=>{assert.equal(JSON.stringify(rows[2]),originalThird);assert.equal(cfg.enabled,false);assert.equal(cfg.delivery_sync_ready,false);assert.ok(events.every(e=>ids.slice(0,2).includes(e.send_id)));};
- return{run,rows,payload,calls,updates,events,worker,assertIsolated};
+ const prepare=(sendIds=payload.references.map(p=>p.sendId))=>vm.runInContext('prepareScopedEmailDeliveries',context)(worker,{action:'prepare-email-scoped',sendIds});
+ return{run,prepare,rows,payload,calls,updates,events,worker,assertIsolated};
 }
 test('only two approved sends are queried and persisted; third row and gates remain unchanged',async()=>{const f=fixture(),r=await f.run();assert.equal(r.ok,true);assert.equal(f.calls.length,3);assert.equal(f.events.length,2);assert.equal(r.automaticSyncChanged,false);assert.equal(r.messageAttempted,false);assert.ok(!JSON.stringify(r).includes('@'));assert.ok(!JSON.stringify(r).includes('synthetic-mail-reference'));f.assertIsolated();});
+
+test('metadata preparation returns exact references and presence, without OAuth, provider or write',async()=>{const f=fixture({config:{secret:'private-fixture-secret',delivery_job_key:'private-fixture-job'}}),r=await f.prepare();assert.equal(r.ok,true);assert.deepEqual(Array.from(r.references,p=>p.sendId),ids.slice(0,2));assert.equal(r.references[0].revision,2);assert.equal(r.diagnostic.automaticSyncOff,true);assert.equal(r.diagnostic.deliveryRead.refreshToken,true);assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);assert.equal(f.events.length,0);assert.ok(!JSON.stringify(r).includes('@'));assert.ok(!JSON.stringify(r).includes('private-fixture'));assert.ok(!JSON.stringify(r).includes('synthetic-not-a-credential'));f.assertIsolated();});
+for(const name of ['EVENT_ZOHO_CLIENT_ID','EVENT_ZOHO_CLIENT_SECRET','EVENT_ZOHO_REFRESH_TOKEN'])test(`missing ${name} is metadata-only setup pending`,async()=>{const f=fixture({missingNames:[name]}),r=await f.prepare();assert.equal(r.ok,false);assert.equal(r.code,'setup_pending');assert.equal(Object.values(r.diagnostic.deliveryRead).filter(Boolean).length,2);assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);f.assertIsolated();});
+test('mailbox reader missing does not block independent delivery preparation',async()=>{const f=fixture({missingNames:['EVENT_MAILBOX_CLIENT_ID','EVENT_MAILBOX_CLIENT_SECRET','EVENT_MAILBOX_REFRESH_TOKEN']}),r=await f.prepare();assert.equal(r.ok,true);assert.equal(Object.values(r.diagnostic.mailboxRead).some(Boolean),false);assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);});
+for(const config of [{enabled:true},{delivery_sync_ready:true},{expected_account:null}])test(`metadata preparation refuses ${JSON.stringify(config)} without mutations`,async()=>{const f=fixture({config}),r=await f.prepare();assert.equal(r.ok,false);assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);assert.equal(f.events.length,0);});
+for(const mutate of [f=>f.rows[0].delivery_checked_at=new Date().toISOString(),f=>f.rows[0].delivery_status='delivered',f=>f.rows[0].channel='whatsapp',f=>f.rows[0].attempts=2,f=>f.rows[0].provider_id='',f=>f.rows[0].reviewed_revision=null])test('metadata preparation rejects an ineligible row before provider or reservation',async()=>{const f=fixture();mutate(f);const r=await f.prepare();assert.equal(r.code,'scope_conflict');assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);});
+for(const sendIds of [[],[ids[0]],[ids[0],ids[0]],ids,[ids[0],'invalid']])test(`metadata preparation rejects malformed selection ${sendIds.length}`,async()=>{const f=fixture(),r=await f.prepare(sendIds);assert.equal(r.code,'scope_invalid');assert.equal(f.calls.length,0);assert.equal(f.updates.length,0);});
+for(const [label,settings,expected] of [['not signed in',{signed:false},401],['not team',{team:false},403],['not Master',{master:false},403],['Master',{},200]])test(`metadata admin guard: ${label}`,async()=>{
+ let handler,prepares=0;
+ const caller={auth:{getUser:async()=>settings.signed===false?{error:{}}:{data:{user:{id:'synthetic-owner'}}}},rpc:async n=>({data:n==='is_team_member'?settings.team!==false:settings.master!==false})};
+ const c=vm.createContext({Request,Response,URL,Deno:{env:{get:()=>''},serve:fn=>handler=fn},createClient:()=>caller,prepareScopedEmailDeliveries:async()=>{prepares++;return{ok:true};}});
+ vm.runInContext(source('event-channel-admin/index.ts'),c);
+ const r=await handler(new Request('https://example.test/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'prepare-email-scoped',sendIds:ids.slice(0,2)})}));assert.equal(r.status,expected);assert.equal(prepares,expected===200?1:0);
+});
 test('legacy event-key collision cannot apply an old pending receipt to a third send',async()=>{const f=fixture({legacyCollision:true});assert.equal((await f.run()).ok,true);assert.equal(f.events[0].key,'scoped-log-delivered:'+ids[0]+':1:synthetic-1');f.assertIsolated();});
 for(const [name,mutate] of [
  ['third ID',f=>f.payload.references[1].sendId=ids[2]],

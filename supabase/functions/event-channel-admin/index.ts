@@ -1,5 +1,5 @@
 import { providerFetch, syncEmailDeliveries } from '../_shared/email-delivery.ts';
-import { reconcileScopedEmailDeliveries } from '../_shared/email-delivery-scope.ts';
+import { prepareScopedEmailDeliveries, reconcileScopedEmailDeliveries } from '../_shared/email-delivery-scope.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { botBridgeUrl, fetchBotBridge, normalizeBotBridgeResult, verifyBotCallbacks } from '../_shared/bot-bridge.ts';
 
@@ -24,6 +24,10 @@ Deno.serve(async (req: Request) => {
     }
     const { data: manager } = await caller.rpc('is_super_admin');
     if (!manager) return respond(403, { ok: false, message: 'Configuração exclusiva do gestor' });
+    if (payload.action === 'prepare-email-scoped') {
+      const result = await prepareScopedEmailDeliveries(worker, payload);
+      return respond(result.ok ? 200 : 409, result);
+    }
     if (payload.action === 'reconcile-email-scoped') {
       const result = await reconcileScopedEmailDeliveries(worker, payload);
       return respond(result.ok ? 200 : 409, result);

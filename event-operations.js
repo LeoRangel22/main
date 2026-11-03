@@ -281,8 +281,79 @@ function renderOpsTriage(){
 }
 function renderOpsChannels(){
   const names={zapi:"WhatsApp",zepto:"Retornos de e-mail",mailbox:"Respostas de e-mail"};
-  return `${renderOpsChannelDiagnostics()}<p>A central busca novos registros a cada 30 segundos enquanto está aberta. Receber mensagens não autoriza respostas automáticas.</p>${["zapi","zepto","mailbox"].map(provider=>{const h=eventOps.channelHealth.find(h=>h.provider===provider)||{};return `<article class="event-ops-message"><strong>${names[provider]}</strong><p>${!h.enabled?"Ativação pendente":!h.account_configured?"Conta de origem pendente":h.last_received_at?`Último retorno autenticado: ${escapeHtml(formatSavedAt(h.last_received_at))}`:"Configurado · aguardando primeiro retorno autenticado"}</p><small>${provider==="zepto"?`${h.delivery_sync_ready?"Consulta automática a cada 5 minutos habilitada":"Consulta automática de entrega pendente"} · ${escapeHtml(h.delivery_sync_diagnostic||"")} · `:""}${h.bridge_enabled?`Ponte do Bot: ${h.bridge_stale?"consulta atrasada ou ainda sem sucesso":"consulta recente"} · ${escapeHtml(h.bridge_diagnostic||"")} · `:""}${Number(h.triage_count)||0} para vincular · ${Number(h.pending_count)||0} retornos aguardando conciliação</small>${isSuperAdminSession()?`<button class="secondary" type="button" data-ops-channel="${provider}">Configurar ${names[provider]}</button>`:""}</article>`;}).join("")}<button class="secondary" type="button" data-ops-email-delivery>Consultar entregas de e-mail</button><p>Entrega de e-mail exige consulta ao provedor com permissão de leitura. Abertura e clique podem ser automáticos. Respostas de e-mail exigem conectar a caixa de entrada.</p>`;
+  return `${renderOpsChannelDiagnostics()}<p>A central busca novos registros a cada 30 segundos enquanto está aberta. Receber mensagens não autoriza respostas automáticas.</p>${["zapi","zepto","mailbox"].map(provider=>{const h=eventOps.channelHealth.find(h=>h.provider===provider)||{};return `<article class="event-ops-message"><strong>${names[provider]}</strong><p>${!h.enabled?"Ativação pendente":!h.account_configured?"Conta de origem pendente":h.last_received_at?`Último retorno autenticado: ${escapeHtml(formatSavedAt(h.last_received_at))}`:"Configurado · aguardando primeiro retorno autenticado"}</p><small>${provider==="zepto"?`${h.delivery_sync_ready?"Consulta automática a cada 5 minutos habilitada":"Consulta automática de entrega pendente"} · ${escapeHtml(h.delivery_sync_diagnostic||"")} · `:""}${h.bridge_enabled?`Ponte do Bot: ${h.bridge_stale?"consulta atrasada ou ainda sem sucesso":"consulta recente"} · ${escapeHtml(h.bridge_diagnostic||"")} · `:""}${Number(h.triage_count)||0} para vincular · ${Number(h.pending_count)||0} retornos aguardando conciliação</small>${isSuperAdminSession()?`<button class="secondary" type="button" data-ops-channel="${provider}">Configurar ${names[provider]}</button>`:""}</article>`;}).join("")}${isSuperAdminSession()?'<button class="secondary" type="button" data-ops-email-scoped>Conciliar dois recibos</button>':""}<button class="secondary" type="button" data-ops-email-delivery>Consultar entregas de e-mail (geral)</button><p>Entrega de e-mail exige consulta ao provedor com permissão de leitura. Abertura e clique podem ser automáticos. Respostas de e-mail exigem conectar a caixa de entrada.</p>`;
 }
+// Scoped receipt operator: no tokens, destinations, message bodies or general sync.
+function opsScopedEmailPreview(data, ids) {
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const text=v=>typeof v==='string'&&v.length>0&&v.length<=500&&v===v.trim()&&!/[\r\n\x00]/.test(v);
+  if(!data?.ok||data.diagnostic?.automaticSyncOff!==true||!text(data.agent)||!Array.isArray(data.references)||data.references.length!==2)throw Error('Não foi possível conferir os dois recibos.');
+  const refs=data.references.map(p=>{
+    if(!p||!uuid.test(p.sendId)||!uuid.test(p.proposalId)||!ids.includes(p.sendId)||!Number.isSafeInteger(p.revision)||p.revision<1||p.attempt!==1||!text(p.providerId))throw Error('Referências não confirmadas.');
+    return {sendId:p.sendId,proposalId:p.proposalId,revision:p.revision,providerId:p.providerId,attempt:1};
+  });
+  if(new Set(refs.map(p=>p.sendId)).size!==2||new Set(refs.map(p=>p.providerId)).size!==2)throw Error('Referências duplicadas.');
+  return {agent:data.agent,references:refs};
+}
+function showOpsScopedEmailReceipts() {
+  const previous=document.getElementById('opsScopedReceiptDialog');if(previous){previous.focus();return previous;}
+  if(!isSuperAdminSession())throw Error('Esta consulta exige login Master.');
+  const client=state.supabase,user=state.session?.user?.id,opener=document.activeElement;
+  if(!client||!user)throw Error('Entre com seu usuário Master.');
+  const d=document.createElement('dialog');d.id='opsScopedReceiptDialog';d.className='event-ops-dialog';d.setAttribute('aria-labelledby','opsScopedReceiptTitle');
+  d.innerHTML='<form><h2>Conciliar dois recibos de e-mail</h2><p>Consulta somente dois envios existentes. Não envia mensagens nem liga a sincronização automática. Uma consulta incerta não será repetida.</p><label>Identificador do primeiro envio<input name="sendA" type="text" required maxlength="36" autocomplete="off" aria-describedby="opsReceiptHelp"/></label><label>Identificador do segundo envio<input name="sendB" type="text" required maxlength="36" autocomplete="off" aria-describedby="opsReceiptHelp"/></label><p id="opsReceiptHelp">Use os identificadores do histórico de envios, não o e-mail do cliente.</p><p data-receipt-diagnostic hidden></p><p data-receipt-preview></p><label class="event-ops-check"><input name="confirmed" type="checkbox" disabled/> Conferi os dois envios e suas revisões. Autorizo somente esta consulta de entrega.</label><p role="status" aria-live="polite" data-receipt-status>Confira os identificadores antes de consultar.</p><p role="alert" class="event-ops-error" hidden></p><div class="event-ops-toolbar"><button type="button" class="secondary" data-receipt-close>Fechar</button><button type="button" class="secondary" data-receipt-read>Consultar registro salvo</button><button type="button" class="secondary" data-receipt-prepare>Conferir referências</button><button type="submit" class="primary" disabled>Conciliar uma vez</button></div></form>';
+  document.body.append(d);
+  const f=d.querySelector('form'),a=f.elements.sendA,b=f.elements.sendB,check=f.elements.confirmed;
+  const prepare=f.querySelector('[data-receipt-prepare]'),read=f.querySelector('[data-receipt-read]'),run=f.querySelector('[type=submit]'),status=f.querySelector('[role=status]'),alert=f.querySelector('[role=alert]'),summary=f.querySelector('[data-receipt-preview]'),diagnostic=f.querySelector('[data-receipt-diagnostic]');
+  d.querySelector('h2').id='opsScopedReceiptTitle';
+  let preview=null,busy=false,attempted=false,invalid=false,subscription;
+  const current=()=>!invalid&&d.isConnected&&state.supabase===client&&state.session?.user?.id===user&&isSuperAdminSession();
+  const ids=()=>[a.value.trim(),b.value.trim()];
+  const valid=()=>{const v=ids();return v.every(x=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(x))&&v[0]!==v[1];};
+  function buttons(){const disabled=!current()||busy;a.disabled=b.disabled=disabled;prepare.disabled=disabled||attempted||!valid();read.disabled=disabled||!valid();check.disabled=disabled||attempted||!preview;run.disabled=disabled||attempted||!preview||!check.checked;}
+  function invalidate(){invalid=true;preview=null;a.value=b.value='';check.checked=false;summary.textContent='';diagnostic.hidden=true;diagnostic.textContent='';alert.hidden=true;alert.textContent='';status.textContent='Sessão alterada. Feche e reabra com seu usuário Master.';buttons();}
+  function message(error){alert.hidden=false;alert.textContent=error;}
+  async function session(){if(QA_MODE)throw Error('Ações externas desativadas no ambiente QA.');let guard;try{guard=await ensureTeamSessionForWrite('consultar dois recibos de e-mail');}catch{throw Error('Sessão indisponível. Entre novamente antes de continuar.');}if(!guard.ok)throw Error('Sessão indisponível. Entre novamente antes de continuar.');if(!current())throw Error('Sessão alterada. Reabra a conferência.');}
+  async function request(body){await session();let r;try{r=await client.functions.invoke('event-channel-admin',{body});}catch{throw Error('Resultado não confirmado. Consulte o registro salvo; não repita.');}let data=r.data;if(!data&&typeof r.error?.context?.json==='function'){try{data=await r.error.context.json();}catch{}}if(!current())throw Error('Sessão alterada. Reabra a conferência.');if(!data||typeof data.ok!=='boolean'||r.error&&data.ok)throw Error('Resultado não confirmado. Consulte o registro salvo; não repita.');return data;}
+  async function readSaved(){
+    await session();const wanted=ids();
+    let r;try{r=await client.from('event_outbox').select('id,proposal_id,reviewed_revision,provider_id,channel,status,attempts,delivery_status,delivery_checked_at').in('id',wanted);}catch{throw Error('Não foi possível conferir os dois registros salvos. Não repita a consulta ao provedor.');}
+    if(!current())throw Error('Sessão alterada. Reabra a conferência.');
+    if(r.error||!Array.isArray(r.data)||r.data.length!==2||new Set(r.data.map(x=>x.id)).size!==2||r.data.some(x=>!wanted.includes(x.id)||x.channel!=='email'||x.attempts!==1||!Number.isSafeInteger(x.reviewed_revision)))throw Error('Não foi possível conferir os dois registros salvos. Não repita a consulta ao provedor.');
+    if(preview&&r.data.some(row=>!preview.references.some(p=>p.sendId===row.id&&p.proposalId===row.proposal_id&&p.revision===row.reviewed_revision&&p.providerId===row.provider_id&&p.attempt===row.attempts)))throw Error('As referências mudaram. Não repita a consulta ao provedor.');
+    const delivered=r.data.filter(x=>['delivered','read'].includes(x.delivery_status)).length;
+    summary.textContent=r.data.map(x=>'Envio '+x.id.slice(0,8)+': '+(['delivered','read'].includes(x.delivery_status)?'entrega registrada':x.delivery_checked_at?'tentativa reservada; entrega não comprovada':'entrega ainda não registrada')).join(' • ');
+    status.textContent=delivered===2?'Entrega registrada nos dois envios. Isso não comprova leitura humana ou resposta.':'Entrega ainda não comprovada nos dois registros. Não repita uma consulta incerta.';
+    return delivered===2;
+  }
+  a.addEventListener('input',changed);b.addEventListener('input',changed);check.onchange=buttons;
+  function changed(){preview=null;check.checked=false;summary.textContent='';diagnostic.hidden=true;alert.hidden=true;status.textContent=attempted?'Já houve uma tentativa nesta conferência. Use somente o registro salvo.':'Referências alteradas. Confira novamente.';buttons();}
+  prepare.onclick=async()=>{
+    if(busy||attempted||!valid()||!current())return;busy=true;alert.hidden=true;buttons();
+    try{const selected=ids(),r=await request({action:'prepare-email-scoped',sendIds:selected});
+      if(JSON.stringify(selected)!==JSON.stringify(ids()))throw Error('Referências alteradas. Confira novamente.');
+      if(r.diagnostic){const p=r.diagnostic;diagnostic.hidden=false;diagnostic.textContent='Credenciais de leitura de entregas: '+(p.deliveryRead?.clientId&&p.deliveryRead?.clientSecret&&p.deliveryRead?.refreshToken?'presentes':'pendentes')+'; credenciais da caixa: '+(p.mailboxRead?.clientId&&p.mailboxRead?.clientSecret&&p.mailboxRead?.refreshToken?'presentes':'pendentes')+'; agente: '+(p.agentPinned?'definido':'pendente')+'; sincronização automática OFF: '+(p.automaticSyncOff?'confirmado':'não confirmado')+'. Presença não comprova autorização válida da API.';}
+      if(!r.ok)throw Error(r.code==='setup_pending'?'Configuração de leitura pendente. Nenhuma consulta ao provedor foi feita.':'Referências ou controles não confirmados. Nenhuma consulta ao provedor foi feita.');
+      preview=opsScopedEmailPreview(r,selected);check.checked=false;summary.textContent=preview.references.map(p=>'Envio '+p.sendId.slice(0,8)+' — proposta '+p.proposalId.slice(0,8)+', revisão '+p.revision+', tentativa 1').join(' • ');status.textContent='Referências conferidas. Marque a confirmação para consultar uma vez.';
+    }catch(error){preview=null;check.checked=false;message(error.message);}finally{busy=false;buttons();}
+  };
+  read.onclick=async()=>{if(busy||!valid()||!current())return;busy=true;alert.hidden=true;buttons();try{await readSaved();}catch(error){message(error.message);}finally{busy=false;buttons();}};
+  f.onsubmit=async e=>{
+    e.preventDefault();if(busy||attempted||!preview||!check.checked||!current())return;
+    attempted=true;busy=true;alert.hidden=true;buttons();status.textContent='Consultando os dois recibos. Não repita ou abra outra conferência.';
+    try{const now=Date.now(),r=await request({action:'reconcile-email-scoped',...preview,startedAt:new Date(now).toISOString(),expiresAt:new Date(now+120000).toISOString()});
+      if(!r.ok||!Array.isArray(r.results)||r.results.length!==2||new Set(r.results.map(x=>x.sendId)).size!==2||r.results.some(x=>x.state!=='confirmed'||!preview.references.some(p=>p.sendId===x.sendId)))throw Error('Resultado não confirmado. Conferindo somente o registro salvo.');
+      status.textContent='Entrega registrada nos dois envios. Nenhuma mensagem foi reenviada. Isso não comprova resposta.';
+    }catch(error){if(current()){message('Resultado incerto ou incompleto. Não repetir a consulta ao provedor.');try{if(await readSaved())alert.hidden=true;}catch{status.textContent='Registro salvo não confirmado. Preserve esta tentativa para conferência; não repita.';}}}
+    finally{busy=false;buttons();}
+  };
+  f.querySelector('[data-receipt-close]').onclick=()=>d.close();
+  d.addEventListener('close',()=>{invalid=true;subscription?.data?.subscription?.unsubscribe();d.remove();if(opener?.isConnected)opener.focus();},{once:true});
+  if(typeof client.auth?.onAuthStateChange==='function')subscription=client.auth.onAuthStateChange((_event,s)=>{if(!s?.user?.id||s.user.id!==user)invalidate();});
+  d.showModal();buttons();a.focus();return d;
+}
+// End scoped receipt operator.
+
 async function callOpsChannelAdmin(action,approved=false,instanceId=null,scopeId=null){
   if(QA_MODE)throw new Error("Configuração externa desativada no modo QA.");
   const check=await ensureTeamSessionForWrite("configurar ou consultar canais");if(!check.ok)throw new Error(check.message);
@@ -381,6 +452,7 @@ async function handleEventOpsClick(e) {
   const work=e.target.closest("[data-ops-work]");if(work){const i=getOpsItems().find(i=>i.opportunityId===work.dataset.opsWork);if(!i)return;if(i.kind==="proposal"){await safeOpenSavedProposal(i.id,"Revisão diária");if(operationStatuses.has(i.status))nodes.operationalChecklist?.scrollIntoView({behavior:"smooth",block:"start"});}else await safeApplyQuoteRequest(i.id,"Revisão diária");return;}
   const link=e.target.closest("[data-ops-link], [data-ops-ignore]");
   if(link){const id=link.dataset.opsLink||link.dataset.opsIgnore,ignore=Boolean(link.dataset.opsIgnore);opsDialog(ignore?"Arquivar mensagem":"Identificar evento",ignore?'<p>A mensagem ficará arquivada sem alterar nenhum evento.</p><label class="event-ops-check"><input type="checkbox" required/> Conferi e desejo arquivar.</label>':`<label>Evento correto<select name="event" required><option value="">Escolha</option>${getOpsItems().map(i=>`<option value="${escapeHtml(i.opportunityId)}">${escapeHtml(i.name)} · ${escapeHtml(i.date||"sem data")}</option>`).join("")}</select></label><label class="event-ops-check"><input type="checkbox" required/> Conferi o vínculo desta mensagem.</label>`,ignore?"Arquivar":"Vincular",f=>eventOpsRpc("resolve_event_inbound",{target_event:id,target_opportunity:ignore?null:f.elements.event.value,ignore_message:ignore}));return;}
+  if(e.target.closest("[data-ops-email-scoped]")){try{showOpsScopedEmailReceipts();}catch(error){showToast(error.message);}return;}
   const channel=e.target.closest("[data-ops-channel]");if(channel){try{await showOpsChannelSetup(channel.dataset.opsChannel);}catch(err){showToast(err.message);}return;}
   if(e.target.closest("[data-ops-email-delivery]")){const b=e.target.closest("button");b.disabled=true;try{const r=await callOpsChannelAdmin("sync-email");showToast(r.message);await loadEventOperations();}catch(err){showToast(err.message);}finally{b.disabled=false;}return;}
   const tab=e.target.closest("[data-ops-tab]");if(tab){eventOps.tab=tab.dataset.opsTab;renderEventOperations();return;}
