@@ -1,0 +1,26 @@
+(()=>{
+ 'use strict';
+ const $=id=>document.getElementById(id),s={actor:null,attempt:null,state:null,busy:false,submitted:true,generation:0};let client;
+ const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v);
+ const mark=()=>`event-mailbox-connect:${s.attempt}`;
+ function controls(){const prepared=s.state==='prepared'&&s.attempt&&!s.submitted,ready=s.actor&&!s.busy;$('prepareConnection').disabled=!ready||!['absent','expired'].includes(s.state)||!$('scopeConfirmed').checked;$('readConnection').disabled=!ready;$('authorizationCode').disabled=!ready||!prepared;$('completeConnection').disabled=!ready||!prepared||!$('scopeConfirmed').checked||!$('authorizationCode').value;}
+ function clear(){s.actor=null;s.attempt=null;s.state=null;s.submitted=true;$('authorizationCode').value='';$('scopeConfirmed').checked=false;$('connectionWorkspace').hidden=true;$('connectionOutcome').textContent='';controls();}
+ async function identity(expected){const r=await client.auth.getUser();if(r.error||!r.data?.user||expected&&r.data.user.id!==expected)throw Error('session_changed');const role=await client.rpc('is_super_admin');if(role.error||role.data!==true)throw Error('owner_required');return r.data.user.id;}
+ function bounded(task){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('unconfirmed')),35000);Promise.resolve().then(task).then(v=>{clearTimeout(timer);resolve(v);},()=>{clearTimeout(timer);reject(Error('unconfirmed'));});});}
+ async function invoke(payload){const r=await bounded(()=>client.functions.invoke('event-mailbox-connect',{body:payload}));if(r.error||r.data?.ok!==true)throw Error('unconfirmed');return r.data;}
+ function render(v){if(!v||!['absent','prepared','claimed','stored','uncertain','expired'].includes(v.state)||v.captureActivated!==false)throw Error('status_invalid');if(v.state==='prepared'&&!uuid(v.attemptId))throw Error('status_invalid');s.state=v.state;s.attempt=v.state==='prepared'?v.attemptId:null;s.submitted=!s.attempt||sessionStorage.getItem(mark())!==null;const messages={absent:'Conexão ainda não preparada.',prepared:'Preparado. Gere um código novo na conta Eventos e cole somente no campo protegido.',claimed:'Troca em andamento ou sem resultado confirmado. Consulte o estado; não repita.',stored:'Conta verificada e conexão guardada no servidor. Captura e envios não foram ativados.',uncertain:'Resultado incerto. Não gere outro código nem repita a troca.',expired:'Preparação expirada antes de iniciar a troca.'};$('connectionStatus').textContent=messages[v.state];controls();}
+ async function run(action){if(s.busy||!s.actor)return;const g=s.generation,actor=s.actor;s.busy=true;controls();try{await identity(actor);if(g!==s.generation)return;const v=await invoke({action});if(g===s.generation)render(v);}catch{if(g===s.generation)$('connectionOutcome').textContent='Não foi possível confirmar o estado. Nenhuma troca será repetida automaticamente.';}finally{if(g===s.generation){s.busy=false;controls();}}}
+ $('prepareConnection').addEventListener('click',()=>{if(!s.busy&&s.actor&&['absent','expired'].includes(s.state)&&$('scopeConfirmed').checked)void run('prepare');});
+ $('readConnection').addEventListener('click',()=>void run('status'));
+ $('scopeConfirmed').addEventListener('change',controls);$('authorizationCode').addEventListener('input',controls);
+ $('connectionForm').addEventListener('submit',async e=>{
+  e.preventDefault();if(s.busy||!s.actor||s.state!=='prepared'||!s.attempt||s.submitted||!$('scopeConfirmed').checked)return;
+  let code=$('authorizationCode').value;$('authorizationCode').value='';if(!/^[A-Za-z0-9._~-]{1,8192}$/.test(code)){code='';$('connectionOutcome').textContent='Código inválido. Não envie credenciais pelo chat.';controls();return;}
+  const g=s.generation,actor=s.actor,attempt=s.attempt;s.busy=true;s.submitted=true;controls();
+  try{sessionStorage.setItem(mark(),'submitted');await identity(actor);if(g!==s.generation)return;const work=invoke({action:'complete',attemptId:attempt,code,scopesConfirmed:true});code='';const v=await work;if(g===s.generation)render(v);}
+  catch{if(g===s.generation){$('connectionOutcome').textContent='Resultado não confirmado. Use somente Consultar estado; não repita a troca.';s.submitted=true;}}
+  finally{code='';if(g===s.generation){s.busy=false;controls();}}
+ });
+ async function load(){const g=++s.generation;clear();try{const actor=await identity();if(g!==s.generation)return;s.actor=actor;$('connectionWorkspace').hidden=false;await run('status');}catch{if(g===s.generation){clear();$('connectionStatus').textContent='Entre no Eventos com a sessão Master/proprietária existente. Nenhuma conexão foi iniciada.';}}}
+ try{client=window.supabase.createClient(window.APPROVAL_CONFIG.url,window.APPROVAL_CONFIG.key);client.auth.onAuthStateChange((event,session)=>{if(s.actor&&session?.user?.id===s.actor&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED'].includes(event))return;++s.generation;clear();s.busy=false;$('connectionStatus').textContent='Sessão alterada. Nenhuma operação será repetida.';if(event!=='SIGNED_OUT'&&session?.user)setTimeout(()=>void load(),0);});void load();}catch{clear();$('connectionStatus').textContent='Não foi possível iniciar a sessão. Nenhuma conexão foi iniciada.';}
+})();
