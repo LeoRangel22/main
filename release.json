@@ -1,9 +1,11 @@
 {
-  "commit": "383810ed2927c3eaba88bad33b96627b78f07da8",
-  "schemaHead": "20261104005303_smtp_neutral_pilot_receipt.sql",
+  "commit": "363ec7554efbcd9904d4df9cdd09508c16a050f3",
+  "schemaHead": "20261104160148_neutral_reply_audit.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
-    "teste-email.html": "803a3fe06c10d14eb2f34ad4fad522fad574bc0742390d4bdc34f400defb9bee",
+    "conciliar-teste-email.html": "e8d4e273ec33a5dd4b357ffa984e7cd47ad92d617d81b1fa9215e7e940786b58",
+    "conciliar-teste-email.js": "069d0a1fdf144f7f181f7df247def0a95c3f08c7d67c7a3560fd70c6127ac319",
+    "teste-email.html": "6bad789c5d9525a2ad6b361d6686a469c33937ac2795596d392c8f1f59c11cab",
     "teste-email.js": "ad642a406666ae79686a9810a7715021dabac7cb0090c5a580b1ad8695a756b7",
     "conectar-email.html": "a87dbb7f51236ac68cf004ed41738fd2ef91d3d153ed92e7be67b2ea29209342",
     "conectar-email.js": "3116905dd29df305a8db7e9dcce89134d99c86889f1d8c209701489ee45ae338",
