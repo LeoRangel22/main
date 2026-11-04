@@ -92,7 +92,7 @@ async function handler(options={}){
  const rows=options.rows||[row()];
  const cfg={enabled:true,channel_enabled:true,job_key:'job-key',account_id:accountId,mailbox,expected_account:mailbox,watermark_ms:now-600000,activated_at_ms:now-3600000,version:4,capture_send_ids:['00000000-0000-4000-8000-000000000001'],capture_started_at_ms:now-60000,capture_expires_at_ms:now+600000,capture_message_limit:20,capture_used_messages:0,...options.config};
  const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'never-visible',EVENT_MAILBOX_CLIENT_ID:'client',EVENT_MAILBOX_CLIENT_SECRET:'never-visible-client',EVENT_MAILBOX_REFRESH_TOKEN:'never-visible-refresh',...options.env};
- const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
+ const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};if(options.bindingSequence)return{data:options.bindingSequence.shift()};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
  const sandbox=vm.createContext({...native,Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
@@ -165,4 +165,35 @@ test('Vault lookup failure or malformed token cannot fall back or reach a provid
   const r=await handler(options);assert.equal(r.status,503);assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);
   assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
  }
+});
+
+
+test('known unresolved transport defers without body, seen marker, cursor commit or local retry',async()=>{
+ const r=await handler({binding:{code:'transport_pending'}});
+ assert.equal(r.status,503);assert.equal(r.body.code,'transport_pending');
+ assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);
+ assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_resolve_binding').length,1);
+ assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);assert.equal(r.events.length,0);
+});
+test('one unresolved reply aborts the entire batch without partial ingestion or cursor advance',async()=>{
+ const r=await handler({rows:[row('100'),row('101')],binding:{code:'transport_pending'}});
+ assert.equal(r.status,503);assert.equal(r.events.length,0);
+ assert.equal(r.fetches.filter(f=>f.url.includes('/header?')).length,1);
+ assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+});
+test('a later explicit cycle can import the reply after acceptance without an earlier consumed marker',async()=>{
+ const pending=await handler({binding:{code:'transport_pending'}});
+ assert.equal(pending.events.length,0);assert.equal(pending.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+ const settled=await handler();assert.equal(settled.status,200);assert.equal(settled.events.length,1);
+ assert.equal(settled.events[0].state,'prepared');assert.equal(settled.rpcCalls.filter(c=>c.name==='event_mailbox_commit_bound').length,1);
+});
+
+
+test('a prepared reply followed by an unresolved transport never commits a partial batch',async()=>{
+ const accepted={version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)};
+ const r=await handler({rows:[row('100'),row('101')],bindingSequence:[accepted,{code:'transport_pending'}]});
+ assert.equal(r.status,503);assert.equal(r.body.code,'transport_pending');assert.equal(r.events.length,0);
+ assert.equal(r.fetches.filter(f=>f.url.includes('/content?')).length,1);
+ assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_resolve_binding').length,2);
+ assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
 });

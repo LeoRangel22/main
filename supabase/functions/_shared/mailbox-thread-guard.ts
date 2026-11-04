@@ -39,6 +39,8 @@ export function createBoundMailboxPreparer(ports:Pick<Ports,'resolve'|'content'>
     let resolved;
     try{resolved=await ports.resolve({account_id:accountId,mailbox:ZOHO_MAILBOX,from:headers.from,message_id:headers.message_id!,reply_candidates:headers.reply_candidates.slice()});}
     catch{throw new Error('thread_lookup_unavailable');}
+    // A known transport can settle after its reply arrives. Do not consume it as unmatched.
+    if(resolved?.code==='transport_pending')throw new Error('transport_pending');
     if(resolved===null)return {state:'review_required',reason:'unmatched_thread',provider_id:providerId,contentRead:false,messageAttempted:false};
     if(resolved?.code==='out_of_scope')return {state:'review_required',reason:'out_of_scope',provider_id:providerId,contentRead:false,messageAttempted:false};
     if(resolved?.code==='capture_limit')return {state:'review_required',reason:'capture_limit',provider_id:providerId,contentRead:false,messageAttempted:false};

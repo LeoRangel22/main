@@ -56,7 +56,7 @@ Deno.serve(async(req:Request)=>{
     if(commitError)throw new Error('commit_conflict');
     return respond(200,{ok:true,processed:selected.length,hasMore});
   }catch(error){
-    const safe=new Set(['oauth_not_configured','origins_invalid','account_mismatch','provider_auth_failed','provider_rate_limited','mailbox_backlog','recipient_unverified','sender_mismatch','message_id_invalid','content_empty','scan_changed','commit_conflict']);
+    const safe=new Set(['transport_pending','oauth_not_configured','origins_invalid','account_mismatch','provider_auth_failed','provider_rate_limited','mailbox_backlog','recipient_unverified','sender_mismatch','message_id_invalid','content_empty','scan_changed','commit_conflict']);
     const code=error instanceof Error&&safe.has(error.message)?error.message:'mailbox_unavailable';
     return respond(503,{ok:false,code});
   }
