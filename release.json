@@ -1,6 +1,6 @@
 {
-  "commit": "f5c07fa350a0bbdf5bfd83eb15c1a5581a1440f2",
-  "schemaHead": "20261104160148_neutral_reply_audit.sql",
+  "commit": "f43e1941c4c0bdb17df32cd13c9e12ea14f64e83",
+  "schemaHead": "20261104201532_defer_pending_mailbox_receipts.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "conciliar-teste-email.html": "e8d4e273ec33a5dd4b357ffa984e7cd47ad92d617d81b1fa9215e7e940786b58",
