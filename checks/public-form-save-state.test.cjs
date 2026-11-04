@@ -8,7 +8,7 @@ function setup(){
  const requests=[],pending=[],timers=new Map(),messages=[],history=[],shared=new Map([['token',token]]);let timer=0;
  const current={referencia:'SYNTHETIC',cliente:{nome:'Pessoa Sintetica',email:'person@example.test',whatsapp:''},evento:{observacoes:'v1'},enviadoEm:'time-one'};
  const context=vm.createContext({uiState:{language:'pt'},partialCaptureTimer:null,CAPTURE_TOKEN_KEY:'token',formStorageMemory:{token},progressSteps:[],stepOrder:[],
-  fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''}},
+  fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''},guests:{value:'30'}},
   getSnapshot:()=>structuredClone(current),getOrCreateReferenceCode:()=>current.referencia,getCaptureToken:()=>token,
   getPublicSupabaseClient:()=>({rpc:(name,payload)=>{const d=deferred();requests.push({name,payload:structuredClone(payload)});pending.push(d);return d.promise;}}),
   hasUsableName:v=>String(v).trim().length>=2,
@@ -16,7 +16,7 @@ function setup(){
   localStorage:{getItem:k=>shared.get(k)||null,setItem:(k,v)=>{shared.set(k,v);messages.push({key:k,value:JSON.parse(v)});}},
   document:{querySelector:()=>null},
  });
- vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone'),context);
+ vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount'),context);
  context.observe=()=>history.push(vm.runInContext('partialCaptureState.phase',context));
  vm.runInContext('renderPartialCaptureStatus=()=>observe()',context);
  return{requests,pending,timers,messages,history,current,shared,run:s=>vm.runInContext(s,context),phase:()=>vm.runInContext('partialCaptureState.phase',context)};

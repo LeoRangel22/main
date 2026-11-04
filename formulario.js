@@ -1009,6 +1009,12 @@ function getDisplayFormat(id) { return getFormatDefinition(id); }
 function getDisplayFormatLabel(label) { const id=Object.keys(formats).find(key=>formats[key].label===label); return id ? getDisplayFormat(id).label : label; }
 
 const spanishDynamicText = {
+  "Selected": "Seleccionado",
+  "Your earlier choice": "Tu elección anterior",
+  "Review preference": "Revisar preferencia",
+  "When are you imagining your event?": "¿Cuándo imaginas tu evento?",
+  "Enter a whole number from 2 to 500 guests.": "Indica un número entero de 2 a 500 invitados.",
+  "Changes not saved yet. Review the guest count; your entries remain in this tab.": "Cambios aún no guardados. Revisa la cantidad de invitados; tus datos siguen en esta pestaña.",
   "Recommended": "Recomendado",
   "Select": "Seleccionar",
   "Access history": "Acceder al historial",
@@ -1225,7 +1231,7 @@ function renderChoiceButtons(container, items, groupName) {
           ? selectedProfiles.has(item.value)
           : fields[groupName]?.value === item.value;
       return `
-        <button type="button" data-choice-group="${groupName}" data-choice-value="${item.value}" class="${selected ? "is-selected" : ""}">
+        <button type="button" data-choice-group="${groupName}" data-choice-value="${item.value}" class="${selected ? "is-selected" : ""}" aria-pressed="${selected ? "true" : "false"}">
           ${item.icon ? `<span class="profile-icon">${item.icon}</span>` : ""}
           <strong>${item.title || item.label}</strong>
           ${item.description ? `<span>${item.description}</span>` : ""}
@@ -1318,7 +1324,7 @@ function applyStaticCopy() {
   updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = localizedText("Event preferences", "Preferências do evento");
   document.querySelector("#contactTitle").textContent = current.stepLabels[3];
-  document.querySelector("#momentTitle").textContent = current.stepLabels[0] === "When" ? "When are you imagining your event?" : "Quando você imagina seu evento?";
+  document.querySelector("#momentTitle").textContent = localizedText("When are you imagining your event?", "Quando você imagina seu evento?");
   document.querySelector("#profileTitle").textContent = localizedText("Who is organizing and what is the occasion?", "Quem está organizando e qual é a ocasião?");
   document.querySelector("#eventDetailsTitle").textContent = localizedText("Event details", "Detalhes do evento");
   document.querySelector(".preference-chips legend").textContent = current.labels.preferenceLegend;
@@ -1575,6 +1581,7 @@ function renderPartialCaptureStatus() {
   }
   if (partialCaptureState.phase !== "saved") partialCaptureState.confirmedAt = null;
   let message = copy[partialCaptureState.phase] || copy.unsaved;
+  if (partialCaptureState.phase === "unsaved" && getGuestCount() === null) message = localizedText("Changes not saved yet. Review the guest count; your entries remain in this tab.", "Alterações ainda não salvas. Revise a quantidade de convidados; seus dados continuam nesta aba.");
   if (partialCaptureState.phase === "saved") {
     const time = formatPartialCaptureConfirmationTime(partialCaptureState.confirmedAt);
     message += ` ${time ? copy.confirmationTime.replace("{time}", time) : copy.confirmationTimeUnavailable}`;
@@ -1597,7 +1604,7 @@ function getPartialCaptureFingerprint(snapshot = getSnapshot(getOrCreateReferenc
 
 function canCapturePartialLead() {
   const name = fields.name.value.trim(), email = fields.email.value.trim(), phone = fields.phone.value.trim();
-  return hasUsableName(name) && Boolean(email || phone)
+  return getGuestCount() !== null && hasUsableName(name) && Boolean(email || phone)
     && (!email || isValidEmail(email)) && (!phone || isValidContactPhone(phone));
 }
 
@@ -1828,24 +1835,23 @@ function resetFlexibleDateField() {
   fields.dateIsFlexible.value = "no";
 }
 
+function getGuestCount(value = fields.guests.value) {
+  if (!String(value ?? "").trim()) return null;
+  const number = toNumber(value);
+  return Number.isSafeInteger(number) && number >= 2 && number <= 500 ? number : null;
+}
+
+function getGuestCountError() {
+  return localizedText("Enter a whole number from 2 to 500 guests.", "Informe um número inteiro entre 2 e 500 convidados.");
+}
+
 function updateGuestOutput(source = "number") {
-  const current = getCopy();
-  const sliderMax = 100;
-  if (source === "slider" && fields.guestSlider) {
-    const sliderGuests = Math.floor(toNumber(fields.guestSlider.value) || 30);
-    fields.guests.value = String(sliderGuests >= sliderMax ? sliderMax : sliderGuests);
-  }
-
-  let guests = Math.floor(toNumber(fields.guests.value) || 30);
-  guests = Math.min(500, Math.max(2, guests));
-  fields.guests.value = String(guests);
-
-  if (fields.guestSlider) {
-    fields.guestSlider.value = String(guests >= 100 ? 100 : guests);
-  }
-
-  const outputLabel = current.guestOutput(guests);
-  fields.guestOutput.textContent = outputLabel;
+  if (source === "slider" && fields.guestSlider) fields.guests.value = fields.guestSlider.value;
+  const guests = getGuestCount();
+  // Preserve typed input. Invalid counts are never silently clamped or saved as defaults.
+  if (guests !== null && fields.guestSlider) fields.guestSlider.value = String(guests >= 100 ? 100 : guests);
+  setFieldValidity(fields.guests, guests !== null, getGuestCountError());
+  fields.guestOutput.textContent = guests === null ? "—" : getCopy().guestOutput(guests);
   renderFinalReview();
 }
 
@@ -1903,13 +1909,15 @@ function renderFinalReview() {
   const timeReady = fields.time.value;
   const clientTypeLabel = getClientTypeDisplayLabel();
   const profileLabel = getSelectedProfileDisplayLabels().join(", ");
+  const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
+  const preferenceOutsideRecommendations = Boolean(selectedFormatId && fields.moment.value && !getRecommendedFormatIds().includes(selectedFormatId));
   const items = [
     {
       label: localizedText("Event format", "Formato do evento"),
       value: getDisplayFormatLabel(fields.eventType.value) || reviewCopy.formatMissing,
       step: "recommendation",
-      status: fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
-      state: fields.eventType.value ? "is-ok" : "is-warning",
+      status: preferenceOutsideRecommendations ? localizedText("Review preference", "Revisar preferência") : fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
+      state: fields.eventType.value && !preferenceOutsideRecommendations ? "is-ok" : "is-warning",
     },
     {
       label: localizedText("Who and occasion", "Quem organiza e ocasião"),
@@ -1933,10 +1941,10 @@ function renderFinalReview() {
     },
     {
       label: localizedText("Guests and duration", "Convidados e duração"),
-      value: `${fields.guests.value || 30} ${localizedText("guests", "pessoas")} · ${getSelectedDurationLabel()}`,
+      value: `${fields.guests.value || pendingLabel} ${localizedText("guests", "pessoas")} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
-      status: fields.duration.value ? reviewCopy.ok : reviewCopy.warning,
-      state: fields.duration.value ? "is-ok" : "is-warning",
+      status: getGuestCount() === null ? reviewCopy.required : fields.duration.value ? reviewCopy.ok : reviewCopy.warning,
+      state: getGuestCount() !== null && fields.duration.value ? "is-ok" : "is-warning",
     },
     {
       label: localizedText("Preferences", "Preferências"),
@@ -2182,7 +2190,7 @@ function setFieldValidity(field, isValid, message = "") {
     }
     const current = getCopy();
     const defaults = new Map([[fields.name, current.messages.invalidName], [fields.email, current.messages.invalidEmail],
-      [fields.phone, current.messages.invalidPhone], [fields.date, current.messages.missingDate], [fields.dateFlex, current.messages.missingDate]]);
+      [fields.phone, current.messages.invalidPhone], [fields.guests, getGuestCountError()], [fields.date, current.messages.missingDate], [fields.dateFlex, current.messages.missingDate]]);
     error.textContent = message || defaults.get(field) || current.messages.submitError;
     error.hidden = false;
     described.add(id);
@@ -2216,7 +2224,9 @@ function scrollToStep(stepName, force = false) {
 
 function setActiveChoice(group, value) {
   document.querySelectorAll(`[data-choice-group="${group}"]`).forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.choiceValue === value);
+    const selected = button.dataset.choiceValue === value;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
   });
   setStepValidity(group, true);
 }
@@ -2234,7 +2244,9 @@ function setProfileChoice(value) {
   if (!selectedProfiles.size) selectedProfiles.add(value);
   fields.profile.value = [...selectedProfiles].join(",");
   document.querySelectorAll(`[data-choice-group="profile"]`).forEach((button) => {
-    button.classList.toggle("is-selected", selectedProfiles.has(button.dataset.choiceValue));
+    const selected = selectedProfiles.has(button.dataset.choiceValue);
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
   });
   setStepValidity("profile", true);
 }
@@ -2308,23 +2320,25 @@ function renderRecommendations() {
     return;
   }
 
-  const ids = getRecommendedFormatIds();
+  const recommendedIds = getRecommendedFormatIds();
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
+  const ids = selectedFormatId && !recommendedIds.includes(selectedFormatId) ? [...recommendedIds, selectedFormatId] : recommendedIds;
   // Keep an explicit choice even when exploring a different recommendation.
   const moment = current.momentOptions.find(item=>item.value===fields.moment.value)?.title || canonicalMomentLabels[fields.moment.value];
   recommendationIntro.textContent = current.recommendationReady(moment);
   recommendationList.innerHTML = ids
     .map((id, index) => {
       const item = getFormatDefinition(id);
-      const selected = fields.eventType.value === formats[id].label;
+      const selected = id === selectedFormatId;
+      const earlierChoice = selected && !recommendedIds.includes(id);
       return `
-        <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}">
-          <span>${item.badge}</span>
+        <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}" aria-pressed="${selected ? "true" : "false"}">
+          <span>${earlierChoice ? localizedText("Your earlier choice", "Sua escolha anterior") : item.badge}</span>
           <i>${item.visual}</i>
           <strong>${item.label}</strong>
           <em>${item.description}</em>
           <small>${item.group}</small>
-          <b>${index === 0 ? localizedText("Recommended", "Mais indicado") : localizedText("Select", "Selecionar")}</b>
+          <b>${selected ? localizedText("Selected", "Selecionado") : index === 0 ? localizedText("Recommended", "Mais indicado") : localizedText("Select", "Selecionar")}</b>
         </button>
       `;
     })
@@ -2403,7 +2417,7 @@ function getSnapshot(referenceCode) {
       dataFlexivelStatus: canonicalFlexibilityLabels[fields.dateIsFlexible.value] || "",
       faixaHorario: canonicalTimeRangeLabels[fields.timeRange.value] || "",
       horario: selectedTime,
-      convidados: Math.min(500, Math.max(2, Math.floor(toNumber(fields.guests.value) || 30))),
+      convidados: getGuestCount(),
       duracao: fields.duration.value ? toNumber(fields.duration.value) : null,
       duracaoTexto: durationLabel,
       motivo: fields.reason.value.trim(),
@@ -2491,6 +2505,7 @@ function validateSnapshot(snapshot) {
   const current = getCopy();
   clearAllStepValidity();
   Object.values(fields).forEach((field) => setFieldValidity(field, true));
+  if (getGuestCount() === null) return failValidation(fields.guests, "eventDetails", getGuestCountError());
   applyLeadFallbacks(snapshot);
   const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
 
@@ -2960,7 +2975,10 @@ async function submitRequest(event) {
   fields.eventType.value = "";
   fields.dateIsFlexible.value = "no";
   selectedProfiles.clear();
-  document.querySelectorAll(".is-selected").forEach((node) => node.classList.remove("is-selected"));
+  document.querySelectorAll(".is-selected").forEach((node) => {
+    node.classList.remove("is-selected");
+    if (node.matches("[data-choice-group], [data-format-id]")) node.setAttribute("aria-pressed", "false");
+  });
   clearAllStepValidity();
   fillGuestOptions();
   fillTimeOptions("");

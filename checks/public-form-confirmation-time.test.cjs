@@ -7,10 +7,10 @@ function node(){let text='';const attrs=new Map(),writes={text:0,attrs:0,data:0}
 function setup(){const status=node(),retry=node(),requests=[],pending=[],timers=new Map(),events={},clock={now:Date.parse('2026-11-02T20:15:00Z')},shared=new Map([['token',token]]);let timer=0;
  const current={referencia:'SYNTHETIC',cliente:{nome:'Pessoa Sintetica',email:'person@example.test',whatsapp:''},evento:{observacoes:'v1'},enviadoEm:'request-generated-time'};
  const context=vm.createContext({uiState:{language:'pt'},partialCaptureTimer:null,CAPTURE_TOKEN_KEY:'token',formStorageMemory:{token},progressSteps:[],stepOrder:[],navigator:{onLine:true},Date:class extends Date{static now(){return clock.now;}},
-  fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''}},getSnapshot:()=>structuredClone(current),getOrCreateReferenceCode:()=>current.referencia,getCaptureToken:()=>token,hasUsableName:v=>String(v).trim().length>=2,
+  fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''},guests:{value:'30'}},getSnapshot:()=>structuredClone(current),getOrCreateReferenceCode:()=>current.referencia,getCaptureToken:()=>token,hasUsableName:v=>String(v).trim().length>=2,
   getPublicSupabaseClient:()=>({rpc:(name,payload)=>{const d=deferred();requests.push({name,payload:structuredClone(payload)});pending.push(d);return d.promise;}}),
   window:{setTimeout:f=>{timers.set(++timer,f);return timer;},clearTimeout:id=>timers.delete(id),addEventListener:(type,fn)=>{events[type]=fn;}},localStorage:{getItem:k=>shared.get(k)||null,setItem:(k,v)=>shared.set(k,v)},document:{querySelector:s=>s==='#partialCaptureStatus'?status:s==='#retryPartialCaptureBtn'?retry:null}});
- vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone'),context);
+ vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount'),context);
  return{status,retry,requests,pending,timers,events,clock,current,run:s=>vm.runInContext(s,context),phase:()=>vm.runInContext('partialCaptureState.phase',context),at:()=>vm.runInContext('partialCaptureState.confirmedAt',context)};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
