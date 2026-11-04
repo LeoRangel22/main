@@ -5,3 +5,33 @@ test('optional accessibility nodes do not prevent language changes',async({page}
 for(const lang of ['pt','en','es'])test('localizes accessibility and only WhatsApp text on load and language changes '+lang,async({page})=>{const f=await isolate(page);await page.goto('/formulario.html?lang='+lang);for(const next of [lang,...Object.keys(copy)]){await page.locator('#lang'+next[0].toUpperCase()+next.slice(1)+'Btn').click();await expect(page.locator('.skip-link')).toHaveText(copy[next].skip);await expect(page.locator('.public-form-hero > img')).toHaveAttribute('alt',copy[next].alt);const u=new URL(await page.locator('#quickHumanLink').getAttribute('href'));expect(u.origin).toBe('https://wa.me');expect(u.pathname).toBe('/5521971426007');expect([...u.searchParams.keys()]).toEqual(['text']);expect(u.searchParams.get('text')).toBe(copy[next].message);}expect(f.outside).toEqual([]);expect(f.errors).toEqual([]);expect(f.calls).toEqual([]);});
 for(const lang of ['pt','en','es'])test('minimum on the card prompts advisory review without changing choice or sending data '+lang,async({page})=>{const f=await isolate(page);await page.goto('/formulario.html?lang='+lang);await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="weekday-morning"]').click();await page.locator('[data-choice-value="company"]').click();await page.locator('[data-choice-value="corporate"]').click();await page.locator('[data-format-id="breakfast"]').click();await page.locator('#requestGuestCount').fill('2');const review=page.locator('[data-review-step="recommendation"]');await expect(review.locator('.final-review-status')).toHaveText(copy[lang].review);await expect(review).toContainText(copy[lang].note);await expect(page.locator('[data-format-id="breakfast"]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.format-group-note')).toContainText(copy[lang].note);await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid');await page.locator('#requestEventDate').fill('2099-02-20');await page.locator('#submitClientQuoteBtn').click();await expect.poll(()=>f.calls.filter(c=>c.name==='submit_public_quote_request').length).toBe(1);const snapshot=f.calls.find(c=>c.name==='submit_public_quote_request').payload.p_snapshot;expect(snapshot.evento.tipo).toBe('Café da Manhã / Brunch');expect(snapshot.evento.convidados).toBe(2);expect(f.outside).toEqual([]);expect(f.errors).toEqual([]);});
 for(const width of [320,1440])test('warm form labels have readable contrast in normal selected and hovered states '+width,async({page})=>{const f=await isolate(page);await page.setViewportSize({width,height:1000});await page.goto('/formulario.html?lang=en');await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="weekday-morning"]').click();const card=page.locator('[data-format-id="breakfast"]');const ratio=()=>card.locator(':scope > span').evaluate(el=>{const rgb=s=>s.match(/[\d.]+/g).slice(0,3).map(Number);const lum=c=>{c=c.map(x=>(x/=255)<=.04045?x/12.92:((x+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2];};const a=lum(rgb(getComputedStyle(el).color)),b=lum(rgb(getComputedStyle(el.parentElement).backgroundColor));return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});expect(await ratio()).toBeGreaterThanOrEqual(4.5);await card.hover();await page.waitForTimeout(180);expect(await ratio()).toBeGreaterThanOrEqual(4.5);await card.click();await page.waitForTimeout(180);expect(await ratio()).toBeGreaterThanOrEqual(4.5);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:require('node:path').join(test.info().outputDir,'followup-'+test.info().project.name+'-'+width+'.png'),fullPage:true});expect(f.outside).toEqual([]);expect(f.errors).toEqual([]);});
+
+async function frameContrast(page,selector,interaction){
+ await page.evaluate(selector=>{
+  const rgb=s=>s.match(/[\d.]+/g).slice(0,3).map(Number);
+  const lum=c=>{c=c.map(x=>(x/=255)<=.04045?x/12.92:((x+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2];};
+  const probe={running:true,samples:[]};window.__contrastFrames=probe;
+  const tick=()=>{if(!probe.running)return;const node=document.querySelector(selector),label=node?.querySelector(':scope > span');if(!node||!label){probe.samples.push({ratio:0,missing:true});}else{const foreground=getComputedStyle(label).color,background=getComputedStyle(node).backgroundColor,a=lum(rgb(foreground)),b=lum(rgb(background));probe.samples.push({ratio:(Math.max(a,b)+.05)/(Math.min(a,b)+.05),foreground,background});}if(probe.samples.length<512)requestAnimationFrame(tick);};
+  tick();
+ },selector);
+ await interaction();
+ await page.evaluate(()=>new Promise(resolve=>{const started=performance.now();let n=0;const tick=()=>{if(++n>=14&&performance.now()-started>=250)resolve();else requestAnimationFrame(tick);};requestAnimationFrame(tick);}));
+ const samples=await page.evaluate(()=>{window.__contrastFrames.running=false;return window.__contrastFrames.samples;});
+ expect(samples.length).toBeGreaterThanOrEqual(14);
+ expect(samples.length).toBeLessThan(512);
+ expect(Math.min(...samples.map(s=>s.ratio)),JSON.stringify(samples)).toBeGreaterThanOrEqual(4.5);
+}
+for(const width of [320,1440])test('contrast stays readable on every frame of hover entry exit selection and deselection '+width,async({page})=>{
+ const f=await isolate(page);await page.emulateMedia({reducedMotion:'no-preference'});await page.setViewportSize({width,height:1000});
+ for(const [selector,other]of [['[data-choice-value="company"]','[data-choice-value="person"]'],['[data-format-id="breakfast"]','.format-card:not([data-format-id="breakfast"])']]){
+  await page.goto('/formulario.html?lang=en');await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="weekday-morning"]').click();
+  const target=page.locator(selector);await expect(target).toBeVisible();
+  await frameContrast(page,selector,()=>target.hover());
+  await frameContrast(page,selector,()=>page.mouse.move(0,0));
+  await frameContrast(page,selector,()=>target.click());
+  await expect(target).toHaveAttribute('aria-pressed','true');
+  await frameContrast(page,selector,()=>page.locator(other).first().click());
+  await expect(page.locator(selector)).toHaveAttribute('aria-pressed','false');
+ }
+ expect(f.outside).toEqual([]);expect(f.errors).toEqual([]);expect(f.calls).toEqual([]);
+});
