@@ -1,0 +1,8 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'../formulario.js'),'utf8');
+const formats=source.slice(source.indexOf('const formats = {'),source.indexOf('\n};',source.indexOf('const formats = {'))+3);
+const helpers=source.slice(source.indexOf('function getFormAccessibilityCopy('),source.indexOf('function setLanguage('));
+const c=vm.createContext({uiState:{language:'pt'},getGuestCount:()=>2});vm.runInContext(formats+'\n'+helpers,c);
+for(const [id,min]of [['breakfast',30],['coffee',30],['lunch',2],['welcome',20],['cocktail',20],['workshop',8],['custom',null],['recommendation',null],['unknown',null]])test('advice reuses the printed card minimum '+id,()=>{assert.equal(c.getFormatGroupMinimum(id),min);if(min){assert.notEqual(c.getFormatGroupSizeNote(id,min-1),'');assert.equal(c.getFormatGroupSizeNote(id,min),'');}assert.equal(c.getFormatGroupSizeNote(id,null),'');});
+for(const [lang,skip,word]of [['pt','Ir para o formulário','equipe'],['en','Skip to the form','team'],['es','Ir al formulario','equipo']])test('localized accessibility and advisory copy '+lang,()=>{c.uiState.language=lang;const copy=c.getFormAccessibilityCopy();assert.equal(copy.skip,skip);assert.ok(copy.heroAlt.length>20);assert.ok(copy.whatsapp.length>20);assert.match(c.getFormatGroupSizeNote('breakfast',2),new RegExp(word));});
+test('contrast of the warm light-surface label exceeds 4.5 against white',()=>{const linear=x=>(x/=255)<=.04045?x/12.92:((x+.055)/1.055)**2.4;const l=.2126*linear(135)+.7152*linear(80)+.0722*linear(21);assert.ok(1.05/(l+.05)>=4.5);});

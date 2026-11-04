@@ -1355,9 +1355,45 @@ function renderLocalizedChoices() {
   renderChoiceButtons(document.querySelector("#profileChoices"), current.profiles, "profile");
 }
 
+function getFormAccessibilityCopy(language = uiState.language) {
+  return ({
+    pt: {skip: "Ir para o formulário", heroAlt: "Área externa da Embaixada Carioca com vista para o Pão de Açúcar", whatsapp: "Olá, quero conversar sobre um evento na Embaixada Carioca"},
+    en: {skip: "Skip to the form", heroAlt: "Outdoor area of Embaixada Carioca overlooking Sugarloaf Mountain", whatsapp: "Hello, I would like to discuss an event at Embaixada Carioca"},
+    es: {skip: "Ir al formulario", heroAlt: "Área exterior de Embaixada Carioca con vista al Pan de Azúcar", whatsapp: "Hola, quiero conversar sobre un evento en Embaixada Carioca"},
+  })[language] || getFormAccessibilityCopy("pt");
+}
+
+function getFormatGroupMinimum(formatId) {
+  // Advisory only: reuse the minimum already printed on the canonical card.
+  const match = formats[formatId]?.group?.match(/^A partir de (\d+) pessoas$/);
+  return match ? Number(match[1]) : null;
+}
+
+function getFormatGroupSizeNote(formatId, guests = getGuestCount()) {
+  const minimum = getFormatGroupMinimum(formatId);
+  if (guests === null || minimum === null || guests >= minimum) return "";
+  const messages = {
+    pt: `Este cartão indica grupos a partir de ${minimum} pessoas. Sua preferência para ${guests} pessoas será mantida para avaliação da equipe.`,
+    en: `This card indicates groups from ${minimum} guests. Your preference for ${guests} guests is kept for our team to review.`,
+    es: `Esta tarjeta indica grupos a partir de ${minimum} personas. Tu preferencia para ${guests} personas se mantiene para que el equipo la evalúe.`,
+  };
+  return messages[uiState.language] || messages.pt;
+}
+
 function setLanguage(language) {
   uiState.language = ["pt", "en", "es"].includes(language) ? language : "pt";
   writeFormStorage(LANGUAGE_KEY, uiState.language);
+  const accessibility = getFormAccessibilityCopy();
+  const skipLink = document.querySelector('.skip-link[href="#clientQuoteForm"]');
+  if (skipLink) skipLink.textContent = accessibility.skip;
+  const heroImage = document.querySelector(".public-form-hero > img");
+  if (heroImage) heroImage.alt = accessibility.heroAlt;
+  const humanLink = document.querySelector("#quickHumanLink");
+  if (humanLink) {
+    const url = new URL(humanLink.href);
+    url.searchParams.set("text", accessibility.whatsapp);
+    humanLink.href = url.toString();
+  }
   const shortcutCopy = uiState.language !== "pt"
     ? ["Already know your date and group size?", "Send the essentials now. Our team can help choose the format later.", "Go to essentials", "Talk to our team"]
     : ["Já sabe a data e o tamanho do grupo?", "Envie o essencial agora. A equipe ajuda a definir o formato depois.", "Ir ao essencial", "Falar com a equipe"];
@@ -1851,6 +1887,7 @@ function updateGuestOutput(source = "number") {
   // Preserve typed input. Invalid counts are never silently clamped or saved as defaults.
   if (guests !== null && fields.guestSlider) fields.guestSlider.value = String(guests >= 100 ? 100 : guests);
   setFieldValidity(fields.guests, guests !== null, getGuestCountError());
+  renderRecommendations();
   fields.guestOutput.textContent = guests === null ? "—" : getCopy().guestOutput(guests);
   renderFinalReview();
 }
@@ -1911,13 +1948,15 @@ function renderFinalReview() {
   const profileLabel = getSelectedProfileDisplayLabels().join(", ");
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
   const preferenceOutsideRecommendations = Boolean(selectedFormatId && fields.moment.value && !getRecommendedFormatIds().includes(selectedFormatId));
+  const groupSizeNote = getFormatGroupSizeNote(selectedFormatId);
+  const preferenceNeedsReview = preferenceOutsideRecommendations || Boolean(groupSizeNote);
   const items = [
     {
       label: localizedText("Event format", "Formato do evento"),
-      value: getDisplayFormatLabel(fields.eventType.value) || reviewCopy.formatMissing,
+      value: [getDisplayFormatLabel(fields.eventType.value) || reviewCopy.formatMissing, groupSizeNote].filter(Boolean).join(" — "),
       step: "recommendation",
-      status: preferenceOutsideRecommendations ? localizedText("Review preference", "Revisar preferência") : fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
-      state: fields.eventType.value && !preferenceOutsideRecommendations ? "is-ok" : "is-warning",
+      status: preferenceNeedsReview ? localizedText("Review preference", "Revisar preferência") : fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
+      state: fields.eventType.value && !preferenceNeedsReview ? "is-ok" : "is-warning",
     },
     {
       label: localizedText("Who and occasion", "Quem organiza e ocasião"),
@@ -2338,6 +2377,7 @@ function renderRecommendations() {
           <strong>${item.label}</strong>
           <em>${item.description}</em>
           <small>${item.group}</small>
+          ${selected && getFormatGroupSizeNote(id) ? `<small class="format-group-note">${escapeHtml(getFormatGroupSizeNote(id))}</small>` : ""}
           <b>${selected ? localizedText("Selected", "Selecionado") : index === 0 ? localizedText("Recommended", "Mais indicado") : localizedText("Select", "Selecionar")}</b>
         </button>
       `;
