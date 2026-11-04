@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
+import { neutralSmtpGate, sendNeutralSmtp } from "../_shared/neutral-smtp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -426,18 +427,38 @@ Deno.serve(async (req) => {
     const emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
     if (emailContent.text.length > 12000) return jsonResponse({ ok: false, message: "O e-mail completo excede 12.000 caracteres. Reduza a mensagem antes de revisar." }, 400);
     if (payload.preview === true) {
-      return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash });
+      let neutralPilot;
+      if(neutral){try{const g=neutralSmtpGate(key=>Deno.env.get(key),proposal.id);neutralPilot={contract:"smtp-neutral-receipt-v1",ready:true,proposalId:proposal.id,closesAt:g.expiresAt};}catch{neutralPilot={contract:"smtp-neutral-receipt-v1",ready:false,proposalId:proposal.id};}}
+      return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash,...(neutral?{neutralPilot}:{}) });
     }
     if (payload.reviewedContentHash !== emailContent.contentHash) {
       return jsonResponse({ ok: false, message: "O conteúdo do e-mail mudou ou não foi revisado. Abra a prévia completa e aprove novamente." }, 409);
     }
     const firstName = safeText(proposal.cliente_nome || proposal.snapshot?.client?.name, "cliente").split(/\s+/)[0] || "cliente";
     const subject = emailContent.subject;
+    let smtpGate;
+    if (neutral) {
+      try { smtpGate = neutralSmtpGate(key => Deno.env.get(key), proposal.id); }
+      catch { return jsonResponse({ok:false,code:"SMTP_PILOT_CLOSED",message:"A janela do teste de e-mail está fechada. Nenhum envio foi tentado."},409); }
+    }
     const worker = createSendWorker();
     let claim;
     try { claim = await claimSend(supabase, proposal, payload, "email", email, emailContent.text, subject); }
     catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
     if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
+    if (neutral) {
+      // The neutral owner pilot requires its real MIME identity and typed SMTP receipt.
+      // It must never fall through or retry using the commercial HTTP transport.
+      const result = await sendNeutralSmtp({worker,send:claim.send,actorId:userData.user.id,proposalId:proposal.id,to:email,
+        content:emailContent,password:zeptoAuth.authorization.replace(/^zoho-enczapikey\s+/i,""),gate:smtpGate!},{authorize:async()=>{
+          const fresh=await supabase.auth.getUser();
+          if(fresh.error||fresh.data?.user?.id!==userData.user.id||!fresh.data.user.email_confirmed_at||safeText(fresh.data.user.email).toLowerCase()!==email)return false;
+          const master=await supabase.rpc("is_super_admin"),team=await supabase.rpc("is_team_member");
+          return !master.error&&!team.error&&master.data===true&&team.data===true;
+        }});
+      return jsonResponse({ok:result.ok,code:result.code,sendId:claim.send.id,deliveryStatus:result.deliveryStatus,
+        message:result.ok?"Aceito pelo transporte SMTP. Entrega e leitura não comprovadas.":"Resultado do teste não confirmado. Consulte o histórico; não repita o envio."},result.ok?200:409);
+    }
     let zeptoResponse;
     try { zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
       method: "POST",
