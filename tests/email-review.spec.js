@@ -13,7 +13,7 @@ async function startPreview(page, {delay=false,error=false}={}) {
       if(options.body.preview){
         if(delay)await new Promise(resolve=>window.releasePreview=resolve);
         if(error)return {data:null,error:{message:'Prévia indisponível'}};
-        return {data:{ok:true,mode:'preview',reviewedRevision:3,contentHash:'exact-approved-content',sender:'Eventos <events@example.test>',subject:'Proposta completa revisada',
+        return {data:{ok:true,mode:'preview',reviewedRevision:3,contentHash:'exact-approved-content',sender:'Eventos <events@example.test>',replyTo:'eventos+'+'a'.repeat(52)+'@embaixadacarioca.com.br',subject:'Proposta completa revisada',
           html:'<h1>Proposta completa</h1><p>Item aprovado: Café</p><p>Total: R$ 1.120,00</p><p>Prazo do sinal: 3 dias</p>',
           text:'Item aprovado: Café\nTotal: R$ 1.120,00\nPrazo do sinal: 3 dias'},error:null};
       }
@@ -31,6 +31,7 @@ test('aprovação exibe HTML e texto completos; cancelar não envia',async({page
   await expect(dialog.frameLocator('iframe').getByText('Item aprovado: Café')).toBeVisible();
   await expect(dialog.locator('.send-confirm-message')).toHaveValue(/Total: R\$ 1.120,00/);
   await expect(dialog).toContainText('Proposta completa revisada');
+  await expect(dialog.locator('.send-confirm-reply-to')).toHaveText('eventos+'+'a'.repeat(52)+'@embaixadacarioca.com.br');
   await dialog.getByRole('button',{name:'Cancelar',exact:true}).click();
   const result=await page.evaluate(async()=>({ok:await window.emailAttempt,calls:window.emailCalls,locked:state.sendLocks.email}));
   expect(result.ok).toBe(false);expect(result.calls).toHaveLength(1);expect(result.calls[0].preview).toBe(true);expect(result.locked).toBe(false);
@@ -78,4 +79,13 @@ test('prévia permanece isolada e não executa scripts ou ações no painel', as
   expect(await page.evaluate(() => window.unsafeEmailExecuted)).toBe(false);
   await dialog.getByRole('button',{name:'Cancelar',exact:true}).click();
   expect(await page.evaluate(() => window.sandboxReview)).toBe(false);
+});
+
+for(const width of [320,1440])test('Reply-To revisado fica legível e inerte em '+width,async({page})=>{
+ await page.setViewportSize({width,height:900});await startPreview(page);
+ const dialog=page.locator('.send-confirm-dialog');await expect(dialog).toBeVisible();
+ await expect(dialog.locator('.send-confirm-reply-to')).toHaveText('eventos+'+'a'.repeat(52)+'@embaixadacarioca.com.br');
+ expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ await dialog.getByRole('button',{name:'Cancelar',exact:true}).click();
+ expect(await page.evaluate(async()=>({ok:await window.emailAttempt,count:window.emailCalls.length}))).toEqual({ok:false,count:1});
 });
