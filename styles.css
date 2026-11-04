@@ -13216,3 +13216,9 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
 .public-form-body .final-review-grid button:not(.is-ok) .final-review-status,
 .public-form-body .public-form-steps li:not([data-active]):not([data-complete]) > span { color: #875015; }
 .public-form-body .format-card .format-group-note { font-style: normal; line-height: 1.5; }
+
+/* Keep label and surface contrast stable while hover and selection change. */
+.public-form-body .choice-card-grid button,
+.public-form-body .format-card {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
