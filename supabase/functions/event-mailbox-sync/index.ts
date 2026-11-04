@@ -18,7 +18,7 @@ Deno.serve(async(req:Request)=>{
     const {data:cfg,error}=await worker.rpc('event_mailbox_worker_config');
     if(error||!cfg)return respond(503,{ok:false,code:'configuration_unavailable'});
     if(!sameSecret(req.headers.get('x-event-job-key')||'',cfg.job_key))return respond(401,{ok:false,code:'origin_unauthenticated'});
-    let scope; if(body.action==='sync'){try{scope=mailboxCaptureScope(cfg);}catch{return respond(409,{ok:false,code:'mailbox_capture_inactive'});}}
+    let scope: ReturnType<typeof mailboxCaptureScope> | undefined; if(body.action==='sync'){try{scope=mailboxCaptureScope(cfg);}catch{return respond(409,{ok:false,code:'mailbox_capture_inactive'});}}
     if(scope&&scope.remaining===0)return respond(200,{ok:true,processed:0,hasMore:false,code:'capture_limit'});
     const tokenEnv=await mailboxTokenEnvironment(worker,cfg.account_id,k=>Deno.env.get(k));
     const configured=['EVENT_MAILBOX_CLIENT_ID','EVENT_MAILBOX_CLIENT_SECRET','EVENT_MAILBOX_REFRESH_TOKEN'].every(k=>Boolean(tokenEnv(k)));
@@ -56,7 +56,7 @@ Deno.serve(async(req:Request)=>{
     if(commitError)throw new Error('commit_conflict');
     return respond(200,{ok:true,processed:selected.length,hasMore});
   }catch(error){
-    const safe=new Set(['oauth_not_configured','origins_invalid','account_mismatch','provider_auth_failed','provider_rate_limited','mailbox_backlog','recipient_unverified','sender_mismatch','message_id_invalid','content_empty','scan_changed','commit_conflict']);
+    const safe=new Set(['transport_pending','oauth_not_configured','origins_invalid','account_mismatch','provider_auth_failed','provider_rate_limited','mailbox_backlog','recipient_unverified','sender_mismatch','message_id_invalid','content_empty','scan_changed','commit_conflict']);
     const code=error instanceof Error&&safe.has(error.message)?error.message:'mailbox_unavailable';
     return respond(503,{ok:false,code});
   }

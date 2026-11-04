@@ -24,3 +24,7 @@ For rollback, first close and read back capture. Preserve all receipts, messages
 ## Validation
 
 Synthetic tests only: account schema, header/correlation parsing, remaining budget, scope changes before body, duplicates, uncertain commit, complete-chain ambiguity and expiry after real lock contention. The existing full database suite exercises fresh install, upgrades, concurrent journeys and compatibility rollback. Managed Auth/HTTP/cron are local test adapters, not real-provider evidence.
+
+## Replies arriving before the transport result
+
+A verified outbound RFC alias may exist before the corresponding send reaches accepted. A known matching sending or uncertain transport defers the whole bounded batch with the sanitized transport_pending code. No message body, seen marker, receipt or cursor is committed, and the invocation does not retry. A later separately scheduled or explicit cycle can reconsider it after the ledger has been reconciled; nothing retries the outbound send. The check covers all verified ancestors, including one outside the current allowlist, to prevent choosing an accepted ancestor before another known send settles. Unknown threads still retain metadata-only review and are never attached by contact or subject. An unresolved ledger can hold the bounded cursor; the operator must reconcile it or close the window. Expiry and OFF controls remain mandatory.

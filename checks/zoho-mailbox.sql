@@ -27,11 +27,27 @@ begin
  update event_private.mailbox_sync_state set capture_send_ids=array[b],capture_started_at=now()-interval '2 minutes',capture_expires_at=now()+interval '10 minutes',capture_message_limit=1;
  assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]') is null,'No inferred Message-ID mapping';
  insert into event_private.mailbox_outbound_headers select '123','<proposal@example.test>',b,attempts,reviewed_revision,repeat('a',64) from public.event_outbox where id=b;
+
+ -- Header provenance can precede a durable transport result; leave the reply unconsumed.
+ update public.event_outbox set status='sending' where id=b;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]')->>'code'='transport_pending','Known sending transport is deferred';
+ update public.event_outbox set status='uncertain' where id=b;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]')->>'code'='transport_pending','Known uncertain transport is deferred';
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','other@example.test','<reply@example.test>','["<proposal@example.test>"]') is null,'No pending context leaks to another sender';
+ blocked:=false;begin perform public.event_mailbox_resolve_binding('456','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]');exception when others then blocked:=true;end;assert blocked,'Another account remains denied';
+ update public.event_outbox set status='accepted' where id=b;
  binding:=public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>"]');
  -- Known but out-of-scope ancestor must remain ambiguous, never disappear before count.
  insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,attempts,approved_by,reviewed_revision)
  select proposal_id,opportunity_id,fingerprint||':out-of-scope',channel,destination,body,status,attempts,approved_by,reviewed_revision from public.event_outbox where id=b returning id into other_b;
  insert into event_private.mailbox_outbound_headers select '123','<other-proposal@example.test>',other_b,attempts,reviewed_revision,repeat('b',64) from public.event_outbox where id=other_b;
+
+ -- An unresolved ancestor outside the allowlist must not disappear from a mixed chain.
+ update public.event_outbox set status='sending' where id=other_b;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>","<other-proposal@example.test>"]')->>'code'='transport_pending','Accepted plus out-of-scope sending defers';
+ update public.event_outbox set status='uncertain' where id=other_b;
+ assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>","<other-proposal@example.test>"]')->>'code'='transport_pending','Accepted plus out-of-scope uncertain defers';
+ update public.event_outbox set status='accepted' where id=other_b;
  assert public.event_mailbox_resolve_binding('123','eventos@embaixadacarioca.com.br','bound-client@example.test','<reply@example.test>','["<proposal@example.test>","<other-proposal@example.test>"]')->>'code'='ambiguous','Complete chain checked before allowlist';
  delete from event_private.mailbox_outbound_headers where outbound_message_id='<other-proposal@example.test>';
  assert binding->>'send_id'=b::text and (binding->>'proposal_revision')::bigint=(select reviewed_revision from public.event_outbox where id=b),'Exact immutable revision binding';
