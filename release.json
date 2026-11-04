@@ -1,8 +1,10 @@
 {
-  "commit": "657479ac9d762bc7a22a5c2a92986ce4c0c5c5cc",
-  "schemaHead": "20261103180038_mailbox_oauth_vault.sql",
+  "commit": "383810ed2927c3eaba88bad33b96627b78f07da8",
+  "schemaHead": "20261104005303_smtp_neutral_pilot_receipt.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
+    "teste-email.html": "803a3fe06c10d14eb2f34ad4fad522fad574bc0742390d4bdc34f400defb9bee",
+    "teste-email.js": "ad642a406666ae79686a9810a7715021dabac7cb0090c5a580b1ad8695a756b7",
     "conectar-email.html": "a87dbb7f51236ac68cf004ed41738fd2ef91d3d153ed92e7be67b2ea29209342",
     "conectar-email.js": "3116905dd29df305a8db7e9dcce89134d99c86889f1d8c209701489ee45ae338",
     "recibo-whatsapp.html": "976f10454df3abcff385b5379e1f67da8a4e19d16d827a532f6c8fe01f1e7641",

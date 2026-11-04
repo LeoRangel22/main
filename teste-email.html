@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Teste neutro de e-mail | Eventos</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    .email-pilot{max-width:54rem;margin:0 auto;padding:1.25rem;color:#183a2d;background:#fff;line-height:1.6}
+    .email-pilot h1{font-size:1.75rem;line-height:1.25}.email-pilot h2{font-size:1.25rem;margin-top:1.5rem}
+    .email-pilot button,.email-pilot a{min-height:44px}.email-pilot a{display:inline-flex;align-items:center}.email-pilot button{padding:.7rem 1rem;margin:.5rem .5rem .5rem 0;border:2px solid #183a2d;border-radius:8px;background:#183a2d;color:#fff;font:inherit;cursor:pointer}
+    .email-pilot button:disabled{background:#edf1ee;color:#46534a;border-color:#6a776e;cursor:not-allowed}
+    .email-pilot :focus-visible{outline:3px solid #875015;outline-offset:4px}.email-pilot label{display:flex;gap:.75rem;align-items:flex-start;margin:1rem 0;font-size:1rem;font-weight:600;color:#183a2d}
+    .email-pilot input[type=checkbox]{width:1.4rem;height:1.4rem;flex:none;margin-top:.2rem}.email-pilot dl{display:grid;grid-template-columns:minmax(7rem,1fr) 2fr;gap:.5rem}
+    .email-pilot dd{margin:0;overflow-wrap:anywhere}.email-pilot pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:#eef4f0;padding:1rem;border-radius:8px}
+    .email-pilot [hidden]{display:none!important}.email-pilot .pilot-notice{border-left:4px solid #875015;padding:.5rem 1rem;margin:1rem 0}.email-pilot .pilot-actions{display:flex;flex-wrap:wrap}
+    @media(max-width:420px){.email-pilot{padding:1rem}.email-pilot dl{display:block}.email-pilot dt{font-weight:700;margin-top:.75rem}.email-pilot button{width:100%;margin:.4rem 0}}
+  </style>
+  <script defer src="./vendor/supabase.js"></script>
+  <script defer src="./approval-config.js"></script>
+  <script defer src="./teste-email.js"></script>
+</head>
+<body><main class="email-pilot">
+  <a href="./index.html">Voltar ao Eventos</a>
+  <h1>Teste neutro de e-mail</h1>
+  <p>QA-COM-EMAIL-01. Somente para a conta proprietária confirmada. Este caso não é proposta comercial e não gera reserva, aprovação, cobrança ou captura automática.</p>
+  <p id="emailPilotStatus" class="pilot-notice" role="status" aria-live="polite">Verificando acesso.</p>
+  <button id="emailVerifyAccess" type="button">Verificar acesso novamente</button>
+  <p id="emailPilotLogin" hidden><a href="./index.html">Entrar com sua conta existente de Eventos</a></p>
+  <section id="emailPilotWorkspace" hidden aria-label="Operação restrita do teste neutro">
+    <p>Consultar não cria caso nem envia e-mail. Preparar cria somente um caso QA. As configurações e a janela autorizada são conferidas pelo servidor.</p>
+    <p id="emailPilotState" role="status" aria-live="polite">Estado ainda não consultado.</p>
+    <dl id="emailPilotMetadata" aria-label="Estado do caso neutro"></dl>
+    <div class="pilot-actions"><button id="emailReadStatus" type="button">Consultar estado — sem enviar</button></div>
+    <label><input id="emailConfirmPrepare" type="checkbox" disabled>Confirmo a criação de um único caso neutro QA-COM-EMAIL-01, sem envio.</label>
+    <button id="emailPrepareCase" type="button" disabled>Preparar caso neutro sem enviar</button>
+    <button id="emailPreview" type="button" disabled>Conferir prévia exata</button>
+    <section id="emailPreviewPanel" hidden aria-label="Prévia exata do único teste">
+      <h2>Mensagem que será enviada</h2>
+      <dl><dt>Destinatário</dt><dd id="emailPreviewTo"></dd><dt>Remetente</dt><dd id="emailPreviewSender"></dd><dt>Responder para</dt><dd>eventos@embaixadacarioca.com.br</dd><dt>Assunto</dt><dd id="emailPreviewSubject"></dd><dt>Janela termina em</dt><dd id="emailPreviewCloses"></dd></dl>
+      <pre id="emailPreviewText" aria-label="Texto integral da mensagem"></pre>
+      <p>Endereço, assunto e conteúdo são fixos e não podem ser editados aqui. Aceitação pelo provedor não comprova entrega na caixa de entrada.</p>
+    </section>
+    <label><input id="emailConfirmSend" type="checkbox" disabled>Revisei o destinatário, remetente, Reply-To, assunto e texto exatos acima e autorizo este único teste.</label>
+    <button id="emailSendOnce" type="button" disabled>Enviar único teste autorizado</button>
+    <p id="emailPilotOutcome" role="status" aria-live="polite"></p>
+    <p>Após resultado incerto, recarga ou tentativa registrada, use somente Consultar estado. Não haverá repetição automática nem envio por outro canal.</p>
+  </section>
+</main></body>
+</html>
