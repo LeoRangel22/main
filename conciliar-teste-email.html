@@ -1,0 +1,22 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Conferir retorno do teste | Eventos</title><link rel="stylesheet" href="./styles.css">
+<style>main{max-width:54rem;margin:auto;padding:1.25rem;background:white;color:#183a2d;font-family:system-ui,sans-serif;line-height:1.6;overflow-wrap:anywhere}h1{font-size:1.7rem}label{display:block;margin:1rem 0}textarea,button{font:inherit}textarea{display:block;width:100%;box-sizing:border-box;min-height:5rem;padding:.7rem;overflow-wrap:anywhere}button,a{min-height:44px}a{display:inline-flex;align-items:center}button{padding:.7rem 1rem;border:2px solid #183a2d;border-radius:8px;background:#183a2d;color:white;margin:.4rem 0}button:disabled{background:#edf1ee;color:#46534a;border-color:#6a776e}input[type=checkbox]{width:1.3rem;height:1.3rem;vertical-align:middle}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:#eef4f0;padding:1rem}dd{margin:0;overflow-wrap:anywhere}dt{font-weight:bold}:focus-visible{outline:3px solid #875015;outline-offset:4px}[hidden]{display:none!important}@media(max-width:420px){main{padding:1rem}button{width:100%}}</style>
+<script defer src="./vendor/supabase.js"></script><script defer src="./approval-config.js"></script><script defer src="./conciliar-teste-email.js?v=20261104-neutral-reply-v1"></script></head>
+<body><main><a href="./teste-email.html">Voltar ao teste de e-mail</a><h1>Conferir retorno do teste</h1>
+<p>Conciliação pontual do QA-COM-EMAIL-01. Não envia e-mail, não altera a proposta e não ativa a captura automática. A associação é conferida pelo proprietário; o servidor lê a resposta real da caixa Eventos.</p>
+<p id="replyStatus" role="status" aria-live="polite">Verificando acesso.</p><button id="replyAccess" type="button">Verificar acesso</button>
+<section id="replyWorkspace" hidden aria-label="Conciliação restrita do teste">
+<dl id="replyCase"></dl>
+<label for="replyDelivered">Message-ID final conferido no registro do Zepto</label><textarea id="replyDelivered" maxlength="300" spellcheck="false" aria-describedby="replyIdHelp"></textarea>
+<label for="replyIncoming">Message-ID da resposta enviada pelo Gmail</label><textarea id="replyIncoming" maxlength="300" spellcheck="false" aria-describedby="replyIdHelp"></textarea>
+<p id="replyIdHelp">Use os identificadores completos entre &lt; e &gt;. Não cole senhas, tokens ou conteúdo de outras mensagens.</p>
+<label><input id="replyAttest" type="checkbox">Conferi que estes identificadores pertencem ao único teste e à minha resposta. Entendo que esta conferência do provedor é registrada como revisão do proprietário.</label>
+<button id="replyBegin" type="button" disabled>Preparar conferência sem gravar no histórico</button>
+<button id="replyRead" type="button" disabled>Ler somente a resposta do teste</button>
+<button id="replyRefresh" type="button" disabled>Consultar estado sem repetir</button>
+<section id="replyPreview" hidden aria-label="Prévia da resposta lida da caixa"><h2>Resposta encontrada</h2><dl id="replyMetadata"></dl><pre id="replyBody"></pre>
+<label><input id="replyConfirm" type="checkbox">Revisei o caso, a revisão e a resposta acima e confirmo registrar uma única entrada no histórico.</label>
+<button id="replyCommit" type="button" disabled>Registrar resposta conferida</button></section>
+<p>Após erro ou resultado incerto, consulte o estado. Nenhuma chamada será repetida automaticamente. Este registro não representa aceite comercial nem homologação da captura automática.</p>
+</section></main></body></html>

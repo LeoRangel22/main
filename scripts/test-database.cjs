@@ -212,6 +212,7 @@ async function concurrent(c,name) {
     await c.query('update event_private.proposal_approval_policy set enabled=false where id');
     await checks(c); console.log('PASS current production upgrade preserves existing approval links and identity');
     await c.end(); c=null;
+    await require('../checks/neutral-reply-audit.cjs')({create,apply,connect,migrationFiles,admin});
     c=await connect('events_test');
     await c.query('begin'); await apply(c,'supabase/rollback/priority_integrity_compatibility.sql');
     assert.equal((await c.query("select has_table_privilege('authenticated','propostas','UPDATE') ok")).rows[0].ok,true);
