@@ -9235,11 +9235,14 @@ input[type="range"] {
   color: var(--muted);
 }
 
+.client-quote-form { --form-review-badge: "revisar"; }
+html:lang(en) .client-quote-form { --form-review-badge: "review"; }
+
 .consult-step[data-invalid] .section-heading h2::after {
   background: rgba(157, 67, 47, 0.1);
   border-radius: 999px;
   color: var(--danger);
-  content: "revisar";
+  content: var(--form-review-badge, "revisar");
   display: inline-flex;
   font-size: 0.66rem;
   font-weight: 900;
