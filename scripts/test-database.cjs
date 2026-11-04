@@ -54,7 +54,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','mailbox-oauth-vault','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','website-attribution','future-tariff-application','private-operational-signoffs','private-operational-release']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','mailbox-oauth-vault','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','website-attribution','future-tariff-application','private-operational-signoffs','private-operational-release','smtp-neutral-pilot']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -66,6 +66,7 @@ async function checks(c) {
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
+  await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-capture-concurrency.cjs')(c,connect,name);
   const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
   await require('../checks/whatsapp-pilot-concurrency.cjs')(c,sql,connect,name,actor);

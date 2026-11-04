@@ -1,0 +1,21 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {test}=require('node:test');
+const source=fs.readFileSync(path.join(__dirname,'../teste-email.js'),'utf8');
+const actor={id:'11111111-1111-4111-8111-111111111111',email:'owner@example.invalid'};
+const context=vm.createContext({Date,Object,Error,Number,Array,TextEncoder,crypto:crypto.webcrypto,state:{actor},sessionStorage:{getItem(){return null;}}});
+const constants=source.slice(source.indexOf('  const UUID='),source.indexOf('  const SEALED='));
+const helpers=source.slice(source.indexOf('  const email='),source.indexOf('  function clearPreview('));
+const normalize=source.slice(source.indexOf('  function normalized('),source.indexOf('  const sameCase='));
+vm.runInContext(constants+helpers+normalize+';globalThis.iso=iso;globalThis.safeFlags=safeFlags;',context);context.actor=actor;
+
+const ready={state:'ready',proposalId:'22222222-2222-4222-8222-222222222222',revision:1,publicToken:'33333333-3333-4333-8333-333333333333',email:actor.email,approvalRequired:false,captureActive:false};
+test('ready JSON object is accepted without changing its identity',()=>{const r=context.normalized(ready,actor);assert.equal(r.email,actor.email);assert.equal(r.revision,1);});
+for(const [name,value]of [['array',[ready]],['missing capture',{...ready,captureActive:undefined}],['missing policy',{...ready,approvalRequired:undefined}],['wrong owner',{...ready,email:'other@example.invalid'}],['wrong revision',{...ready,revision:2}],['unknown field',{...ready,body:'not allowed'}],['wrong token type',{...ready,publicToken:[ready.publicToken]}],['invalid state',{...ready,state:'delivered'}]])test(name+' is rejected',()=>assert.throws(()=>context.normalized(value,actor)));
+test('absent status requires explicit flags but no case',()=>assert.equal(context.normalized({state:'absent',approvalRequired:false,captureActive:false},actor).state,'absent'));
+for(const value of ['2026-02-31T00:00:00.000Z','2026-10-01T24:00:00.000Z','2026-10-01T00:00:00Z','not a date'])test('strict ISO rejects '+value,()=>assert.equal(context.iso(value),false));
+test('strict ISO accepts canonical leap day',()=>assert.equal(context.iso('2028-02-29T12:00:00.000Z'),true));
+test('policy and capture false are both mandatory',()=>{assert.equal(context.safeFlags(ready),true);assert.equal(context.safeFlags({...ready,approvalRequired:true}),false);assert.equal(context.safeFlags({...ready,captureActive:true}),false);});
+test('no HTML sinks, credentials, alternate transport or auto-retry',()=>{assert.doesNotMatch(source,/innerHTML|outerHTML|insertAdjacentHTML|console\.|fetch\(|XMLHttpRequest|localStorage|setItem\([^)]*(?:token|email)/);assert.equal((source.match(/approved:true/g)||[]).length,1);});
+test('wire review hash maps to reviewedContentHash only',()=>{assert.match(source,/approved:true,reviewedContentHash:preview\.contentHash/);assert.doesNotMatch(source,/approved:true,contentHash:/);});
+test('synthetic canonical text matches immutable reviewed UTF8 hash',()=>assert.equal(crypto.createHash('sha256').update(require('../tests/fixtures/neutral-email-qa.cjs').text).digest('hex'),'3cb5fe4c494dbfc1153166d1f20d762c2b3d784eabdd6a5d53808616d1267099'));

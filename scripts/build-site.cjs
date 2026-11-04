@@ -7,6 +7,7 @@ const root=path.resolve(__dirname,'..');
 const dest=path.join(root,'dist');
 // Explicit public surface: tooling, SQL, tests and credentials cannot be copied.
 const publicFiles=[
+  'teste-email.html','teste-email.js',
   'conectar-email.html','conectar-email.js',
   'recibo-whatsapp.html','recibo-whatsapp.js',
   'piloto-whatsapp.html','piloto-whatsapp.js',
@@ -47,4 +48,5 @@ const migrations=fs.readdirSync(path.join(root,'supabase/migrations')).filter(f=
 const assets=Object.fromEntries([...publicFiles,'vendor/supabase.js'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(path.join(dest,f))).digest('hex')]));
 fs.writeFileSync(path.join(dest,'release.json'),JSON.stringify({commit,schemaHead:migrations.at(-1),supabaseVersion:require('@supabase/supabase-js/package.json').version,assets},null,2));
 console.log(`Public build: ${publicFiles.length+3} files, commit ${commit}`);
+
 
