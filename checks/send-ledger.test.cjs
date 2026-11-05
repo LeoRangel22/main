@@ -4,9 +4,19 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { stripTypeScriptTypes } = require('node:module');
 
+const ownerFixturePolicy=(change={})=>({version:1,state:'open',proposal_ids:['00000000-0000-4000-8000-000000000111'],recipient:'client@example.test',started_at:new Date(Date.now()-1000).toISOString(),expires_at:new Date(Date.now()+120000).toISOString(),...change});
+test('email owner pilot: exact route reaches provider only after binding',async()=>{const r=await run('email',{ownerPolicy:ownerFixturePolicy()});assert.equal(r.status,200);assert.equal(r.calls.routeBinds.length,1);assert.equal(r.calls.fetch,1);assert.match(r.calls.providerPayload.reply_to[0].address,/^eventos\+/);});
+for(const flag of ['closeOwnerAtBind','changeOwnerAtBind'])test('email owner pilot: '+flag+' pauses without transport',async()=>{const r=await run('email',{ownerPolicy:ownerFixturePolicy(),[flag]:true});assert.equal(r.status,409);assert.equal(r.body.code,'reply_route_gate_changed');assert.equal(r.calls.fetch,0);assert.equal(r.calls.finish[0].send_status,'paused');});
+test('email owner pilot: absent configuration and outside scope preserve ordinary email',async()=>{const r=await run('email',{ownerPolicy:ownerFixturePolicy({proposal_ids:['00000000-0000-4000-8000-000000000222']})});assert.equal(r.status,200);assert.equal(r.calls.routePreviews.length,0);assert.equal(r.calls.providerPayload.reply_to[0].address,'eventos@embaixadacarioca.com.br');});
+test('email owner pilot: unknown server policy never claims or contacts provider',async()=>{const r=await run('email',{ownerConfigError:true});assert.equal(r.status,409);assert.equal(r.calls.begin.length,0);assert.equal(r.calls.fetch,0);});
+test('email owner pilot: conflicting environment authorization fails closed',async()=>{const r=await run('email',{ownerPolicy:ownerFixturePolicy(),routes:true});assert.equal(r.status,409);assert.equal(r.calls.begin.length,0);assert.equal(r.calls.fetch,0);});
+test('email owner pilot: existing neutral SMTP pilot does not depend on owner policy',async()=>{const r=await run('email',{neutral:true,ownerConfigError:true});assert.equal(r.status,200);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,1);});
+test('email sender: compatibility dry-run has no claim or provider side effect',async()=>{const r=await run('email',{skipPreview:true,payload:{dryRun:true}});assert.equal(r.status,200);assert.equal(r.body.ownerReplyPilotContract,'owner-pilot-v1');assert.equal(r.calls.begin.length,0);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,0);});
+
 async function run(channel, scenario = {}) {
   const calls = { routePreviews:[],routeBinds:[],fetch: 0, smtp: 0, begin: [], finish: [], smtpFinalizations: [] };
   let smtpRecord;
+  let ownerPolicy=scenario.ownerPolicy??null;
   const proposal = { id: '00000000-0000-4000-8000-000000000111', revision: 3, is_current:true, status:'proposta_pronta', oportunidade_id:'00000000-0000-4000-8000-000000000113', public_token: 'token', cliente_nome: 'Cliente', total: 1120, snapshot: { event: {signalDeadlineHours:72}, selectedItems:[{nome:'Coffee Break aprovado',descricao:'Café e frutas',calc:{total:1000}}] } };
   if(scenario.neutral){proposal.revision=1;proposal.total=0;proposal.cliente_email='client@example.test';proposal.snapshot={communicationTest:{id:'QA-COM-EMAIL-01',neutral:true},totals:{total:0},selectedItems:[]};}
   if(scenario.proposal)Object.assign(proposal,scenario.proposal);
@@ -15,8 +25,9 @@ async function run(channel, scenario = {}) {
     auth: { getUser: async () => ({ data: { user: { id: '00000000-0000-4000-8000-000000000114', email:'client@example.test', email_confirmed_at:scenario.unconfirmed?null:'2026-01-01T00:00:00Z' } } }) },
     from: table => ({ select: () => ({ eq: () => ({ single: async () => ({data:table==='oportunidades'?{ultima_resposta_cliente_em:scenario.newResponse?'2026-10-21T00:00:00Z':'2026-10-06T00:00:00Z'}:calls.begin.length?{...proposal,...scenario.fresh}:proposal}) }) }) }),
     rpc: async (name, body) => {
+      if(name==='event_email_owner_pilot_config')return scenario.ownerConfigError?{error:{message:'Synthetic configuration unavailable'}}:{data:ownerPolicy,error:null};
       if(name==='event_email_reply_route_prepare'){calls.routePreviews.push(body);if(scenario.routePrepareError)return{error:{message:'synthetic route prepare unavailable'}};return{data:{version:1,id:'00000000-0000-4000-8000-000000000115',reply_to:'eventos+'+(scenario.changedRoute&&calls.routePreviews.length>1?'b':'a').repeat(51)+'a@embaixadacarioca.com.br',context_hash:body.context_hash}};}
-      if(name==='event_email_reply_route_bind'){calls.routeBinds.push(body);if(scenario.expirePilotAtBind)fixtureClockShift=180000;if(scenario.closeRouteGateAtBind){env.EVENT_PROPOSAL_REPLY_ROUTES_ENABLED='false';env.EVENT_PROPOSAL_REPLY_ROUTE_PILOT='';}if(scenario.changePilotAtBind)env.EVENT_PROPOSAL_REPLY_ROUTE_PILOT=scenario.changePilotAtBind;if(scenario.routeBindError)return{error:{message:'synthetic route bind refused'}};return{data:{bound:true}};}
+      if(name==='event_email_reply_route_bind'){calls.routeBinds.push(body);if(scenario.closeOwnerAtBind)ownerPolicy={...ownerPolicy,state:'closed',version:ownerPolicy.version+1};if(scenario.changeOwnerAtBind)ownerPolicy={...ownerPolicy,version:ownerPolicy.version+1};if(scenario.expirePilotAtBind)fixtureClockShift=180000;if(scenario.closeRouteGateAtBind){env.EVENT_PROPOSAL_REPLY_ROUTES_ENABLED='false';env.EVENT_PROPOSAL_REPLY_ROUTE_PILOT='';}if(scenario.changePilotAtBind)env.EVENT_PROPOSAL_REPLY_ROUTE_PILOT=scenario.changePilotAtBind;if(scenario.routeBindError)return{error:{message:'synthetic route bind refused'}};return{data:{bound:true}};}
       if(name==='event_smtp_pilot_prepare'){if(scenario.smtpPrepareError||smtpRecord)return{error:{message:'Synthetic preparation refused'}};smtpRecord={state:'prepared',claim_token:'a'.repeat(64),mime_sha256:body.mime_sha256,origin_message_id:body.origin_message_id};return{data:{...smtpRecord}};}
       if(name==='event_smtp_pilot_start'){smtpRecord.state='sending';return{data:{...smtpRecord,deadline:new Date(Date.now()+45000).toISOString(),gate_expires_at:new Date(Date.now()+120000).toISOString()}};}
       if(name==='event_smtp_pilot_finish'){calls.smtpFinalizations.push(body);smtpRecord.state=body.result_code==='DATA_250'?'accepted':'uncertain';if(scenario.ledger)scenario.ledger.row={...scenario.ledger.row,status:smtpRecord.state,provider_id:null};return{data:{...smtpRecord}};}
@@ -50,7 +61,7 @@ async function run(channel, scenario = {}) {
     const providerBody=Object.hasOwn(scenario,'providerBody')?scenario.providerBody:{ messageId: 'provider', request_id: 'provider' };
     return new Response(scenario.malformedJson?'{invalid':JSON.stringify(providerBody), { status: scenario.http || 200 });
   } });
-  for (const file of ['_shared/mailbox-reply-route.ts','_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
+  for (const file of ['_shared/mailbox-reply-route.ts','_shared/mailbox-owner-pilot.ts','_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
     const source = fs.readFileSync(`${__dirname}/../supabase/functions/${file}`, 'utf8').replace(/^import .*;\s*$/gm, '').replace(/^export /gm, '');
     vm.runInContext(stripTypeScriptTypes(source), context);
   }

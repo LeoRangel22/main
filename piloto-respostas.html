@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Homologar respostas — Eventos</title><link rel="stylesheet" href="styles.css?v=owner-pilot1"><script defer src="vendor/supabase.js"></script><script defer src="approval-config.js?v=owner-pilot1"></script><script defer src="piloto-respostas.js?v=owner-pilot1"></script>
+<style>main{max-width:64rem;margin:auto;padding:1.25rem}fieldset{margin:1.25rem 0;padding:1rem;border:1px solid #72877f}label.pilot-choice{display:flex;align-items:flex-start;gap:.6rem;margin:.75rem 0}label.pilot-choice input{width:auto;flex:0 0 auto;margin-top:.25rem}#pilotWorkspace button{margin:.25rem;min-height:44px}#pilotEvidence{overflow-wrap:anywhere}a{color:#174c3c}fieldset[disabled]{opacity:.8}</style></head>
+<body><main><a href="index.html">Voltar ao Eventos</a><h1>Homologar respostas de propostas</h1>
+<p>Teste restrito com a sessão Master e propostas identificadas como QA-VENDA. Esta página não envia e-mails, não aprova vendas e não registra pagamentos ou reservas.</p>
+<p id="pilotStatus" role="status" aria-live="polite">Verificando a sessão existente.</p>
+<section id="pilotWorkspace" hidden>
+<button type="button" id="readPilot">Consultar estado sem repetir</button>
+<fieldset><legend>Alertas do formulário</legend><p id="leadAlertStatus">Destinatário ainda não conferido.</p><p>Confira o destinatário e a quantidade antes de criar os dois novos leads. Consultar esta página não envia alertas.</p></fieldset>
+<fieldset id="pilotSelection"><legend>1. Escolher até duas propostas de teste ainda sem envio</legend><div id="pilotProposals"></div>
+<label class="pilot-choice"><input id="pilotConfirmed" type="checkbox">Confirmo estas propostas de teste, meu endereço como destinatário e a janela de até 15 minutos. O envio continuará exigindo revisão na proposta.</label>
+<button type="button" id="openPilot" disabled>Abrir janela restrita sem enviar</button></fieldset>
+<fieldset><legend>2. Conferir o envio aceito e ativar somente seu retorno</legend><p>Com a janela aberta, revise e envie a proposta uma única vez no Eventos. Depois consulte o estado aqui. O envio anterior da V1 não deve ser repetido.</p><div id="pilotSends"></div>
+<label class="pilot-choice"><input id="captureConfirmed" type="checkbox">Conferi os envios selecionados e autorizo a leitura das respostas desses envios durante esta janela, com limite de quatro mensagens.</label>
+<button type="button" id="capturePilot" disabled>Ativar retorno restrito</button>
+<p>Depois de ativar, responda pelo Gmail à mensagem recebida. Esta aba fará a verificação automática enquanto estiver aberta. A chegada à caixa pode levar pelo menos dois minutos para aparecer na consulta.</p></fieldset>
+<fieldset><legend>3. Provar a associação e encerrar</legend><div id="pilotEvidence"></div>
+<button type="button" id="closePilot" disabled>Encerrar janela e desligar captura</button>
+<p>Uma resposta só fica comprovada quando há registro persistido na proposta e revisão mostradas. Reabra a proposta para conferir o histórico. Isso não representa aceite comercial nem comprova financeiro ou WhatsApp.</p></fieldset>
+<p id="pilotOutcome" role="status" aria-live="polite"></p>
+</section></main></body></html>

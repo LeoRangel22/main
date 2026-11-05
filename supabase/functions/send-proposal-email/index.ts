@@ -1,4 +1,5 @@
 import { validatePreparedReplyRoute, proposalReplyRoutingGate } from '../_shared/mailbox-reply-route.ts';
+import { ownerReplyRoutingGate } from '../_shared/mailbox-owner-pilot.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
@@ -378,6 +379,7 @@ Deno.serve(async (req) => {
       return jsonResponse({
         ok: true,
         mode: "dry-run",
+        ownerReplyPilotContract: "owner-pilot-v1",
         message: "ZeptoMail configurado para envio de propostas.",
         configured: {
           token: Boolean(zeptoAuth.token),
@@ -427,8 +429,10 @@ Deno.serve(async (req) => {
     }
     let emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
     let replyRoute:any=null;
+    let worker:ReturnType<typeof createSendWorker>;
+    const routingGate=()=>ownerReplyRoutingGate(k=>Deno.env.get(k),()=>{worker??=createSendWorker();return worker.rpc('event_email_owner_pilot_config');},proposal.id,email);
     let routeGate:ReturnType<typeof proposalReplyRoutingGate>;
-    try{routeGate=neutral?Object.freeze({mode:"off" as const,configuration:""}):proposalReplyRoutingGate(k=>Deno.env.get(k),proposal.id,email);}
+    try{routeGate=neutral?Object.freeze({mode:"off" as const,configuration:""}):await routingGate();}
     catch{return jsonResponse({ok:false,code:"reply_route_pilot_unavailable",message:"Confira o escopo, destinatário e janela do piloto. Nenhum envio foi tentado."},409);}
     if(routeGate.mode!=="off"){
       if(replyTo!=="eventos@embaixadacarioca.com.br")return jsonResponse({ok:false,code:"reply_route_configuration",message:"Confira a conta de respostas antes de enviar."},409);
@@ -454,7 +458,7 @@ Deno.serve(async (req) => {
       try { smtpGate = neutralSmtpGate(key => Deno.env.get(key), proposal.id); }
       catch { return jsonResponse({ok:false,code:"SMTP_PILOT_CLOSED",message:"A janela do teste de e-mail está fechada. Nenhum envio foi tentado."},409); }
     }
-    const worker = createSendWorker();
+    worker??=createSendWorker();
     let claim;
     try { claim = await claimSend(supabase, proposal, payload, "email", email, emailContent.text, subject); }
     catch (error) { return jsonResponse({ ok: false, message: String(error instanceof Error ? error.message : error) }, 409); }
@@ -471,7 +475,7 @@ Deno.serve(async (req) => {
 
     if(replyRoute){
       let current=false;
-      try{const latest=proposalReplyRoutingGate(k=>Deno.env.get(k),proposal.id,email);current=latest.mode===routeGate.mode&&latest.configuration===routeGate.configuration;}catch{/* Closed or changed pilot: never call transport. */}
+      try{const latest=await routingGate();current=latest.mode===routeGate.mode&&latest.configuration===routeGate.configuration;}catch{/* Closed or changed pilot: never call transport. */}
       if(!current){
         let paused=false;try{await finishSend(worker,claim.send.id,"paused",null,"Janela ou escopo de resposta mudou; transporte não iniciado.");paused=true;}catch{/* Read back the ledger before any further action. */}
         return jsonResponse({ok:false,sendId:claim.send.id,deliveryStatus:paused?"paused":"uncertain",code:"reply_route_gate_changed",message:"Transporte não iniciado. Consulte o histórico; não haverá repetição automática."},409);
