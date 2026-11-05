@@ -2,7 +2,7 @@
 
 A 256-bit random, canonical lowercase base32 capability produces a 60-octet local part on the existing Events mailbox. The authenticated team preview obtains a stable route for its immutable account/proposal/revision/recipient/content context. The final Reply-To is included in the reviewed fingerprint. Service-only binding attaches it to the claimed send and attempt before any provider call. A failure pauses the unattempted claim or requires ledger readback if the pause itself is uncertain. Nothing retries a send.
 
-Routing is OFF unless EVENT_PROPOSAL_REPLY_ROUTES_ENABLED is exactly true. Publication does not set it. The neutral QA-COM-EMAIL-01 SMTP renderer remains unchanged. No OAuth, secret generation, extra mailbox alias, schedule or general capture is installed here.
+Routing is OFF unless the explicit public environment gate, the isolated legacy environment pilot, or the authenticated owner pilot authorizes the exact proposal. Publication does not open any of them. The neutral QA-COM-EMAIL-01 SMTP renderer remains unchanged. No OAuth, secret generation, extra mailbox alias, schedule or general capture is installed here. See `mailbox-owner-pilot.md` for the restricted Master control, read-only alert preflight and closure.
 
 Only an exact registered capability can authorize a body read. A recognized address is metadata, not binding. Account, expected recipient/sender, accepted ledger, attempt, immutable revision, bounded capture allowlist, message budget and window all remain required. Pending transports defer without consuming the cursor. Known conflicting RFC ancestors or multiple routes remain unresolved. Unknown routes, wrong sender, revoked/expired routes and out-of-scope sends never fall back to names or subjects.
 
