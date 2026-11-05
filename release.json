@@ -1,13 +1,15 @@
 {
-  "commit": "72e64eca1eb613c28316f3501ddcff5045c61c8b",
-  "schemaHead": "20261104222157_proposal_reply_routes.sql",
+  "commit": "9f52d7f025d93e5774cc0184861723057943228a",
+  "schemaHead": "20261105124701_owner_mailbox_pilot.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
+    "piloto-respostas.html": "47ce704e641eb95b683d8b70174a08baa61519d8ad3227e515b4b69e3726bcae",
+    "piloto-respostas.js": "d3ff9e59e0bd3f6fd69218e777f5af1f57b9eff125dcc193af4717267da43a3e",
     "conciliar-teste-email.html": "e8d4e273ec33a5dd4b357ffa984e7cd47ad92d617d81b1fa9215e7e940786b58",
     "conciliar-teste-email.js": "069d0a1fdf144f7f181f7df247def0a95c3f08c7d67c7a3560fd70c6127ac319",
     "teste-email.html": "6bad789c5d9525a2ad6b361d6686a469c33937ac2795596d392c8f1f59c11cab",
     "teste-email.js": "ad642a406666ae79686a9810a7715021dabac7cb0090c5a580b1ad8695a756b7",
-    "conectar-email.html": "72b16b072334b667cc32dfad93958581bf004fbf0e9e8eb8d37907cb7feedd4f",
+    "conectar-email.html": "a317e6bad573b1820b03878bb4d721e066ed2a5eb2333eef19ffa5a7c2b8234d",
     "conectar-email.js": "3116905dd29df305a8db7e9dcce89134d99c86889f1d8c209701489ee45ae338",
     "recibo-whatsapp.html": "976f10454df3abcff385b5379e1f67da8a4e19d16d827a532f6c8fe01f1e7641",
     "recibo-whatsapp.js": "15e72c99c260a49ba8a387353e1d758646345dc194e184c6dfcd1b13c9b0e3b2",
