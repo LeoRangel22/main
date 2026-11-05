@@ -163,20 +163,22 @@ export function mailboxPlainText(html:unknown) {
   text=text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,(full,entity)=>{if(entity[0]!=='#')return named[entity.toLowerCase()]||full;const n=entity[1].toLowerCase()==='x'?parseInt(entity.slice(2),16):parseInt(entity.slice(1),10);return n>0&&n<=0x10ffff&&!(n>=0xd800&&n<=0xdfff)?String.fromCodePoint(n):'';});
   return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'').replace(/[ \t]+/g,' ').replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,6000);
 }
-export function mailboxHeaderPreflight(row:any,headerResponse:any,mailbox:string,owned:Set<string>) {
+export function mailboxHeaderPreflight(row:any,headerResponse:any,mailbox:string,owned:Set<string>,allowReplyRoutes=false) {
   if(mailbox!==ZOHO_MAILBOX)throw new Error('mailbox_invalid');
   mailboxId(row.messageId);const receivedAt=milliseconds(row.receivedAt),headers=headerMap(headerResponse);
   // Verify destination before downloading content, and never import other aliases.
   const recipients=['to','cc','delivered-to','x-original-to'].flatMap(name=>(headers.get(name)||[]).flatMap(headerAddresses));
-  if(!recipients.includes(mailbox))return null;
+  const reply_routes=[...new Set(recipients.filter(v=>allowReplyRoutes&&/^eventos\+[a-z2-7]{51}[aq]@embaixadacarioca\.com\.br$/.test(v)))];
+  // Syntax recognition permits metadata resolution only; protected SQL must recognize the exact route before body access.
+  if(!recipients.includes(mailbox)&&!reply_routes.length)return null;
   const from=headerAddresses(uniqueHeader(headers,'from',true)!);
   if(from.length!==1||email(row.fromAddress)!==from[0])throw new Error('sender_mismatch');
   if(owned.has(from[0]))return null;
   const messageId=rfcId(uniqueHeader(headers,'message-id',true),true),replyId=rfcId(uniqueHeader(headers,'in-reply-to'));
-  return {mailbox,kind:'inbound',message_id:messageId,in_reply_to:replyId,from:from[0],received_at:new Date(receivedAt).toISOString()};
+  return {mailbox,kind:'inbound',message_id:messageId,in_reply_to:replyId,from:from[0],received_at:new Date(receivedAt).toISOString(),reply_routes};
 }
-export function normalizeZohoMail(row:any,headerResponse:any,contentResponse:any,mailbox:string,owned:Set<string>) {
-  const preflight=mailboxHeaderPreflight(row,headerResponse,mailbox,owned);
+export function normalizeZohoMail(row:any,headerResponse:any,contentResponse:any,mailbox:string,owned:Set<string>,allowReplyRoutes=false) {
+  const preflight=mailboxHeaderPreflight(row,headerResponse,mailbox,owned,allowReplyRoutes);
   if(!preflight)return null;
   const text=mailboxPlainText(contentResponse?.data?.content);
   if(!text)throw new Error('content_empty');
@@ -185,8 +187,8 @@ export function normalizeZohoMail(row:any,headerResponse:any,contentResponse:any
 
 // Read-only thread metadata. It is not a provider-ID-to-RFC-ID conversion.
 // Keep opaque ID case, reject ambiguous headers, and never infer from subject/name.
-export function mailboxThreadHeaders(row:any,headerResponse:any,mailbox:string,owned:Set<string>) {
-  const preflight=mailboxHeaderPreflight(row,headerResponse,mailbox,owned);
+export function mailboxThreadHeaders(row:any,headerResponse:any,mailbox:string,owned:Set<string>,allowReplyRoutes=false) {
+  const preflight=mailboxHeaderPreflight(row,headerResponse,mailbox,owned,allowReplyRoutes);
   if(!preflight)return null;
   const headers=headerMap(headerResponse),raw=uniqueHeader(headers,'references');
   if(headers.has('references')&&raw===null)throw new Error('references_invalid');

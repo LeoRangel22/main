@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { stripTypeScriptTypes } = require('node:module');
 
 async function run(channel, scenario = {}) {
-  const calls = { fetch: 0, smtp: 0, begin: [], finish: [], smtpFinalizations: [] };
+  const calls = { routePreviews:[],routeBinds:[],fetch: 0, smtp: 0, begin: [], finish: [], smtpFinalizations: [] };
   let smtpRecord;
   const proposal = { id: '00000000-0000-4000-8000-000000000111', revision: 3, is_current:true, status:'proposta_pronta', oportunidade_id:'00000000-0000-4000-8000-000000000113', public_token: 'token', cliente_nome: 'Cliente', total: 1120, snapshot: { event: {signalDeadlineHours:72}, selectedItems:[{nome:'Coffee Break aprovado',descricao:'Café e frutas',calc:{total:1000}}] } };
   if(scenario.neutral){proposal.revision=1;proposal.total=0;proposal.cliente_email='client@example.test';proposal.snapshot={communicationTest:{id:'QA-COM-EMAIL-01',neutral:true},totals:{total:0},selectedItems:[]};}
@@ -14,6 +14,8 @@ async function run(channel, scenario = {}) {
     auth: { getUser: async () => ({ data: { user: { id: '00000000-0000-4000-8000-000000000114', email:'client@example.test', email_confirmed_at:scenario.unconfirmed?null:'2026-01-01T00:00:00Z' } } }) },
     from: table => ({ select: () => ({ eq: () => ({ single: async () => ({data:table==='oportunidades'?{ultima_resposta_cliente_em:scenario.newResponse?'2026-10-21T00:00:00Z':'2026-10-06T00:00:00Z'}:calls.begin.length?{...proposal,...scenario.fresh}:proposal}) }) }) }),
     rpc: async (name, body) => {
+      if(name==='event_email_reply_route_prepare'){calls.routePreviews.push(body);if(scenario.routePrepareError)return{error:{message:'synthetic route prepare unavailable'}};return{data:{version:1,id:'00000000-0000-4000-8000-000000000115',reply_to:'eventos+'+(scenario.changedRoute&&calls.routePreviews.length>1?'b':'a').repeat(51)+'a@embaixadacarioca.com.br',context_hash:body.context_hash}};}
+      if(name==='event_email_reply_route_bind'){calls.routeBinds.push(body);if(scenario.routeBindError)return{error:{message:'synthetic route bind refused'}};return{data:{bound:true}};}
       if(name==='event_smtp_pilot_prepare'){if(scenario.smtpPrepareError||smtpRecord)return{error:{message:'Synthetic preparation refused'}};smtpRecord={state:'prepared',claim_token:'a'.repeat(64),mime_sha256:body.mime_sha256,origin_message_id:body.origin_message_id};return{data:{...smtpRecord}};}
       if(name==='event_smtp_pilot_start'){smtpRecord.state='sending';return{data:{...smtpRecord,deadline:new Date(Date.now()+45000).toISOString(),gate_expires_at:new Date(Date.now()+120000).toISOString()}};}
       if(name==='event_smtp_pilot_finish'){calls.smtpFinalizations.push(body);smtpRecord.state=body.result_code==='DATA_250'?'accepted':'uncertain';if(scenario.ledger)scenario.ledger.row={...scenario.ledger.row,status:smtpRecord.state,provider_id:null};return{data:{...smtpRecord}};}
@@ -35,6 +37,7 @@ async function run(channel, scenario = {}) {
   let handler;
   const env = { SUPABASE_URL: 'https://example.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'worker', EVENT_BOT_SEND_ENABLED:'true',EVENT_BOT_SEND_URL:'https://script.google.com/macros/s/fixture/exec',EVENT_BOT_SEND_SECRET:'s'.repeat(40),ZAPI_INSTANCE_ID: 'instance', ZAPI_TOKEN: 'token', ZAPI_CLIENT_TOKEN: 'client', ZEPTO_MAIL_TOKEN: 'email-token', PROPOSAL_FROM_EMAIL: 'events@example.test' };
   if(scenario.neutral){env.PROPOSAL_FROM_EMAIL='leads@embaixadacarioca.com.br';env.ZEPTO_MAIL_TOKEN='fixture-token-only-000000';env.EVENT_NEUTRAL_SMTP_ENABLED=scenario.smtpClosed?'false':'true';env.EVENT_NEUTRAL_SMTP_PROPOSAL_ID=proposal.id;env.EVENT_NEUTRAL_SMTP_STARTED_AT=new Date(Date.now()-1000).toISOString();env.EVENT_NEUTRAL_SMTP_EXPIRES_AT=new Date(Date.now()+120000).toISOString();}
+  if(scenario.routes)env.EVENT_PROPOSAL_REPLY_ROUTES_ENABLED='true';
   if(scenario.sender)env.PROPOSAL_FROM_EMAIL=scenario.sender;
   if(scenario.replyTo)env.PROPOSAL_REPLY_TO_EMAIL=scenario.replyTo;
   const context = vm.createContext({ Buffer, setTimeout, clearTimeout, crypto: require('node:crypto').webcrypto, TextEncoder, Request, Response, URL, AbortSignal, Intl, Date, console: { error() {} }, createClient: () => client, Deno: { env: { get: key => env[key] }, serve: fn => handler = fn }, fetch: async (url, options) => {
@@ -45,7 +48,7 @@ async function run(channel, scenario = {}) {
     const providerBody=Object.hasOwn(scenario,'providerBody')?scenario.providerBody:{ messageId: 'provider', request_id: 'provider' };
     return new Response(scenario.malformedJson?'{invalid':JSON.stringify(providerBody), { status: scenario.http || 200 });
   } });
-  for (const file of ['_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
+  for (const file of ['_shared/mailbox-reply-route.ts','_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
     const source = fs.readFileSync(`${__dirname}/../supabase/functions/${file}`, 'utf8').replace(/^import .*;\s*$/gm, '').replace(/^export /gm, '');
     vm.runInContext(stripTypeScriptTypes(source), context);
   }
@@ -201,3 +204,25 @@ for(const field of ['title','message'])test('email neutral: whitespace never dis
 
 
 for(const scenario of [{smtpClosed:true},{smtpPrepareError:true}])test('email neutral: blocked SMTP never falls through to HTTP '+JSON.stringify(scenario),async()=>{const r=await run('email',{neutral:true,...scenario});assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,0);if(scenario.smtpClosed)assert.equal(r.calls.begin.length,0);});
+
+test('email route: same reviewed Reply-To reaches provider only after durable binding',async()=>{
+ const r=await run('email',{routes:true});assert.equal(r.status,200);assert.equal(r.calls.routePreviews.length,2);assert.deepEqual(r.calls.routePreviews[0],r.calls.routePreviews[1]);assert.equal(r.calls.routeBinds.length,1);assert.equal(r.calls.fetch,1);assert.equal(r.calls.providerPayload.reply_to[0].address,r.preview.replyTo);assert.equal(r.calls.routeBinds[0].reviewed_content_hash,r.preview.contentHash);assert.equal(r.calls.routeBinds[0].send_body,r.preview.text);
+});
+test('email route: preparing route fails closed before claim or HTTP',async()=>{
+ const r=await run('email',{routes:true,routePrepareError:true});assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);assert.equal(r.calls.routeBinds.length,0);
+});
+test('email route: route changed after preview requires fresh human review',async()=>{
+ const r=await run('email',{routes:true,changedRoute:true});assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);
+});
+test('email route: failed binding pauses unattempted transport without retry',async()=>{
+ const r=await run('email',{routes:true,routeBindError:true});assert.equal(r.status,409);assert.equal(r.body.code,'reply_route_bind_unconfirmed');assert.equal(r.body.deliveryStatus,'paused');assert.equal(r.calls.fetch,0);assert.equal(r.calls.routeBinds.length,1);assert.equal(r.calls.finish[0].send_status,'paused');
+});
+test('email route: unknown pause result requires readback and still never invokes provider',async()=>{
+ const r=await run('email',{routes:true,routeBindError:true,finishError:true});assert.equal(r.status,409);assert.equal(r.body.deliveryStatus,'uncertain');assert.equal(r.calls.fetch,0);
+});
+for(const state of ['sending','uncertain','accepted'])test('email route: duplicate '+state+' cannot bind or resend',async()=>{
+ const r=await run('email',{routes:true,duplicate:state});assert.equal(r.calls.fetch,0);assert.equal(r.calls.routeBinds.length,0);
+});
+test('email route: neutral SMTP contract retains its original base Reply-To',async()=>{
+ const r=await run('email',{routes:true,neutral:true});assert.equal(r.calls.routePreviews.length,0);assert.equal(r.calls.routeBinds.length,0);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,1);
+});

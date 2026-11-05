@@ -92,7 +92,7 @@ async function handler(options={}){
  const rows=options.rows||[row()];
  const cfg={enabled:true,channel_enabled:true,job_key:'job-key',account_id:accountId,mailbox,expected_account:mailbox,watermark_ms:now-600000,activated_at_ms:now-3600000,version:4,capture_send_ids:['00000000-0000-4000-8000-000000000001'],capture_started_at_ms:now-60000,capture_expires_at_ms:now+600000,capture_message_limit:20,capture_used_messages:0,...options.config};
  const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'never-visible',EVENT_MAILBOX_CLIENT_ID:'client',EVENT_MAILBOX_CLIENT_SECRET:'never-visible-client',EVENT_MAILBOX_REFRESH_TOKEN:'never-visible-refresh',...options.env};
- const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};if(options.bindingSequence)return{data:options.bindingSequence.shift()};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
+ const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'||name==='event_mailbox_resolve_routed_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};if(options.bindingSequence)return{data:options.bindingSequence.shift()};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
  const sandbox=vm.createContext({...native,Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
@@ -103,7 +103,7 @@ async function handler(options={}){
    if(url.endsWith('/content?includeBlockContent=false'))return json(content);
    throw Error('Unexpected endpoint');
  }});
- for(const f of ['_shared/channel-events.ts','_shared/zoho-mailbox.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
+ for(const f of ['_shared/channel-events.ts','_shared/zoho-mailbox.ts','_shared/mailbox-reply-route.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
  const response=await serve(new Request('https://example.test/worker',{method:options.method||'POST',headers:{'x-event-job-key':options.key||'job-key'},body:options.method==='GET'?undefined:(options.body??JSON.stringify({action:options.action||'sync'}))}));
  return{status:response.status,body:await response.json(),fetches,rpcCalls,events};
 }
@@ -196,4 +196,20 @@ test('a prepared reply followed by an unresolved transport never commits a parti
  assert.equal(r.fetches.filter(f=>f.url.includes('/content?')).length,1);
  assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_resolve_binding').length,2);
  assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+});
+
+const routeAddress='eventos+'+'a'.repeat(52)+'@embaixadacarioca.com.br';
+const routedBinding=()=>({version:2,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:null,origin:'server_generated_reply_to_capability',route_id:'00000000-0000-4000-8000-000000000004',route_address:routeAddress,evidence_sha256:'a'.repeat(64)});
+test('routed worker passes exact API header capability into protected resolver and atomic commit',async()=>{
+ const r=await handler({header:headers({To:[routeAddress],'In-Reply-To':[]}),binding:routedBinding()});
+ assert.equal(r.status,200);const lookup=r.rpcCalls.find(c=>c.name==='event_mailbox_resolve_routed_binding');
+ assert.deepEqual([...lookup.args.reply_routes],[routeAddress]);assert.equal(r.events[0].binding.origin,'server_generated_reply_to_capability');assert.deepEqual([...r.events[0].reply_routes],[routeAddress]);assert.equal(r.events[0].binding.outbound_message_id,null);assert.equal(r.fetches.filter(f=>f.url.includes('/content?')).length,1);
+});
+test('routed worker unresolved transport never commits or rereads inside invocation',async()=>{
+ const r=await handler({header:headers({To:[routeAddress]}),binding:{code:'transport_pending'}});
+ assert.equal(r.status,503);assert.equal(r.body.code,'transport_pending');assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_resolve_routed_binding').length,1);assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);
+});
+test('routed worker unknown capability stays metadata-only without RFC fallback',async()=>{
+ const r=await handler({header:headers({To:[routeAddress]}),binding:null});
+ assert.equal(r.status,200);assert.equal(r.events[0].state,'review_required');assert.equal(r.events[0].event,null);assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_resolve_binding'),false);
 });

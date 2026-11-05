@@ -1,0 +1,85 @@
+-- Synthetic only. All rows/flags rolled back; no HTTP or external credentials.
+begin;
+do $$
+declare actor uuid;principal record;o uuid;p uuid;b uuid;b2 uuid;r jsonb;r2 jsonb;r3 jsonb;binding jsonb;item jsonb;e jsonb;result jsonb;blocked boolean;
+ v bigint;w bigint;revision bigint;received bigint:=floor(extract(epoch from now())*1000)-60000;
+ activation bigint:=floor(extract(epoch from now())*1000)-3600000;before_o jsonb;
+begin
+ assert not has_table_privilege('service_role','event_private.mailbox_reply_routes','SELECT'),'Raw capabilities private';
+ assert not has_table_privilege('authenticated','event_private.mailbox_reply_routes','SELECT'),'No direct team route access';
+ assert (select relrowsecurity from pg_class where oid='event_private.mailbox_reply_routes'::regclass),'Route RLS';
+ assert not has_function_privilege('anon','public.event_email_reply_route_prepare(uuid,bigint,text,text)','EXECUTE'),'No anonymous route creation';
+ assert has_function_privilege('authenticated','public.event_email_reply_route_prepare(uuid,bigint,text,text)','EXECUTE'),'Team path available';
+ assert not has_function_privilege('authenticated','public.event_email_reply_route_bind(uuid,uuid,integer,text,text,text)','EXECUTE'),'No client bind';
+ assert not has_function_privilege('authenticated','public.event_mailbox_resolve_routed_binding(text,text,text,text,jsonb,jsonb)','EXECUTE'),'No client metadata resolver';
+ assert not exists(select 1 from event_private.mailbox_sync_state where enabled or cardinality(capture_send_ids)>0),'Installed OFF';
+ assert (select count(distinct event_private.mailbox_reply_route_token())=100 from generate_series(1,100)),'Random tokens distinct in fixture';
+ assert not exists(select 1 from generate_series(1,100) where event_private.mailbox_reply_route_token() !~ '^[a-z2-7]{51}[aq]$'),'Canonical padded base32';
+ -- Select the disposable harness's seeded owner without publishing any personal address.
+ for principal in select id,email from auth.users order by id loop
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',principal.id,'email',principal.email,'role','authenticated')::text,true);
+  if public.is_super_admin() then actor:=principal.id;exit;end if;
+ end loop;
+ assert actor is not null,'Synthetic harness owner required';
+ insert into public.oportunidades(cliente_nome,cliente_email,data_evento,status) values('Synthetic route','route-client@example.test','2099-12-01','proposta_pronta') returning id into o;
+ insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,privatizacao,total,status,publication_status,snapshot)
+ values(o,'Synthetic route','route-client@example.test','2099-12-01','10:00',30,2,1000,120,0,1120,'proposta_pronta','ready','{"event":{},"totals":{"adjustment":0}}') returning id,propostas.revision into p,revision;
+ update event_private.mailbox_sync_state set account_id='123',mailbox='eventos@embaixadacarioca.com.br',activated_at_ms=activation,watermark_ms=activation where singleton;
+ r:=public.event_email_reply_route_prepare(p,revision,'route-client@example.test',repeat('a',64));
+ assert r=public.event_email_reply_route_prepare(p,revision,'route-client@example.test',repeat('a',64)),'Same preview route is stable';
+ assert length(split_part(r->>'reply_to','@',1))=60,'RFC local part bounded';
+ r2:=public.event_email_reply_route_prepare(p,revision,'route-client@example.test',repeat('b',64));
+ r3:=public.event_email_reply_route_prepare(p,revision,'route-client@example.test',repeat('d',64));
+ assert r->>'id'<>r2->>'id' and r->>'reply_to'<>r2->>'reply_to','Changed reviewed context has separate route';
+ blocked:=false;begin perform public.event_email_reply_route_prepare(p,revision-1,'route-client@example.test',repeat('a',64));exception when others then blocked:=true;end;assert blocked,'Stale proposal preview rejected';
+ result:=public.begin_event_send(p,'email','route-client@example.test','Route body fixture','Route title',null);b:=(result#>>'{send,id}')::uuid;
+ assert public.event_email_reply_route_bind((r->>'id')::uuid,b,1,repeat('a',64),repeat('c',64),'Route body fixture')->>'bound'='true','Bound before transport';
+ assert public.event_email_reply_route_bind((r->>'id')::uuid,b,1,repeat('a',64),repeat('c',64),'Route body fixture')->>'bound'='true','Exact bind replay idempotent';
+ blocked:=false;begin perform public.event_email_reply_route_bind((r->>'id')::uuid,b,1,repeat('a',64),repeat('d',64),'Route body fixture');exception when others then blocked:=true;end;assert blocked,'Reviewed content hash immutable';
+ blocked:=false;begin perform public.event_email_reply_route_bind((r->>'id')::uuid,b,2,repeat('a',64),repeat('c',64),'Route body fixture');exception when others then blocked:=true;end;assert blocked,'Attempt cannot change';
+ blocked:=false;begin perform public.event_email_reply_route_bind((r2->>'id')::uuid,b,1,repeat('b',64),repeat('c',64),'Route body fixture');exception when others then blocked:=true;end;assert blocked,'One route per send and attempt';
+ insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,attempts,approved_by,reviewed_revision)
+ select proposal_id,opportunity_id,fingerprint||':other-route',channel,destination,body,status,attempts,approved_by,reviewed_revision from public.event_outbox where id=b returning id into b2;
+ perform public.event_email_reply_route_bind((r2->>'id')::uuid,b2,1,repeat('b',64),repeat('d',64),'Route body fixture');
+ update event_private.channel_credentials set enabled=true,expected_account='eventos@embaixadacarioca.com.br' where provider='mailbox';
+ update event_private.mailbox_sync_state set enabled=true,capture_send_ids=array[b],capture_started_at=now()-interval '2 minutes',capture_expires_at=now()+interval '10 minutes',capture_message_limit=10 where singleton;
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<preview-only@example.test>','[]',jsonb_build_array(r3->>'reply_to')) is null,'Unbound preview is not pending transport and cannot stall the cursor';
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'))->>'code'='transport_pending','Early sending reply deferred';
+ update public.event_outbox set status='uncertain' where id=b;
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'))->>'code'='transport_pending','Uncertain transport deferred';
+ update public.event_outbox set status='sending' where id=b;
+ perform public.finish_event_send(b,'accepted','opaque-zeptomail-request-id');
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to',r2->>'reply_to'))->>'code'='transport_pending','Pending outside-scope route takes precedence';
+ update public.event_outbox set status='accepted' where id=b2;
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to',r2->>'reply_to'))->>'code'='ambiguous','Multiple known routes cannot choose first';
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r2->>'reply_to'))->>'code'='out_of_scope','Third/out-of-scope send denied';
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','other@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to')) is null,'Different sender cannot bind';
+ blocked:=false;begin perform public.event_mailbox_resolve_routed_binding('456','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'));exception when others then blocked:=true;end;assert blocked,'Wrong account fails closed';
+ insert into event_private.mailbox_outbound_headers select '123','<conflicting@example.test>',b2,attempts,reviewed_revision,repeat('e',64) from public.event_outbox where id=b2;
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','["<conflicting@example.test>"]',jsonb_build_array(r->>'reply_to'))->>'code'='ambiguous','RFC conflict cannot be overridden by address';
+ binding:=public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'));
+ assert binding->>'origin'='server_generated_reply_to_capability' and binding->'outbound_message_id'='null'::jsonb,'Route is not fake RFC provenance';
+ assert binding->>'send_id'=b::text and (binding->>'proposal_revision')::bigint=revision,'Exact accepted historic revision';
+ e:=jsonb_build_object('key','<reply@example.test>','message_id','<reply@example.test>','reply_to_id',null,'kind','inbound','channel','email','destination','route-client@example.test','body','Synthetic route reply','occurred_at',to_timestamp(received/1000.0));
+ item:=jsonb_build_object('provider_id','800','received_at_ms',received,'state','prepared','inbound_message_id','<reply@example.test>','sender','route-client@example.test','reply_candidates','[]'::jsonb,'reply_routes',jsonb_build_array(r->>'reply_to'),'binding',binding,'event',e);
+ select version,watermark_ms into v,w from event_private.mailbox_sync_state;
+ update event_private.mailbox_reply_routes set revoked_at=clock_timestamp() where id=(r->>'id')::uuid;
+ blocked:=false;begin perform public.event_mailbox_commit_bound(v,'123',w,received,jsonb_build_array(item));exception when others then blocked:=true;end;assert blocked,'Revocation between prepare and commit blocks persistence';
+ assert not exists(select 1 from event_private.mailbox_seen where account_id='123' and provider_id='800'),'Rejected commit leaves seen/cursor unconsumed';
+ update event_private.mailbox_reply_routes set revoked_at=null where id=(r->>'id')::uuid;
+ perform public.event_mailbox_commit_bound(v,'123',w,received,jsonb_build_array(item));
+ assert exists(select 1 from event_private.mailbox_bound_receipts where provider_id='800' and reply_route_id=(r->>'id')::uuid and binding_origin='server_generated_reply_to_capability' and outbound_message_id is null),'Separate audited route provenance persisted';
+ assert (select count(*)=1 from public.event_messages where opportunity_id=o and direction='inbound' and proposal_revision=revision),'One message in exact revision';
+ select to_jsonb(x) into before_o from public.oportunidades x where id=o;
+ result:=public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'));
+ assert result->>'code'='duplicate','Reload resolves canonical duplicate';
+ item:=item||jsonb_build_object('provider_id','801','state','duplicate','event',null);
+ perform public.event_mailbox_commit_bound(v+1,'123',received,received,jsonb_build_array(item));
+ assert (select count(*)=1 from public.event_messages where opportunity_id=o and direction='inbound'),'Provider alias cannot duplicate body';
+ assert (select to_jsonb(x)=before_o from public.oportunidades x where id=o),'Duplicate does not mutate opportunity';
+ update event_private.mailbox_reply_routes set expires_at=clock_timestamp()-interval '1 second' where id=(r->>'id')::uuid;
+ assert public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<another@example.test>','[]',jsonb_build_array(r->>'reply_to'))->>'code'='out_of_scope','Route lifetime checked separately';
+ update event_private.channel_credentials set enabled=false where provider='mailbox';
+ blocked:=false;begin perform public.event_mailbox_resolve_routed_binding('123','eventos@embaixadacarioca.com.br','route-client@example.test','<reply@example.test>','[]',jsonb_build_array(r->>'reply_to'));exception when others then blocked:=true;end;assert blocked,'Physical OFF rejects lookup';
+end $$;
+rollback;

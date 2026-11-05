@@ -11,6 +11,19 @@ const sql = (file) => fs.readFileSync(path.join(root,file),'utf8');
 const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }
+// Discover the seeded owner inside the disposable fixture; no personal identity is embedded here.
+async function fixtureOwner(c) {
+  const prior=(await c.query("select current_setting('request.jwt.claims',true) as claims")).rows[0].claims;
+  try {
+    for(const candidate of (await c.query('select id,email from auth.users order by id')).rows) {
+      await c.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:candidate.id,email:candidate.email,role:'authenticated'})]);
+      if((await c.query('select public.is_super_admin() as allowed')).rows[0].allowed===true)return candidate;
+    }
+    throw Error('Seeded fixture owner unavailable');
+  } finally {
+    await c.query("select set_config('request.jwt.claims',$1,false)",[prior||'']);
+  }
+}
 async function apply(c,file) {
   const whatsappPilot=file.startsWith('supabase/migrations/')&&file.endsWith('_single_whatsapp_pilot.sql');
   if(whatsappPilot) await apply(c,'checks/whatsapp-pilot-upgrade-setup.sql');
@@ -54,7 +67,7 @@ async function checks(c) {
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
-  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','mailbox-oauth-vault','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','website-attribution','future-tariff-application','private-operational-signoffs','private-operational-release','smtp-neutral-pilot']) {
+  for(const f of ['capture-idempotency','event-operations','channel-events','opportunity-reconciliation','p1-assisted-sales-handoff','priority-integrity','commercial-cockpit','bridge-operational-completion','proposal-persistence','remote-approval','journey-integrity','journey-completion','approval-closure','approval-closure-regressions','channel-readiness-journey','amendment-lifecycle','seller-workflow-feedback','operational-release','operational-workspace','channel-measurement','intuitive-sales','payment-decision','production-capacity-margin','payment-reservation-review','production-cost-review','cohort-preparation','integrated-readiness','zoho-mailbox','mailbox-reply-route','mailbox-oauth-vault','deferred-send-ledger','approval-watch-readiness','bridge-quarantine-health','website-attribution','future-tariff-application','private-operational-signoffs','private-operational-release','smtp-neutral-pilot']) {
 
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
@@ -68,7 +81,8 @@ async function checks(c) {
 async function concurrent(c,name) {
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-capture-concurrency.cjs')(c,connect,name);
-  const actor=(await c.query("select id from auth.users where email='leorangel@gmail.com'")).rows[0].id;
+  await require('../checks/mailbox-reply-route-concurrency.cjs')(c,connect,name);
+  const owner=await fixtureOwner(c),actor=owner.id;
   await require('../checks/whatsapp-pilot-concurrency.cjs')(c,sql,connect,name,actor);
   await require('../checks/whatsapp-preparation-concurrency.cjs')(c,connect,name,actor);
   await require('../checks/bridge-lock-order.cjs')(c,connect,name,actor);
@@ -77,7 +91,7 @@ async function concurrent(c,name) {
   await require('../checks/gerencia-identity-rollback-concurrency.cjs')(c,sql,connect,name);
   await require('../checks/public-form-attribution-concurrency.cjs')(c,connect,name);
   await require('../checks/future-tariff-concurrency.cjs')(c,connect,name,actor);
-  const claims=JSON.stringify({sub:actor,email:'leorangel@gmail.com',role:'authenticated'});
+  const claims=JSON.stringify({sub:actor,email:owner.email,role:'authenticated'});
   const opp=(await c.query("insert into oportunidades(cliente_nome,status) values('Concurrent fixture','proposta_pronta') returning id")).rows[0].id;
   const p=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,snapshot) values($1,'Concurrent fixture','proposta_pronta','ready','{}') returning *",[opp])).rows[0];
   const writers=await Promise.all([connect(name),connect(name)]);
@@ -109,7 +123,7 @@ async function concurrent(c,name) {
     assert.equal(race.filter(r=>r.status==='rejected'&&r.reason.code==='PT409').length,1);
     console.log('PASS concurrent public retry and team/client race');
     // A renewal uses the proposal lock: concurrent unchanged requests share one successor.
-    await c.query("update event_private.proposal_approval_policy set enabled=true,approver_id=$1,approver_email='leorangel@gmail.com',whatsapp='5521000000000' where id",[actor]);
+    await c.query("update event_private.proposal_approval_policy set enabled=true,approver_id=$1,approver_email=$2,whatsapp='5521000000000' where id",[actor,owner.email]);
     const renewalOpp=(await c.query("insert into oportunidades(cliente_nome,status,data_evento) values('Renewal race fixture','proposta_pronta','2099-11-18') returning id")).rows[0].id;
     const renewal=(await c.query("insert into propostas(oportunidade_id,cliente_nome,status,publication_status,data_evento,horario_evento,convidados,subtotal,taxa_servico,total,snapshot) values($1,'Renewal race fixture','proposta_pronta','ready','2099-11-18','10:00',20,1000,120,1120,'{\"totals\":{\"subtotal\":1000,\"serviceFee\":120,\"total\":1120},\"selectedItems\":[{\"name\":\"Fixture\",\"calc\":{\"total\":1000}}]}') returning *",[renewalOpp])).rows[0];
     const content=JSON.stringify({channel:'whatsapp',destination:'5521000000001',body:'Renewal race fixture',message:'Renewal race fixture',title:'Fixture',contentHash:null,reviewedResponseAt:null,proposalUrl:'https://leorangel22.github.io/main/proposta.html?p='+renewal.public_token});
@@ -176,20 +190,28 @@ async function concurrent(c,name) {
     const privateSignoffs=migrationFiles.find(f=>f.endsWith('_private_operational_signoffs.sql'));
     const gerenciaIdentity=migrationFiles.find(f=>f.endsWith('_gerencia_operational_identity.sql'));
     for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity)) await apply(c,`supabase/migrations/${f}`);
-    const legacyApproval=(await c.query(`
+    const legacyOwner=await fixtureOwner(c);
+    const legacyClaimsBefore=(await c.query("select current_setting('request.jwt.claims',true) as claims")).rows[0].claims;
+    let legacyApproval;
+    try {
+    await c.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:legacyOwner.id,email:legacyOwner.email,role:'authenticated'})]);
+    legacyApproval=(await c.query(`
       update event_private.proposal_approval_policy set enabled=true,
-        approver_id=(select id from auth.users where email='leorangel@gmail.com'),approver_email='manager@example.test',whatsapp='5521000000000' where id;
+        approver_id=auth.uid(),approver_email='manager@example.test',whatsapp='5521000000000' where id;
       insert into oportunidades(cliente_nome,status,data_evento) values('Legacy approval fixture','proposta_pronta','2099-11-18');
       insert into propostas(oportunidade_id,cliente_nome,status,publication_status,data_evento,total,subtotal,taxa_servico,snapshot)
         select id,cliente_nome,'proposta_pronta','ready','2099-11-18',1120,1000,120,
           '{"totals":{"subtotal":1000,"serviceFee":120,"total":1120},"selectedItems":[{"name":"Legacy fixture","calc":{"total":1000}}]}'::jsonb
         from oportunidades where cliente_nome='Legacy approval fixture';
       select a.* from propostas p cross join lateral event_create_proposal_approval(p.id,p.revision,
-        (select id from auth.users where email='leorangel@gmail.com'),
+        auth.uid(),
         jsonb_build_object('channel','whatsapp','destination','5521000000001','body','Legacy approved content',
           'proposalUrl','https://leorangel22.github.io/main/proposta.html?p='||p.public_token)) a
         where p.cliente_nome='Legacy approval fixture';
     `)).at(-1).rows[0];
+    } finally {
+      await c.query("select set_config('request.jwt.claims',$1,false)",[legacyClaimsBefore||'']);
+    }
     await apply(c,`supabase/migrations/${closure}`);
     // Deferred transport contracts require the closure tables, already present in production.
     if(deferred) await apply(c,`supabase/migrations/${deferred}`);

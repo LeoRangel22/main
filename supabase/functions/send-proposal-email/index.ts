@@ -1,3 +1,4 @@
+import { validatePreparedReplyRoute } from '../_shared/mailbox-reply-route.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
@@ -424,12 +425,21 @@ Deno.serve(async (req) => {
       const {data:owner,error:ownerError}=await supabase.rpc("is_super_admin");
       if(ownerError||owner!==true)return jsonResponse({ok:false,message:"O teste controlado exige o proprietário Master."},403);
     }
-    const emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
+    let emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
+    let replyRoute:any=null;
+    if(!neutral&&Deno.env.get("EVENT_PROPOSAL_REPLY_ROUTES_ENABLED")==="true"){
+      if(replyTo!=="eventos@embaixadacarioca.com.br")return jsonResponse({ok:false,code:"reply_route_configuration",message:"Confira a conta de respostas antes de enviar."},409);
+      const contextHash=emailContent.contentHash;
+      const prepared=await supabase.rpc("event_email_reply_route_prepare",{target_proposal:proposal.id,reviewed_revision:proposal.revision,send_destination:email,context_hash:contextHash});
+      try{if(prepared.error)throw Error("route_unavailable");replyRoute=validatePreparedReplyRoute(prepared.data,contextHash);}
+      catch{return jsonResponse({ok:false,code:"reply_route_unavailable",message:"Não foi possível preparar o vínculo da resposta. Nenhum envio foi tentado."},409);}
+      emailContent=await prepareReviewedEmail(proposal,payload,email,{address:fromEmail,name:fromName},replyRoute.reply_to);
+    }
     if (emailContent.text.length > 12000) return jsonResponse({ ok: false, message: "O e-mail completo excede 12.000 caracteres. Reduza a mensagem antes de revisar." }, 400);
     if (payload.preview === true) {
       let neutralPilot;
       if(neutral){try{const g=neutralSmtpGate(key=>Deno.env.get(key),proposal.id);neutralPilot={contract:"smtp-neutral-receipt-v1",ready:true,proposalId:proposal.id,closesAt:g.expiresAt};}catch{neutralPilot={contract:"smtp-neutral-receipt-v1",ready:false,proposalId:proposal.id};}}
-      return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash,...(neutral?{neutralPilot}:{}) });
+      return jsonResponse({ ok: true, mode: "preview", email, subject: emailContent.subject, html: emailContent.html, text: emailContent.text, sender: `${emailContent.sender.name} <${emailContent.sender.address}>`, replyTo:emailContent.replyTo, reviewedRevision: emailContent.reviewedRevision, contentHash: emailContent.contentHash,...(neutral?{neutralPilot}:{}) });
     }
     if (payload.reviewedContentHash !== emailContent.contentHash) {
       return jsonResponse({ ok: false, message: "O conteúdo do e-mail mudou ou não foi revisado. Abra a prévia completa e aprove novamente." }, 409);
@@ -444,8 +454,18 @@ Deno.serve(async (req) => {
     const worker = createSendWorker();
     let claim;
     try { claim = await claimSend(supabase, proposal, payload, "email", email, emailContent.text, subject); }
-    catch (error) { return jsonResponse({ ok: false, message: String(error.message || error) }, 409); }
+    catch (error) { return jsonResponse({ ok: false, message: String(error instanceof Error ? error.message : error) }, 409); }
     if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
+    if(replyRoute){
+      let bound=false;
+      try{const result=await worker.rpc("event_email_reply_route_bind",{target_route:replyRoute.id,target_send:claim.send.id,expected_attempt:claim.send.attempts,context_hash:replyRoute.context_hash,reviewed_content_hash:emailContent.contentHash,send_body:emailContent.text});bound=!result.error&&result.data?.bound===true;}
+      catch{/* No transport call is permitted after a failed or uncertain bind. */}
+      if(!bound){
+        let paused=false;try{await finishSend(worker,claim.send.id,"paused",null,"Vínculo de resposta não confirmado; transporte não iniciado.");paused=true;}catch{/* Read back ledger before any future action. */}
+        return jsonResponse({ok:false,sendId:claim.send.id,deliveryStatus:paused?"paused":"uncertain",code:"reply_route_bind_unconfirmed",message:"Transporte não iniciado. Consulte o histórico antes de nova ação; não haverá repetição automática."},409);
+      }
+    }
+
     if (neutral) {
       // The neutral owner pilot requires its real MIME identity and typed SMTP receipt.
       // It must never fall through or retry using the commercial HTTP transport.

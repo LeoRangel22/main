@@ -30,7 +30,7 @@ Deno.serve(async(req:Request)=>{
     const owned=verifyMailboxAccount(account,cfg.account_id,cfg.mailbox);
     if(body.action==='diagnose')return respond(200,{ok:true,diagnostic:{oauth_configured:true,mailbox_verified:true,provider:'zoho_mail',enabled:cfg.enabled===true&&cfg.channel_enabled===true}});
     const prepare=createBoundMailboxPreparer({
-      resolve:async q=>{const {data,error}=await worker.rpc('event_mailbox_resolve_binding',{target_account_id:q.account_id,target_mailbox:q.mailbox,sender:q.from,target_message_id:q.message_id,reply_candidates:q.reply_candidates});if(error)throw new Error('thread_lookup_unavailable');return data;},
+      resolve:async q=>{const {data,error}=await worker.rpc(q.reply_routes.length?'event_mailbox_resolve_routed_binding':'event_mailbox_resolve_binding',{target_account_id:q.account_id,target_mailbox:q.mailbox,sender:q.from,target_message_id:q.message_id,reply_candidates:q.reply_candidates,...(q.reply_routes.length?{reply_routes:q.reply_routes}:{})});if(error)throw new Error('thread_lookup_unavailable');return data;},
       content:async q=>{const {data:latest,error}=await worker.rpc('event_mailbox_worker_config');if(error||!latest||!sameSecret(req.headers.get('x-event-job-key')||'',latest.job_key)||latest.account_id!==cfg.account_id||latest.mailbox!==cfg.mailbox||latest.expected_account!==cfg.expected_account||latest.version!==cfg.version||JSON.stringify(mailboxCaptureScope(latest))!==JSON.stringify(scope))throw new Error('mailbox_capture_inactive');return mailboxJson(base+'/folders/'+q.folder_id+'/messages/'+q.provider_id+'/content?includeBlockContent=false',{method:'GET',headers:auth.headers},524288);}
     });
     const upper=Date.now()-120000;
@@ -48,7 +48,7 @@ Deno.serve(async(req:Request)=>{
       const path=`${base}/folders/${row.folderId}/messages/${row.messageId}`;
       const header=await mailboxJson(path+'/header?raw=false',{method:'GET',headers:auth.headers},131072);
       const result=await prepare(cfg,row,header,owned);
-      items.push({provider_id:row.messageId,received_at_ms:row.receivedAt,state:result.state,reason:('reason' in result)?result.reason:null,inbound_message_id:('inbound_message_id' in result)?result.inbound_message_id:null,sender:('sender' in result)?result.sender:null,reply_candidates:('reply_candidates' in result)?result.reply_candidates:null,binding:('binding' in result)?result.binding:null,event:('event' in result)?result.event:null});
+      items.push({provider_id:row.messageId,received_at_ms:row.receivedAt,state:result.state,reason:('reason' in result)?result.reason:null,inbound_message_id:('inbound_message_id' in result)?result.inbound_message_id:null,sender:('sender' in result)?result.sender:null,reply_candidates:('reply_candidates' in result)?result.reply_candidates:null,reply_routes:('reply_routes' in result)?result.reply_routes:[],binding:('binding' in result)?result.binding:null,event:('event' in result)?result.event:null});
     }
     const hasMore=unseen.length>selected.length;
     const next=hasMore?Math.max(cfg.watermark_ms,selected[selected.length-1].receivedAt):upper;
