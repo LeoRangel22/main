@@ -15045,7 +15045,7 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return renderCommunicationTemplateText(template.whatsappBody, context, proposalUrl);
 }
 
-function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", html = "", sender = "", proposalUrl = "", proposal = null }) {
+function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", html = "", sender = "", replyTo = "", proposalUrl = "", proposal = null }) {
   const signature = getSendReviewSignature();
   const clientName = fields.clientName.value.trim() || "cliente";
   const eventType = getCurrentEventType();
@@ -15077,6 +15077,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     `Canal: ${channel}`,
     destination ? `Destino: ${destination}` : "",
     sender ? `Remetente: ${sender}` : "",
+    replyTo ? `Responder para: ${replyTo}` : "",
     eventType ? `Evento: ${eventType}` : "",
     eventDate || eventTime ? `Data e horário: ${[eventDate, eventTime].filter(Boolean).join(" - ")}` : "",
     `Pax: ${getGuestCount()} · Total: ${formatMoney(totals.total)} · Confiança: ${confidence.score}%`,
@@ -15114,6 +15115,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
           <div><dt>Canal</dt><dd>${escapeHtml(channel)}</dd></div>
           <div><dt>Destinatário</dt><dd>${escapeHtml(destination || "Não informado")}</dd></div>
           ${sender ? `<div><dt>Remetente</dt><dd>${escapeHtml(sender)}</dd></div>` : ""}
+          ${replyTo ? `<div><dt>Responder para</dt><dd class="send-confirm-reply-to">${escapeHtml(replyTo)}</dd></div>` : ""}
           ${subject ? `<div><dt>Assunto</dt><dd>${escapeHtml(subject)}</dd></div>` : ""}
         </dl>
         ${html ? '<label>E-mail que o cliente receberá<iframe class="send-confirm-email" title="Prévia completa do e-mail" sandbox="" referrerpolicy="no-referrer" style="width:100%;height:26rem;border:1px solid #d7e3dc;border-radius:8px;"></iframe></label>' : ""}
@@ -15476,7 +15478,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       channel: "E-mail",
       destination,
       title,
-      message: emailPreview.text, html: emailPreview.html, sender: emailPreview.sender,
+      message: emailPreview.text, html: emailPreview.html, sender: emailPreview.sender, replyTo:emailPreview.replyTo,
       subject: emailPreview.subject, proposalUrl, proposal,
       action: "enviar agora pelo ZeptoMail e registrar no histórico",
     });
