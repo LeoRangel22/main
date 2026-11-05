@@ -1,6 +1,6 @@
 {
-  "commit": "9f52d7f025d93e5774cc0184861723057943228a",
-  "schemaHead": "20261105124701_owner_mailbox_pilot.sql",
+  "commit": "c666548a0155ef1c74cea053eda447d6a425cbc5",
+  "schemaHead": "20261105171722_pilot_draft_revision_admission.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "piloto-respostas.html": "47ce704e641eb95b683d8b70174a08baa61519d8ad3227e515b4b69e3726bcae",
