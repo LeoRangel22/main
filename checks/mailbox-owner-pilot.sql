@@ -86,7 +86,7 @@ begin
 end $$;
 
 -- Regression: a draft revision inherits the opportunity's commercial sent status.
-do $
+do $$
 declare actor uuid:=auth.uid(); owner_email text; opportunity uuid; sent_proposal uuid; draft_proposal uuid;
  template_send uuid; guarded_send uuid; version bigint; result jsonb; blocked boolean; email_state text;
 begin
@@ -143,5 +143,5 @@ begin
   'The accepted earlier version is preserved';
  assert (select state='closed' from event_private.mailbox_owner_pilot where singleton);
  assert (select not enabled and cardinality(capture_send_ids)=0 from event_private.mailbox_sync_state where singleton);
-end $;
+end $$;
 rollback;
