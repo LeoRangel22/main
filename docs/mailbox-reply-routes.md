@@ -21,3 +21,11 @@ Before activation, demonstrate the exact reviewed Reply-To survives an actual au
 ## Rollback
 
 Close and read back capture/routing first. Preserve route, receipt and message rows. Restoring previous worker and sender source is a code rollback, not a reason to drop history, reopen contact-based ingress, replay a send, or reclassify an uncertain transport. Database changes are additive except the reviewed bound commit implementation; retain its previous source for controlled restoration while capture stays OFF.
+
+## Isolated pre-release pilot
+
+Keep the public routing flag false. EVENT_PROPOSAL_REPLY_ROUTE_PILOT may contain one JSON object with exactly proposal_ids (one or two distinct UUIDs), recipient (canonical lower-case email), started_at and expires_at (UTC ISO timestamps with milliseconds). The positive window must be no longer than fifteen minutes. Only a listed proposal and the exact recipient receive a route. Other proposals keep the existing base address, even after pilot expiry. Invalid policy fails closed; a selected expired or future pilot cannot silently send through the base address.
+
+The sender rechecks the mode, exact policy and wall clock after binding, immediately before commercial HTTP transport. A detected change pauses the claim; uncertain finalization requires ledger readback and never automatic replay. The neutral SMTP fixture stays independent. Environment propagation is not transactional revocation across warm workers: use the fixed expiry as the hard deadline, close the database capture gates and revoke the test route when ending the window. Do not claim an environment update cancels an already-started transport.
+
+This control does not send or schedule anything. Capture still needs its separate one-to-two-send allowlist, budget and bounded window. No credentials, OAuth scopes, client data, commercial minima or payment rules are changed. Real account/API delivery, reply persistence and reload remain an operational gate; do not resend earlier tests.

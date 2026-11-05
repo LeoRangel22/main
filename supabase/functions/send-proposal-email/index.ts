@@ -1,4 +1,4 @@
-import { validatePreparedReplyRoute } from '../_shared/mailbox-reply-route.ts';
+import { validatePreparedReplyRoute, proposalReplyRoutingGate } from '../_shared/mailbox-reply-route.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { claimSend, createSendWorker, finishSend, duplicateResult } from "../_shared/send-ledger.ts";
@@ -427,7 +427,10 @@ Deno.serve(async (req) => {
     }
     let emailContent = await prepareReviewedEmail(proposal, payload, email, { address: fromEmail, name: fromName }, replyTo, neutral);
     let replyRoute:any=null;
-    if(!neutral&&Deno.env.get("EVENT_PROPOSAL_REPLY_ROUTES_ENABLED")==="true"){
+    let routeGate:ReturnType<typeof proposalReplyRoutingGate>;
+    try{routeGate=neutral?Object.freeze({mode:"off" as const,configuration:""}):proposalReplyRoutingGate(k=>Deno.env.get(k),proposal.id,email);}
+    catch{return jsonResponse({ok:false,code:"reply_route_pilot_unavailable",message:"Confira o escopo, destinatário e janela do piloto. Nenhum envio foi tentado."},409);}
+    if(routeGate.mode!=="off"){
       if(replyTo!=="eventos@embaixadacarioca.com.br")return jsonResponse({ok:false,code:"reply_route_configuration",message:"Confira a conta de respostas antes de enviar."},409);
       const contextHash=emailContent.contentHash;
       const prepared=await supabase.rpc("event_email_reply_route_prepare",{target_proposal:proposal.id,reviewed_revision:proposal.revision,send_destination:email,context_hash:contextHash});
@@ -466,6 +469,14 @@ Deno.serve(async (req) => {
       }
     }
 
+    if(replyRoute){
+      let current=false;
+      try{const latest=proposalReplyRoutingGate(k=>Deno.env.get(k),proposal.id,email);current=latest.mode===routeGate.mode&&latest.configuration===routeGate.configuration;}catch{/* Closed or changed pilot: never call transport. */}
+      if(!current){
+        let paused=false;try{await finishSend(worker,claim.send.id,"paused",null,"Janela ou escopo de resposta mudou; transporte não iniciado.");paused=true;}catch{/* Read back the ledger before any further action. */}
+        return jsonResponse({ok:false,sendId:claim.send.id,deliveryStatus:paused?"paused":"uncertain",code:"reply_route_gate_changed",message:"Transporte não iniciado. Consulte o histórico; não haverá repetição automática."},409);
+      }
+    }
     if (neutral) {
       // The neutral owner pilot requires its real MIME identity and typed SMTP receipt.
       // It must never fall through or retry using the commercial HTTP transport.
