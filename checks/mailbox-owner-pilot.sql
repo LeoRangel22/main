@@ -84,4 +84,64 @@ begin
  blocked:=false;begin perform public.event_owner_mailbox_pilot('open',v,array[p],null,true);exception when others then blocked:=true;end;assert blocked,'Already accepted proposal cannot open another send pilot';
  assert (select count(*)=2 from owner_pilot_http),'No extra polling or sending at closure';
 end $$;
+
+-- Regression: a draft revision inherits the opportunity's commercial sent status.
+do $
+declare actor uuid:=auth.uid(); owner_email text; opportunity uuid; sent_proposal uuid; draft_proposal uuid;
+ template_send uuid; guarded_send uuid; version bigint; result jsonb; blocked boolean; email_state text;
+begin
+ select lower(email) into owner_email from auth.users where id=actor;
+ select capture_send_ids[1] into template_send from event_private.mailbox_owner_pilot where singleton;
+ assert template_send is not null;
+ version:=(public.event_owner_mailbox_pilot('status')->>'version')::bigint;
+ insert into public.oportunidades(cliente_nome,cliente_email,data_evento,status)
+ values('Synthetic revision pilot',owner_email,'2099-12-02','proposta_enviada') returning id into opportunity;
+ insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,data_evento,horario_evento,convidados,duracao,
+  subtotal,taxa_servico,privatizacao,total,status,publication_status,public_token_expires_at,snapshot,versao,is_current)
+ values(opportunity,'[TESTE SEM VALOR COMERCIAL] QA-VENDA-02',owner_email,'2099-12-02','19:00',50,2,
+  1000,120,0,1120,'proposta_enviada','sent',clock_timestamp()+interval '1 day','{"event":{},"totals":{"adjustment":0}}',1,true)
+ returning id into sent_proposal;
+ insert into public.propostas(oportunidade_id,cliente_nome,cliente_email,data_evento,horario_evento,convidados,duracao,
+  subtotal,taxa_servico,privatizacao,total,status,publication_status,public_token_expires_at,snapshot,versao,is_current)
+ values(opportunity,'[TESTE SEM VALOR COMERCIAL] QA-VENDA-02',owner_email,'2099-12-02','19:00',80,2,
+  1600,192,0,1792,'proposta_enviada','draft',clock_timestamp()+interval '1 day','{"event":{},"totals":{"adjustment":0}}',2,false)
+ returning id into draft_proposal;
+ blocked:=false;begin
+  perform public.event_owner_mailbox_pilot('open',version,array[sent_proposal],null,true);
+ exception when others then blocked:=SQLERRM='pilot_proposals_unverified';end;
+ assert blocked,'A published version remains excluded even without an email outbox entry';
+ insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,attempts,approved_by,reviewed_revision)
+ select sent_proposal,opportunity,repeat(md5(sent_proposal::text),2),channel,destination,body,'accepted',1,approved_by,1
+ from public.event_outbox where id=template_send;
+ update public.propostas set status='rascunho' where id=draft_proposal;
+ blocked:=false;begin
+  perform public.event_owner_mailbox_pilot('open',version,array[draft_proposal],null,true);
+ exception when others then blocked:=SQLERRM='pilot_proposals_unverified';end;
+ assert blocked,'Commercial readiness restrictions remain enforced';
+ update public.propostas set status='proposta_enviada' where id=draft_proposal;
+ result:=public.event_owner_mailbox_pilot('open',version,array[draft_proposal],null,true);
+ version:=(result->>'version')::bigint;
+ assert result->>'state'='open' and result->>'captureEnabled'='false',
+  'A new unsent draft is admitted despite an accepted older version in the same opportunity';
+ assert result->'proposalIds'=jsonb_build_array(draft_proposal);
+ assert (select status='proposta_enviada' and publication_status='draft' from public.propostas where id=draft_proposal),
+  'Opening does not rewrite commercial status or publish the draft';
+ result:=public.event_owner_mailbox_pilot('close',version);version:=(result->>'version')::bigint;
+ assert result->>'state'='closed' and result->>'captureEnabled'='false';
+ insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,attempts,approved_by,reviewed_revision)
+ select draft_proposal,opportunity,repeat(md5(draft_proposal::text),2),b.channel,b.destination,b.body,'sending',1,b.approved_by,q.revision
+ from public.event_outbox b join public.propostas q on q.id=draft_proposal where b.id=template_send returning id into guarded_send;
+ foreach email_state in array array['sending','uncertain','accepted'] loop
+  update public.event_outbox set status=email_state where id=guarded_send;
+  blocked:=false;begin
+   perform public.event_owner_mailbox_pilot('open',version,array[draft_proposal],null,true);
+  exception when others then blocked:=SQLERRM='pilot_proposals_unverified';end;
+  assert blocked,'A draft with its own sending, uncertain or accepted email cannot reopen a send pilot';
+ end loop;
+ assert (select count(*)=2 from owner_pilot_http),'Admission tests queue no reads or emails';
+ assert (select count(*)=1 from public.event_outbox where proposal_id=sent_proposal and status='accepted' and attempts=1),
+  'The accepted earlier version is preserved';
+ assert (select state='closed' from event_private.mailbox_owner_pilot where singleton);
+ assert (select not enabled and cardinality(capture_send_ids)=0 from event_private.mailbox_sync_state where singleton);
+end $;
 rollback;
