@@ -148,7 +148,7 @@ begin
   if cardinality(p.capture_send_ids)>0 and s.capture_send_ids=p.capture_send_ids
     and s.capture_started_at=p.started_at and s.capture_expires_at=p.expires_at then
    update event_private.mailbox_sync_state set enabled=false,capture_send_ids='{}',
-    capture_started_at=null,capture_expires_at=null,capture_message_limit=0,version=version+1 where singleton;
+    capture_started_at=null,capture_expires_at=null,capture_message_limit=4,version=version+1 where singleton;
    update event_private.channel_credentials set enabled=false,updated_at=clock_timestamp() where provider='mailbox';
   end if;
   update event_private.mailbox_reply_routes set revoked_at=clock_timestamp()

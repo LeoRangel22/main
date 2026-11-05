@@ -77,7 +77,7 @@ begin
  update event_private.channel_credentials set enabled=true where provider='mailbox';
  result:=public.event_owner_mailbox_pilot('close',v);v:=(result->>'version')::bigint;
  assert result->>'state'='closed' and result->>'captureEnabled'='false';
- assert (select cardinality(capture_send_ids)=0 and not enabled from event_private.mailbox_sync_state where singleton);
+ assert (select cardinality(capture_send_ids)=0 and not enabled and capture_message_limit=4 from event_private.mailbox_sync_state where singleton),'Closure keeps a schema-valid bounded limit while removing the entire capture scope';
  assert (select revoked_at is not null from event_private.mailbox_reply_routes where id=(r->>'id')::uuid);
  assert (select status='accepted' and attempts=1 from public.event_outbox where id=b),'Closing preserves send history';
  assert public.event_email_owner_pilot_config()->>'state'='closed','Closed routing policy stays explicit';
