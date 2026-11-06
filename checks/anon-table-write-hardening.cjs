@@ -56,6 +56,10 @@ module.exports=async(c,sql,migrations)=>{
    assert.equal((await c.query('select count(*)::int as count from public.'+table)).rows[0].count,0,'RLS still hides direct reads');
    for(const statement of ['insert into public.'+table+' default values','update public.'+table+' set id=id where false','delete from public.'+table+' where false','truncate table public.'+table])await expectDenied(c,statement);
   }
+  await c.query('savepoint unauthorized_acl_restore');
+  await assert.rejects(c.query(sql('supabase/rollback/anon_table_write_hardening.sql')),error=>error.code==='42501'||error.message.includes('anon_acl_restore_failed'),'Unauthorized rollback cannot claim grants were restored');
+  await c.query('rollback to savepoint unauthorized_acl_restore');
+  await c.query('release savepoint unauthorized_acl_restore');
   await c.query('reset role');
   // The repository bootstrap notifies only completed inserts. The deployed predecessor
   // has an unconditional INSERT trigger, plus the same partial-to-complete UPDATE trigger.
