@@ -1,6 +1,6 @@
 {
-  "commit": "a0f063b2d06627530116d5ef9479d9876ab56986",
-  "schemaHead": "20261106034925_continuous_mailbox_capture.sql",
+  "commit": "ec4289791b37e59159ddbaabe06c4fbef72f28d4",
+  "schemaHead": "20261106131908_public_view_visibility.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "captura-respostas.html": "0002ee38efc693a57928018e29d5839297482fec3c4be28541a76d3d55aac338",
