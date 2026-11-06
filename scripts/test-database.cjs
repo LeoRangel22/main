@@ -44,6 +44,10 @@ async function apply(c,file) {
   if(deferredSend) await apply(c,'checks/deferred-send-upgrade-setup.sql');
   if(cohortReview) await apply(c,'checks/cohort-preparation-upgrade-setup.sql');
   const viewVisibility=file.startsWith('supabase/migrations/')&&file.endsWith('_public_view_visibility.sql');
+  const anonWrite=file.startsWith('supabase/migrations/')&&file.endsWith('_anon_table_write_hardening.sql');
+  const anonAudit=anonWrite?require('../checks/anon-table-write-hardening.cjs'):null;
+  let anonBefore;
+  if(anonWrite){await c.query(sql('supabase/rollback/anon_table_write_hardening.sql'));anonBefore=await anonAudit.inspect(c);}
   let priorViewFunction;
   if(viewVisibility){
     // Exercise the actual deployed predecessor, including fresh-bootstrap compatibility.
@@ -57,6 +61,14 @@ async function apply(c,file) {
     const upgraded=(await c.query("select oid::text,proowner::text,proacl::text from pg_proc where oid='public.record_public_proposal_view(uuid,text,text)'::regprocedure")).rows[0];
     assert.deepEqual(upgraded,priorViewFunction);
     console.log('PASS view analytics upgrade preserves existing owner, OID and ACL');
+  }
+  if(anonWrite){
+    const hardened=await anonAudit.inspect(c);anonAudit.assertDelta(anonBefore,hardened);
+    await c.query(sql('supabase/rollback/anon_table_write_hardening.sql'));
+    assert.deepEqual(await anonAudit.inspect(c),anonBefore,'ACL rollback restores exact prior grants and preserves all other state');
+    await c.query(statement);assert.deepEqual(await anonAudit.inspect(c),hardened);
+    await c.query(statement);assert.deepEqual(await anonAudit.inspect(c),hardened,'ACL hardening is idempotent');
+    console.log('PASS anonymous table ACL upgrade, exact rollback and idempotence preserve existing app identities, permissions, triggers and history');
   }
   if(whatsappPilot){await apply(c,'checks/whatsapp-pilot-upgrade-assert.sql');console.log('PASS isolated WhatsApp pilot installs empty, RLS and scoped RPC permissions only');}
   if(gerenciaIdentity){await apply(c,'checks/gerencia-identity-upgrade-assert.sql');console.log('PASS Gerencia install empty, no grants/public RPC/user or business changes');}
@@ -90,6 +102,7 @@ async function checks(c) {
   await apply(c,'checks/diagnostic-pilot-receipts.sql'); console.log('PASS private diagnostic receipts, isolation, errors and history-preserving rollback');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
   await require('../checks/public-view-visibility.cjs')(c,sql,migrationFiles);
+  await require('../checks/anon-table-write-hardening.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
@@ -198,12 +211,13 @@ async function concurrent(c,name) {
     const closure=migrationFiles.find(f=>f.endsWith('_approval_closure.sql'));
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
     const continuousMailbox=migrationFiles.find(f=>f.endsWith('_continuous_mailbox_capture.sql'));
+    const anonWrite=migrationFiles.find(f=>f.endsWith('_anon_table_write_hardening.sql'));
     const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
     const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
     const whatsappPreparation=migrationFiles.find(f=>f.endsWith('_whatsapp_readonly_preparation.sql'));
     const privateSignoffs=migrationFiles.find(f=>f.endsWith('_private_operational_signoffs.sql'));
     const gerenciaIdentity=migrationFiles.find(f=>f.endsWith('_gerencia_operational_identity.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity&&f!==continuousMailbox)) await apply(c,`supabase/migrations/${f}`);
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity&&f!==continuousMailbox&&f!==anonWrite)) await apply(c,`supabase/migrations/${f}`);
     const legacyOwner=await fixtureOwner(c);
     const legacyClaimsBefore=(await c.query("select current_setting('request.jwt.claims',true) as claims")).rows[0].claims;
     let legacyApproval;
@@ -236,6 +250,7 @@ async function concurrent(c,name) {
     if(gerenciaIdentity) await apply(c,`supabase/migrations/${gerenciaIdentity}`);
     // The new SQL helpers depend on reviewed_revision introduced by the deferred ledger.
     if(continuousMailbox) await apply(c,`supabase/migrations/${continuousMailbox}`);
+    if(anonWrite) await apply(c,`supabase/migrations/${anonWrite}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
