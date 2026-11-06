@@ -116,7 +116,7 @@ module.exports=async(c,sql,migrations)=>{
   await c.query('grant update(cliente_nome) on public.propostas to anon');
   await c.query('savepoint before_column_candidate');
   const columnGrant=await inspect(c);
-  await assert.rejects(c.query(candidate),e=>e.message.includes('anon_acl_effective_write_remaining'));
+  await assert.rejects(c.query(candidate),e=>e.message.includes('anon_acl_column_acl_mismatch'));
   await c.query('rollback to savepoint before_column_candidate');
   assert.deepEqual(await inspect(c),columnGrant,'Column write rejection rolls back every candidate revoke without changing column ACLs');
   await c.query('rollback to savepoint column_write');

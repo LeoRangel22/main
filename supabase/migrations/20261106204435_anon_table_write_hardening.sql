@@ -17,6 +17,11 @@ begin
     if target_relation is null then raise exception 'anon_acl_target_missing'; end if;
     select relowner,relrowsecurity into owner_id,rls_enabled from pg_catalog.pg_class where oid=target_relation and relkind='r';
     if owner_id is null or not coalesce(rls_enabled,false) then raise exception 'anon_acl_rls_mismatch'; end if;
+    -- REVOKE on a table also revokes corresponding column privileges. Reject
+    -- unreviewed column ACLs before any change, preserving every existing grant.
+    if exists(select 1 from pg_catalog.pg_attribute where attrelid=target_relation and attnum>0 and not attisdropped and attacl is not null) then
+      raise exception 'anon_acl_column_acl_mismatch';
+    end if;
     original_privileges := array['DELETE','INSERT','MAINTAIN','REFERENCES','SELECT','TRIGGER','TRUNCATE','UPDATE'];
     if target_name='solicitacoes_cotacao' then original_privileges:=pg_catalog.array_remove(original_privileges,'INSERT'); end if;
     select coalesce(array_agg(a.privilege_type order by a.privilege_type),array[]::text[]),
