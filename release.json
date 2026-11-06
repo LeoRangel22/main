@@ -1,8 +1,10 @@
 {
-  "commit": "c666548a0155ef1c74cea053eda447d6a425cbc5",
-  "schemaHead": "20261105171722_pilot_draft_revision_admission.sql",
+  "commit": "a0f063b2d06627530116d5ef9479d9876ab56986",
+  "schemaHead": "20261106034925_continuous_mailbox_capture.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
+    "captura-respostas.html": "0002ee38efc693a57928018e29d5839297482fec3c4be28541a76d3d55aac338",
+    "captura-respostas.js": "11efcfe27359e29d589dbcecb6999e8e897ad9ebb14701136275d0896e6fa27c",
     "piloto-respostas.html": "47ce704e641eb95b683d8b70174a08baa61519d8ad3227e515b4b69e3726bcae",
     "piloto-respostas.js": "d3ff9e59e0bd3f6fd69218e777f5af1f57b9eff125dcc193af4717267da43a3e",
     "conciliar-teste-email.html": "e8d4e273ec33a5dd4b357ffa984e7cd47ad92d617d81b1fa9215e7e940786b58",
