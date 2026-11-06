@@ -12,9 +12,9 @@ const header=extra=>({data:{headerContent:{From:['Client <client@example.invalid
 function headerFailure(value){try{api.mailboxThreadHeaders(row,value,mailbox,new Set([mailbox]),true);assert.fail('Invalid metadata was accepted');}catch(error){if(error.code==='ERR_ASSERTION')throw error;return error;}}
 function classify(message){context.failureMessage=message;return vm.runInContext('mailboxSafeErrorCode(new Error(failureMessage))',context);}
 test('Malformed headers still fail closed and expose only a bounded diagnostic',()=>{
- const error=headerFailure(header({Subject:'SYNTHETIC_PRIVATE_SUBJECT'}));
- assert.equal(api.mailboxSafeErrorCode(error),'headers_invalid');
- assert.ok(!JSON.stringify({code:api.mailboxSafeErrorCode(error)}).includes('SYNTHETIC_PRIVATE_SUBJECT'));
+ const error=headerFailure(header({From:'SYNTHETIC_PRIVATE_HEADER'}));
+ assert.equal(api.mailboxSafeErrorCode(error),'routing_header_invalid');
+ assert.ok(!JSON.stringify({code:api.mailboxSafeErrorCode(error)}).includes('SYNTHETIC_PRIVATE_HEADER'));
 });
 test('Ambiguous identity and excessive references remain rejected without reflecting headers',()=>{
  const ambiguous=headerFailure(header({From:['First <client@example.invalid>','Second <other@example.invalid>']}));
