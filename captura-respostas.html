@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Receber respostas — Eventos</title><link rel="stylesheet" href="styles.css?v=continuous1"><script defer src="vendor/supabase.js"></script><script defer src="approval-config.js?v=continuous1"></script><script defer src="captura-respostas.js?v=continuous1"></script></head>
+<body><main style="max-width:52rem;margin:auto;padding:1rem"><a href="index.html">Voltar ao Eventos</a><h1>Receber respostas de propostas</h1>
+<p>A leitura usa a conexão existente da caixa Eventos. Somente respostas com vínculo verificado a um envio podem entrar na proposta e revisão correspondentes. Receber uma mensagem não aprova uma venda nem registra pagamento ou reserva.</p>
+<p id="captureStatus" role="status" aria-live="polite">Verificando sessão.</p><button type="button" id="readCapture" disabled>Consultar estado sem repetir</button>
+<section id="captureWorkspace" hidden><h2>Concluir a homologação do retorno</h2><p>Escolha o envio já recebido. Nenhuma proposta será reenviada. O servidor consulta as respostas em segundo plano a cada dois minutos, mesmo com esta página fechada. A etapa de homologação termina em até uma hora.</p>
+<fieldset id="testSends"><legend>Envios de teste disponíveis</legend></fieldset>
+<label><input type="checkbox" id="testConsent"> Conferi o envio e autorizo a leitura de novas respostas somente aos envios escolhidos. Se a rota do teste estiver revogada, autorizo sua reativação auditada nesta etapa; ela será revogada novamente ao encerrar.</label>
+<p><button type="button" id="startTestCapture" disabled>Iniciar retorno contínuo somente do teste</button></p>
+<p>Depois de iniciar, use <strong>Responder no Gmail web</strong> na mensagem original e confira o endereço completo contra o Reply-To exibido abaixo. Aguarde o registro automático e confira o histórico no Eventos após recarregar. Não registre a resposta manualmente.</p>
+<div id="testRouteDetails" style="overflow-wrap:anywhere"></div>
+<h2>Comprovação do retorno</h2><div id="captureProof" aria-live="polite"></div>
+<p id="captureSchedule"></p><p>Para comprovar a continuidade além do piloto anterior, mantenha a etapa ativa por pelo menos 16 minutos e consulte o estado. O agendamento deve continuar funcionando com a página fechada.</p>
+<label><input type="checkbox" id="stopConsent"> Quero encerrar a captura e a etapa de homologação.</label><p><button type="button" id="stopCapture" disabled>Encerrar captura</button></p>
+<details><summary>Ativação operacional após concluir a homologação</summary><p>A operação contínua recebe novas respostas às propostas com rotas de retorno válidas. Ela permanece ativa até ser encerrada. Mensagens sem vínculo não são anexadas a uma proposta; seus corpos não são capturados. A ativação começa nas mensagens novas, sem importar o histórico da caixa.</p>
+<label><input type="checkbox" id="releaseConsent"> Revisei os resultados da homologação comercial, financeira e de retorno e autorizo a operação contínua de leitura das respostas às propostas.</label><p><button type="button" id="startProductionCapture" disabled>Ativar operação contínua</button></p></details>
+<p id="captureOutcome" role="status" aria-live="polite"></p></section></main></body></html>
