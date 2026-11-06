@@ -1,7 +1,7 @@
 import { mailboxTokenEnvironment } from '../_shared/mailbox-token-source.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { sameSecret } from '../_shared/channel-events.ts';
-import { ZOHO_MAILBOX, mailboxBoundedText, mailboxToken, mailboxJson, verifyMailboxAccount, mailboxFolders, collectMailboxWindow } from '../_shared/zoho-mailbox.ts';
+import { ZOHO_MAILBOX, mailboxBoundedText, mailboxToken, mailboxJson, verifyMailboxAccount, mailboxFolders, collectMailboxWindow, mailboxSafeErrorCode } from '../_shared/zoho-mailbox.ts';
 
 import { createBoundMailboxPreparer } from '../_shared/mailbox-thread-guard.ts';
 
@@ -56,8 +56,7 @@ Deno.serve(async(req:Request)=>{
     if(commitError)throw new Error('commit_conflict');
     return respond(200,{ok:true,processed:selected.length,hasMore});
   }catch(error){
-    const safe=new Set(['transport_pending','oauth_not_configured','origins_invalid','account_mismatch','provider_auth_failed','provider_rate_limited','mailbox_backlog','recipient_unverified','sender_mismatch','message_id_invalid','content_empty','scan_changed','commit_conflict']);
-    const code=error instanceof Error&&safe.has(error.message)?error.message:'mailbox_unavailable';
+    const code=mailboxSafeErrorCode(error);
     return respond(503,{ok:false,code});
   }
 });

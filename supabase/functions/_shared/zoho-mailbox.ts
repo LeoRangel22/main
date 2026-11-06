@@ -200,3 +200,45 @@ export function mailboxThreadHeaders(row:any,headerResponse:any,mailbox:string,o
   return {...preflight,references:[...new Set(references)],reply_candidates};
 }
 
+
+// Exact internal error names only. Never expose provider payloads, credentials or message content.
+const SAFE_MAILBOX_ERROR_CODES=new Set<string>([
+  "transport_pending",
+  "oauth_not_configured",
+  "origins_invalid",
+  "account_mismatch",
+  "provider_auth_failed",
+  "provider_rate_limited",
+  "mailbox_backlog",
+  "recipient_unverified",
+  "sender_mismatch",
+  "message_id_invalid",
+  "content_empty",
+  "scan_changed",
+  "commit_conflict",
+  "dedup_unavailable",
+  "folder_unverified",
+  "headers_invalid",
+  "header_ambiguous",
+  "address_invalid",
+  "references_invalid",
+  "thread_self_reference",
+  "thread_lookup_unavailable",
+  "reply_binding_invalid",
+  "thread_context_changed",
+  "content_unavailable",
+  "provider_payload_invalid",
+  "provider_payload_large",
+  "provider_unavailable",
+  "provider_id_invalid",
+  "cursor_invalid",
+  "received_time_invalid",
+  "folders_invalid",
+  "messages_invalid",
+  "account_invalid",
+  "oauth_credential_unavailable",
+  "oauth_credential_source_conflict"
+]);
+export function mailboxSafeErrorCode(error:unknown) {
+ return error instanceof Error&&SAFE_MAILBOX_ERROR_CODES.has(error.message)?error.message:'mailbox_unavailable';
+}
