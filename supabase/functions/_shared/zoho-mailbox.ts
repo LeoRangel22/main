@@ -106,13 +106,18 @@ export async function collectMailboxWindow(api:string,headers:Record<string,stri
   // Offset scan exceeded the bounded window. Never claim completion or move the cursor.
   throw new Error('mailbox_backlog');
 }
+// Only fields used for destination, identity and thread binding enter this map.
+// Other headers remain opaque; their values cannot authorize content access.
+const ROUTING_HEADER_NAMES=new Set(['from','to','cc','delivered-to','x-original-to','message-id','in-reply-to','references']);
 function headerMap(response:any) {
   const raw=response?.data?.headerContent;
-  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('headers_invalid');
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('headers_container_invalid');
   const result=new Map<string,string[]>();
   for(const [name,value] of Object.entries(raw)){
-    if(!/^[A-Za-z0-9-]{1,80}$/.test(name)||!Array.isArray(value)||value.length>30||value.some(v=>typeof v!=='string'||v.length>16384))throw new Error('headers_invalid');
-    const key=name.toLowerCase();result.set(key,[...(result.get(key)||[]),...value.map(v=>v.replace(/\r?\n[ \t]+/g,' ').trim())]);
+    const key=name.toLowerCase();
+    if(!ROUTING_HEADER_NAMES.has(key))continue;
+    if(!Array.isArray(value)||value.length>30||value.some(v=>typeof v!=='string'||v.length>16384))throw new Error('routing_header_invalid');
+    result.set(key,[...(result.get(key)||[]),...value.map(v=>v.replace(/\r?\n[ \t]+/g,' ').trim())]);
   }
   return result;
 }
@@ -219,6 +224,8 @@ const SAFE_MAILBOX_ERROR_CODES=new Set<string>([
   "dedup_unavailable",
   "folder_unverified",
   "headers_invalid",
+  "headers_container_invalid",
+  "routing_header_invalid",
   "header_ambiguous",
   "address_invalid",
   "references_invalid",
