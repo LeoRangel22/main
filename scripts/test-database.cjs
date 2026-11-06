@@ -43,9 +43,21 @@ async function apply(c,file) {
   if(bridgeHealth) await apply(c,'checks/bridge-health-upgrade-setup.sql');
   if(deferredSend) await apply(c,'checks/deferred-send-upgrade-setup.sql');
   if(cohortReview) await apply(c,'checks/cohort-preparation-upgrade-setup.sql');
+  const viewVisibility=file.startsWith('supabase/migrations/')&&file.endsWith('_public_view_visibility.sql');
+  let priorViewFunction;
+  if(viewVisibility){
+    // Exercise the actual deployed predecessor, including fresh-bootstrap compatibility.
+    await c.query(sql('supabase/rollback/public_view_visibility.sql'));
+    priorViewFunction=(await c.query("select oid::text,proowner::text,proacl::text from pg_proc where oid='public.record_public_proposal_view(uuid,text,text)'::regprocedure")).rows[0];
+  }
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(viewVisibility){
+    const upgraded=(await c.query("select oid::text,proowner::text,proacl::text from pg_proc where oid='public.record_public_proposal_view(uuid,text,text)'::regprocedure")).rows[0];
+    assert.deepEqual(upgraded,priorViewFunction);
+    console.log('PASS view analytics upgrade preserves existing owner, OID and ACL');
+  }
   if(whatsappPilot){await apply(c,'checks/whatsapp-pilot-upgrade-assert.sql');console.log('PASS isolated WhatsApp pilot installs empty, RLS and scoped RPC permissions only');}
   if(gerenciaIdentity){await apply(c,'checks/gerencia-identity-upgrade-assert.sql');console.log('PASS Gerencia install empty, no grants/public RPC/user or business changes');}
   if(whatsappPreparation) { await apply(c,'checks/whatsapp-preparation-upgrade-assert.sql'); console.log('PASS preparation preserves history, existing claim OID/ACL and bridge configuration'); }
@@ -77,6 +89,7 @@ async function checks(c) {
   await apply(c,'checks/whatsapp-single-pilot.sql'); console.log('PASS pilot owner, anonymous/other-account denial, once-only claim, uncertainty and immutable history');
   await apply(c,'checks/diagnostic-pilot-receipts.sql'); console.log('PASS private diagnostic receipts, isolation, errors and history-preserving rollback');
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
+  await require('../checks/public-view-visibility.cjs')(c,sql,migrationFiles);
 }
 async function concurrent(c,name) {
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);

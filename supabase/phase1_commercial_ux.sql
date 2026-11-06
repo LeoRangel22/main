@@ -982,13 +982,8 @@ declare
   target_id uuid;
   has_store_column boolean;
 begin
-  select coalesce(current_p.id, requested.id)
-    into target_id
-  from public.propostas requested
-  left join public.propostas current_p
-    on current_p.oportunidade_id = requested.oportunidade_id
-   and current_p.is_current = true
-  where requested.public_token = proposal_token
+  select visible.id into target_id
+  from public.get_public_proposal(proposal_token) visible
   limit 1;
 
   if target_id is null then
