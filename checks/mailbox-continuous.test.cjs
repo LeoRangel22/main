@@ -1,0 +1,12 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
+const src=fs.readFileSync(path.join(__dirname,'../supabase/functions/_shared/mailbox-capture-scope.ts'),'utf8');
+const moduleObject={exports:{}};new Function('module','exports',esbuild.transformSync(src,{loader:'ts',format:'cjs',target:'node22'}).code)(moduleObject,moduleObject.exports);
+const {mailboxCaptureScope}=moduleObject.exports;
+const start=1800000000000,id='11111111-1111-4111-8111-111111111111';
+const continuous=()=>({enabled:true,channel_enabled:true,capture_mode:'continuous',continuous_enabled:true,capture_send_ids:[],continuous_started_at_ms:start,continuous_test_only:true,continuous_expires_at_ms:start+3600000});
+test('restricted continuous reading remains active after the former fifteen-minute pilot',()=>{assert.equal(mailboxCaptureScope(continuous(),start+1200000).remaining,20);});
+test('restricted continuous reading expires exactly at its hour boundary',()=>{assert.throws(()=>mailboxCaptureScope(continuous(),start+3600000),/inactive/);});
+test('operational continuous reading has no implicit pilot expiry and remains bounded per batch',()=>{const cfg={...continuous(),continuous_test_only:false,continuous_expires_at_ms:null};assert.equal(mailboxCaptureScope(cfg,start+86400000).remaining,20);});
+test('continuous capture cannot be enabled by a single flag or mixed pilot configuration',()=>{for(const patch of [{enabled:false},{channel_enabled:false},{continuous_enabled:false},{capture_send_ids:[id]},{continuous_started_at_ms:start+1},{continuous_test_only:undefined},{continuous_expires_at_ms:null},{continuous_expires_at_ms:start+3600001}])assert.throws(()=>mailboxCaptureScope({...continuous(),...patch},start),/inactive/);});
+test('unknown capture modes fail closed',()=>{for(const mode of ['all','legacy',null,true])assert.throws(()=>mailboxCaptureScope({...continuous(),capture_mode:mode},start),/inactive/);});
+test('the existing bounded pilot retains its expiry and total message budget',()=>{const cfg={enabled:true,channel_enabled:true,capture_send_ids:[id],capture_started_at_ms:start,capture_expires_at_ms:start+900000,capture_message_limit:4,capture_used_messages:3};assert.equal(mailboxCaptureScope(cfg,start).remaining,1);assert.throws(()=>mailboxCaptureScope(cfg,start+900000),/inactive/);});

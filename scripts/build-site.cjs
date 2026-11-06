@@ -7,6 +7,7 @@ const root=path.resolve(__dirname,'..');
 const dest=path.join(root,'dist');
 // Explicit public surface: tooling, SQL, tests and credentials cannot be copied.
 const publicFiles=[
+  'captura-respostas.html','captura-respostas.js',
   'piloto-respostas.html','piloto-respostas.js',
   'conciliar-teste-email.html','conciliar-teste-email.js',
   'teste-email.html','teste-email.js',
@@ -24,7 +25,8 @@ for(const file of publicFiles) {
   const target=path.join(dest,file); fs.mkdirSync(path.dirname(target),{recursive:true});
   fs.copyFileSync(path.join(root,file),target);
 }
-esbuild.buildSync({entryPoints:[path.join(root,'node_modules/@supabase/supabase-js/dist/module/index.js')],bundle:true,format:'iife',globalName:'supabase',platform:'browser',target:['es2020'],minify:true,outfile:path.join(dest,'vendor/supabase.js')});
+const supabaseEntry=path.join(path.dirname(require.resolve('@supabase/supabase-js/package.json')),'dist/module/index.js');
+esbuild.buildSync({entryPoints:[supabaseEntry],bundle:true,format:'iife',globalName:'supabase',platform:'browser',target:['es2020'],minify:true,outfile:path.join(dest,'vendor/supabase.js')});
 // Preserve the human-readable rollout tag while making every already-versioned
 // local script/style URL change whenever its bytes change. No source files,
 // external URLs, credentials or unversioned SDK paths are rewritten.
