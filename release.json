@@ -1,6 +1,6 @@
 {
-  "commit": "60bbcaf4cca00a32303f00bda5b79a1dcf6c5faf",
-  "schemaHead": "20261106131908_public_view_visibility.sql",
+  "commit": "ec58871a9e5cb5cf364eac7c2adcda822d4a2f07",
+  "schemaHead": "20261106204435_anon_table_write_hardening.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "captura-respostas.html": "0002ee38efc693a57928018e29d5839297482fec3c4be28541a76d3d55aac338",
