@@ -6,6 +6,7 @@ async function inspect(c){
  return (await c.query("select jsonb_build_object("+
  "'tables',(select jsonb_agg(jsonb_build_object('name',r.relname,'oid',r.oid,'owner',r.relowner,'rls',r.relrowsecurity,'force_rls',r.relforcerowsecurity,"+
  "'anon',coalesce((select jsonb_agg(to_jsonb(a) order by a.grantor,a.privilege_type) from aclexplode(r.relacl)a where a.grantee=(select oid from pg_roles where rolname='anon')),'[]'::jsonb),"+
+ "'column_acl',(select jsonb_agg(jsonb_build_object('number',a.attnum,'acl',a.attacl::text) order by a.attnum) from pg_attribute a where a.attrelid=r.oid and a.attnum>0 and not a.attisdropped),"+
  "'other_acl',coalesce((select jsonb_agg(to_jsonb(a) order by a.grantee,a.grantor,a.privilege_type) from aclexplode(r.relacl)a where a.grantee<>(select oid from pg_roles where rolname='anon')),'[]'::jsonb)) order by r.relname) from pg_class r join pg_namespace n on n.oid=r.relnamespace where n.nspname='public' and r.relname=any($1::text[])),"+
  "'functions',(select jsonb_agg(jsonb_build_object('oid',p.oid,'owner',p.proowner,'acl',p.proacl::text,'body',md5(p.prosrc)) order by p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','event_private')),"+
  "'defaults',(select jsonb_agg(to_jsonb(d) order by d.oid) from pg_default_acl d),"+
@@ -53,6 +54,7 @@ module.exports=async(c,sql,migrations)=>{
   await c.query('set local role anon');
   for(const table of tables){
    for(const privilege of writes)assert.equal((await c.query('select has_table_privilege(current_user,$1,$2) as allowed',['public.'+table,privilege])).rows[0].allowed,false);
+   for(const privilege of ['INSERT','UPDATE','REFERENCES'])assert.equal((await c.query('select has_any_column_privilege(current_user,$1,$2) as allowed',['public.'+table,privilege])).rows[0].allowed,false);
    assert.equal((await c.query('select count(*)::int as count from public.'+table)).rows[0].count,0,'RLS still hides direct reads');
    for(const statement of ['insert into public.'+table+' default values','update public.'+table+' set id=id where false','delete from public.'+table+' where false','truncate table public.'+table])await expectDenied(c,statement);
   }
@@ -109,8 +111,19 @@ module.exports=async(c,sql,migrations)=>{
   assert.deepEqual(await inspect(c),inherited,'Inherited write rejection rolls back every candidate revoke');
   await c.query('rollback to savepoint inherited_write');
   assert.deepEqual(await inspect(c),hardened);
+  await c.query('savepoint column_write');
+  await c.query(sql('supabase/rollback/anon_table_write_hardening.sql'));
+  await c.query('grant update(cliente_nome) on public.propostas to anon');
+  await c.query('savepoint before_column_candidate');
+  const columnGrant=await inspect(c);
+  await assert.rejects(c.query(candidate),e=>e.message.includes('anon_acl_effective_write_remaining'));
+  await c.query('rollback to savepoint before_column_candidate');
+  assert.deepEqual(await inspect(c),columnGrant,'Column write rejection rolls back every candidate revoke without changing column ACLs');
+  await c.query('rollback to savepoint column_write');
+  assert.deepEqual(await inspect(c),hardened);
+
   console.log('PASS anonymous direct writes denied; protected draft/submit stay idempotent under both bootstrap and deployed normal-trigger notification contracts, without network');
-  console.log('PASS anonymous ACL drift and inherited writes fail atomically; SELECT/RLS and all other authority boundaries preserved');
+  console.log('PASS anonymous ACL drift, inherited table writes and column grants fail atomically; SELECT/RLS and all other authority boundaries preserved');
  }finally{await c.query('rollback');}
  assert.deepEqual(await inspect(c),beforeFixture,'All fixture trigger, authority and business state is rolled back');
 };

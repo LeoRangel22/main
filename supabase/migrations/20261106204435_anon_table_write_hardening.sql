@@ -35,6 +35,9 @@ begin
       if pg_catalog.has_table_privilege('anon',target_relation,privilege_name) then
         raise exception 'anon_acl_effective_write_remaining';
       end if;
+      if privilege_name in ('INSERT','UPDATE','REFERENCES') then
+        if pg_catalog.has_any_column_privilege('anon',target_relation,privilege_name) then raise exception 'anon_acl_effective_write_remaining'; end if;
+      end if;
     end loop;
     if not pg_catalog.has_table_privilege('anon',target_relation,'SELECT') then raise exception 'anon_acl_read_changed'; end if;
   end loop;
