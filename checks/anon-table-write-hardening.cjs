@@ -40,6 +40,7 @@ module.exports=async(c,sql,migrations)=>{
  assert.equal((await c.query("select current_setting('session_replication_role') as mode")).rows[0].mode,'origin','Normal triggers required');
  const migration=migrations.find(f=>f.endsWith('_anon_table_write_hardening.sql'));assert.ok(migration);
  const candidate=sql('supabase/migrations/'+migration);
+ const beforeFixture=await inspect(c);
  await c.query('begin');
  try{
   assertHardened(await inspect(c));
@@ -55,19 +56,33 @@ module.exports=async(c,sql,migrations)=>{
    assert.equal((await c.query('select count(*)::int as count from public.'+table)).rows[0].count,0,'RLS still hides direct reads');
    for(const statement of ['insert into public.'+table+' default values','update public.'+table+' set id=id where false','delete from public.'+table+' where false','truncate table public.'+table])await expectDenied(c,statement);
   }
-  const token=randomUUID(),snapshot={cliente:{nome:'Synthetic ACL Visitor',email:'acl-fixture@example.invalid'},evento:{tipo:'Coquetel',data:'2099-11-18',horario:'19:00',convidados:30,duracao:1}};
-  const first=(await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot])).rows[0];assert.ok(first?.request_id);
-  const repeated=(await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot])).rows[0];
-  const completed=(await c.query('select * from public.submit_public_quote_request($1,$2)',[token,snapshot])).rows[0];
-  const duplicate=(await c.query('select * from public.submit_public_quote_request($1,$2)',[token,snapshot])).rows[0];
-  await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot]);
-  for(const next of [repeated,completed,duplicate]){assert.equal(next.request_id,first.request_id);assert.equal(next.opportunity_id,first.opportunity_id);}
   await c.query('reset role');
-  const request=(await c.query("select id,oportunidade_id,capture_status from public.solicitacoes_cotacao where capture_token=$1",[token])).rows;
-  assert.equal(request.length,1);assert.equal(request[0].id,first.request_id);assert.equal(request[0].oportunidade_id,first.opportunity_id);assert.equal(request[0].capture_status,'complete');
-  const notifications=(await c.query('select request_id,capture_status from pg_temp._anon_acl_notifications order by capture_status')).rows;
-  assert.deepEqual(notifications,[{request_id:first.request_id,capture_status:'complete'},{request_id:first.request_id,capture_status:'partial'}],'Normal partial/completion triggers record exactly two synthetic alerts');
-  assert.equal((await c.query('select count(*)::int as count from public.event_outbox')).rows[0].count,outboxBefore,'No message outbox is created');
+  // The repository bootstrap notifies only completed inserts. The deployed predecessor
+  // has an unconditional INSERT trigger, plus the same partial-to-complete UPDATE trigger.
+  // Exercise both verified contracts inside this rolled-back, non-network fixture.
+  for(const profile of [{name:'bootstrap',statuses:['complete']},{name:'production-equivalent',statuses:['complete','partial']}]){
+   if(profile.name==='production-equivalent'){
+    await c.query("drop trigger notify_new_lead_webhook on public.solicitacoes_cotacao; create trigger notify_new_lead_webhook after insert on public.solicitacoes_cotacao for each row execute function public.notify_new_lead_fn()");
+   }
+   await c.query('truncate pg_temp._anon_acl_notifications');
+   const token=randomUUID(),snapshot={cliente:{nome:'Synthetic ACL Visitor',email:'acl-fixture@example.invalid'},evento:{tipo:'Coquetel',data:'2099-11-18',horario:'19:00',convidados:30,duracao:1}};
+   await c.query('set local role anon');
+   const first=(await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot])).rows[0];assert.ok(first?.request_id);
+   const repeated=(await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot])).rows[0];
+   await c.query('reset role');
+   assert.equal((await c.query('select count(*)::int as count from pg_temp._anon_acl_notifications')).rows[0].count,profile.name==='bootstrap'?0:1,profile.name+' partial notification timing');
+   await c.query('set local role anon');
+   const completed=(await c.query('select * from public.submit_public_quote_request($1,$2)',[token,snapshot])).rows[0];
+   const duplicate=(await c.query('select * from public.submit_public_quote_request($1,$2)',[token,snapshot])).rows[0];
+   await c.query("select * from public.upsert_public_quote_draft($1,$2,'essencial')",[token,snapshot]);
+   for(const next of [repeated,completed,duplicate]){assert.equal(next.request_id,first.request_id);assert.equal(next.opportunity_id,first.opportunity_id);}
+   await c.query('reset role');
+   const request=(await c.query("select id,oportunidade_id,capture_status from public.solicitacoes_cotacao where capture_token=$1",[token])).rows;
+   assert.equal(request.length,1);assert.equal(request[0].id,first.request_id);assert.equal(request[0].oportunidade_id,first.opportunity_id);assert.equal(request[0].capture_status,'complete');
+   const notifications=(await c.query('select request_id,capture_status from pg_temp._anon_acl_notifications order by capture_status')).rows;
+   assert.deepEqual(notifications,profile.statuses.map(capture_status=>({request_id:first.request_id,capture_status})),profile.name+' notification contract survives anonymous table revocation without duplicates');
+   assert.equal((await c.query('select count(*)::int as count from public.event_outbox')).rows[0].count,outboxBefore,'No message outbox is created');
+  }
 
   const hardened=await inspect(c);
   await c.query('savepoint unexpected_direct_grant');
@@ -90,9 +105,10 @@ module.exports=async(c,sql,migrations)=>{
   assert.deepEqual(await inspect(c),inherited,'Inherited write rejection rolls back every candidate revoke');
   await c.query('rollback to savepoint inherited_write');
   assert.deepEqual(await inspect(c),hardened);
-  console.log('PASS anonymous direct writes denied; protected draft/submit stay idempotent with normal triggers and two recorded synthetic notifications, without network');
+  console.log('PASS anonymous direct writes denied; protected draft/submit stay idempotent under both bootstrap and deployed normal-trigger notification contracts, without network');
   console.log('PASS anonymous ACL drift and inherited writes fail atomically; SELECT/RLS and all other authority boundaries preserved');
  }finally{await c.query('rollback');}
+ assert.deepEqual(await inspect(c),beforeFixture,'All fixture trigger, authority and business state is rolled back');
 };
 module.exports.inspect=inspect;
 module.exports.assertDelta=assertDelta;
