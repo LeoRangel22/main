@@ -184,12 +184,13 @@ async function concurrent(c,name) {
     c=await create('events_current_upgrade_test');
     const closure=migrationFiles.find(f=>f.endsWith('_approval_closure.sql'));
     const deferred=migrationFiles.find(f=>f.endsWith('_deferred_send_ledger.sql'));
+    const continuousMailbox=migrationFiles.find(f=>f.endsWith('_continuous_mailbox_capture.sql'));
     const watchReadiness=migrationFiles.find(f=>f.endsWith('_approval_watch_effective_readiness.sql'));
     const bridgeHealth=migrationFiles.find(f=>f.endsWith('_bridge_quarantine_health.sql'));
     const whatsappPreparation=migrationFiles.find(f=>f.endsWith('_whatsapp_readonly_preparation.sql'));
     const privateSignoffs=migrationFiles.find(f=>f.endsWith('_private_operational_signoffs.sql'));
     const gerenciaIdentity=migrationFiles.find(f=>f.endsWith('_gerencia_operational_identity.sql'));
-    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity)) await apply(c,`supabase/migrations/${f}`);
+    for(const f of migrationFiles.filter(f=>f!==closure&&f!==deferred&&f!==watchReadiness&&f!==bridgeHealth&&f!==whatsappPreparation&&f!==privateSignoffs&&f!==gerenciaIdentity&&f!==continuousMailbox)) await apply(c,`supabase/migrations/${f}`);
     const legacyOwner=await fixtureOwner(c);
     const legacyClaimsBefore=(await c.query("select current_setting('request.jwt.claims',true) as claims")).rows[0].claims;
     let legacyApproval;
@@ -220,6 +221,8 @@ async function concurrent(c,name) {
     if(whatsappPreparation) await apply(c,`supabase/migrations/${whatsappPreparation}`);
     if(privateSignoffs) await apply(c,`supabase/migrations/${privateSignoffs}`);
     if(gerenciaIdentity) await apply(c,`supabase/migrations/${gerenciaIdentity}`);
+    // The new SQL helpers depend on reviewed_revision introduced by the deferred ledger.
+    if(continuousMailbox) await apply(c,`supabase/migrations/${continuousMailbox}`);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
