@@ -83,12 +83,15 @@ test("sort and search include records beyond the first page", async ({ page }) =
     state.proposals = Array.from({ length: 26 }, (_, i) => ({
       ...structuredClone(template), id: "page-" + i, oportunidade_id: "page-" + i,
       cliente_nome: i === 25 ? "Alvo fora da primeira página" : "Zulu " + String(i).padStart(2, "0"),
+      created_at: "2026-11-06T12:" + String(59 - i).padStart(2, "0") + ":00Z",
     }));
     state.opportunities = []; renderPipeline();
   });
   await expect(ready(page).locator(".pipeline-card")).toHaveCount(20);
+  await expect(ready(page)).not.toContainText("Alvo fora");
   await ready(page).getByRole("combobox").selectOption("name");
   await expect(ready(page).locator(".pipeline-card").first()).toContainText("Alvo fora");
+  await ready(page).getByRole("combobox").selectOption("received");
   await page.locator("#pipelineSearchInput").fill("alvo");
   await expect(cards(page)).toHaveCount(1); await expect(cards(page)).toContainText("Alvo fora");
 });
