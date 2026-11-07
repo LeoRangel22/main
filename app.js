@@ -7,6 +7,7 @@ const SUPABASE_CONFIG_KEY = "embaixada_orcamentos_supabase_v1";
 const INTEGRATION_LOG_KEY = "embaixada_orcamentos_envios_v1";
 const COMMUNICATION_TEMPLATES_KEY = "embaixada_orcamentos_comunicacao_v1";
 const WORKSPACE_MODE_KEY = "embaixada_orcamentos_modo_trabalho_v1";
+const PIPELINE_SORT_KEY = "embaixada_orcamentos_ordem_funil_v1";
 const DEFAULT_SUPABASE_URL = "https://pdgbnpztdnrvrphzdjas.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkZ2JucHp0ZG5ydnJwaHpkamFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTA3MDUsImV4cCI6MjA5MTk2NjcwNX0.RN75ksH4im9c0gk3fc3TI9m1ij6e8HJSMtILO8eOmno";
@@ -675,6 +676,16 @@ function loadWorkspaceMode() {
   }
 }
 
+function loadPipelineSorts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PIPELINE_SORT_KEY) || "{}");
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
+    return Object.fromEntries(Object.entries(saved).filter(([stage, key]) => /^[a-z_]{1,64}$/.test(stage) && FunnelView.sortKeys.includes(key)));
+  } catch (_) {
+    return {};
+  }
+}
+
 const state = {
   prices: loadPrices(),
   productTypes: loadProductTypes(),
@@ -698,6 +709,7 @@ const state = {
   lastAppliedDashboardTarget: "",
   activeReportPreset: "currentMonth",
   activePipelineFilter: "all",
+  pipelineSorts: loadPipelineSorts(),
   workspaceMode: loadWorkspaceMode(),
   quoteGuideDismissed: false,
   sourceOverrides: {},
@@ -789,6 +801,7 @@ const fields = {
   reportStatusFilter: document.querySelector("#reportStatusFilter"),
   reportKindFilter: document.querySelector("#reportKindFilter"),
   globalSearchInput: document.querySelector("#globalSearchInput"),
+  pipelineSearchInput: document.querySelector("#pipelineSearchInput"),
 };
 
 const nodes = {
@@ -863,6 +876,8 @@ const nodes = {
   jumpToPipelineBtn: document.querySelector("#jumpToPipelineBtn"),
   openNextPriorityBtn: document.querySelector("#openNextPriorityBtn"),
   globalSearchResults: document.querySelector("#globalSearchResults"),
+  pipelineSearchStatus: document.querySelector("#pipelineSearchStatus"),
+  pipelineSearchClear: document.querySelector("#pipelineSearchClear"),
   clientDirectory: document.querySelector("#clientDirectory"),
   clientRegistryMeta: document.querySelector("#clientRegistryMeta"),
   systemHealthSummary: document.querySelector("#systemHealthSummary"),
@@ -10626,6 +10641,7 @@ function getPipelineQuickFilterDefinitions() {
 }
 
 function getFilteredPipelineItems(items = getPipelineItems()) {
+  items = items.filter((item) => FunnelView.matches(item, fields.pipelineSearchInput?.value || ""));
   const activeFilter = state.activePipelineFilter || "all";
   if (activeFilter === "sales:negotiation") return getSalesFunnelItems(items).filter(item=>["changes","reply","approved"].includes(getSalesFunnelStateForItem(item)?.id));
   if (activeFilter.startsWith("sales:")) return getSalesFunnelItems(items).filter(item=>getSalesFunnelStateForItem(item)?.id === activeFilter.slice(6));
@@ -12381,9 +12397,40 @@ function renderPipelineEmptyState(stage) {
   `;
 }
 
-function renderPipelineStage(stage, items) {
-  const stageItems = stage.salesState ? getSalesFunnelItems(items).filter((item) => getSalesFunnelStateForItem(item)?.id === stage.salesState)
+function getPipelineStageItems(stage, items) {
+  return stage.salesState ? getSalesFunnelItems(items).filter((item) => getSalesFunnelStateForItem(item)?.id === stage.salesState)
     : items.filter((item) => item.stage === stage.id);
+}
+
+function renderPipelineSearchStatus(items, rows = []) {
+  const available = Boolean(state.supabase && state.session);
+  if (fields.pipelineSearchInput) {
+    fields.pipelineSearchInput.disabled = !available;
+    if (!available) fields.pipelineSearchInput.value = "";
+  }
+  if (nodes.pipelineSearchClear) nodes.pipelineSearchClear.disabled = !available || !fields.pipelineSearchInput?.value;
+  if (!nodes.pipelineSearchStatus) return;
+  if (!available) {
+    nodes.pipelineSearchStatus.textContent = "Entre com o e-mail da equipe para buscar no funil.";
+    return;
+  }
+  const ids = new Set(rows.flatMap(row => row.stages.flatMap(stage => getPipelineStageItems(stage, items).map(item => item.kind + ":" + item.id))));
+  const filter = getActivePipelineFilterLabel();
+  nodes.pipelineSearchStatus.textContent = ids.size + (ids.size === 1 ? " registro no funil" : " registros no funil") + (filter ? " · " + filter : "") + ".";
+}
+
+function renderPipelineStage(stage, items) {
+  const sortKey = state.pipelineSorts[stage.id] || "received";
+  const stageItems = FunnelView.sort(getPipelineStageItems(stage, items), sortKey);
+  const sortControl = `
+    <label class="pipeline-sort">
+      <span>Ordenar por</span>
+      <select data-pipeline-sort="${escapeHtml(stage.id)}" aria-label="Ordenar ${escapeHtml(stage.title)}">
+        <option value="name"${sortKey === "name" ? " selected" : ""}>Nome · A–Z</option>
+        <option value="event"${sortKey === "event" ? " selected" : ""}>Data do evento · próxima</option>
+        <option value="received"${sortKey === "received" ? " selected" : ""}>Data de recebimento · recente</option>
+      </select>
+    </label>`;
   const dropAttribute = stage.salesState ? "" : ' data-pipeline-drop-status="' + escapeHtml(stage.statuses[0]) + '"';
   const paginationKey = stage.legacyStage || stage.id;
   const limit = commercialStageLimits[paginationKey] || 20;
@@ -12397,6 +12444,7 @@ function renderPipelineStage(stage, items) {
             <span>${escapeHtml(stage.title)}</span>
             <strong>${stageItems.length}</strong>
           </summary>
+          ${sortControl}
           <div class="pipeline-column-list" ${dropAttribute}>
             ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
           </div>
@@ -12410,6 +12458,7 @@ function renderPipelineStage(stage, items) {
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
       </div>
+      ${sortControl}
       <div class="pipeline-column-list" ${dropAttribute}>
         ${stageItems.length ? stageCards : renderPipelineEmptyState(stage)}
       </div>
@@ -12430,6 +12479,7 @@ function renderPipeline() {
     renderPipelineQuickFilters([]);
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
+    renderPipelineSearchStatus([]);
     renderPipelineMetrics([]);
     renderFinanceCommandPanel([]);
     return;
@@ -12439,6 +12489,7 @@ function renderPipeline() {
     renderPipelineQuickFilters([]);
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
+    renderPipelineSearchStatus([]);
     renderPipelineMetrics([]);
     renderFinanceCommandPanel([]);
     return;
@@ -12458,6 +12509,7 @@ function renderPipeline() {
     { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
   ];
   const rows = state.workspaceMode === "sales" ? allRows.filter((row) => row.id === "commercial") : allRows;
+  renderPipelineSearchStatus(filteredItems, rows);
 
   nodes.pipelineBoard.innerHTML = rows
     .map((row) => `
@@ -16671,6 +16723,12 @@ function bindEvents() {
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Agenda operacional");
   });
+  fields.pipelineSearchInput?.addEventListener("input", () => renderPipeline());
+  nodes.pipelineSearchClear?.addEventListener("click", () => {
+    fields.pipelineSearchInput.value = "";
+    renderPipeline();
+    fields.pipelineSearchInput.focus();
+  });
   fields.globalSearchInput?.addEventListener("input", () => {
     const items = getPipelineItems();
     renderGlobalSearch(items);
@@ -16905,6 +16963,16 @@ function bindEvents() {
     await openPipelineCardElement(card);
   });
   nodes.pipelineBoard?.addEventListener("change", (event) => {
+    const sortSelect = event.target.closest("select[data-pipeline-sort]");
+    if (sortSelect && FunnelView.sortKeys.includes(sortSelect.value)) {
+      const stageId = sortSelect.dataset.pipelineSort;
+      if (!/^[a-z_]{1,64}$/.test(stageId)) return;
+      state.pipelineSorts[stageId] = sortSelect.value;
+      try { localStorage.setItem(PIPELINE_SORT_KEY, JSON.stringify(state.pipelineSorts)); } catch (_) { /* Selection still works in this session. */ }
+      renderPipeline();
+      nodes.pipelineBoard.querySelector(`select[data-pipeline-sort="${stageId}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     const select = event.target.closest("select[data-pipeline-status-id]");
     if (!select) return;
     const { pipelineStatusKind, pipelineStatusId } = select.dataset;
