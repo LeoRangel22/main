@@ -99,7 +99,7 @@ test("newer searches win, and logout discards a pending private response",async(
  await expect(input).toHaveValue("");
 });
 test("dates and headcounts stay distinct on mobile",async({page})=>{
- const trace=await setup(page,390);await page.locator("#crmHistoryKind").selectOption("event");
+ const trace=await setup(page,320);await page.evaluate(()=>{document.documentElement.style.fontSize="200%";});await page.locator("#crmHistoryKind").selectOption("event");
  await page.locator("#crmHistorySort").selectOption("event_date");
  await expect(page.locator("#crmHistoryResults")).toContainText("19/02/2099");
  await expect(page.locator("#crmHistoryResults")).toContainText("Convidados planejados: 2");
