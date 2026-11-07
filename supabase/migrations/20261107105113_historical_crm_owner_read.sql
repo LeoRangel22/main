@@ -128,8 +128,8 @@ begin
    if not found then raise exception using errcode='22023',message='Registro não encontrado nesta base.'; end if;
    select count(*) into source_total from event_crm.foundation_records s
     where s.batch_id=b.id and s.kind='source_index' and coalesce(target->'source_ids','[]'::jsonb) ? s.record_id;
-   select coalesce(jsonb_agg(x.payload order by x.at desc nulls last,x.id),'[]'::jsonb) into sources from(
-    select s.record_id id,s.payload->>'occurred_at' at,
+   select coalesce(jsonb_agg(x.payload order by x.occurred_sort desc nulls last,x.id),'[]'::jsonb) into sources from(
+    select s.record_id id,s.payload->>'occurred_at' as occurred_sort,
      jsonb_build_object('id',s.record_id,'kind',s.payload->>'kind','subject',s.payload->>'subject',
       'from_email',s.payload->>'from_email','occurred_at',s.payload->>'occurred_at',
       'message_id',s.payload->>'message_id','format',s.payload->>'format',
@@ -148,12 +148,19 @@ begin
  end if;
  with base as materialized(
    select r.record_id,r.payload,o.payload organization,
-    coalesce((select jsonb_agg(c.payload-'source_ids') from event_crm.foundation_records c
-      where c.batch_id=b.id and c.kind='contact' and(
-       (r.kind='organization' and c.payload->>'organization_id'=r.record_id) or
-       (r.kind='case' and coalesce(r.payload->'contact_ids','[]'::jsonb) ? c.record_id) or
-       (r.kind in ('event','action') and c.payload->>'organization_id'=o.record_id)
-      )),'[]'::jsonb) contacts
+    case
+     when trim(coalesce(p_query,''))='' then '[]'::jsonb
+     when r.kind='case' then coalesce((
+       select jsonb_agg(c.payload-'source_ids')
+       from jsonb_array_elements_text(coalesce(r.payload->'contact_ids','[]'::jsonb)) ids(id)
+       join event_crm.foundation_records c on c.batch_id=b.id and c.kind='contact' and c.record_id=ids.id
+     ),'[]'::jsonb)
+     when r.kind in ('organization','event','action') then coalesce((
+       select jsonb_agg(c.payload-'source_ids') from event_crm.foundation_records c
+       where c.batch_id=b.id and c.kind='contact'
+        and c.payload->>'organization_id'=case when r.kind='organization' then r.record_id else o.record_id end
+     ),'[]'::jsonb)
+     else '[]'::jsonb end contacts
    from event_crm.foundation_records r
    left join event_crm.foundation_records o on o.batch_id=b.id and o.kind='organization' and(
      o.record_id=r.payload->>'organization_id' or
