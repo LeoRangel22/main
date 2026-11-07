@@ -104,6 +104,19 @@ test("search and sorting fit mobile, full view includes operation/archive, and i
   await ready(page).getByRole("combobox").selectOption("name");
   await page.locator("#pipelineSearchInput").fill("ana");
   await expect(cards(page)).toHaveCount(1); await expectNoHorizontalOverflow(page);
+  await page.evaluate(() => {
+    state.proposals.push({ ...structuredClone(state.proposals[0]), id: "archived", oportunidade_id: "archived", cliente_nome: "Zélia Arquivada", status: "cancelado" });
+    renderPipeline();
+  });
+  await page.locator("#pipelineSearchInput").fill("arquivada");
+  const archived = page.locator(".pipeline-stage-cancelado");
+  await expect(archived.locator("details")).toHaveAttribute("open", "");
+  await expect(archived.locator(".pipeline-card")).toBeVisible();
+  await archived.getByRole("combobox").selectOption("name");
+  await expect(archived.locator("details")).toHaveAttribute("open", "");
+  await expect(archived.getByRole("combobox")).toBeFocused();
+  await page.getByRole("button", { name: "Limpar busca", exact: true }).click();
+  await expect(archived.locator("details")).toHaveAttribute("open", "");
   const saved = await page.evaluate(() => {
     localStorage.setItem(PIPELINE_SORT_KEY, JSON.stringify({ sales_ready: "invalid", sales_waiting: "name", bad1: "event" }));
     return loadPipelineSorts();

@@ -12511,6 +12511,8 @@ function renderPipeline() {
   const rows = state.workspaceMode === "sales" ? allRows.filter((row) => row.id === "commercial") : allRows;
   renderPipelineSearchStatus(filteredItems, rows);
 
+  const expandedColumns = new Set([...nodes.pipelineBoard.querySelectorAll(".pipeline-column-collapsible details[open]")]
+    .map(details => details.querySelector("[data-pipeline-sort]")?.dataset.pipelineSort));
   nodes.pipelineBoard.innerHTML = rows
     .map((row) => `
       <div class="pipeline-row pipeline-row-${escapeHtml(row.id)}" aria-label="${escapeHtml(row.title)}">
@@ -12518,6 +12520,10 @@ function renderPipeline() {
       </div>
     `)
     .join("");
+  nodes.pipelineBoard.querySelectorAll(".pipeline-column-collapsible > details").forEach(details => {
+    const stageId = details.querySelector("[data-pipeline-sort]")?.dataset.pipelineSort;
+    details.open = expandedColumns.has(stageId) || Boolean(fields.pipelineSearchInput?.value.trim() && details.querySelector(".pipeline-card"));
+  });
 }
 
 function renderQuoteRequests() {
