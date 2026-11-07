@@ -103,6 +103,7 @@ async function checks(c) {
   await require('../checks/cohort-amendment-reconciliation.cjs')(c,sql,migrationFiles);
   await require('../checks/public-view-visibility.cjs')(c,sql,migrationFiles);
   await require('../checks/anon-table-write-hardening.cjs')(c,sql,migrationFiles);
+  await require('../checks/historical-crm-owner-read.cjs')(c,sql,fixtureOwner,migrationFiles);
 }
 async function concurrent(c,name) {
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
@@ -251,6 +252,7 @@ async function concurrent(c,name) {
     // The new SQL helpers depend on reviewed_revision introduced by the deferred ledger.
     if(continuousMailbox) await apply(c,`supabase/migrations/${continuousMailbox}`);
     if(anonWrite) await apply(c,`supabase/migrations/${anonWrite}`);
+    for(const f of migrationFiles)if(f.endsWith("_historical_crm_owner_read.sql"))await apply(c,"supabase/migrations/"+f);
     const backfilled=(await c.query('select * from event_proposal_approvals where id=$1',[legacyApproval.id])).rows[0];
     assert.equal(backfilled.review_hash,legacyApproval.review_hash);
     assert.deepEqual(backfilled.proposal_snapshot,legacyApproval.proposal_snapshot);
