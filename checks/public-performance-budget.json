@@ -52,6 +52,22 @@
       "baselineGzipBytes": 6766,
       "maxRawBytes": 34535,
       "maxGzipBytes": 8458
+    },
+    {
+      "path": "historical-crm.js",
+      "baselineCommit": "0e3a8265ab831f802f461a220496888e7c463b4f",
+      "baselineRawBytes": 23917,
+      "baselineGzipBytes": 7176,
+      "maxRawBytes": 29897,
+      "maxGzipBytes": 8970
+    },
+    {
+      "path": "historical-crm.css",
+      "baselineCommit": "0e3a8265ab831f802f461a220496888e7c463b4f",
+      "baselineRawBytes": 3204,
+      "baselineGzipBytes": 1014,
+      "maxRawBytes": 4005,
+      "maxGzipBytes": 1268
     }
   ]
 }

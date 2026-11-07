@@ -9370,6 +9370,7 @@ function updateAuthUI() {
   if (!loginButton || !logoutButton || !recoverButton || !nodes.authStatus || !fields.loginEmail || !fields.magicLinkUrl) return;
   const isConnected = Boolean(state.supabase);
   const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
+  if (typeof window !== "undefined") window.EventCrmHistory?.setSession({ client: state.supabase, user: isLoggedIn && isSuperAdminSession() ? state.session.user : null });
 
   if (!isLoggedIn && typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   document.body.classList.toggle("auth-locked", !isLoggedIn);
