@@ -50,7 +50,7 @@ create or replace function event_crm_api.normalize_text(value text)
 returns text language sql immutable security invoker set search_path=''
 as $f$
  select translate(lower(coalesce(value,'')),
- 'áàâãäéèêëíìîïóòôõöúùûüçñ','aaaaaeeeeiiiiooooouuuucn');
+ 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑáàâãäéèêëíìîïóòôõöúùûüçñ','aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn');
 $f$;
 revoke all on function event_crm_api.normalize_text(text) from public,anon,authenticated,service_role;
 
