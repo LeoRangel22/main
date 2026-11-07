@@ -29,6 +29,7 @@ module.exports=async function(c,sql,fixtureOwner,migrationFiles){
   const before=(await c.query("select (select count(*) from public.propostas)::int proposals,(select count(*) from public.oportunidades)::int opportunities,(select count(*) from public.solicitacoes_cotacao)::int requests")).rows[0];
   const meta=(await c.query("select has_schema_privilege('authenticated','event_crm','USAGE') data_schema,has_table_privilege('authenticated','event_crm.foundation_records','SELECT') table_select,(select prosecdef from pg_proc where oid='public.event_crm_history(text,text,text,integer,integer,text,text)'::regprocedure) public_definer,(select prosecdef from pg_proc where oid='event_crm_api.read_history(text,text,text,integer,integer,text,text)'::regprocedure) private_definer")).rows[0];
   assert.deepEqual(meta,{data_schema:false,table_select:false,public_definer:false,private_definer:true});
+  assert.equal((await c.query("select event_crm_api.normalize_text('ÁGÊNCIA' collate \"C\") normalized")).rows[0].normalized,"agencia","Accent search is independent of database locale");
   await deny({}, "anon");
   await deny({...claims,sub:outside,email:"crm-outsider@example.test"});
   await deny({...claims,sub:outside}); // Forged Master e-mail cannot change the current account.
