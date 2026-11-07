@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Clientes | Embaixada Carioca</title>
     <link rel="stylesheet" href="./styles.css?v=20261018-synergy" />
+    <link rel="stylesheet" href="./historical-crm.css?v=20261107-history" />
   </head>
   <body class="auth-locked clients-page" data-page="clientes">
     <main class="app-shell">
@@ -88,6 +89,29 @@
           <p>Use esta página para recuperar contatos, entender relacionamento anterior e abrir o último lead ou proposta sem procurar no funil.</p>
         </section>
 
+
+        <section id="crmHistory" class="crm-history ph-no-capture ph-mask" aria-label="Histórico recuperado de clientes" hidden>
+          <header><span>Relacionamentos anteriores</span><h2>Histórico recuperado</h2>
+            <p>Consulte contas, contatos, eventos e conversas com suas fontes.</p>
+            <p id="crmHistoryPeriod"></p></header>
+          <dl id="crmHistoryStats" class="crm-history-stats"></dl>
+          <form id="crmHistoryForm" class="crm-history-toolbar">
+            <label>Buscar no histórico<input id="crmHistorySearch" type="search" maxlength="200" autocomplete="off" placeholder="Nome, empresa, e-mail, telefone ou data" /></label>
+            <label>Consultar<select id="crmHistoryKind"><option value="organization">Contas</option><option value="contact">Contatos</option><option value="event">Eventos documentados</option><option value="case">Conversas</option><option value="action">Oportunidades de retomada</option></select></label>
+            <label>Ordenar por<select id="crmHistorySort"><option value="recent">Último contato</option><option value="name">Nome</option><option value="event_date">Data do evento</option></select></label>
+            <button id="crmHistoryRefresh" class="secondary" type="button">Atualizar histórico</button>
+          </form>
+          <div id="crmHistoryScope" class="crm-history-scope" hidden><span>Conta: <strong id="crmHistoryScopeName"></strong></span><button id="crmHistoryClearScope" type="button" class="secondary">Todas as contas</button></div>
+          <p id="crmHistoryStatus" class="crm-history-status" role="status" aria-live="polite"></p>
+          <div id="crmHistoryResults" class="crm-history-results"></div>
+          <nav class="crm-history-pager" aria-label="Páginas do histórico"><button id="crmHistoryPrevious" class="secondary" type="button">Anterior</button><span id="crmHistoryPage"></span><button id="crmHistoryNext" class="secondary" type="button">Próxima</button></nav>
+          <p>Contagens distinguem conversas, reservas e realizações comprovadas. Valores documentados não representam recebimentos conciliados.</p>
+        </section>
+        <dialog id="crmHistoryDialog" class="crm-history-dialog ph-no-capture ph-mask" aria-labelledby="crmHistoryDetailTitle">
+          <div class="crm-history-dialog-header"><h2 id="crmHistoryDetailTitle"></h2><button id="crmHistoryClose" type="button" class="secondary">Fechar</button></div>
+          <div id="crmHistoryDetail"></div>
+        </dialog>
+
         <section class="client-command-center" aria-label="Busca e carteira de clientes">
           <div class="global-search-panel">
             <div class="command-heading">
@@ -126,6 +150,7 @@
 <script defer src="./commercial-rules.js?v=20261015-approval-closure"></script>
 <script defer src="./commercial-dashboard.js?v=20261007-commercial-v1"></script>
 <script defer src="./remote-approval-ui.js?v=20261018-synergy"></script>
+  <script defer src="./historical-crm.js?v=20261107-history"></script>
   <script defer src="./app.js?v=20261018-synergy"></script>
   </body>
 </html>
