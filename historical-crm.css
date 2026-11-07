@@ -1,5 +1,6 @@
-.crm-history{margin:24px 0;padding:24px;background:#fff;border:1px solid #c8d8ce;border-radius:16px;min-width:0}
-.crm-history[hidden]{display:none}.crm-history h2{margin:4px 0 8px;color:#163f2c}.crm-history p{line-height:1.5}
+#crmHistoryMount{min-width:0;max-width:100%}
+.crm-history{overflow-wrap:anywhere;margin:24px 0;padding:24px;background:#fff;border:1px solid #c8d8ce;border-radius:16px;min-width:0}
+.crm-history[hidden]{display:none}.crm-history h2{max-width:100%;white-space:normal;overflow-wrap:anywhere;margin:4px 0 8px;color:#163f2c}.crm-history p{line-height:1.5}
 .crm-history-toolbar{display:grid;grid-template-columns:minmax(160px,2fr) repeat(2,minmax(130px,1fr)) auto;gap:12px;align-items:end;margin:20px 0}
 .crm-history-toolbar label{display:grid;gap:6px;font-weight:600}.crm-history-toolbar input,.crm-history-toolbar select{width:100%;min-width:0;min-height:44px;font-size:16px}
 .crm-history button,.crm-history-dialog button{min-height:44px}.crm-history-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
