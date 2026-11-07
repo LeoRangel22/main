@@ -109,6 +109,7 @@ function getPipelineStageForItem(status, date, snapshot = {}) {
 }
 
 function getPipelineItems() {
+  const receivedAtById = FunnelView.receiptDates({ requests: state.quoteRequests, opportunities: state.opportunities, proposals: state.proposals });
   const workingProposals = getWorkingProposals();
   const linkedRequests = new Set(workingProposals.map((proposal) => proposal.solicitacao_id).filter(Boolean));
   const requestItems = state.quoteRequests
@@ -135,6 +136,7 @@ function getPipelineItems() {
         briefingGuests: Object.prototype.hasOwnProperty.call(request, "convidados") ? request.convidados : eventSnapshot.convidados ?? null,
         total: null,
         createdAt: request.created_at,
+        receivedAt: receivedAtById.get(`request:${request.id}`) || "",
         updatedAt: request.updated_at || request.created_at,
         reference: request.snapshot?.referencia || "",
         snapshot: request.snapshot || {},
@@ -182,6 +184,7 @@ function getPipelineItems() {
       total: proposal.total || 0,
       privatizationAmount: proposal.privatizacao ?? snapshot.totals?.privatizationAmount ?? snapshot.totals?.privatization?.amount ?? 0,
       createdAt: proposal.created_at,
+      receivedAt: receivedAtById.get(`proposal:${proposal.id}`) || "",
       updatedAt: proposal.updated_at || proposal.created_at,
       sentAt: proposal.sent_at || "",
       linkExpiresAt: proposal.public_token_expires_at || "",
@@ -426,3 +429,94 @@ function getTaskPlan(item) {
     overdue: Boolean(dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()),
   };
 }
+
+
+/* Read-only funnel views. Sorting never changes a record's business stage. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = Object.freeze({ ...module.exports, FunnelView: api });
+  else root.FunnelView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+  const sortKeys = ["received", "event", "name"];
+  function normalize(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+  function validDate(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+    const [, y, m, d] = match;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    return date.toISOString().slice(0, 10) === value ? value : "";
+  }
+  function receivedDay(value) {
+    const timestamp = Date.parse(value || "");
+    if (!Number.isFinite(timestamp)) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(timestamp);
+    const part = type => parts.find(p => p.type === type).value;
+    return `${part("year")}-${part("month")}-${part("day")}`;
+  }
+  function dateMatches(date, query) {
+    if (!date) return false;
+    const [year, month, day] = date.split("-");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(query)) return Boolean(validDate(query)) && date === query;
+    const match = query.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?$/);
+    if (!match) return false;
+    const [, d, m, y] = match;
+    if (y && !validDate(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`)) return false;
+    return Number(d) === Number(day) && Number(m) === Number(month) && (!y || y === year);
+  }
+  function matches(item, query) {
+    const term = normalize(query);
+    if (!term) return true;
+    const text = normalize([
+      item.name, item.company, item.finalClient, item.groupName, item.email, item.phone,
+      item.reference, item.type, item.clientType, ...(item.meta || [])
+    ].filter(Boolean).join(" "));
+    const phone = String(item.phone || "").replace(/\D/g, "");
+    const dates = [validDate(item.date), receivedDay(item.receivedAt)].filter(Boolean);
+    // Treat an entire formatted phone as one term, rather than separate punctuation fragments.
+    if (/^[+()\d\s.-]+$/.test(term) && term.replace(/\D/g, "").length >= 8 && !/^\d{4}-\d{2}-\d{2}$/.test(term) && !/^\d{1,2}-\d{1,2}-\d{4}$/.test(term)) {
+      return phone.includes(term.replace(/\D/g, ""));
+    }
+    return term.split(" ").every(token => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(token) || /^\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{4})?$/.test(token)) {
+        return dates.some(date => dateMatches(date, token));
+      }
+      return text.includes(token) || (/^\d{4,}$/.test(token) && phone.includes(token));
+    });
+  }
+  function receiptDates({ requests = [], opportunities = [], proposals = [] } = {}) {
+    const requestDates = new Map();
+    const opportunityDates = new Map();
+    const result = new Map();
+    const time = value => { const n = Date.parse(value || ""); return Number.isFinite(n) ? n : Infinity; };
+    const setEarliest = (map, id, value) => { if (id && Number.isFinite(value)) map.set(id, Math.min(map.get(id) ?? Infinity, value)); };
+    requests.forEach(row => {
+      setEarliest(requestDates, row.id, time(row.created_at));
+      setEarliest(opportunityDates, row.oportunidade_id, time(row.created_at));
+    });
+    opportunities.forEach(row => setEarliest(opportunityDates, row.id, Math.min(time(row.created_at), requestDates.get(row.solicitacao_id) ?? Infinity)));
+    proposals.forEach(row => setEarliest(opportunityDates, row.oportunidade_id, Math.min(time(row.created_at), requestDates.get(row.solicitacao_id) ?? Infinity)));
+    const add = (kind, row) => {
+      const value = Math.min(time(row.created_at), opportunityDates.get(row.oportunidade_id) ?? Infinity,
+        requestDates.get(kind === "request" ? row.id : row.solicitacao_id) ?? Infinity);
+      if (Number.isFinite(value)) result.set(`${kind}:${row.id}`, new Date(value).toISOString());
+    };
+    requests.forEach(row => add("request", row));
+    proposals.forEach(row => add("proposal", row));
+    return result;
+  }
+  function sort(items, key = "received") {
+    const mode = sortKeys.includes(key) ? key : "received";
+    const value = item => mode === "event" ? validDate(item.date) : mode === "received" ? Date.parse(item.receivedAt || "") : normalize(item.name);
+    return [...items].sort((a, b) => {
+      const av = value(a), bv = value(b);
+      const missing = v => v === "" || v == null || (typeof v === "number" && !Number.isFinite(v));
+      if (missing(av) !== missing(bv)) return missing(av) ? 1 : -1;
+      const order = missing(av) ? 0 : mode === "received" ? bv - av : collator.compare(String(av), String(bv));
+      return order || collator.compare(normalize(a.name), normalize(b.name)) || String(a.id).localeCompare(String(b.id));
+    });
+  }
+  return Object.freeze({ normalize, matches, receiptDates, sort, sortKeys });
+});

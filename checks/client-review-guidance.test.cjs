@@ -136,8 +136,8 @@ test('shared phone warning survives another two-person channel',()=>{
   assert.equal(result.get('a').moreCandidates,true);
 });
 function pipelineContext(proposals, requests=[]) {
-  const c=context(); c.state.quoteRequests=requests;
-  Object.assign(c,{getWorkingProposals:()=>proposals,normalizeRequestStatus:x=>x,getPipelineStageForItem:x=>x,
+  const c=context(); c.state.quoteRequests=requests; c.state.proposals=proposals; c.state.opportunities=[];
+  Object.assign(c,{FunnelView:require("../commercial-rules.js").FunnelView,getWorkingProposals:()=>proposals,normalizeRequestStatus:x=>x,getPipelineStageForItem:x=>x,
     getPaymentCoverage:()=>({paidTotal:0,remainingDue:0}),getOpportunityForItem:()=>null,getFinalClientFromSnapshot:()=>'',
     getGroupNameFromSnapshot:()=>'',getLeadSegment:()=>'',parseLocalIsoDate:()=>null});
   vm.runInContext(extract('getPipelineItems',fs.readFileSync('commercial-rules.js','utf8')),c); return c;

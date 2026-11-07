@@ -190,6 +190,15 @@
               </div>
             </details>
             <section id="salesFunnelOverview" class="sales-funnel-overview" aria-label="Etapas da venda" hidden></section>
+            <section class="pipeline-search" aria-label="Buscar no funil">
+              <label for="pipelineSearchInput">Buscar no funil</label>
+              <div class="pipeline-search-controls">
+                <input id="pipelineSearchInput" type="search" placeholder="Nome, empresa, e-mail, celular ou data" autocomplete="off" aria-describedby="pipelineSearchHelp pipelineSearchStatus" disabled />
+                <button class="secondary" id="pipelineSearchClear" type="button" disabled>Limpar busca</button>
+              </div>
+              <small id="pipelineSearchHelp">Combine termos. Datas: 18/11, 18/11/2026 ou 2026-11-18 (evento ou recebimento). Celular com ou sem pontuação.</small>
+              <p id="pipelineSearchStatus" role="status" aria-live="polite"></p>
+            </section>
             <div class="pipeline-quick-filters" aria-label="Filtros rápidos do funil">
               <span>Filtros rápidos</span>
               <div class="pipeline-filter-list" id="pipelineQuickFilters"></div>
