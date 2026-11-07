@@ -1,0 +1,21 @@
+#crmHistoryMount{min-width:0;max-width:100%}
+.crm-history{overflow-wrap:anywhere;margin:24px 0;padding:24px;background:#fff;border:1px solid #c8d8ce;border-radius:16px;min-width:0}
+.crm-history[hidden]{display:none}.crm-history h2{max-width:100%;white-space:normal;overflow-wrap:anywhere;margin:4px 0 8px;color:#163f2c}.crm-history p{line-height:1.5}
+.crm-history-toolbar{display:grid;grid-template-columns:minmax(160px,2fr) repeat(2,minmax(130px,1fr)) auto;gap:12px;align-items:end;margin:20px 0}
+.crm-history-toolbar label{display:grid;gap:6px;font-weight:600}.crm-history-toolbar input,.crm-history-toolbar select{width:100%;min-width:0;min-height:44px;font-size:16px}
+.crm-history button,.crm-history-dialog button{min-height:44px}.crm-history-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.crm-history-stat{background:#edf4ef;padding:14px;border-radius:10px}.crm-history-stat dt{font-size:13px;color:#31583f}.crm-history-stat dd{margin:8px 0 0;font-weight:800;font-size:24px;color:#163f2c}
+.crm-history-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-top:16px}
+.crm-history-card{padding:18px;border:1px solid #d5dfd7;border-radius:12px;min-width:0;overflow-wrap:anywhere}.crm-history-card h3{margin:0 0 12px;font-size:18px;color:#163f2c}
+.crm-history-card button{margin-top:12px}.crm-history-line{margin:6px 0;font-size:14px;overflow-wrap:anywhere}.crm-history-line strong{font-weight:650}
+.crm-history-tag{display:inline-block;margin:4px 0;padding:5px 9px;background:#e6efe8;color:#163f2c;border-radius:6px;font-size:13px}
+.crm-history-pager,.crm-history-scope{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}.crm-history-scope[hidden]{display:none}
+.crm-history-error{color:#9a2323}.crm-history-status{min-height:24px}
+.crm-history-dialog{width:min(860px,calc(100% - 32px));max-height:90vh;padding:24px;border:1px solid #b7cbbd;border-radius:14px;color:#20372b;overflow-wrap:anywhere}
+.crm-history-dialog::backdrop{background:#0e241c99}.crm-history-dialog-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.crm-history-dialog h2{font-size:22px;margin:0 0 20px}
+.crm-history-definition{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2fr);gap:10px 18px}.crm-history-definition dt{font-weight:700}.crm-history-definition dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.crm-history-related{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}.crm-history-related h3{width:100%;margin:0}
+.crm-history-source{padding:14px 0;border-bottom:1px solid #d5dfd7}.crm-history-observations{margin:20px 0}.crm-history-observations summary{cursor:pointer;font-weight:700;padding:10px 0}
+.crm-history-observations small{display:block;color:#526258}.crm-history-sources{margin-top:24px}
+@media(max-width:700px){.crm-history{padding:16px}.crm-history-toolbar{grid-template-columns:1fr 1fr}.crm-history-toolbar label:first-child{grid-column:1/-1}.crm-history-stats{grid-template-columns:1fr 1fr}.crm-history-definition{grid-template-columns:1fr;gap:6px}.crm-history-definition dd{margin-bottom:12px}.crm-history-dialog{padding:18px}}
+@media(max-width:380px){.crm-history-toolbar{grid-template-columns:1fr}.crm-history-toolbar label:first-child{grid-column:auto}}
