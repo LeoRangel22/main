@@ -48,6 +48,14 @@ test("each column sorts independently, keeps keyboard focus and preserves busine
   await expect(order).toHaveValue("event");
   expect(await page.evaluate(() => loadPipelineSorts().sales_ready)).toBe("event");
   expect(await page.evaluate(() => JSON.stringify([state.proposals, state.opportunities, state.quoteRequests]))).toBe(before);
+  await page.evaluate(() => {
+    window.__quoteRenders = 0;
+    const original = renderCalculation;
+    renderCalculation = (...args) => { window.__quoteRenders++; return original(...args); };
+  });
+  await page.locator("#pipelineSearchInput").fill("ana");
+  expect(await page.evaluate(() => window.__quoteRenders)).toBe(0);
+  expect(await page.evaluate(() => JSON.stringify([state.proposals, state.opportunities, state.quoteRequests]))).toBe(before);
   await expectNoBrowserErrors(errors);
 });
 test("search supports accents, company, e-mail, mobile and event/receipt dates without losing input focus", async ({ page }) => {

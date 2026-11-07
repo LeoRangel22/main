@@ -16394,7 +16394,7 @@ function addProductType() {
 
 function bindEvents() {
   Object.values(fields).forEach((field) => {
-    if (!field) return;
+    if (!field || field === fields.pipelineSearchInput) return;
     const refreshFormOutputs = (event) => {
       if (event?.target === fields.eventDateTime) {
         syncFieldsFromDateTime();
