@@ -90,13 +90,16 @@
         </section>
 
 
-        <div id="crmHistoryMount"></div>
+        <nav class="client-section-nav" aria-label="Áreas de clientes">
+          <a class="button-link secondary" href="#currentClients">Clientes atuais</a>
+          <a class="button-link secondary" href="#crmHistoryMount" id="clientHistoryLink" hidden>Histórico recuperado</a>
+        </nav>
 
-        <section class="client-command-center" aria-label="Busca e carteira de clientes">
+        <section class="client-command-center" id="currentClients" tabindex="-1" aria-label="Busca e carteira de clientes">
           <div class="global-search-panel">
             <div class="command-heading">
               <div>
-                <span>Busca global</span>
+                <span>Buscar nos clientes atuais</span>
                 <strong id="globalSearchLabel">Cliente, empresa, telefone, data ou referência</strong>
               </div>
             </div>
@@ -120,6 +123,7 @@
             </div>
           </div>
         </section>
+        <div id="crmHistoryMount" tabindex="-1"></div>
       </section>
     </main>
 

@@ -11,7 +11,7 @@ async function capture(page,info,label){
  console.log('NAVIGATION_AUDIT '+JSON.stringify({label,...metrics}));
  await page.screenshot({path:info.outputPath('synthetic-'+label+'.png')});
 }
-for(const width of [390,1440])test('commercial Funil shortcut is reachable from Operations at '+width+'px',async({page},info)=>{
+for(const width of [320,390,1440])test('commercial Funil shortcut is reachable from Operations at '+width+'px',async({page},info)=>{
  const c=await isolate(page);await page.setViewportSize({width,height:950});await page.goto('/index.html?qa=1');
  await expect(page.locator('body')).toHaveClass(/auth-connected/);
  const before=await page.evaluate(()=>JSON.stringify(state.proposals));
@@ -20,6 +20,8 @@ for(const width of [390,1440])test('commercial Funil shortcut is reachable from 
  await page.locator('.admin-quick-nav').getByRole('link',{name:'Funil',exact:true}).click();
  await capture(page,info,'funil-from-operations-'+width);
  await expect(page.locator('#salesPipeline')).toBeVisible();
+ await expect(page.locator('#salesPipeline')).toBeFocused();
+ expect(await page.locator('#salesPipeline').evaluate(n=>Math.abs(n.getBoundingClientRect().top))).toBeLessThan(40);
  expect(await page.evaluate(()=>JSON.stringify(state.proposals))).toBe(before);
  expect(c.external).toEqual([]);expect(c.errors).toEqual([]);
 });
@@ -38,5 +40,56 @@ test('current client search stays reachable when historical accounts are loaded'
  await page.evaluate(()=>scrollTo(0,0));
  await capture(page,info,'clients-history-and-current');
  await expect(page.locator('#globalSearchInput')).toBeInViewport();
+ await expect(page.getByRole('link',{name:'Histórico recuperado',exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Histórico recuperado',exact:true}).press('Enter');
+ await expect(page.locator('#crmHistorySearch')).toBeInViewport();
+ await page.getByRole('link',{name:'Clientes atuais',exact:true}).press('Enter');
+ await expect(page.locator('#globalSearchInput')).toBeInViewport();
+ await page.locator('#globalSearchInput').fill('Pessoa Sintetica quality-a1');
+ await expect(page.locator('.client-registry-card')).toHaveCount(1);
+ await page.evaluate(()=>EventCrmHistory.setSession(null));
+ await expect(page.locator('#clientHistoryLink')).toBeHidden();
+ await expect(page.locator('#crmHistoryResults .crm-history-card')).toHaveCount(0);
+ expect(c.external).toEqual([]);expect(c.errors).toEqual([]);
+});
+
+for(const width of [320,1440])test('workspace shortcuts preserve the draft and support repeated keyboard navigation at '+width+'px',async({page})=>{
+ const c=await isolate(page);await page.setViewportSize({width,height:950});await page.goto('/index.html?qa=1');
+ await expect(page.locator('body')).toHaveClass(/auth-connected/);
+ await page.locator('#clientName').fill('Rascunho sintético de navegação');
+ const before=await page.evaluate(()=>({records:JSON.stringify(state.proposals),editor:getCurrentEditorSignature()}));
+ const nav=page.locator('.admin-quick-nav');
+ for(const [name,id] of [['Operação','operationWorkspace'],['Hoje','salesCommand'],['Operação','operationWorkspace'],['Proposta','quoteWorkspace']]){
+  await nav.getByRole('link',{name,exact:true}).press('Enter');
+  await expect(page.locator('#'+id)).toBeVisible();await expect(page.locator('#'+id)).toBeFocused();
+ }
+ // Same fragment: no hashchange occurs, but the destination must still open.
+ await page.locator('[data-workspace-mode="operations"]').click();
+ await nav.getByRole('link',{name:'Proposta',exact:true}).click();
+ await expect(page.locator('body')).toHaveClass(/workspace-mode-sales/);
+ await expect(page.locator('#quoteWorkspace')).toBeFocused();
+ expect(await page.evaluate(()=>({records:JSON.stringify(state.proposals),editor:getCurrentEditorSignature()}))).toEqual(before);
+ expect(c.external).toEqual([]);expect(c.errors).toEqual([]);
+});
+
+test('section fragments survive reload and browser history without overriding the complete view',async({page})=>{
+ const c=await isolate(page);await page.goto('/index.html?qa=1');
+ await page.locator('[data-workspace-mode="operations"]').click();
+ await page.goto('/index.html?qa=1#salesPipeline');
+ await expect(page.locator('body')).toHaveClass(/workspace-mode-sales/);
+ await expect(page.locator('#salesPipeline')).toBeVisible();
+ await page.locator('.admin-quick-nav').getByRole('link',{name:'Operação',exact:true}).click();
+ await expect(page.locator('#operationWorkspace')).toBeVisible();
+ await page.goBack();
+ await expect(page.locator('#salesPipeline')).toBeVisible();
+ await page.goForward();
+ await expect(page.locator('#operationWorkspace')).toBeVisible();
+ await page.reload();
+ await expect(page.locator('#operationWorkspace')).toBeVisible();
+ await page.locator('[data-workspace-mode="full"]').click();
+ await page.locator('.admin-quick-nav').getByRole('link',{name:'Funil',exact:true}).click();
+ await expect(page.locator('body')).toHaveClass(/workspace-mode-full/);
+ await page.evaluate(()=>{location.hash='unknown-section';});
+ await expect(page.locator('body')).toHaveClass(/workspace-mode-full/);
  expect(c.external).toEqual([]);expect(c.errors).toEqual([]);
 });
