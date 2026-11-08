@@ -21,7 +21,10 @@ for(const width of [320,390,1440])test('commercial Funil shortcut is reachable f
  await capture(page,info,'funil-from-operations-'+width);
  await expect(page.locator('#salesPipeline')).toBeVisible();
  await expect(page.locator('#salesPipeline')).toBeFocused();
- expect(await page.locator('#salesPipeline').evaluate(n=>Math.abs(n.getBoundingClientRect().top))).toBeLessThan(40);
+ // The existing sticky header is accommodated by the section's scroll margin.
+ await expect.poll(()=>page.locator('#salesPipeline').evaluate(n=>
+  Math.abs(n.getBoundingClientRect().top-parseFloat(getComputedStyle(n).scrollMarginTop))
+ )).toBeLessThan(2);
  expect(await page.evaluate(()=>JSON.stringify(state.proposals))).toBe(before);
  expect(c.external).toEqual([]);expect(c.errors).toEqual([]);
 });
