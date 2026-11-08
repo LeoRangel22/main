@@ -22,6 +22,7 @@ async function setup(page,options={}){
  return{calls,external,errors};
 }
 async function fill(page,{email='person@example.test',phone='',name='Pessoa Sintetica'}={}){
+ await page.locator('#requestGuestCount').fill('30');
  await page.locator('#requestClientName').fill(name);
  if(email)await page.locator('#requestClientEmail').fill(email);
  if(phone)await page.locator('#requestClientPhone').fill(phone);

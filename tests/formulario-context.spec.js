@@ -11,7 +11,7 @@ async function isolate(page){
   await page.exposeFunction('__fixtureRpc',async(name,payload)=>{calls.push({name,payload});await new Promise(r=>setTimeout(r,30));return {data:[{request_id:'00000000-0000-4000-8000-000000000101',opportunity_id:'00000000-0000-4000-8000-000000000102',capture_token:payload.p_capture_token}],error:null}});
   return {calls,unexpected,errors};
 }
-async function essentials(page){await page.locator('#requestEventDate').fill('2027-02-20');await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid')}
+async function essentials(page){await page.locator('#requestGuestCount').fill('30');await page.locator('#requestEventDate').fill('2027-02-20');await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid')}
 for(const lang of ['pt','en','es'])test(`URL ${lang} wins over saved preference and preserves submission context`,async({page})=>{
   const fixture=await isolate(page);await page.addInitScript(()=>localStorage.setItem('embaixada_form_language_v1','en'));
   await page.goto('/formulario.html?lang='+lang+'&'+utm+'&email=not-forwarded@example.invalid');
@@ -22,7 +22,7 @@ for(const lang of ['pt','en','es'])test(`URL ${lang} wins over saved preference 
 test('Spanish mobile form renders choices, formats, review, errors and accessible labels',async({page})=>{
   const f=await isolate(page);await page.setViewportSize({width:375,height:812});await page.goto('/formulario.html?lang=es&'+utm);
   await expect(page.locator('#heroTitle')).toContainText('Organiza tu evento');await expect(page.locator('.language-toggle')).toHaveAttribute('aria-label','Idioma del formulario');
-  await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText(/corrige|completa|Ajusta|fecha/i);
+  await page.locator('#requestGuestCount').fill('30');await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#clientFormStatus')).toContainText(/corrige|completa|Ajusta|fecha/i);
   await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="weekday-morning"]').click();await page.locator('[data-choice-value="company"]').click();await page.locator('[data-choice-value="corporate"]').click();
   await page.locator('[data-format-id="breakfast"]').click();await expect(page.locator('#requestEventType')).toHaveValue('Café da Manhã / Brunch');await expect(page.locator('#formatRecommendations')).toContainText('Desayuno');
   await essentials(page);await expect(page.locator('#finalReviewGrid')).toContainText('Desayuno');await expect(page.locator('#finalReviewGrid')).not.toContainText('Café da Manhã');

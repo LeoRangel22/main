@@ -10,7 +10,7 @@ function setup(){const status=node(),retry=node(),requests=[],pending=[],timers=
   fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''},guests:{value:'30'}},getSnapshot:()=>structuredClone(current),getOrCreateReferenceCode:()=>current.referencia,getCaptureToken:()=>token,hasUsableName:v=>String(v).trim().length>=2,
   getPublicSupabaseClient:()=>({rpc:(name,payload)=>{const d=deferred();requests.push({name,payload:structuredClone(payload)});pending.push(d);return d.promise;}}),
   window:{setTimeout:f=>{timers.set(++timer,f);return timer;},clearTimeout:id=>timers.delete(id),addEventListener:(type,fn)=>{events[type]=fn;}},localStorage:{getItem:k=>shared.get(k)||null,setItem:(k,v)=>shared.set(k,v)},document:{querySelector:s=>s==='#partialCaptureStatus'?status:s==='#retryPartialCaptureBtn'?retry:null}});
- vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount'),context);
+ vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount')+'\n'+fn('hasInvalidGuestCount'),context);
  return{status,retry,requests,pending,timers,events,clock,current,run:s=>vm.runInContext(s,context),phase:()=>vm.runInContext('partialCaptureState.phase',context),at:()=>vm.runInContext('partialCaptureState.confirmedAt',context)};
 }
 const tick=()=>new Promise(r=>setImmediate(r));

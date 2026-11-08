@@ -25,6 +25,10 @@ async function fixtureOwner(c) {
   }
 }
 async function apply(c,file) {
+  const unknownGuests=file.startsWith('supabase/migrations/')&&file.endsWith('_public_quote_unknown_guests.sql');
+  const guestAudit=unknownGuests?require('../checks/public-quote-unknown-guests.cjs'):null;
+  const guestFixtures=unknownGuests?await guestAudit.seedUpgrade(c):null;
+  const guestsBefore=unknownGuests?await guestAudit.inspectUpgrade(c):null;
   const whatsappPilot=file.startsWith('supabase/migrations/')&&file.endsWith('_single_whatsapp_pilot.sql');
   if(whatsappPilot) await apply(c,'checks/whatsapp-pilot-upgrade-setup.sql');
   const gerenciaIdentity=file.startsWith('supabase/migrations/')&&file.endsWith('_gerencia_operational_identity.sql');
@@ -56,7 +60,9 @@ async function apply(c,file) {
   }
   // Only pg_cron extension creation is adapted; cron.schedule is explicitly mocked.
   const statement=sql(file).replace('create extension if not exists pg_cron with schema pg_catalog;','-- CI adapter: cron schema supplied by platform-test.sql');
+  if(unknownGuests) await guestAudit.verifyTransactionalRollback(c,statement);
   try { await c.query(statement); } catch(e) { e.message=`${file}: ${e.message}`; throw e; }
+  if(unknownGuests) { await guestAudit.assertUpgrade(c,guestsBefore); await guestAudit.cleanupUpgrade(c,guestFixtures); }
   if(viewVisibility){
     const upgraded=(await c.query("select oid::text,proowner::text,proacl::text from pg_proc where oid='public.record_public_proposal_view(uuid,text,text)'::regprocedure")).rows[0];
     assert.deepEqual(upgraded,priorViewFunction);
@@ -88,6 +94,7 @@ async function create(name) {
   return c;
 }
 async function checks(c) {
+  await require('../checks/public-quote-unknown-guests.cjs').run(c);
   // Business configuration is deliberately absent from a fresh installation.
   // Explicit fixture capacity, independent of production configuration.
   await c.query('update public.event_commercial_policy set capacity=200 where id');
@@ -117,6 +124,7 @@ async function concurrent(c,name) {
   await require('../checks/gerencia-identity-concurrency.cjs')(c,sql,connect,name);
   await require('../checks/gerencia-identity-rollback-concurrency.cjs')(c,sql,connect,name);
   await require('../checks/public-form-attribution-concurrency.cjs')(c,connect,name);
+  await require('../checks/public-quote-unknown-guests-concurrency.cjs')(c,connect,name);
   await require('../checks/future-tariff-concurrency.cjs')(c,connect,name,actor);
   const claims=JSON.stringify({sub:actor,email:owner.email,role:'authenticated'});
   const opp=(await c.query("insert into oportunidades(cliente_nome,status) values('Concurrent fixture','proposta_pronta') returning id")).rows[0].id;

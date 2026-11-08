@@ -16,7 +16,7 @@ function setup(){
   localStorage:{getItem:k=>shared.get(k)||null,setItem:(k,v)=>{shared.set(k,v);messages.push({key:k,value:JSON.parse(v)});}},
   document:{querySelector:()=>null},
  });
- vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount'),context);
+ vm.runInContext(source.slice(source.indexOf('const partialCaptureState ='),source.indexOf('function createReferenceCode()'))+'\n'+fn('isValidEmail')+'\n'+fn('isValidContactPhone')+'\n'+fn('toNumber')+'\n'+fn('getGuestCount')+'\n'+fn('hasInvalidGuestCount'),context);
  context.observe=()=>history.push(vm.runInContext('partialCaptureState.phase',context));
  vm.runInContext('renderPartialCaptureStatus=()=>observe()',context);
  return{requests,pending,timers,messages,history,current,shared,run:s=>vm.runInContext(s,context),phase:()=>vm.runInContext('partialCaptureState.phase',context)};

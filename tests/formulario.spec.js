@@ -12,14 +12,14 @@ test.describe("Formulário público do cliente", () => {
     });
   });
 
-  test("mantém defaults, campos críticos e UX mobile sem envio real", async ({ page }) => {
+  test("não presume respostas e mantém campos críticos e UX mobile sem envio real", async ({ page }) => {
     const errors = collectBrowserErrors(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/formulario.html");
 
     await expect(page.locator("#clientQuoteForm")).toBeVisible();
-    await expect(page.locator("#requestDateIsFlexible")).toHaveValue("no");
+    await expect(page.locator("#requestDateIsFlexible")).toHaveValue("");
     await expect(page.locator("#requestDuration")).toHaveValue("");
     await expect(page.locator("#requestGuestCount")).toHaveAttribute("inputmode", "numeric");
     await expect(page.locator("#phoneLabel")).toContainText("Celular/WhatsApp");
@@ -82,6 +82,7 @@ test.describe("Formulário público do cliente", () => {
     await expect(page.locator("#contactStep")).toBeInViewport();
     await page.locator("#requestClientName").fill("Alex Smith");
     await page.locator("#requestClientEmail").fill("alex@example.com");
+    await page.locator("#requestGuestCount").fill("30");
     await page.locator("#submitClientQuoteBtn").click();
     await expect(page.locator("#clientFormStatus")).toContainText(/received|sent/i);
     expect(payload?.p_snapshot?.cliente?.idioma).toBe("en");
@@ -95,6 +96,7 @@ test.describe("Formulário público do cliente", () => {
     });
 
     await page.goto("/formulario.html");
+    await page.locator("#requestGuestCount").fill("30");
     await page.locator("#submitClientQuoteBtn").click();
 
     await expect(page.locator("#clientFormStatus")).toContainText(/Complete|corrigir|enviar/i);
@@ -114,6 +116,7 @@ test.describe("Formulário público do cliente", () => {
     await page.locator("#requestEventDate").fill("2026-08-20");
     await page.locator("#requestClientName").fill("Ana");
     await page.locator("#requestClientEmail").fill("ana@example.com");
+    await page.locator("#requestGuestCount").fill("30");
     await page.locator("#submitClientQuoteBtn").click();
 
     await expect(page.locator("#clientFormStatus")).toContainText(/Solicitação enviada|received/i);
@@ -245,6 +248,7 @@ test('falha de RPC não tenta inserir diretamente na tabela pública',async({pag
   await page.locator('#requestEventDate').fill('2099-11-20');
   await page.locator('#requestClientName').fill('Ana');
   await page.locator('#requestClientEmail').fill('ana@example.test');
+  await page.locator('#requestGuestCount').fill('30');
   await page.locator('#submitClientQuoteBtn').click();
   await expect(page.locator('#clientFormStatus')).toHaveAttribute('data-status','error');
   expect(directWrites).toBe(0);

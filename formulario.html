@@ -179,7 +179,7 @@
               <label>
                 <span id="eventDateLabel">Data desejada</span>
                 <input id="requestEventDate" name="data_desejada" type="date" autocomplete="off" />
-                <small id="eventDateHelp">Se ainda não houver data fechada, conte a janela aproximada abaixo.</small>
+                <small id="eventDateHelp">Para enviar, informe a data ou uma janela aproximada abaixo.</small>
               </label>
               <label>
                 <span id="dateFlexLabel">Se não tiver data fechada</span>
@@ -192,25 +192,25 @@
                 />
               </label>
               <label>
-                <span id="dateFlexibleLabel">A data pode mudar?</span>
+                <span id="dateFlexibleLabel">A data pode mudar? (opcional)</span>
                 <select id="requestDateIsFlexible" name="data_e_flexivel" autocomplete="off">
                   <option value="">Selecione</option>
                   <option value="yes">Sim</option>
-                  <option value="no" selected>Não</option>
+                  <option value="no">Não</option>
                   <option value="maybe">Ainda avaliando</option>
                 </select>
               </label>
               <label>
                 <div class="guest-count-heading">
-                  <span id="guestCountLabel">Quantidade de convidados</span>
-                  <span class="guest-range-output" id="requestGuestOutput">30 pessoas</span>
+                  <span id="guestCountLabel">Quantidade de convidados (obrigatória para enviar)</span>
+                  <span class="guest-range-output" id="requestGuestOutput">Não informado</span>
                 </div>
-                <input id="requestGuestSlider" type="range" min="2" max="100" step="1" value="30" aria-label="Escolha rápida de convidados" />
-                <input id="requestGuestCount" aria-labelledby="guestCountLabel" aria-describedby="guestCountHelp" name="convidados" type="number" inputmode="numeric" min="2" max="500" step="1" value="30" required />
-                <small id="guestCountHelp">Use o slider até 99+. Para grupos maiores, digite o número exato até 500.</small>
+                <input id="requestGuestSlider" type="range" min="2" max="100" step="1" value="2" aria-describedby="guestCountHelp" aria-valuetext="Quantidade não informada. Ajuste para preencher." aria-label="Escolha rápida de convidados" />
+                <input id="requestGuestCount" aria-labelledby="guestCountLabel" aria-describedby="guestCountHelp" name="convidados" type="number" inputmode="numeric" min="2" max="500" step="1" placeholder="Ex.: 30" required />
+                <small id="guestCountHelp">Informe de 2 a 500 pessoas. O controle rápido só preenche a quantidade quando você o ajusta.</small>
               </label>
               <label>
-                <span id="timeRangeLabel">Período desejado</span>
+                <span id="timeRangeLabel">Período desejado (opcional)</span>
                 <select id="requestTimeRange" name="periodo_desejado" autocomplete="off">
                   <option value="">Selecione</option>
                   <option value="morning">Manhã</option>
@@ -219,14 +219,14 @@
                 </select>
               </label>
               <label>
-                <span id="eventTimeLabel">Horário de chegada</span>
+                <span id="eventTimeLabel">Horário de chegada (opcional)</span>
                 <select id="requestEventTime" name="horario_chegada" autocomplete="off">
                   <option value="">Selecione o período</option>
                 </select>
                 <small id="eventTimeHelp">O horário guia a operação. Atrasos podem gerar hora extra.</small>
               </label>
               <label>
-                <span id="durationLabel">Duração estimada</span>
+                <span id="durationLabel">Duração estimada (opcional)</span>
                 <select id="requestDuration" name="duracao_estimada" autocomplete="off">
                   <option value="">A definir</option>
                   <option value="1">1h</option>
@@ -349,18 +349,18 @@
                   <small id="phoneHelp">Informe o DDD e o celular. Se for um número internacional, inclua o código do país.</small>
                 </label>
                 <label>
-                  <span id="companyLabel">Empresa ou agência</span>
-                  <small id="companyHelp">Recomendado para empresa e agência. Ajuda a equipe a localizar e priorizar seu pedido.</small>
+                  <span id="companyLabel">Empresa ou agência (opcional)</span>
+                  <small id="companyHelp">Opcional, inclusive para empresas e agências. Ajuda a equipe a identificar seu pedido.</small>
                   <input id="requestCompany" name="empresa" type="text" autocomplete="organization" placeholder="Ex.: Grupo Atlântico Eventos…" />
                 </label>
                 <label id="endClientField" class="conditional-contact-field is-hidden">
-                  <span id="endClientLabel">Cliente final</span>
-                  <small id="endClientHelp">Recomendado para agências. Ex.: marca, empresa contratante ou família atendida.</small>
+                  <span id="endClientLabel">Cliente final (opcional)</span>
+                  <small id="endClientHelp">Opcional para agências. Ex.: marca, empresa contratante ou família atendida.</small>
                   <input id="requestEndClientName" name="cliente_final" type="text" autocomplete="organization" placeholder="Ex.: Grupo Aurora…" />
                 </label>
                 <label id="groupNameField" class="conditional-contact-field is-hidden">
-                  <span id="groupNameLabel">Nome do grupo</span>
-                  <small id="groupNameHelp">Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.</small>
+                  <span id="groupNameLabel">Nome do grupo (opcional)</span>
+                  <small id="groupNameHelp">Opcional para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.</small>
                   <input id="requestGroupName" name="nome_grupo" type="text" autocomplete="organization" placeholder="Ex.: Incentivo México 2026…" />
                 </label>
               </div>
@@ -411,7 +411,7 @@
             <div>
               <span id="finalReviewEyebrow">Revisão final</span>
               <h2 id="finalReviewTitle">Veja o que a equipe vai receber</h2>
-              <p id="finalReviewBody">Confira os pontos principais. Se algo precisar mudar, toque em “Ajustar” no card.</p>
+              <p id="finalReviewBody">Para enviar: data ou janela, convidados, nome e um contato. Os demais detalhes são opcionais. Toque em “Ajustar” para mudar.</p>
             </div>
             <div class="final-review-grid" id="finalReviewGrid"></div>
           </section>

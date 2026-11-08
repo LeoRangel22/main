@@ -19,6 +19,7 @@ for (const failure of ['throw', 'reject', 'pending', 'missing']) {
     await page.locator('#requestEventDate').fill('2026-12-20');
     await page.locator('#requestClientName').fill('Cliente de teste');
     await page.locator('#requestClientEmail').fill('fixture@example.test');
+    await page.locator('#requestGuestCount').fill('30');
     await page.locator('#submitClientQuoteBtn').click();
     await expect(page.locator('#clientFormStatus')).toContainText('Solicitação enviada');
     expect(calls).toHaveLength(1);
@@ -41,7 +42,8 @@ test('lead usa oportunidade retornada pelo banco sem enviar referência ou conta
   await page.locator('#requestEventDate').fill('2026-12-20');
   await page.locator('#requestClientName').fill('Cliente confidencial');
   await page.locator('#requestClientEmail').fill('private@example.test');
-  await page.locator('#submitClientQuoteBtn').click();
+  await page.locator('#requestGuestCount').fill('30');
+    await page.locator('#submitClientQuoteBtn').click();
   await expect(page.locator('#clientFormStatus')).toContainText('Solicitação enviada');
   await expect.poll(()=>events.find(e=>e.event==='lead_created')?.properties.entity_hash).toBe(opportunityHash);
   const lead=events.find(e=>e.event==='lead_created');

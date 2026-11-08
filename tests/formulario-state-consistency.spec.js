@@ -16,7 +16,7 @@ async function isolate(page,{draft}={}){
  });
  return{calls,outside,errors};
 }
-async function contact(page){await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid');await page.locator('#requestEventDate').fill('2099-02-20');}
+async function contact(page){if(await page.locator('#requestGuestCount').inputValue()==='')await page.locator('#requestGuestCount').fill('30');await page.locator('#requestClientName').fill('Synthetic Visitor');await page.locator('#requestClientEmail').fill('visitor@example.invalid');await page.locator('#requestEventDate').fill('2099-02-20');}
 async function personalized(page){await page.locator('#formPersonalizeNav').click();await page.locator('[data-choice-value="weekday-morning"]').click();await page.locator('[data-choice-value="company"]').click();await page.locator('[data-choice-value="corporate"]').click();await page.locator('[data-format-id="breakfast"]').click();}
 function clean(f){expect(f.outside).toEqual([]);expect(f.errors).toEqual([]);}
 for(const [lang,selected,review]of[['pt','Selecionado','Revisar preferência'],['en','Selected','Review preference'],['es','Seleccionado','Revisar preferencia']]){
@@ -34,7 +34,7 @@ for(const [lang,selected,review]of[['pt','Selecionado','Revisar preferência'],[
   expect(await page.locator('[data-choice-group][aria-pressed="true"]').count()).toBe(0);clean(f);
  });
 }
-for(const value of ['','0','1','-1','501','999','2.5'])test('invalid guests remain unchanged and never produce a draft or submit '+JSON.stringify(value),async({page})=>{
+for(const value of ['0','1','-1','501','999','2.5'])test('invalid guests remain unchanged and never produce a draft or submit '+JSON.stringify(value),async({page})=>{
  const f=await isolate(page);await page.goto('/formulario.html?lang=en');await page.locator('#requestGuestCount').fill(value);await contact(page);
  await expect(page.locator('#requestGuestCount')).toHaveValue(value);await expect(page.locator('#requestGuestCount')).toHaveAttribute('aria-invalid','true');await expect(page.locator('#requestGuestCountError')).toContainText('2 to 500');
  await page.evaluate(()=>savePartialLead());expect(f.calls).toEqual([]);await page.locator('#submitClientQuoteBtn').click();

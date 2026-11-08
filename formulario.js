@@ -471,18 +471,18 @@ const copy = {
     occasionSupport: "Ocasião do evento · escolha pelo menos uma opção. Se não souber, use “Me ajudem a definir”.",
     recommendationTitle: "Experiências mais indicadas",
     recommendationEmpty: "Escolha o momento e o perfil para ver as sugestões. A equipe também pode ajustar depois.",
-    recommendationReady: (moment) => `Selecionamos uma sugestão inicial para ${moment.toLowerCase()}. Se outra experiência fizer mais sentido, pode trocar sem problema.`,
+    recommendationReady: (moment) => `Sugestões para ${moment.toLowerCase()}. Nenhum formato é escolhido automaticamente: toque em “Selecionar” ou deixe a equipe ajudar depois.`,
     labels: {
       eventDate: "Data desejada",
-      eventDateHelp: "Se ainda não houver data fechada, conte a janela aproximada abaixo.",
+      eventDateHelp: "Para enviar, informe a data ou uma janela aproximada abaixo.",
       dateFlex: "Se não tiver data fechada",
-      dateFlexible: "A data pode mudar?",
-      guests: "Quantidade de convidados",
-      guestsHelp: "Use o slider até 99+. Para grupos maiores, digite o número exato até 500.",
-      period: "Período desejado",
-      time: "Horário de chegada",
+      dateFlexible: "A data pode mudar? (opcional)",
+      guests: "Quantidade de convidados (obrigatória para enviar)",
+      guestsHelp: "Informe de 2 a 500 pessoas. O controle rápido só preenche a quantidade quando você o ajusta.",
+      period: "Período desejado (opcional)",
+      time: "Horário de chegada (opcional)",
       timeHelp: "O horário combinado orienta a reserva e a operação.",
-      duration: "Duração estimada",
+      duration: "Duração estimada (opcional)",
       briefingSupport: "Marque só o que for importante. Se não tiver certeza, deixe em branco; a equipe completa com você depois.",
       reason: "Motivo do evento",
       preferences: "Preferências de alimentos e bebidas",
@@ -495,13 +495,13 @@ const copy = {
       emailHelp: "Usaremos para enviar a proposta.",
       phone: "Celular/WhatsApp",
       phoneHelp: "Informe o DDD e o celular. Se for um número internacional, inclua o código do país.",
-      company: "Empresa ou agência",
-      companyHelpOptional: "Opcional para pessoa física.",
-      companyHelpRequired: "Recomendado para empresa e agência. Ajuda a equipe a localizar e priorizar seu pedido.",
-      endClient: "Cliente final",
-      endClientHelp: "Recomendado para agências. Ex.: marca, empresa contratante ou família atendida.",
-      groupName: "Nome do grupo",
-      groupNameHelp: "Para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.",
+      company: "Empresa ou agência (opcional)",
+      companyHelpOptional: "Opcional. Preencha se houver uma empresa ou agência organizadora.",
+      companyHelpRequired: "Opcional, inclusive para empresas e agências. Ajuda a equipe a identificar seu pedido.",
+      endClient: "Cliente final (opcional)",
+      endClientHelp: "Opcional para agências. Ex.: marca, empresa contratante ou família atendida.",
+      groupName: "Nome do grupo (opcional)",
+      groupNameHelp: "Opcional para turismo receptivo/DMC. Ajuda a localizar grupos e roteiros.",
       contactIntroTitle: "Como prefere que a equipe fale com você?",
       contactIntroBody:
         "Informe seu nome e pelo menos um canal de contato. O restante pode ser completado depois.",
@@ -513,7 +513,7 @@ const copy = {
       defaultStatus: "Seu pedido será analisado pela equipe de eventos da Embaixada Carioca.",
       finalReviewEyebrow: "Revisão final",
       finalReviewTitle: "Veja o que a equipe vai receber",
-      finalReviewBody: "Confira os pontos principais. Se algo precisar mudar, toque em “Ajustar” no card.",
+      finalReviewBody: "Para enviar: data ou janela, convidados, nome e um contato. Os demais detalhes são opcionais. Toque em “Ajustar” para mudar.",
       submit: "Enviar solicitação de proposta",
       preferenceLegend: "O que não pode faltar?",
       extrasLegend: "Extras de produção",
@@ -649,18 +649,18 @@ const copy = {
     occasionSupport: "Event occasion · choose at least one option. If unsure, choose “Help me define it”.",
     recommendationTitle: "Best experiences for your event",
     recommendationEmpty: "Choose the moment and profile to see suggestions. Our team can still adjust it later.",
-    recommendationReady: (moment) => `We selected an initial suggestion for ${moment.toLowerCase()}. If another experience feels better, you can change it anytime.`,
+    recommendationReady: (moment) => `Suggestions for ${moment.toLowerCase()}. No format is chosen automatically: select a card or let our team help later.`,
     labels: {
       eventDate: "Preferred date",
-      eventDateHelp: "If the date is not set yet, share an approximate window below.",
+      eventDateHelp: "To submit, enter a date or an approximate window below.",
       dateFlex: "If the date is not set",
-      dateFlexible: "Can the date move?",
-      guests: "Guest count",
-      guestsHelp: "Use the slider up to 99+. For larger groups, type the exact number up to 500.",
-      period: "Preferred period",
-      time: "Arrival time",
+      dateFlexible: "Can the date move? (optional)",
+      guests: "Guest count (required to submit)",
+      guestsHelp: "Enter 2 to 500 guests. The quick slider fills the count only when you adjust it.",
+      period: "Preferred period (optional)",
+      time: "Arrival time (optional)",
       timeHelp: "The agreed time guides the reservation and operation.",
-      duration: "Estimated duration",
+      duration: "Estimated duration (optional)",
       briefingSupport: "Select only what matters. If you are unsure, leave it blank; our team can complete it with you later.",
       reason: "Event goal",
       preferences: "Food and beverage preferences",
@@ -673,13 +673,13 @@ const copy = {
       emailHelp: "We will use it to send your proposal.",
       phone: "Phone/WhatsApp",
       phoneHelp: "Enter the area code and phone number. For international numbers, include the country code.",
-      company: "Company or agency",
-      companyHelpOptional: "Optional for private celebrations.",
-      companyHelpRequired: "Recommended for companies and agencies. It helps our team identify and prioritize the request.",
-      endClient: "Final client",
-      endClientHelp: "Recommended for agencies. Example: brand, contracting company or family served.",
-      groupName: "Group name",
-      groupNameHelp: "For receptive tourism/DMC. It helps us identify groups and itineraries.",
+      company: "Company or agency (optional)",
+      companyHelpOptional: "Optional. Fill in if a company or agency is organizing.",
+      companyHelpRequired: "Optional, including for companies and agencies. It helps our team identify your request.",
+      endClient: "Final client (optional)",
+      endClientHelp: "Optional for agencies. Example: brand, contracting company or family served.",
+      groupName: "Group name (optional)",
+      groupNameHelp: "Optional for receptive tourism/DMC. It helps identify groups and itineraries.",
       contactIntroTitle: "How should our team reach you?",
       contactIntroBody:
         "Tell us your name and at least one contact channel. You can complete the rest later.",
@@ -691,7 +691,7 @@ const copy = {
       defaultStatus: "Your request will be reviewed by the Embaixada Carioca events team.",
       finalReviewEyebrow: "Final review",
       finalReviewTitle: "See what our team will receive",
-      finalReviewBody: "Review the key points. If anything needs to change, tap “Adjust” on the card.",
+      finalReviewBody: "To submit: date or window, guest count, name and one contact channel. Other details are optional. Tap “Adjust” to change.",
       submit: "Send proposal request",
       preferenceLegend: "What cannot be missing?",
       extrasLegend: "Production extras",
@@ -829,18 +829,18 @@ copy.es = {
     occasionSupport: "Ocasión del evento · elige al menos una opción. Si tienes dudas, selecciona “Ayúdenme a definirlo”.",
     recommendationTitle: "Experiencias más recomendadas para tu evento",
     recommendationEmpty: "Elige el momento y el perfil para ver las sugerencias. Nuestro equipo también puede ajustarlo después.",
-    recommendationReady: (moment) => `Seleccionamos una sugerencia inicial para ${moment.toLowerCase()}. Si otra experiencia te convence más, puedes cambiarla sin problema.`,
+    recommendationReady: (moment) => `Sugerencias para ${moment.toLowerCase()}. No elegimos ningún formato automáticamente: selecciona una tarjeta o deja que nuestro equipo te ayude después.`,
     labels: {
       eventDate: "Fecha deseada",
-      eventDateHelp: "Si aún no tienes una fecha definida, indica un período aproximado a continuación.",
+      eventDateHelp: "Para enviar, indica una fecha o un período aproximado a continuación.",
       dateFlex: "Si no tienes una fecha definida",
-      dateFlexible: "¿La fecha puede cambiar?",
-      guests: "Cantidad de invitados",
-      guestsHelp: "Usa el control deslizante hasta 99+. Para grupos más grandes, escribe la cantidad exacta hasta 500.",
-      period: "Franja horaria deseada",
-      time: "Hora de llegada",
+      dateFlexible: "¿La fecha puede cambiar? (opcional)",
+      guests: "Cantidad de invitados (obligatoria para enviar)",
+      guestsHelp: "Indica de 2 a 500 personas. El control rápido solo completa la cantidad cuando lo ajustas.",
+      period: "Franja horaria deseada (opcional)",
+      time: "Hora de llegada (opcional)",
       timeHelp: "La hora acordada orienta la reserva y la organización.",
-      duration: "Duración estimada",
+      duration: "Duración estimada (opcional)",
       briefingSupport: "Marca solo lo que sea importante. Si tienes dudas, déjalo en blanco; nuestro equipo puede completarlo contigo después.",
       reason: "Motivo del evento",
       preferences: "Preferencias de comida y bebida",
@@ -853,13 +853,13 @@ copy.es = {
       emailHelp: "Lo usaremos para enviarte la propuesta.",
       phone: "Teléfono/WhatsApp",
       phoneHelp: "Indica el código de área y el teléfono. Para números internacionales, incluye el código del país.",
-      company: "Empresa o agencia",
-      companyHelpOptional: "Opcional para particulares.",
-      companyHelpRequired: "Recomendado para empresas y agencias. Ayuda a nuestro equipo a identificar y priorizar la solicitud.",
-      endClient: "Cliente final",
-      endClientHelp: "Recomendado para agencias. Ejemplo: marca, empresa contratante o familia atendida.",
-      groupName: "Nombre del grupo",
-      groupNameHelp: "Para turismo receptivo/DMC. Nos ayuda a identificar grupos e itinerarios.",
+      company: "Empresa o agencia (opcional)",
+      companyHelpOptional: "Opcional. Complétalo si organiza una empresa o agencia.",
+      companyHelpRequired: "Opcional, también para empresas y agencias. Ayuda a identificar tu solicitud.",
+      endClient: "Cliente final (opcional)",
+      endClientHelp: "Opcional para agencias. Ejemplo: marca, empresa contratante o familia atendida.",
+      groupName: "Nombre del grupo (opcional)",
+      groupNameHelp: "Opcional para turismo receptivo/DMC. Ayuda a identificar grupos e itinerarios.",
       contactIntroTitle: "¿Cómo podemos contactarte?",
       contactIntroBody:
         "Indica tu nombre y al menos un medio de contacto. Puedes completar el resto después.",
@@ -871,7 +871,7 @@ copy.es = {
       defaultStatus: "El equipo de eventos de Embaixada Carioca revisará tu solicitud.",
       finalReviewEyebrow: "Revisión final",
       finalReviewTitle: "Revisa lo que recibirá nuestro equipo",
-      finalReviewBody: "Revisa los puntos principales. Si necesitas cambiar algo, pulsa “Ajustar” en la tarjeta.",
+      finalReviewBody: "Para enviar: fecha o período, invitados, nombre y un contacto. El resto es opcional. Pulsa “Ajustar” para cambiar.",
       submit: "Enviar solicitud de propuesta",
       preferenceLegend: "¿Qué no puede faltar?",
       extrasLegend: "Extras de producción",
@@ -1010,6 +1010,9 @@ function getDisplayFormatLabel(label) { const id=Object.keys(formats).find(key=>
 
 const spanishDynamicText = {
   "Selected": "Seleccionado",
+  "Suggested format": "Formato sugerido",
+  "Not provided": "Sin informar",
+  "No guest count chosen. Adjust to enter a count.": "Cantidad sin informar. Ajusta para indicar la cantidad.",
   "Your earlier choice": "Tu elección anterior",
   "Review preference": "Revisar preferencia",
   "When are you imagining your event?": "¿Cuándo imaginas tu evento?",
@@ -1617,7 +1620,7 @@ function renderPartialCaptureStatus() {
   }
   if (partialCaptureState.phase !== "saved") partialCaptureState.confirmedAt = null;
   let message = copy[partialCaptureState.phase] || copy.unsaved;
-  if (partialCaptureState.phase === "unsaved" && getGuestCount() === null) message = localizedText("Changes not saved yet. Review the guest count; your entries remain in this tab.", "Alterações ainda não salvas. Revise a quantidade de convidados; seus dados continuam nesta aba.");
+  if (partialCaptureState.phase === "unsaved" && hasInvalidGuestCount()) message = localizedText("Changes not saved yet. Review the guest count; your entries remain in this tab.", "Alterações ainda não salvas. Revise a quantidade de convidados; seus dados continuam nesta aba.");
   if (partialCaptureState.phase === "saved") {
     const time = formatPartialCaptureConfirmationTime(partialCaptureState.confirmedAt);
     message += ` ${time ? copy.confirmationTime.replace("{time}", time) : copy.confirmationTimeUnavailable}`;
@@ -1640,7 +1643,7 @@ function getPartialCaptureFingerprint(snapshot = getSnapshot(getOrCreateReferenc
 
 function canCapturePartialLead() {
   const name = fields.name.value.trim(), email = fields.email.value.trim(), phone = fields.phone.value.trim();
-  return getGuestCount() !== null && hasUsableName(name) && Boolean(email || phone)
+  return !hasInvalidGuestCount() && hasUsableName(name) && Boolean(email || phone)
     && (!email || isValidEmail(email)) && (!phone || isValidContactPhone(phone));
 }
 
@@ -1860,21 +1863,24 @@ function renderSuccessStatus(referenceCode) {
 }
 
 function fillGuestOptions() {
-  fields.guests.value = "30";
-  if (fields.guestSlider) fields.guestSlider.value = "30";
-  if (fields.dateIsFlexible) fields.dateIsFlexible.value = "no";
+  fields.guests.value = "";
+  if (fields.guestSlider) fields.guestSlider.value = "2";
   updateGuestOutput("number");
 }
 
 function resetFlexibleDateField() {
   if (!fields.dateIsFlexible) return;
-  fields.dateIsFlexible.value = "no";
+  fields.dateIsFlexible.value = "";
 }
 
 function getGuestCount(value = fields.guests.value) {
   if (!String(value ?? "").trim()) return null;
   const number = toNumber(value);
   return Number.isSafeInteger(number) && number >= 2 && number <= 500 ? number : null;
+}
+
+function hasInvalidGuestCount() {
+  return Boolean(fields.guests.validity?.badInput || (fields.guests.value.trim() && getGuestCount() === null));
 }
 
 function getGuestCountError() {
@@ -1886,9 +1892,15 @@ function updateGuestOutput(source = "number") {
   const guests = getGuestCount();
   // Preserve typed input. Invalid counts are never silently clamped or saved as defaults.
   if (guests !== null && fields.guestSlider) fields.guestSlider.value = String(guests >= 100 ? 100 : guests);
-  setFieldValidity(fields.guests, guests !== null, getGuestCountError());
+  const missingAfterSubmit = guests === null && fields.guests.getAttribute("aria-invalid") === "true";
+  setFieldValidity(fields.guests, !hasInvalidGuestCount() && !missingAfterSubmit, getGuestCountError());
+  if (fields.guestSlider) {
+    fields.guestSlider.setAttribute("aria-valuetext", guests === null
+      ? localizedText("No guest count chosen. Adjust to enter a count.", "Quantidade não informada. Ajuste para preencher.")
+      : getCopy().guestOutput(guests));
+  }
   renderRecommendations();
-  fields.guestOutput.textContent = guests === null ? "—" : getCopy().guestOutput(guests);
+  fields.guestOutput.textContent = guests === null ? localizedText("Not provided", "Não informado") : getCopy().guestOutput(guests);
   renderFinalReview();
 }
 
@@ -1943,7 +1955,6 @@ function renderFinalReview() {
   ].filter(Boolean);
   const contactReady = hasUsableName(fields.name.value.trim()) && Boolean((fields.email.value.trim() && isValidEmail(fields.email.value.trim())) || (fields.phone.value.trim() && isValidContactPhone(fields.phone.value.trim()))) && (!fields.email.value.trim() || isValidEmail(fields.email.value.trim())) && (!fields.phone.value.trim() || isValidContactPhone(fields.phone.value.trim()));
   const dateReady = fields.date.value || fields.dateFlex.value.trim();
-  const timeReady = fields.time.value;
   const clientTypeLabel = getClientTypeDisplayLabel();
   const profileLabel = getSelectedProfileDisplayLabels().join(", ");
   const selectedFormatId = getFormatIdByLabel(fields.eventType.value);
@@ -1955,8 +1966,8 @@ function renderFinalReview() {
       label: localizedText("Event format", "Formato do evento"),
       value: [getDisplayFormatLabel(fields.eventType.value) || reviewCopy.formatMissing, groupSizeNote].filter(Boolean).join(" — "),
       step: "recommendation",
-      status: preferenceNeedsReview ? localizedText("Review preference", "Revisar preferência") : fields.eventType.value ? reviewCopy.ok : reviewCopy.warning,
-      state: fields.eventType.value && !preferenceNeedsReview ? "is-ok" : "is-warning",
+      status: preferenceNeedsReview ? localizedText("Review preference", "Revisar preferência") : fields.eventType.value ? reviewCopy.ok : reviewCopy.optional,
+      state: preferenceNeedsReview ? "is-warning" : fields.eventType.value ? "is-ok" : "is-optional",
     },
     {
       label: localizedText("Who and occasion", "Quem organiza e ocasião"),
@@ -1975,15 +1986,15 @@ function renderFinalReview() {
         fields.time.value || reviewCopy.timeMissing,
       ].join(" · "),
       step: "eventDetails",
-      status: dateReady && timeReady ? reviewCopy.ok : dateReady ? reviewCopy.warning : reviewCopy.required,
-      state: dateReady && timeReady ? "is-ok" : dateReady ? "is-warning" : "is-required",
+      status: dateReady ? reviewCopy.ok : reviewCopy.required,
+      state: dateReady ? "is-ok" : "is-required",
     },
     {
       label: localizedText("Guests and duration", "Convidados e duração"),
-      value: `${fields.guests.value || pendingLabel} ${localizedText("guests", "pessoas")} · ${getSelectedDurationLabel()}`,
+      value: `${getGuestCount() === null ? pendingLabel : `${getGuestCount()} ${localizedText("guests", "pessoas")}`} · ${getSelectedDurationLabel()}`,
       step: "eventDetails",
-      status: getGuestCount() === null ? reviewCopy.required : fields.duration.value ? reviewCopy.ok : reviewCopy.warning,
-      state: getGuestCount() !== null && fields.duration.value ? "is-ok" : "is-warning",
+      status: getGuestCount() === null ? reviewCopy.required : reviewCopy.ok,
+      state: getGuestCount() === null ? "is-required" : "is-ok",
     },
     {
       label: localizedText("Preferences", "Preferências"),
@@ -2372,13 +2383,13 @@ function renderRecommendations() {
       const earlierChoice = selected && !recommendedIds.includes(id);
       return `
         <button class="format-card ${selected ? "is-selected" : ""}" type="button" data-format-id="${id}" aria-pressed="${selected ? "true" : "false"}">
-          <span>${earlierChoice ? localizedText("Your earlier choice", "Sua escolha anterior") : item.badge}</span>
+          <span>${earlierChoice ? localizedText("Your earlier choice", "Sua escolha anterior") : `${index === 0 ? localizedText("Suggested format", "Formato sugerido") + " · " : ""}${item.badge}`}</span>
           <i>${item.visual}</i>
           <strong>${item.label}</strong>
           <em>${item.description}</em>
           <small>${item.group}</small>
           ${selected && getFormatGroupSizeNote(id) ? `<small class="format-group-note">${escapeHtml(getFormatGroupSizeNote(id))}</small>` : ""}
-          <b>${selected ? localizedText("Selected", "Selecionado") : index === 0 ? localizedText("Recommended", "Mais indicado") : localizedText("Select", "Selecionar")}</b>
+          <b>${selected ? localizedText("Selected", "Selecionado") : localizedText("Select", "Selecionar")}</b>
         </button>
       `;
     })
@@ -2803,7 +2814,8 @@ function applyReturningHistoryAsBase(item) {
   fields.eventType.value = eventData.type || eventData.tipo || item.tipo_evento || "";
   fields.date.value = "";
   fields.dateFlex.value = "";
-  fields.guests.value = String(eventData.guests || eventData.convidados || item.convidados || 30);
+  fields.dateIsFlexible.value = "";
+  fields.guests.value = String(eventData.guests ?? eventData.convidados ?? item.convidados ?? "");
   fields.duration.value = String(eventData.duration || eventData.duracao || "");
   fields.reason.value = eventData.reason || eventData.motivo || "";
   fields.preferences.value = eventData.preferences || eventData.preferencias || "";
@@ -3013,7 +3025,7 @@ async function submitRequest(event) {
   fields.clientType.value = "";
   fields.profile.value = "";
   fields.eventType.value = "";
-  fields.dateIsFlexible.value = "no";
+  fields.dateIsFlexible.value = "";
   selectedProfiles.clear();
   document.querySelectorAll(".is-selected").forEach((node) => {
     node.classList.remove("is-selected");
@@ -3092,6 +3104,12 @@ fields.name.addEventListener("blur", () => {
 });
 fields.guests.addEventListener("input", updateGuestOutput);
 fields.guestSlider?.addEventListener("input", () => updateGuestOutput("slider"));
+fields.guestSlider?.addEventListener("pointerup", () => {
+  if (fields.guests.value === "") {
+    updateGuestOutput("slider");
+    schedulePartialCapture();
+  }
+});
 fields.email.addEventListener("input", () => {
   setFieldValidity(fields.email, !fields.email.value || isValidEmail(fields.email.value));
   if (isValidEmail(fields.email.value) && !fields.phone.value) setFieldValidity(fields.phone, true);

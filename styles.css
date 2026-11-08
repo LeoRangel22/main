@@ -13247,3 +13247,10 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
   .pipeline-search-controls { flex-wrap: wrap; }
   .pipeline-search-controls button { min-height: 44px; }
 }
+
+/* A hover preview is not a selected format. Reserve the dark fill for an explicit choice. */
+.public-form-body .format-card:not(.is-selected):hover { background: #f1f6f2; border-color: var(--verde); color: var(--ink); }
+.public-form-body .format-card:not(.is-selected):hover em,
+.public-form-body .format-card:not(.is-selected):hover small { color: var(--muted); }
+.public-form-body .format-card:not(.is-selected):hover > span { color: #875015; }
+.public-form-body .format-card:not(.is-selected):hover i { background: var(--surface); color: var(--verde); }
