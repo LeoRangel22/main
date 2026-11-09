@@ -10832,6 +10832,125 @@ function getClientRegistry(items = getPipelineItems()) {
     .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
 }
 
+
+function getClientDirectoryFilters() {
+  if (document.body.dataset.page !== "clientes") return {segment:"all", relationship:"all"};
+  return {segment:document.querySelector("#clientSegmentFilter")?.value || "all",
+    relationship:document.querySelector("#clientRelationshipFilter")?.value || "all"};
+}
+
+function getClientDeclaredSegments(client) {
+  const segments = new Set();
+  for (const item of client.items) {
+    const s = item.snapshot || {}, q = s.qualificacao || {};
+    // item.clientType can be inferred for funnel display. Filters require declared data.
+    const value = q.tipoCliente || q.clientType || s.sourceRequestSnapshot?.qualificacao?.tipoCliente || s.client?.clientType || "";
+    const index = sourceClientTypeOptions.findIndex(label => normalizeSearchValue(label) === normalizeSearchValue(value));
+    if (index >= 0) segments.add(["tourism", "events", "company", "person"][index]);
+  }
+  return segments.size ? segments : new Set(["unknown"]);
+}
+
+function getClientRelationshipItems(client) {
+  const realizedItems = client.items.filter(item => item.kind === "proposal" && normalizeProposalStatus(item.status) === "pos_venda");
+  const confirmedItems = client.items.filter(item => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)) && normalizeProposalStatus(item.status) !== "pos_venda");
+  const quoteItems = client.items.filter(item => item.kind !== "proposal" || !operationStatuses.has(normalizeProposalStatus(item.status)));
+  const canceledItems = client.items.filter(item => getReportStatus(item) === "cancelado");
+  const openQuoteItems = quoteItems.filter(item => getReportStatus(item) !== "cancelado");
+  return {realizedItems, confirmedItems, quoteItems, canceledItems, openQuoteItems};
+}
+
+function clientDirectoryMatches(item, query) {
+  // Keep dates and times out of free text tokens: a name ending in 00 is not 19:00.
+  // Preserve legacy whole-phrase searches while extending structured matching.
+  return FunnelView.matches({...item, meta:[...(item.meta || []), item.guests ? `${item.guests} pax` : "", item.status ? getProposalStatusLabel(item.status) : ""]}, query)
+    || getItemSearchText(item).includes(normalizeSearchValue(query));
+}
+
+function filterClientDirectory(clients, query) {
+  const {segment, relationship} = getClientDirectoryFilters();
+  return clients.filter(client => {
+    if (segment !== "all" && !getClientDeclaredSegments(client).has(segment)) return false;
+    const buckets = getClientRelationshipItems(client);
+    const relationships = {open:buckets.openQuoteItems, confirmed:buckets.confirmedItems,
+      realized:buckets.realizedItems, canceled:buckets.canceledItems};
+    if (relationship !== "all" && !relationships[relationship]?.length) return false;
+    return client.items.some(item => clientDirectoryMatches(item, query));
+  });
+}
+
+function clientDirectoryQueryKey(term) {
+  const filters = getClientDirectoryFilters();
+  return document.body.dataset.page === "clientes" ? JSON.stringify([normalizeSearchValue(term), filters.segment, filters.relationship]) : normalizeSearchValue(term);
+}
+
+function initializeClientDirectoryNavigation() {
+  if (document.body.dataset.page !== "clientes") return;
+  const current = document.querySelector("#currentClients"), history = document.querySelector("#clientHistoryArea");
+  const nav = document.querySelector(".client-section-nav"), historyLink = document.querySelector("#clientHistoryLink");
+  if (!current || !history || !nav || !historyLink) return;
+  const controls = document.createElement("div");
+  controls.className = "client-directory-filters";
+  controls.innerHTML = '<label>Segmento informado<select id="clientSegmentFilter"><option value="all">Todos os segmentos</option><option value="tourism">Turismo / DMC</option><option value="events">Marketing / eventos</option><option value="company">Empresa</option><option value="person">Pessoa física</option><option value="unknown">Sem segmento informado</option></select></label><label>Relacionamento<select id="clientRelationshipFilter"><option value="all">Todos os relacionamentos</option><option value="open">Cotação em aberto</option><option value="confirmed">Venda em andamento</option><option value="realized">Evento realizado no sistema</option><option value="canceled">Com cancelamento</option></select></label><button class="secondary" id="clearClientFilters" type="button">Limpar busca e filtros</button><small>Segmentos usam dados informados nos registros. Valores de propostas não comprovam recebimentos.</small>';
+  nodes.globalSearchResults?.before(controls);
+  const refresh = () => { const items = getPipelineItems(); renderGlobalSearch(items); renderClientRegistry(items); rememberClientDirectoryView(); };
+  controls.querySelectorAll("select").forEach(select => select.addEventListener("change", refresh));
+  controls.querySelector("button").addEventListener("click", () => {
+    controls.querySelectorAll("select").forEach(select => { select.value = "all"; });
+    fields.globalSearchInput.value = ""; refresh(); fields.globalSearchInput.focus();
+  });
+  let requested = location.hash === "#crmHistoryMount" ? "history" : "current";
+  let active = "", hadAccess = false, generation = 0;
+  const offset = () => {
+    const header = editorHeaderOffset();
+    nav.style.setProperty("--client-section-top", (header + 8) + "px");
+    const sticky = ["sticky", "fixed"].includes(getComputedStyle(nav).position);
+    return header + (sticky ? nav.getBoundingClientRect().height + 16 : 16);
+  };
+  const sync = (focus = false) => {
+    const available = !historyLink.hidden && !document.body.classList.contains("auth-locked");
+    if (hadAccess && !available && requested === "history") {
+      requested = "current";
+      if (location.hash === "#crmHistoryMount") window.history.replaceState(null, "", "#currentClients");
+    }
+    hadAccess = available;
+    const next = requested === "history" && available ? "history" : "current";
+    current.hidden = next !== "current"; history.hidden = next !== "history";
+    nav.querySelectorAll("a").forEach(link => {
+      const selected = (link === historyLink ? "history" : "current") === next;
+      if (selected) link.setAttribute("aria-current", "location"); else link.removeAttribute("aria-current");
+    });
+    const changed = active !== next; active = next; const run = ++generation;
+    const top = offset();
+    if (focus || (changed && requested === "history" && available)) window.requestAnimationFrame(() => {
+      if (run !== generation || document.body.classList.contains("auth-locked")) return;
+      const target = next === "history" ? history : current;
+      target.focus({preventScroll:true});
+      window.scrollTo({top:Math.max(0, scrollY + target.getBoundingClientRect().top - top), behavior:"auto"});
+    });
+  };
+  nav.addEventListener("click", event => {
+    const link = event.target.closest("a");
+    if (!link || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || link.hidden) return;
+    event.preventDefault();
+    requested = link === historyLink ? "history" : "current";
+    const hash = requested === "history" ? "#crmHistoryMount" : "#currentClients";
+    if (location.hash !== hash) window.history.pushState(null, "", hash);
+    sync(true);
+  });
+  window.addEventListener("hashchange", () => { requested = location.hash === "#crmHistoryMount" ? "history" : "current"; sync(true); });
+  const accessObserver = new MutationObserver(() => sync());
+  accessObserver.observe(historyLink, {attributes:true, attributeFilter:["hidden"]});
+  accessObserver.observe(document.body, {attributes:true, attributeFilter:["class"]});
+  const header = document.querySelector(".topbar");
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(offset); observer.observe(nav); if (header) observer.observe(header);
+  }
+  window.addEventListener("resize", offset, {passive:true});
+  window.addEventListener("pagehide", rememberClientDirectoryView);
+  sync();
+}
+
 function getClientReviewPhone(value) {
   const text = String(value || "").trim();
   if (!text || /[^\d\s()+.\-/]/.test(text)) return "";
@@ -10962,12 +11081,12 @@ let clientDirectoryLastTerm = "";
 let clientDirectoryViewRestored = false;
 
 function rememberClientDirectoryView() {
-  if (document.body.dataset.page !== "clientes" || !state.session?.user?.id) return;
+  if (document.body.dataset.page !== "clientes" || !state.session?.user?.id || document.querySelector("#currentClients")?.hidden) return;
   try {
     sessionStorage.setItem(CLIENT_DIRECTORY_VIEW_KEY, JSON.stringify({
       user: state.session.user.id, savedAt: Date.now(),
       term: (fields.globalSearchInput?.value || "").slice(0, 300),
-      count: clientDirectoryVisibleCount, scroll: Math.max(0, window.scrollY),
+      count: clientDirectoryVisibleCount, scroll: Math.max(0, window.scrollY), ...getClientDirectoryFilters(),
     }));
   } catch (_) { /* Navigation still works when tab storage is unavailable. */ }
 }
@@ -10980,10 +11099,14 @@ function restoreClientDirectoryView(items) {
     if (!view || view.user !== state.session.user.id || !Number.isFinite(view.savedAt) || Date.now() - view.savedAt > 8 * 3600000) return;
     if (typeof view.term !== "string" || view.term.length > 300) return;
     fields.globalSearchInput.value = view.term;
-    clientDirectoryLastTerm = normalizeSearchValue(view.term);
+    for (const [id, value, allowed] of [
+      ["clientSegmentFilter", view.segment, ["all","tourism","events","company","person","unknown"]],
+      ["clientRelationshipFilter", view.relationship, ["all","open","confirmed","realized","canceled"]],
+    ]) { const select = document.getElementById(id); if (select) select.value = allowed.includes(value) ? value : "all"; }
+    clientDirectoryLastTerm = clientDirectoryQueryKey(view.term);
     clientDirectoryVisibleCount = Math.max(24, Math.min(10000, Number(view.count) || 24));
     renderGlobalSearch(items);
-    if (Number.isFinite(view.scroll)) window.requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, view.scroll), behavior: "auto" }));
+    if (location.hash !== "#crmHistoryMount" && Number.isFinite(view.scroll)) window.requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, view.scroll), behavior: "auto" }));
   } catch (_) { /* Ignore obsolete or invalid tab-only state. */ }
 }
 
@@ -11036,9 +11159,10 @@ function renderClientRegistry(items = getPipelineItems()) {
   const clients = getClientRegistry(items);
   const relationshipReviews = document.body?.dataset?.page === "clientes" ? getClientRelationshipReviews(clients) : null;
   const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
-  const filtered = term ? clients.filter((client) => client.searchText.includes(term)) : clients;
   const isClientsPage = document.body?.dataset?.page === "clientes";
-  if (term !== clientDirectoryLastTerm) { clientDirectoryVisibleCount = 24; clientDirectoryLastTerm = term; }
+  const filtered = isClientsPage ? filterClientDirectory(clients, fields.globalSearchInput?.value || "") : term ? clients.filter(client => client.searchText.includes(term)) : clients;
+  const selectionKey = clientDirectoryQueryKey(term);
+  if (selectionKey !== clientDirectoryLastTerm) { clientDirectoryVisibleCount = 24; clientDirectoryLastTerm = selectionKey; }
   const maxClients = isClientsPage ? clientDirectoryVisibleCount : 6;
   const shown = Math.min(filtered.length, maxClients);
   const more = document.querySelector("#clientRegistryMore");
@@ -11049,7 +11173,7 @@ function renderClientRegistry(items = getPipelineItems()) {
   if (nodes.clientRegistryMeta) {
     const recurring = clients.filter((client) => client.items.length > 1).length;
     nodes.clientRegistryMeta.textContent = isClientsPage
-      ? `${shown} de ${filtered.length} cliente(s) exibidos${term ? ` · ${clients.length} na carteira` : ""} · ${recurring} com histórico`
+      ? `${shown} de ${filtered.length} cliente(s) exibidos no recorte · ${clients.length} na carteira · ${recurring} com mais de um registro na carteira`
       : `${clients.length} cliente(s) · ${recurring} com histórico`;
   }
   if (!clients.length) {
@@ -11108,11 +11232,7 @@ function renderClientRegistryCard(client, relationshipReview = null) {
     latest.kind === "proposal"
       ? `<button class="secondary" type="button" data-proposal-id="${escapeHtml(latest.id)}">Abrir último</button>`
       : `<button class="secondary" type="button" data-use-request="${escapeHtml(latest.id)}">Abrir último</button>`;
-  const realizedItems = client.items.filter((item) => item.kind === "proposal" && normalizeProposalStatus(item.status) === "pos_venda");
-  const confirmedItems = client.items.filter((item) => item.kind === "proposal" && operationStatuses.has(normalizeProposalStatus(item.status)) && normalizeProposalStatus(item.status) !== "pos_venda");
-  const quoteItems = client.items.filter((item) => item.kind !== "proposal" || !operationStatuses.has(normalizeProposalStatus(item.status)));
-  const canceledItems = client.items.filter((item) => getReportStatus(item) === "cancelado");
-  const openQuoteItems = quoteItems.filter((item) => getReportStatus(item) !== "cancelado");
+  const {realizedItems, confirmedItems, quoteItems, canceledItems, openQuoteItems} = getClientRelationshipItems(client);
   const realizedValue = realizedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const confirmedValue = confirmedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   const quoteValue = openQuoteItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
@@ -11151,7 +11271,7 @@ function renderClientRegistryCard(client, relationshipReview = null) {
   return `
     <article class="client-registry-card">
       <div class="client-registry-topline">
-        <span>${escapeHtml(client.clientType || "Cliente")}</span>
+        <span>${escapeHtml(document.body.dataset.page === "clientes" ? [...getClientDeclaredSegments(client)].map(key => ({tourism:sourceClientTypeOptions[0],events:sourceClientTypeOptions[1],company:"Empresa",person:"Pessoa física",unknown:"Sem segmento informado"})[key]).join(" · ") : client.clientType || "Cliente")}</span>
         <strong>${escapeHtml(client.items.length)} registro(s)</strong>
       </div>
       <div class="client-registry-main">
@@ -11253,8 +11373,12 @@ function renderGlobalSearch(items = getPipelineItems()) {
   }
   const termDigits = term.replace(/\D/g, "");
   const matchesSearch = (text) => text.includes(term) || (termDigits.length >= 4 && text.includes(termDigits));
-  const matchedItems = items.filter((item) => matchesSearch(getItemSearchText(item))).slice(0, 8);
-  const matchedClients = getClientRegistry(items).filter((client) => matchesSearch(client.searchText)).slice(0, 4);
+  const isClientsPage = document.body.dataset.page === "clientes";
+  const registry = getClientRegistry(items);
+  const allMatchedClients = isClientsPage ? filterClientDirectory(registry, fields.globalSearchInput?.value || "") : registry.filter(client => matchesSearch(client.searchText));
+  const allMatchedItems = isClientsPage ? allMatchedClients.flatMap(client => client.items).filter(item => clientDirectoryMatches(item, fields.globalSearchInput?.value || "")) : items.filter(item => matchesSearch(getItemSearchText(item)));
+  const matchedItems = allMatchedItems.slice(0, 8);
+  const matchedClients = allMatchedClients.slice(0, 4);
   const totalResults = matchedItems.length + matchedClients.length;
   const clientResults = matchedClients
     .map((client) => {
@@ -11268,7 +11392,7 @@ function renderGlobalSearch(items = getPipelineItems()) {
     .join("");
   const itemResults = matchedItems.map(renderGlobalSearchItem).join("");
   nodes.globalSearchResults.innerHTML = clientResults || itemResults
-    ? `<div class="global-search-summary">${totalResults} resultado(s) para "${escapeHtml(fields.globalSearchInput?.value || "")}"</div>${clientResults}${itemResults}`
+    ? `<div class="global-search-summary">${isClientsPage ? `${matchedClients.length} de ${allMatchedClients.length} contatos e ${matchedItems.length} de ${allMatchedItems.length} registros do recorte` : `${totalResults} resultado(s)`} para "${escapeHtml(fields.globalSearchInput?.value || "")}"</div>${clientResults}${itemResults}`
     : `<p>Nada encontrado para essa busca.</p>`;
 }
 
@@ -14047,6 +14171,7 @@ async function logoutSupabase() {
   clientDirectoryViewRestored = false;
   clientDirectoryVisibleCount = 24;
   clientDirectoryLastTerm = "";
+  document.querySelectorAll("#clientSegmentFilter,#clientRelationshipFilter").forEach(select => { select.value = "all"; });
   state.session = null;
   state.proposalSendFeedback = null;
   clearTariffApplication();
@@ -16685,6 +16810,7 @@ function addProductType() {
 
 function bindEvents() {
   initializeEditorToolbar();
+  initializeClientDirectoryNavigation();
   // Once the user acts, an earlier editor opening must not move their target.
   const stopEditorJumpsOnIntent = () => { if (state.activeEditorContext) editorScrollGeneration += 1; };
   document.addEventListener("pointerdown", stopEditorJumpsOnIntent, true);
@@ -17075,6 +17201,7 @@ function bindEvents() {
     const items = getPipelineItems();
     renderGlobalSearch(items);
     renderClientRegistry(items);
+    rememberClientDirectoryView();
   });
   nodes.globalSearchResults?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
@@ -17091,6 +17218,7 @@ function bindEvents() {
     renderClientRegistry();
     const firstNew = nodes.clientDirectory?.children[previousCount];
     if (firstNew) { firstNew.setAttribute("tabindex", "-1"); firstNew.focus(); }
+    rememberClientDirectoryView();
   });
   nodes.clientDirectory?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
