@@ -13270,3 +13270,9 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-column-list 
   body[data-page="app"] .pipeline-panel .pipeline-quick-filters { margin:8px 0; }
   body[data-page="app"] .pipeline-panel .pipeline-quick-filters { display:none; }
 }
+
+body[data-page="app"] .pipeline-board[data-layout="list"] { min-width:0; max-width:100%; grid-template-columns:minmax(0,1fr); }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-row { min-width:0; max-width:100%; }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-column-list,
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card { min-width:0; max-width:100%; box-sizing:border-box; }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(strong,small,span) { overflow-wrap:anywhere; }

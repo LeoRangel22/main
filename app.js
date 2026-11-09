@@ -7238,7 +7238,7 @@ function getScrollableAncestors(node) {
   return ancestors;
 }
 
-function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
+function scrollToNodeReliably(target, { offset = 12, behavior = "smooth", settle = true } = {}) {
   if (!target) return;
   const generation = editorScrollGeneration;
   const scroll = (scrollBehavior = behavior) => {
@@ -7268,9 +7268,11 @@ function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {})
 
   scroll();
   window.requestAnimationFrame(() => scroll());
-  window.setTimeout(() => scroll("auto"), 140);
-  window.setTimeout(() => scroll("auto"), 340);
-  window.setTimeout(() => scroll("auto"), 760);
+  if (settle) {
+    window.setTimeout(() => scroll("auto"), 140);
+    window.setTimeout(() => scroll("auto"), 340);
+    window.setTimeout(() => scroll("auto"), 760);
+  }
 }
 
 function getLoadedEditorTarget(targetMode = "client") {
@@ -7317,18 +7319,15 @@ function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
       } catch (_) {}
     }
   }
-  scrollToNodeReliably(target, { behavior, offset: 14 });
+  scrollToNodeReliably(target, { behavior, offset: 14, settle: false });
   return true;
 }
 
 function scheduleLoadedEditorJump(targetMode = "client", behavior = "auto") {
   const generation = editorScrollGeneration;
-  const jumps = [0, 90, 240, 520, 980, 1500];
-  jumps.forEach((delay) => {
-    window.setTimeout(() => {
-      if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
-      jumpToLoadedEditor(targetMode, delay >= 520 ? "auto" : behavior);
-    }, delay);
+  window.requestAnimationFrame(() => {
+    if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
+    jumpToLoadedEditor(targetMode, behavior);
   });
 }
 
@@ -16618,6 +16617,11 @@ function addProductType() {
 }
 
 function bindEvents() {
+  // Once the user acts, an earlier editor opening must not move their target.
+  const stopEditorJumpsOnIntent = () => { if (state.activeEditorContext) editorScrollGeneration += 1; };
+  document.addEventListener("pointerdown", stopEditorJumpsOnIntent, true);
+  document.addEventListener("keydown", stopEditorJumpsOnIntent, true);
+  document.addEventListener("wheel", stopEditorJumpsOnIntent, {capture:true, passive:true});
   Object.values(fields).forEach((field) => {
     if (!field || field === fields.pipelineSearchInput) return;
     const refreshFormOutputs = (event) => {
@@ -16968,7 +16972,7 @@ function bindEvents() {
       nodes.pipelineBoard.querySelectorAll("[data-view-stage]").forEach(node => { node.hidden = node !== column; });
       nodes.pipelineBoard.querySelectorAll(".pipeline-row").forEach(row => { row.hidden = !row.querySelector(".pipeline-column:not([hidden])"); });
     }
-    column?.querySelector("details")?.setAttribute("open", "");
+    column?.querySelector(":scope > details")?.setAttribute("open", "");
     if (pipelineViewMode === "board") column?.scrollIntoView({block:"nearest",inline:"center",behavior:"auto"});
     renderPipelineSearchStatus(getFilteredPipelineItems(), pipelineRenderedRows);
   });

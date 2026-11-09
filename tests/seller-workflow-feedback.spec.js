@@ -72,6 +72,7 @@ test('Events records actual bank-attested signal and moves directly from Sem res
 for(const width of [1440,390])test('Sem resposta has page scrolling and an accessible direct stage control at '+width,async({page})=>{
  await page.setViewportSize({width,height:900});await fixture(page);
  await page.evaluate(()=>{setWorkspaceMode('sales');renderPipeline();});
+ await page.locator('#pipelineStageSelect').selectOption('sales_waiting');
  const column=page.locator('.pipeline-stage-proposta_enviada .pipeline-column-list').first();
  const styles=await column.evaluate(el=>({max:getComputedStyle(el).maxHeight,overflow:getComputedStyle(el).overflowY}));
  expect(styles.max).toBe('none');expect(styles.overflow).toBe('visible');

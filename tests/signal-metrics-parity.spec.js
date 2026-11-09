@@ -44,7 +44,7 @@ async function expectParity(page, expected) {
   const finance = page.locator('#financeCommandPanel article').filter({ hasText: 'Aprovadas · aguardam sinal' });
   await expect(finance).toBeVisible();
   await expect(finance.locator('strong')).toHaveText(String(expected.length));
-  await page.locator('#pipelineQuickFilters [data-pipeline-filter="awaitingSignal"]:not(.pipeline-active-filter)').click();
+  await page.locator('#pipelineFilterSelect').selectOption('awaitingSignal');
   await expect(page.locator('#pipelineBoard .pipeline-card')).toHaveCount(expected.length);
   for (const id of expected) await expect(page.locator('#pipelineBoard')).toContainText(`Fixture ${id}`);
   await page.locator('[data-report-preset="approvedAwaitingSignal"]').click();
