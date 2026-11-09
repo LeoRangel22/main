@@ -7442,8 +7442,16 @@ function syncDashboardDeepLinkState() {
   if (!leadId && !proposalId) state.lastAppliedDashboardTarget = "";
 }
 
+let dashboardEditorExtensionsReady = document.readyState === "complete";
+
 async function applyPendingDashboardTarget() {
   if (document.body.dataset.page !== "app" || !state.session) return false;
+  // Deferred editor extensions add fields to the clean signature. Open a deep
+  // link only after they have loaded, so an untouched record stays clean.
+  if (!dashboardEditorExtensionsReady) {
+    await new Promise(resolve => document.addEventListener("DOMContentLoaded", () => window.setTimeout(resolve, 0), { once: true }));
+    if (!state.session) return false;
+  }
 
   const targetKey = state.pendingDashboardProposalId
     ? `proposal:${state.pendingDashboardProposalId}`
@@ -17175,6 +17183,7 @@ renderAll();
 // Deferred extensions add fields to the editor signature. Establish the initial
 // baseline only after they have loaded; opening an existing record keeps its base.
 document.addEventListener("DOMContentLoaded", () => {
+  dashboardEditorExtensionsReady = true;
   if (!fields.generalTerms || !fields.eventDuration) return;
   if (!state.loadedEditorSignature) state.loadedEditorSignature = getCurrentEditorSignature();
   syncEditorLeaveProtection();
