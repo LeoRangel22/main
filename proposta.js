@@ -13,13 +13,18 @@ const supabaseClient = window.supabase?.createClient(DEFAULT_SUPABASE_URL, DEFAU
 const tr = (pt, en) => language === "en" ? en : pt;
 
 function syncLanguage() {
+  if (publicSubmissionBusy) return;
+  const draft = readPublicResponseDraft();
   document.documentElement.lang = language === "en" ? "en" : "pt-BR";
   document.title = tr("Proposta de Evento | Embaixada Carioca", "Event Proposal | Embaixada Carioca");
   document.querySelectorAll("[data-proposal-lang]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.proposalLang === language));
   });
   document.querySelector(".public-proposal-hero-copy > p").textContent = tr("Proposta comercial", "Event proposal");
-  if (currentProposal) renderProposal(currentProposal);
+  if (currentProposal) {
+    renderProposal(currentProposal);
+    restorePublicResponseDraft(draft);
+  }
 }
 
 const PAYMENT_INFO = {
@@ -39,6 +44,50 @@ let currentProposal = null;
 let proposalViewRecorded = false;
 let selectedProof = null;
 let pendingUpsellOffer = null;
+let publicSubmissionBusy = false;
+let responseOriginSelector = "";
+
+function readPublicResponseDraft() {
+  const form = document.querySelector("#publicProposalResponseForm");
+  if (!form) return null;
+  const status = document.querySelector("#publicProposalStatus");
+  return {
+    proposal: form.dataset.proposalId, revision: form.dataset.revision, open: !form.hidden,
+    laterProof: document.querySelector("#publicLaterProofForm")?.hidden === false,
+    values: ["publicProposalAction", "publicRequestedDate", "publicRequestedTime", "publicRequestedGuests", "publicResponseMessage"].map(id => document.getElementById(id)?.value || ""),
+    error: status?.dataset.status === "error" ? status.textContent : "",
+  };
+}
+
+function restorePublicResponseDraft(draft) {
+  const form = document.querySelector("#publicProposalResponseForm");
+  if (!draft || !form || draft.proposal !== form.dataset.proposalId || draft.revision !== form.dataset.revision) return;
+  const action = draft.values[0];
+  const eligible = !(currentProposal.cliente_resposta || currentProposal.snapshot?.clienteResposta?.acao) && ["proposta_enviada", "negociacao"].includes(currentProposal.status);
+  if (eligible && ["alteracao", "confirmar", "cancelar"].includes(action)) {
+    if (draft.open) openResponseForm(action, { track: false, focus: false });
+    ["publicProposalAction", "publicRequestedDate", "publicRequestedTime", "publicRequestedGuests", "publicResponseMessage"].forEach((id, index) => { document.getElementById(id).value = draft.values[index]; });
+    if (draft.open && draft.error) setMessage(draft.error, "error");
+  }
+  const later = document.querySelector("#publicLaterProofForm");
+  if (draft.laterProof && later) { later.hidden = false; updateProofStatus(); }
+}
+
+function focusPublicTarget(target) {
+  if (!target) return;
+  if (!target.matches("input,select,textarea,button,summary,a[href],[tabindex]")) target.setAttribute("tabindex", "-1");
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+async function runPublicSubmission(event, handler) {
+  event.preventDefault();
+  if (publicSubmissionBusy) return;
+  publicSubmissionBusy = true;
+  try { return await handler(event); } finally { publicSubmissionBusy = false; }
+}
+function submitPublicResponse(event) { return runPublicSubmission(event, performPublicResponse); }
+function submitPublicProof(event) { return runPublicSubmission(event, performPublicProof); }
 
 function getProposalAnalyticsProperties(proposal = currentProposal) {
   const analytics = window.EventAnalytics;
@@ -592,7 +641,11 @@ function renderProposal(proposal) {
       </div>
     </div>
 
-    <a class="public-proposal-jump" href="#decisionActions">${tr("Ver condições e responder", "Review terms and respond")}</a>
+    <nav class="public-proposal-nav" aria-label="${tr("Navegação da proposta", "Proposal navigation")}">
+      <a href="#publicProposalItems" data-proposal-section tabindex="0">${tr("Itens incluídos", "Included items")}</a>
+      <a class="public-proposal-jump" href="#commercialTerms" data-proposal-section tabindex="0">${tr("Ver condições", "Review terms")}</a>
+      <a href="#decisionActions" data-proposal-section tabindex="0">${tr("Responder", "Respond")}</a>
+    </nav>
     ${renderVersionChanges(snapshot)}
     ${renderOfferComparison(snapshot)}
     ${renderCommercialSummary(snapshot)}
@@ -618,7 +671,7 @@ function renderProposal(proposal) {
       </div>
       ${canSendProof ? `<form id="publicLaterProofForm" class="public-proposal-change-form" hidden>${renderProofUploader()}<button class="primary" type="submit">${tr("Enviar comprovante", "Send receipt")}</button></form>` : ""}
 
-      <form class="public-proposal-change-form" id="publicProposalResponseForm" hidden>
+      <form class="public-proposal-change-form" id="publicProposalResponseForm" data-proposal-id="${escapeHtml(proposal.id)}" data-revision="${escapeHtml(String(snapshot.publicRevision || proposal.versao || 1))}" hidden>
         <input type="hidden" id="publicProposalAction" />
         <div class="public-proposal-form-grid">
           <label>
@@ -650,7 +703,7 @@ function renderProposal(proposal) {
     </div>
 
     <div class="public-proposal-layout">
-      <div class="public-proposal-items">
+      <div class="public-proposal-items" id="publicProposalItems">
         <h3>${tr("Itens incluídos", "Included items")}</h3>
         ${
           selectedItems.length
@@ -686,17 +739,13 @@ function renderProposal(proposal) {
           <p>${tr("Prefere conversar antes de responder?", "Want to talk before responding?")} <a href="mailto:eventos@embaixadacarioca.com.br?subject=${encodeURIComponent(tr("Dúvida sobre proposta de evento", "Question about event proposal"))}">eventos@embaixadacarioca.com.br</a> · <a href="https://wa.me/5521971426007" target="_blank" rel="noopener noreferrer">+55 21 97142-6007</a></p>
         </div>
 
-        ${
-          snapshot.generalTerms
-            ? `<details class="public-proposal-terms" id="commercialTerms"><summary>${tr("Condições comerciais completas", "Full commercial terms")}</summary><p>${formatMultiline(snapshot.generalTerms)}</p>${publicTariffApplicationNotice(snapshot) ? `<p>${escapeHtml(publicTariffApplicationNotice(snapshot))}</p>` : ""}</details>`
-            : ""
-        }
+        <details class="public-proposal-terms" id="commercialTerms"><summary>${tr("Condições comerciais completas", "Full commercial terms")}</summary><p>${snapshot.generalTerms ? formatMultiline(snapshot.generalTerms) : tr("Confirme as condições com a equipe antes de responder.", "Confirm the terms with our team before responding.")}</p>${publicTariffApplicationNotice(snapshot) ? `<p>${escapeHtml(publicTariffApplicationNotice(snapshot))}</p>` : ""}<a href="#decisionActions" data-proposal-section tabindex="0">${tr("Voltar às opções de resposta", "Back to response options")}</a></details>
       </aside>
     </div>
   `;
 }
 
-function openResponseForm(action) {
+function openResponseForm(action, { track = true, focus = true, origin = document.activeElement } = {}) {
   const form = document.querySelector("#publicProposalResponseForm");
   const actionInput = document.querySelector("#publicProposalAction");
   const message = document.querySelector("#publicResponseMessage");
@@ -704,7 +753,11 @@ function openResponseForm(action) {
   const submitButton = document.querySelector("#publicSubmitResponse");
   if (!form || !actionInput || !message) return;
   actionInput.value = action;
-  captureProposalAnalytics("proposal_response_started", { response_type: action });
+  if (track) {
+    responseOriginSelector = origin?.matches("[data-request-offer]")
+      ? `[data-request-offer="${origin.dataset.requestOffer}"]` : `[data-public-action="${action}"]`;
+    captureProposalAnalytics("proposal_response_started", { response_type: action });
+  }
   form.hidden = false;
   if (paymentSlot) paymentSlot.hidden = action !== "confirmar";
   if (action !== "confirmar") {
@@ -716,7 +769,7 @@ function openResponseForm(action) {
     if (submitButton) submitButton.textContent = tr("Enviar aprovação à equipe", "Send approval to our team");
     updateProofStatus();
     setMessage(tr("Confira os dados bancários. Você pode anexar o comprovante agora ou depois de aprovar.", "Review the bank details. You may upload your receipt now or after approving."), "neutral");
-    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (focus) focusPublicTarget(message);
     return;
   }
   if (action === "cancelar") {
@@ -728,13 +781,12 @@ function openResponseForm(action) {
     if (submitButton) submitButton.textContent = tr("Enviar pedido de ajuste", "Request changes");
     setMessage(tr("Conte o que gostaria de ajustar: data, horário, convidados ou outro detalhe.", "Tell us what to change: date, time, guest count or anything else."), "neutral");
   }
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (focus) focusPublicTarget(action === "alteracao" ? document.querySelector("#publicRequestedDate") : message);
 }
 
 let responseAttempt = null;
 
-async function submitPublicResponse(event) {
-  event.preventDefault();
+async function performPublicResponse(event) {
   const action = document.querySelector("#publicProposalAction")?.value || "";
   const requestedDate = document.querySelector("#publicRequestedDate")?.value || null;
   const requestedTime = document.querySelector("#publicRequestedTime")?.value || null;
@@ -808,8 +860,7 @@ async function submitPublicResponse(event) {
   setMessage(tr("Resposta registrada. Nossa equipe recebeu sua atualização.", "Response received. Our team has your request."), "success");
 }
 
-async function submitPublicProof(event) {
-  event.preventDefault();
+async function performPublicProof(event) {
   if (!selectedProof || currentProposal?.cliente_resposta !== "confirmar") {
     setMessage(tr("Escolha um comprovante antes de enviar.", "Choose a receipt before sending."), "error");
     return;
@@ -887,6 +938,15 @@ async function recordProposalView() {
 }
 
 card.addEventListener("click", (event) => {
+  const section = event.target.closest("[data-proposal-section]");
+  if (section) {
+    event.preventDefault();
+    const target = card.querySelector(section.getAttribute("href"));
+    if (target?.matches("details")) target.open = true;
+    window.history.pushState(null, "", section.getAttribute("href"));
+    focusPublicTarget(target?.querySelector("summary,h3") || target);
+    return;
+  }
   const option = event.target.closest("[data-request-offer]");
   if (option) {
     const offer = currentProposal?.snapshot?.publicOfferOptions?.[Number(option.dataset.requestOffer)];
@@ -898,7 +958,7 @@ card.addEventListener("click", (event) => {
         Number(offer.total || 0) - Number(currentProposal?.total || currentProposal?.snapshot?.totals?.total || 0),
       ),
     });
-    openResponseForm("alteracao");
+    openResponseForm("alteracao", { origin: option });
     const message = document.querySelector("#publicResponseMessage");
     if (message) {
       const offerDetail = offer.description ? `${offer.name} — ${offer.description}` : offer.name;
@@ -929,13 +989,16 @@ card.addEventListener("click", (event) => {
   const actionButton = event.target.closest("[data-public-action]");
   if (actionButton) {
     pendingUpsellOffer = null;
-    openResponseForm(actionButton.dataset.publicAction);
+    openResponseForm(actionButton.dataset.publicAction, { origin: actionButton });
   }
   const helpLink = event.target.closest('a[href*="wa.me"]');
   if (helpLink) captureProposalAnalytics("client_help_requested", { channel: "whatsapp", action: "proposal_help" });
   if (event.target.closest("#publicCancelResponse")) {
     const form = document.querySelector("#publicProposalResponseForm");
     if (form) form.hidden = true;
+    const origin = responseOriginSelector ? card.querySelector(responseOriginSelector) : null;
+    origin?.focus({ preventScroll: true });
+    origin?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
     setMessage(`${tr("Status atual", "Current status")}: ${getStatusLabel(currentProposal?.status)}.`, "neutral");
   }
 });
@@ -979,6 +1042,10 @@ card.addEventListener("submit", (event) => {
   else if (event.target.id === "publicProposalResponseForm") submitPublicResponse(event);
 });
 document.querySelectorAll("[data-proposal-lang]").forEach((button) => button.addEventListener("click", () => {
+  if (publicSubmissionBusy) {
+    setMessage(tr("Aguarde a confirmação do envio antes de trocar o idioma.", "Wait for the submission result before changing language."), "neutral");
+    return;
+  }
   language = button.dataset.proposalLang;
   localStorage.setItem("embaixada_form_language_v1", language);
   const url = new URL(window.location.href);

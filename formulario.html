@@ -45,15 +45,11 @@
           </div>
           <div class="public-form-progress-panel">
             <ol class="public-form-steps" aria-label="Etapas do pedido">
-              <li><span>01</span><em id="stepLabel1">Quando</em></li>
-              <li><span>02</span><em id="stepLabel2">Ocasião</em></li>
-              <li><span>03</span><em id="stepLabel3">Formato</em></li>
-              <li><span>04</span><em id="stepLabel4">Data e grupo</em></li>
-              <li><span>05</span><em id="stepLabel5">Preferências</em></li>
-              <li><span>06</span><em id="stepLabel6">Contato</em></li>
+              <li><span>01</span><em id="stepLabel1">Data e grupo</em></li>
+              <li><span>02</span><em id="stepLabel2">Contato</em></li>
             </ol>
             <div class="form-progress" aria-label="Progresso do formulário">
-              <span id="formProgressText">Pergunta 1 de 6 - Tempo estimado 2 minutos</span>
+              <span id="formProgressText">Etapa 1 de 2 · Personalização opcional</span>
               <div><i id="formProgressBar"></i></div>
             </div>
             <div class="form-ux-cues" aria-label="Como funciona">
@@ -211,12 +207,13 @@
               </label>
               <label>
                 <span id="timeRangeLabel">Período desejado</span>
-                <select id="requestTimeRange" name="periodo_desejado" autocomplete="off">
+                <select id="requestTimeRange" name="periodo_desejado" autocomplete="off" aria-describedby="timeRangeHelp">
                   <option value="">Selecione</option>
                   <option value="morning">Manhã</option>
                   <option value="afternoon">Tarde</option>
                   <option value="night">Noite</option>
                 </select>
+                <small id="timeRangeHelp">O período desejado define as opções de horário. Explorar um momento em Personalizar não altera este campo.</small>
               </label>
               <label>
                 <span id="eventTimeLabel">Horário de chegada</span>

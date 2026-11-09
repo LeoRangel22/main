@@ -11,7 +11,8 @@ function setup(data){
  const state={epoch:0,submissionFingerprint:null,submissionSnapshot:null,external:false};
  const counts={rpc:0,reset:0,identityReset:0,success:0};const storage=new Map();
  const fields=Object.fromEntries(['moment','clientType','profile','eventType','dateIsFlexible'].map(k=>[k,{value:'original'}]));
- const context=vm.createContext({partialCaptureState:state,partialCaptureTimer:null,submitButton:{disabled:false},
+ const uiState={validationAttempted:true};
+ const context=vm.createContext({uiState,partialCaptureState:state,partialCaptureTimer:null,submitButton:{disabled:false},
   window:{supabase:{createClient:true}},getCopy:()=>({messages:{submitting:'Sending'}}),applyPartialCaptureFence:()=>false,
   getOrCreateReferenceCode:()=> 'SYNTHETIC',getSnapshot:()=>snapshot,getPartialCaptureFingerprint:()=>JSON.stringify(snapshot),
   validateSnapshot:()=>true,getCaptureToken:()=>token,renderPartialCaptureStatus:()=>{},getPartialCaptureCopy:()=>({submissionUncertain:'Uncertain'}),
@@ -23,7 +24,7 @@ function setup(data){
   renderRecommendations:()=>{},updateContactRequirements:()=>{},updateContactGuidance:()=>{},renderFinalReview:()=>{},
   renderSuccessStatus:()=>{counts.success++;}
  });vm.runInContext(submit,context);
- return{state,counts,storage,run:()=>vm.runInContext('submitRequest({preventDefault(){}})',context)};
+ return{state,counts,storage,uiState,run:()=>vm.runInContext('submitRequest({preventDefault(){}})',context)};
 }
 for(const [label,data] of [['empty',[]],['null',null],['missing request',[{...receipt,request_id:''}]],
  ['missing opportunity',[{...receipt,opportunity_id:null}]],['missing token',[{...receipt,capture_token:undefined}]],
@@ -31,11 +32,11 @@ for(const [label,data] of [['empty',[]],['null',null],['missing request',[{...re
  test(`final submit ${label} acknowledgement cannot clear input or reset identity`,async()=>{
   const c=setup(data);await c.run();assert.equal(c.state.phase,'submissionUncertain');assert.equal(c.state.submissionUncertain,true);
   assert.equal(c.counts.rpc,1);assert.equal(c.counts.reset,0);assert.equal(c.counts.identityReset,0);assert.equal(c.counts.success,0);
-  assert.equal(c.storage.get('embaixada_form_submit_pending_v1'),token);assert.ok(c.state.submissionSnapshot);
+  assert.equal(c.storage.get('embaixada_form_submit_pending_v1'),token);assert.ok(c.state.submissionSnapshot);assert.equal(c.uiState.validationAttempted,true);
  });
 }
 test('one matching final acknowledgement retains the established success path',async()=>{
  const c=setup([receipt]);await c.run();assert.equal(c.state.phase,'submitted');assert.equal(c.counts.rpc,1);
  assert.equal(c.counts.reset,1);assert.equal(c.counts.identityReset,1);assert.equal(c.counts.success,1);
- assert.equal(c.storage.has('embaixada_form_submit_pending_v1'),false);
+ assert.equal(c.storage.has('embaixada_form_submit_pending_v1'),false);assert.equal(c.uiState.validationAttempted,false);
 });
