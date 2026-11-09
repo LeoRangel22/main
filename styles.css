@@ -13276,3 +13276,8 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-row { min-wi
 body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-column-list,
 body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card { min-width:0; max-width:100%; box-sizing:border-box; }
 body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(strong,small,span) { overflow-wrap:anywhere; }
+/* Native date controls must fit their field, including WebKit at enlarged text. */
+body[data-page="app"] input:is([type="date"],[type="time"],[type="month"],[type="datetime-local"]) { min-width:0; max-width:100%; box-sizing:border-box; }
+.commercial-calendar-heading > * { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.commercial-calendar-heading > label { flex:0 1 240px; width:min(100%,240px); }
+.commercial-calendar-heading input { width:100%; min-width:0; max-width:100%; }
