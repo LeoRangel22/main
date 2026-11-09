@@ -13279,6 +13279,7 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(str
 /* Keep the native select's popup metrics from widening WebKit's page. */
 #pipelineStageSelect {
   appearance: none;
+  overflow: hidden;
   padding-right: 32px;
   text-overflow: ellipsis;
   background-image: linear-gradient(45deg, transparent 50%, #183a2d 50%), linear-gradient(135deg, #183a2d 50%, transparent 50%);
