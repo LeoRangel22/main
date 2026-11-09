@@ -96,7 +96,7 @@ test('tab-only client view is cleared after confirmed logout',async({page})=>{
  expect(a.external).toEqual([]);expect(a.errors).toEqual([]);
 });
 
-test('switching records updates the reload target and section navigation keeps local edits',async({page})=>{
+test('switching records updates the reload target and section navigation keeps local edits',async({page,browserName})=>{
  const a=await openClients(page);
  await page.locator('#globalSearchInput').fill('Cliente sintético 00');
  await page.locator('#clientDirectory [data-proposal-id="navigation-proposal-0"]').click();
@@ -109,11 +109,17 @@ test('switching records updates the reload target and section navigation keeps l
  await page.locator('.admin-quick-nav').getByRole('link',{name:'Funil',exact:true}).click();
  await expect(page.locator('#notes')).toHaveValue('Rascunho sintético preservado');
  expect(await page.evaluate(()=>hasUnsavedEditorChanges())).toBe(true);
+ // Native warnings are browser-controlled (MDN beforeunload). Check the app's
+ // cancellation contract in every engine, and the native Chrome warning too.
+ expect(await page.evaluate(()=>{
+  const exit=new Event('beforeunload',{cancelable:true});window.dispatchEvent(exit);
+  return exit.defaultPrevented;
+ })).toBe(true);
  let discardConfirmed=false;
  page.once('dialog',async dialog=>{expect(dialog.type()).toBe('beforeunload');discardConfirmed=true;await dialog.accept();});
  await page.reload();
  await expect(page.locator('#clientName')).toHaveValue('Cliente sintético 01');
  await expect(page.locator('#notes')).toHaveValue(initialNotes);
- expect(discardConfirmed).toBe(true);
+ if(browserName==='chromium')expect(discardConfirmed).toBe(true);
  expect(a.external).toEqual([]);expect(a.errors).toEqual([]);
 });
