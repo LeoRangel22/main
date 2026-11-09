@@ -1331,7 +1331,7 @@ function applyStaticCopy() {
   updateContactRequirements();
   updateContactGuidance();
   document.querySelector("#briefingTitle").textContent = localizedText("Event preferences", "Preferências do evento");
-  document.querySelector("#contactTitle").textContent = current.stepLabels[3];
+  document.querySelector("#contactTitle").textContent = current.stepLabels[1];
   document.querySelector("#momentTitle").textContent = localizedText("When are you imagining your event?", "Quando você imagina seu evento?");
   document.querySelector("#profileTitle").textContent = localizedText("Who is organizing and what is the occasion?", "Quem está organizando e qual é a ocasião?");
   document.querySelector("#eventDetailsTitle").textContent = localizedText("Event details", "Detalhes do evento");
