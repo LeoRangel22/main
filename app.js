@@ -7238,7 +7238,7 @@ function getScrollableAncestors(node) {
   return ancestors;
 }
 
-function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {}) {
+function scrollToNodeReliably(target, { offset = 12, behavior = "smooth", settle = true } = {}) {
   if (!target) return;
   const generation = editorScrollGeneration;
   const scroll = (scrollBehavior = behavior) => {
@@ -7268,9 +7268,11 @@ function scrollToNodeReliably(target, { offset = 12, behavior = "smooth" } = {})
 
   scroll();
   window.requestAnimationFrame(() => scroll());
-  window.setTimeout(() => scroll("auto"), 140);
-  window.setTimeout(() => scroll("auto"), 340);
-  window.setTimeout(() => scroll("auto"), 760);
+  if (settle) {
+    window.setTimeout(() => scroll("auto"), 140);
+    window.setTimeout(() => scroll("auto"), 340);
+    window.setTimeout(() => scroll("auto"), 760);
+  }
 }
 
 function getLoadedEditorTarget(targetMode = "client") {
@@ -7317,18 +7319,15 @@ function jumpToLoadedEditor(targetMode = "client", behavior = "auto") {
       } catch (_) {}
     }
   }
-  scrollToNodeReliably(target, { behavior, offset: 14 });
+  scrollToNodeReliably(target, { behavior, offset: 14, settle: false });
   return true;
 }
 
 function scheduleLoadedEditorJump(targetMode = "client", behavior = "auto") {
   const generation = editorScrollGeneration;
-  const jumps = [0, 90, 240, 520, 980, 1500];
-  jumps.forEach((delay) => {
-    window.setTimeout(() => {
-      if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
-      jumpToLoadedEditor(targetMode, delay >= 520 ? "auto" : behavior);
-    }, delay);
+  window.requestAnimationFrame(() => {
+    if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
+    jumpToLoadedEditor(targetMode, behavior);
   });
 }
 
@@ -7377,9 +7376,10 @@ function focusLoadedProposalEditor(message = "Proposta carregada. Revise os dado
   });
   scheduleLoadedEditorJump(jumpMode, "auto");
   const focusTargetAtLoad = document.activeElement;
+  const focusGenerationAtLoad = editorScrollGeneration;
   window.setTimeout(() => {
     // Never move typing to the client's name after the user chose another field.
-    if (document.activeElement === focusTargetAtLoad || document.activeElement === document.body) {
+    if (focusGenerationAtLoad === editorScrollGeneration && (document.activeElement === focusTargetAtLoad || document.activeElement === document.body)) {
       fields.clientName?.focus?.({ preventScroll: true });
     }
   }, 350);
@@ -7395,9 +7395,10 @@ function jumpToPipelineStage(stageId) {
   const commercialMap = {lead_recebido:"lead",proposta_pronta:"ready",proposta_enviada:"waiting",negociacao:"negotiation",confirmado:"won"};
   const commercialId = commercialMap[stageId];
   state.activePipelineFilter = commercialId ? "sales:"+commercialId : stageId;
+  pipelineSelectedStage = commercialId ? "sales_"+(commercialId === "negotiation" ? "changes" : commercialId) : String(stageId).replace(/[^a-z0-9_-]/gi, "");
   renderPipeline();
   window.requestAnimationFrame(() => {
-    const safeStageId = commercialId ? "sales_"+(commercialId === "negotiation" ? "changes" : commercialId) : String(stageId).replace(/[^a-z0-9_-]/gi, "");
+    const safeStageId = pipelineViewMode === "list" ? pipelineSelectedStage : commercialId ? "sales_"+(commercialId === "negotiation" ? "changes" : commercialId) : String(stageId).replace(/[^a-z0-9_-]/gi, "");
     const stage = document.querySelector(`.pipeline-stage-${safeStageId}`);
     if (!stage) {
       showToast("Etapa ainda não encontrada no funil.");
@@ -10102,11 +10103,12 @@ function renderSalesFunnelOverview(items) {
   if (!state.session || !state.supabase) { root.hidden = true; root.innerHTML = ""; return; }
   root.hidden = false;
   const states = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
-  root.innerHTML = `<h2>Onde cada venda está</h2><p>Resumo de todas as oportunidades. Cada oportunidade é contada uma vez; o filtro selecionado abaixo afeta a lista, não este resumo.</p>
+  const expanded = root.querySelector("details")?.open ?? !window.matchMedia?.("(max-width: 600px)")?.matches;
+  root.innerHTML = `<details ${expanded ? "open" : ""}><summary>Onde cada venda está</summary><p>Resumo de todas as oportunidades. Cada oportunidade é contada uma vez; a busca e os filtros afetam a lista, não este resumo.</p>
     <div class="sales-funnel-stages">${salesFunnelStages.map(stage=>`<button type="button" data-sales-funnel="${stage.id}" aria-pressed="${state.activePipelineFilter === `sales:${stage.id}`}">
       <span>${stage.label}</span><strong>${states.filter(s=>s.id===stage.id).length}</strong><small>${stage.action}</small></button>`).join("")}</div>
     <p class="sales-funnel-evidence">Leitura baseada nos registros disponíveis. Aprovação não confirma pagamento; envio registrado não comprova entrega ou leitura.</p>
-    ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}`;
+    ${commercialRefreshError ? '<p role="status">Atualização pendente: confira os dados antes de decidir.</p>' : ""}</details>`;
 }
 
 function renderPipelineMetrics(items = getPipelineItems()) {
@@ -11455,6 +11457,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = 
   if (document.body.dataset.page !== "app") return openClientWorkspaceRecord("proposal", proposalId);
   if (!(await confirmEditorSwitch())) return false;
   if (!(await ensureProposalJourneyDetails(proposalId))) return false;
+  rememberPipelineReturn("proposal", proposalId);
   if (openSavedProposal(proposalId, sourceLabel) !== true) return false;
   scheduleLoadedEditorJump(targetMode, "auto");
   return true;
@@ -11471,6 +11474,7 @@ async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "
   }
   if (document.body.dataset.page !== "app") return openClientWorkspaceRecord("lead", requestId);
   if (!(await confirmEditorSwitch())) return;
+  rememberPipelineReturn("request", requestId);
   await applyQuoteRequest(requestId, sourceLabel);
   scheduleLoadedEditorJump(targetMode, "auto");
 }
@@ -12523,6 +12527,76 @@ function getPipelineStageItems(stage, items) {
     : items.filter((item) => item.stage === stage.id);
 }
 
+// View state contains navigation only; records and business stages remain unchanged.
+let pipelineViewMode = "";
+let pipelineSelectedStage = "";
+let pipelineSelectionScope = "";
+let pipelineRenderedRows = [];
+let pipelineReturnContext = null;
+
+function syncPipelineViewControls(rows, items) {
+  const mode = document.getElementById("pipelineViewMode");
+  const picker = document.getElementById("pipelineStageSelect");
+  const filters = document.getElementById("pipelineFilterSelect");
+  const available = Boolean(state.session && state.supabase);
+  [mode, picker, filters].forEach(node => { if (node) node.disabled = !available; });
+  if (!available) {
+    pipelineReturnContext = null; pipelineSelectedStage = ""; pipelineSelectionScope = ""; pipelineRenderedRows = [];
+    if (picker) picker.innerHTML = '<option value="">Entre para escolher a etapa</option>';
+    if (filters) filters.innerHTML = '<option value="">Entre para filtrar</option>';
+    return;
+  }
+  if (!pipelineViewMode) pipelineViewMode = window.matchMedia?.("(max-width: 600px)")?.matches ? "list" : "board";
+  const stages = rows.flatMap(row => row.stages.map(stage => ({...stage, rowTitle:row.title})));
+  const scope = JSON.stringify([state.workspaceMode, state.activePipelineFilter, fields.pipelineSearchInput?.value || ""]);
+  const firstPopulated = stages.find(stage => getPipelineStageItems(stage, items).length);
+  if (!stages.some(stage => stage.id === pipelineSelectedStage)) {
+    pipelineSelectedStage = (firstPopulated || stages[0])?.id || "";
+  } else if (scope !== pipelineSelectionScope && firstPopulated && !stages.some(stage => stage.id === pipelineSelectedStage && getPipelineStageItems(stage, items).length)) {
+    pipelineSelectedStage = firstPopulated.id;
+  }
+  pipelineSelectionScope = scope;
+  if (mode) mode.value = pipelineViewMode;
+  if (picker) {
+    picker.innerHTML = stages.map(stage => `<option value="${escapeHtml(stage.id)}">${escapeHtml(stage.rowTitle)} · ${escapeHtml(stage.title)} (${getPipelineStageItems(stage, items).length})</option>`).join("");
+    picker.value = pipelineSelectedStage;
+  }
+  if (filters) {
+    const options = getPipelineQuickFilterDefinitions();
+    const active = getActivePipelineFilterLabel();
+    filters.innerHTML = options.map(filter => `<option value="${escapeHtml(filter.id)}">${escapeHtml(filter.label)}</option>`).join("") +
+      (options.some(filter => filter.id === state.activePipelineFilter) ? "" : `<option value="${escapeHtml(state.activePipelineFilter)}">${escapeHtml(active || "Recorte atual")}</option>`);
+    filters.value = state.activePipelineFilter;
+  }
+  nodes.pipelineBoard.dataset.layout = pipelineViewMode;
+  nodes.pipelineBoard.querySelectorAll("[data-view-stage]").forEach(column => { column.hidden = pipelineViewMode === "list" && column.dataset.viewStage !== pipelineSelectedStage; });
+  nodes.pipelineBoard.querySelectorAll(".pipeline-row").forEach(row => { row.hidden = !row.querySelector(".pipeline-column:not([hidden])"); });
+}
+
+function rememberPipelineReturn(kind, id) {
+  const card = [...(nodes.pipelineBoard?.querySelectorAll("[data-pipeline-card-id]") || [])]
+    .find(node => node.dataset.pipelineCardId === id && node.dataset.pipelineCardKind === kind);
+  if (!card || !card.getClientRects().length) return;
+  pipelineReturnContext = {kind, id, stage:card.closest("[data-view-stage]")?.dataset.viewStage || pipelineSelectedStage,
+    filter:state.activePipelineFilter, term:fields.pipelineSearchInput?.value || "", mode:pipelineViewMode};
+}
+
+function returnToPipelineContext(fallbackStage) {
+  editorScrollGeneration += 1;
+  const context = pipelineReturnContext;
+  if (!context) { jumpToPipelineStage(fallbackStage); return; }
+  state.activePipelineFilter = context.filter;
+  if (fields.pipelineSearchInput) fields.pipelineSearchInput.value = context.term;
+  pipelineViewMode = context.mode; pipelineSelectedStage = context.stage;
+  navigateWorkspaceSection("#salesPipeline", false);
+  renderPipeline();
+  const card = [...nodes.pipelineBoard.querySelectorAll("[data-pipeline-card-id]")]
+    .find(node => node.dataset.pipelineCardId === context.id && node.dataset.pipelineCardKind === context.kind && node.getClientRects().length);
+  const target = card || nodes.pipelineBoard;
+  target.setAttribute("tabindex", "-1"); target.focus({preventScroll:true});
+  target.scrollIntoView({block:"center",inline:"nearest",behavior:"auto"});
+}
+
 function renderPipelineSearchStatus(items, rows = []) {
   const available = Boolean(state.supabase && state.session);
   if (fields.pipelineSearchInput) {
@@ -12537,7 +12611,11 @@ function renderPipelineSearchStatus(items, rows = []) {
   }
   const ids = new Set(rows.flatMap(row => row.stages.flatMap(stage => getPipelineStageItems(stage, items).map(item => item.kind + ":" + item.id))));
   const filter = getActivePipelineFilterLabel();
-  nodes.pipelineSearchStatus.textContent = ids.size + (ids.size === 1 ? " registro no funil" : " registros no funil") + (filter ? " · " + filter : "") + ".";
+  const selected = rows.flatMap(row => row.stages).find(stage => stage.id === pipelineSelectedStage);
+  const listScope = pipelineViewMode === "list" && selected ? ` · ${getPipelineStageItems(selected, items).length} nesta etapa` : "";
+  nodes.pipelineSearchStatus.textContent = ids.size + (ids.size === 1 ? " registro no recorte" : " registros no recorte") +
+    (filter ? " · " + filter : "") + listScope + ". Tudo conta os " + getPipelineItems().length +
+    " registros carregados; o quadro agrupa oportunidades e a visão pode ocultar outras etapas.";
 }
 
 function renderPipelineStage(stage, items) {
@@ -12559,7 +12637,7 @@ function renderPipelineStage(stage, items) {
   const stageCards = stageItems.slice(0, limit).map(renderPipelineCard).join("") + (stageItems.length > limit ? `<button class="secondary stage-more" type="button" data-stage-more="${escapeHtml(paginationKey)}">Mostrar mais 20 · ${stageItems.length - limit} restantes</button>` : "");
   if (stage.row === "archive") {
     return `
-      <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)} pipeline-column-collapsible">
+      <section aria-label="${escapeHtml(stage.title)}" data-view-stage="${escapeHtml(stage.id)}" class="pipeline-column pipeline-stage-${escapeHtml(stage.id)} pipeline-column-collapsible">
         <details>
           <summary class="pipeline-column-heading pipeline-column-summary">
             <span>${escapeHtml(stage.title)}</span>
@@ -12574,7 +12652,7 @@ function renderPipelineStage(stage, items) {
     `;
   }
   return `
-    <section class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}${legacyClass}">
+    <section aria-label="${escapeHtml(stage.title)}" data-view-stage="${escapeHtml(stage.id)}" class="pipeline-column pipeline-stage-${escapeHtml(stage.id)}${legacyClass}">
       <div class="pipeline-column-heading">
         <span>${escapeHtml(stage.title)}</span>
         <strong>${stageItems.length}</strong>
@@ -12600,6 +12678,7 @@ function renderPipeline() {
     renderPipelineQuickFilters([]);
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>A conexão da equipe ainda está carregando.</p>`;
+    syncPipelineViewControls([], []);
     renderPipelineSearchStatus([]);
     renderPipelineMetrics([]);
     renderFinanceCommandPanel([]);
@@ -12610,6 +12689,7 @@ function renderPipeline() {
     renderPipelineQuickFilters([]);
     renderOperationsAgenda([]);
     nodes.pipelineBoard.innerHTML = `<p>Entre com o e-mail da equipe para carregar o funil.</p>`;
+    syncPipelineViewControls([], []);
     renderPipelineSearchStatus([]);
     renderPipelineMetrics([]);
     renderFinanceCommandPanel([]);
@@ -12630,7 +12710,12 @@ function renderPipeline() {
     { id: "archive", title: "Encerrados", stages: funnelStages.filter((stage) => stage.row === "archive") },
   ];
   const rows = state.workspaceMode === "sales" ? allRows.filter((row) => row.id === "commercial") : allRows;
-  renderPipelineSearchStatus(filteredItems, rows);
+  pipelineRenderedRows = rows;
+  const focusedCard = document.activeElement?.closest?.("[data-pipeline-card-id]");
+  const focusedRecord = focusedCard ? {id:focusedCard.dataset.pipelineCardId, kind:focusedCard.dataset.pipelineCardKind} : null;
+  const scrollPositions = new Map([...nodes.pipelineBoard.querySelectorAll("[data-view-stage]")].map(node =>
+    [node.dataset.viewStage, node.querySelector(".pipeline-column-list")?.scrollTop || 0]));
+  const rowPositions = new Map([...nodes.pipelineBoard.querySelectorAll(".pipeline-row")].map(node => [node.getAttribute("aria-label"), node.scrollLeft]));
 
   const expandedColumns = new Set([...nodes.pipelineBoard.querySelectorAll(".pipeline-column-collapsible details[open]")]
     .map(details => details.querySelector("[data-pipeline-sort]")?.dataset.pipelineSort));
@@ -12645,6 +12730,18 @@ function renderPipeline() {
     const stageId = details.querySelector("[data-pipeline-sort]")?.dataset.pipelineSort;
     details.open = expandedColumns.has(stageId) || Boolean(fields.pipelineSearchInput?.value.trim() && details.querySelector(".pipeline-card"));
   });
+  syncPipelineViewControls(rows, filteredItems);
+  nodes.pipelineBoard.querySelectorAll("[data-view-stage]").forEach(node => {
+    const list = node.querySelector(".pipeline-column-list");
+    if (list) list.scrollTop = scrollPositions.get(node.dataset.viewStage) || 0;
+  });
+  nodes.pipelineBoard.querySelectorAll(".pipeline-row").forEach(node => { node.scrollLeft = rowPositions.get(node.getAttribute("aria-label")) || 0; });
+  renderPipelineSearchStatus(filteredItems, rows);
+  if (focusedRecord) {
+    const replacement = [...nodes.pipelineBoard.querySelectorAll("[data-pipeline-card-id]")].find(node =>
+      node.dataset.pipelineCardId === focusedRecord.id && node.dataset.pipelineCardKind === focusedRecord.kind && node.getClientRects().length);
+    replacement?.focus({preventScroll:true});
+  }
 }
 
 function renderQuoteRequests() {
@@ -16520,6 +16617,11 @@ function addProductType() {
 }
 
 function bindEvents() {
+  // Once the user acts, an earlier editor opening must not move their target.
+  const stopEditorJumpsOnIntent = () => { if (state.activeEditorContext) editorScrollGeneration += 1; };
+  document.addEventListener("pointerdown", stopEditorJumpsOnIntent, true);
+  document.addEventListener("keydown", stopEditorJumpsOnIntent, true);
+  document.addEventListener("wheel", stopEditorJumpsOnIntent, {capture:true, passive:true});
   Object.values(fields).forEach((field) => {
     if (!field || field === fields.pipelineSearchInput) return;
     const refreshFormOutputs = (event) => {
@@ -16665,10 +16767,13 @@ function bindEvents() {
   nodes.jumpToPipelineBtn?.addEventListener("click", () => {
     document.querySelector(".pipeline-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  nodes.loadedEditorBar?.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button, a")) editorScrollGeneration += 1;
+  });
   nodes.loadedEditorBar?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-return-pipeline-stage]");
     if (!button) return;
-    jumpToPipelineStage(button.dataset.returnPipelineStage);
+    returnToPipelineContext(button.dataset.returnPipelineStage);
   });
   nodes.firstReplyPanel?.addEventListener("input", (event) => {
     if (event.target.id === "firstReplyText") state.firstReplyDraft = event.target.value;
@@ -16855,6 +16960,24 @@ function bindEvents() {
     }
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Agenda operacional");
+  });
+  document.getElementById("pipelineViewMode")?.addEventListener("change", event => {
+    pipelineViewMode = event.target.value === "list" ? "list" : "board"; renderPipeline();
+  });
+  document.getElementById("pipelineStageSelect")?.addEventListener("change", event => {
+    pipelineSelectedStage = event.target.value;
+    // An explicitly chosen empty stage remains available for inspection.
+    const column = [...nodes.pipelineBoard.querySelectorAll("[data-view-stage]")].find(node => node.dataset.viewStage === pipelineSelectedStage);
+    if (pipelineViewMode === "list") {
+      nodes.pipelineBoard.querySelectorAll("[data-view-stage]").forEach(node => { node.hidden = node !== column; });
+      nodes.pipelineBoard.querySelectorAll(".pipeline-row").forEach(row => { row.hidden = !row.querySelector(".pipeline-column:not([hidden])"); });
+    }
+    column?.querySelector(":scope > details")?.setAttribute("open", "");
+    if (pipelineViewMode === "board") column?.scrollIntoView({block:"nearest",inline:"center",behavior:"auto"});
+    renderPipelineSearchStatus(getFilteredPipelineItems(), pipelineRenderedRows);
+  });
+  document.getElementById("pipelineFilterSelect")?.addEventListener("change", event => {
+    state.activePipelineFilter = event.target.value; renderPipeline();
   });
   fields.pipelineSearchInput?.addEventListener("input", () => renderPipeline());
   nodes.pipelineSearchClear?.addEventListener("click", () => {

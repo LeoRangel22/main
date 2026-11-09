@@ -37,6 +37,6 @@ test('fresh cross-channel response moves waiting to reply, stale or foreign sess
 });
 test('overview is usable on mobile and clears customer data after logout',async({page})=>{
  await page.setViewportSize({width:390,height:900});await setup(page);await expectNoHorizontalOverflow(page);
- await page.locator('[data-sales-funnel="validation"]').click();await expect(page.locator('#pipelineBoard .pipeline-card')).toHaveCount(1);await expect(page.locator('#pipelineBoard .pipeline-card')).toContainText('Comprovante pendente');
+ await page.locator('#salesFunnelOverview > details > summary').click(); await page.locator('[data-sales-funnel="validation"]').click();await expect(page.locator('#pipelineBoard .pipeline-card')).toHaveCount(1);await expect(page.locator('#pipelineBoard .pipeline-card')).toContainText('Comprovante pendente');
  await page.evaluate(()=>{state.session=null;renderPipeline();});await expect(page.locator('#salesFunnelOverview')).toBeHidden();await expect(page.locator('#salesFunnelOverview')).toHaveText('');
 });

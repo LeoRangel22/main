@@ -190,7 +190,6 @@
                 <span><strong>4.</strong> Recebeu sinal? Marque o pagamento e leve para operação.</span>
               </div>
             </details>
-            <section id="salesFunnelOverview" class="sales-funnel-overview" aria-label="Etapas da venda" hidden></section>
             <section class="pipeline-search" aria-label="Buscar no funil">
               <label for="pipelineSearchInput">Buscar no funil</label>
               <div class="pipeline-search-controls">
@@ -200,6 +199,11 @@
               <small id="pipelineSearchHelp">Combine termos. Datas: 18/11, 18/11/2026 ou 2026-11-18 (evento ou recebimento). Celular com ou sem pontuação.</small>
               <p id="pipelineSearchStatus" role="status" aria-live="polite"></p>
             </section>
+            <div class="pipeline-view-controls" aria-label="Navegação do funil">
+              <label>Exibição<select id="pipelineViewMode" aria-controls="pipelineBoard"><option value="board">Quadro de etapas</option><option value="list">Lista por etapa</option></select></label>
+              <label>Etapa<select id="pipelineStageSelect" aria-controls="pipelineBoard"></select></label>
+              <label>Filtrar registros<select id="pipelineFilterSelect" aria-controls="pipelineBoard"></select></label>
+            </div>
             <div class="pipeline-quick-filters" aria-label="Filtros rápidos do funil">
               <span>Filtros rápidos</span>
               <div class="pipeline-filter-list" id="pipelineQuickFilters"></div>
@@ -207,6 +211,7 @@
             <div class="pipeline-board" id="pipelineBoard">
               <p>Entre com Supabase para ver o funil.</p>
             </div>
+            <section id="salesFunnelOverview" class="sales-funnel-overview" aria-label="Etapas da venda" hidden></section>
           </div>
           <section id="commercialCalendar" class="commercial-calendar" aria-label="Calendário comercial" hidden></section>
           <section class="help-panel" aria-label="Manual e perguntas frequentes">
