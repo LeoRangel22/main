@@ -8,6 +8,8 @@ for(const [lang,labels]of[['pt',['Data e grupo','Contato']],['en',['Date & group
   const audit=await isolateJourney(page);await page.goto('/formulario.html?lang='+lang);
   await expect(page.locator('.public-form-steps li')).toHaveCount(2);
   await expect(page.locator('.public-form-steps em')).toHaveText(labels);
+  await expect(page.locator('#contactTitle')).toHaveText(labels[1]);
+  await expect(page.locator('#contactStep')).toHaveAccessibleName(labels[1]);
   await expect(page.locator('.public-form-steps li').first()).toBeVisible();
   await expect(page.locator('.form-progress [role="progressbar"]')).toHaveAttribute('aria-valuenow','0');
   await page.locator('#submitClientQuoteBtn').click();await expect(page.locator('#requestEventDate')).toBeFocused();
