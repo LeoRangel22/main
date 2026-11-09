@@ -968,6 +968,10 @@ textarea[aria-invalid="true"] {
   gap: 14px;
 }
 
+.client-section-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.client-section-nav [hidden], .auth-locked .client-section-nav { display: none; }
+#currentClients, #crmHistoryMount { scroll-margin-top: 16px; }
+
 .clients-page .client-command-center {
   grid-template-columns: minmax(300px, 0.72fr) minmax(520px, 1.28fr);
 }
@@ -11159,6 +11163,7 @@ body[data-page="app"] .workspace {
   background: rgba(24, 58, 45, 0.055);
   border-radius: 999px;
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 3px;
 }
