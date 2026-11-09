@@ -95,3 +95,22 @@ test('tab-only client view is cleared after confirmed logout',async({page})=>{
  expect(await page.evaluate(()=>sessionStorage.getItem('events_client_directory_view_v1'))).toBeNull();
  expect(a.external).toEqual([]);expect(a.errors).toEqual([]);
 });
+
+test('switching records updates the reload target and section navigation keeps local edits',async({page})=>{
+ const a=await openClients(page);
+ await page.locator('#globalSearchInput').fill('Cliente sintético 00');
+ await page.locator('#clientDirectory [data-proposal-id="navigation-proposal-0"]').click();
+ await expect(page.locator('#clientName')).toHaveValue('Cliente sintético 00');
+ await page.locator('#historyList [data-proposal-id="navigation-proposal-1"]').click();
+ await expect(page.locator('#clientName')).toHaveValue('Cliente sintético 01');
+ await expect(page).toHaveURL(/proposal=navigation-proposal-1/);
+ const initialNotes=await page.locator('#notes').inputValue();
+ await page.locator('#notes').fill('Rascunho sintético preservado');
+ await page.locator('.admin-quick-nav').getByRole('link',{name:'Funil',exact:true}).click();
+ await expect(page.locator('#notes')).toHaveValue('Rascunho sintético preservado');
+ await page.locator('#notes').fill(initialNotes);
+ expect(await page.evaluate(()=>hasUnsavedEditorChanges())).toBe(false);
+ await page.reload();
+ await expect(page.locator('#clientName')).toHaveValue('Cliente sintético 01');
+ expect(a.external).toEqual([]);expect(a.errors).toEqual([]);
+});

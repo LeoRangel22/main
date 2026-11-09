@@ -7459,7 +7459,7 @@ async function applyPendingDashboardTarget() {
     if (!(await ensureProposalJourneyDetails(proposal.id))) { setDashboardTargetFeedback("Não foi possível abrir a proposta agora. Atualize o painel e tente novamente."); return false; }
     if (openSavedProposal(proposal.id, "Link direto") !== true) return false;
     setDashboardTargetFeedback("");
-    state.lastAppliedDashboardTarget = targetKey;
+    state.lastAppliedDashboardTarget = state.pendingDashboardProposalId ? `proposal:${state.pendingDashboardProposalId}` : `lead:${state.pendingDashboardLeadId}`;
     return true;
   }
 
@@ -7472,7 +7472,7 @@ async function applyPendingDashboardTarget() {
     if (!(await ensureProposalJourneyDetails(linkedProposal.id))) return false;
     if (openSavedProposal(linkedProposal.id, "Link direto") !== true) return false;
     setDashboardTargetFeedback("");
-    state.lastAppliedDashboardTarget = targetKey;
+    state.lastAppliedDashboardTarget = state.pendingDashboardProposalId ? `proposal:${state.pendingDashboardProposalId}` : `lead:${state.pendingDashboardLeadId}`;
     return true;
   }
 
@@ -7480,7 +7480,7 @@ async function applyPendingDashboardTarget() {
   if (!request) { setDashboardTargetFeedback("O registro solicitado ainda não está disponível no painel carregado. Aguarde a atualização ou confira o cadastro de clientes."); return false; }
   await applyQuoteRequest(request.id, "Link direto");
   setDashboardTargetFeedback("");
-  state.lastAppliedDashboardTarget = targetKey;
+  state.lastAppliedDashboardTarget = state.pendingDashboardProposalId ? `proposal:${state.pendingDashboardProposalId}` : `lead:${state.pendingDashboardLeadId}`;
   return true;
 }
 
@@ -10988,6 +10988,18 @@ function openClientWorkspaceRecord(kind, id) {
   return true;
 }
 
+function syncClientWorkspaceRecordTarget(kind, id) {
+  if (document.body.dataset.page !== "app" || !id) return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("from") !== "clientes") return;
+  url.searchParams.delete("proposal"); url.searchParams.delete("lead");
+  url.searchParams.set(kind, id);
+  window.history.replaceState(null, "", url);
+  state.pendingDashboardProposalId = kind === "proposal" ? id : "";
+  state.pendingDashboardLeadId = kind === "lead" ? id : "";
+  state.lastAppliedDashboardTarget = kind + ":" + id;
+}
+
 function clientDirectoryReturnUrl() {
   const url = new URL("./clientes.html", window.location.href);
   if (QA_MODE) url.searchParams.set("qa", "1");
@@ -12811,6 +12823,7 @@ async function applyQuoteRequest(requestId, sourceLabel = "") {
   renderAll();
   markEditorClean(getEditorContextFromCurrent("request", sourceLabel || "Funil: Lead"));
   focusLoadedProposalEditor("Lead carregado. Revise dados, itens, valor e checklist antes de enviar.", "client");
+  syncClientWorkspaceRecordTarget("lead", request.id);
 }
 
 async function markQuoteRequestAnalyzed(requestId) {
@@ -14439,6 +14452,7 @@ function openSavedProposal(proposalId, sourceLabel = "") {
   applyProposalSnapshot(proposal.snapshot);
   markEditorClean(getEditorContextFromCurrent("proposal", sourceLabel || `Funil: ${getProposalStatusLabel(proposal.status)}`));
   focusLoadedProposalEditor("Proposta carregada. Confira dados, itens e checklist antes de reenviar ou avançar.", "auto");
+  syncClientWorkspaceRecordTarget("proposal", proposal.id);
   return true;
 }
 
