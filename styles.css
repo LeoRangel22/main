@@ -13305,3 +13305,25 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(str
 #commercialTerms, #decisionActions, #publicProposalItems { scroll-margin-top:12px; }
 #commercialTerms > a[data-proposal-section] { display:inline-flex; align-items:center; min-height:44px; color:var(--verde-escuro); font-weight:800; }
 .public-proposal-contact-card { overflow-wrap:anywhere; }
+
+/* Keep the current quote and its safe actions within reach. */
+body[data-page="app"].auth-connected .loaded-editor-bar { background:linear-gradient(135deg,#183a2d,#2f6f45); top:var(--editor-toolbar-top,8px); }
+body[data-page="app"] .loaded-editor-actions { flex-wrap:wrap; }
+body[data-page="app"] .loaded-editor-actions button { min-height:44px; font-size:.78rem; padding:8px 12px; }
+body[data-page="app"] .loaded-editor-quote-meta { color:var(--white); white-space:normal; }
+body[data-page="app"] #quoteForm > .form-section { scroll-margin-top:var(--editor-content-top,16px); }
+body[data-page="app"] #sendReviewPanel { scroll-margin-top:var(--editor-toolbar-top,16px); }
+@media (max-width:600px) {
+  body[data-page="app"] .loaded-editor-main strong { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; white-space:normal; }
+  body[data-page="app"] .loaded-editor-trail { display:none; }
+  body[data-page="app"] .loaded-editor-actions { justify-content:flex-start; }
+}
+@media (max-height:560px) { body[data-page="app"].auth-connected .loaded-editor-bar { position:static; } }
+body[data-page="app"] .loaded-editor-actions [aria-busy="true"] { opacity:.65; cursor:wait; }
+body[data-page="app"] .loaded-editor-actions button:focus-visible { outline:3px solid var(--amarelo-claro); outline-offset:3px; }
+body[data-page="app"] :is(#sendReviewPanel,#eventConfigSection h2):focus { outline:3px solid var(--verde-escuro); outline-offset:3px; }
+#quoteForm select[data-source-field] {
+  appearance:none; overflow:hidden; min-width:0; max-width:100%; width:100%; text-overflow:ellipsis; padding-right:32px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--verde-escuro) 50%),linear-gradient(135deg,var(--verde-escuro) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%; background-size:5px 5px; background-repeat:no-repeat;
+}
