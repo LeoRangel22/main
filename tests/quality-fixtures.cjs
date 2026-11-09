@@ -11,11 +11,14 @@ const identity=/^const QA_USER_EMAIL = ("[^"]+");$/m.exec(original);
 if(!identity)throw Error('QA_IDENTITY_BOUNDARY');
 // Preserve the explicit QA profile/allowlists only in the intercepted in-memory copy.
 const qaSource=(original.slice(0,start)+fixtures+original.slice(end)).split(JSON.parse(identity[1])).join('owner@example.test');
-async function isolate(page){
+async function isolate(page, {loadFixtures} = {}){
+ const isolatedStart=qaSource.indexOf('function loadQaFixtures() {');
+ const isolatedEnd=qaSource.indexOf('\n}',isolatedStart)+2;
+ const isolatedSource=loadFixtures ? qaSource.slice(0,isolatedStart)+loadFixtures+qaSource.slice(isolatedEnd) : qaSource;
  const external=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.context().route('**/*',route=>{
   const u=new URL(route.request().url());
-  if(['127.0.0.1','localhost'].includes(u.hostname))return u.pathname.endsWith('/app.js')?route.fulfill({contentType:'text/javascript',body:qaSource}):route.continue();
+  if(['127.0.0.1','localhost'].includes(u.hostname))return u.pathname.endsWith('/app.js')?route.fulfill({contentType:'text/javascript',body:isolatedSource}):route.continue();
   if(u.hostname==='fonts.googleapis.com')return route.fulfill({contentType:'text/css',body:''});
   external.push({method:route.request().method(),path:u.pathname});return route.abort();
  });return{external,errors};
