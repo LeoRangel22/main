@@ -37,6 +37,11 @@ test('stage list uses the page scroll and retains an explicit empty stage',async
  await page.locator('#pipelineSearchInput').fill('Bruna');
  await expect(page.locator('#pipelineStageSelect')).toHaveValue('sales_ready');
  await expect(page.locator('#pipelineBoard .pipeline-card:visible')).toHaveCount(1);
+ await page.locator('#salesFunnelOverview > details > summary').click();
+ await expect(page.locator('#salesFunnelOverview .sales-funnel-stages')).toBeVisible();
+ await page.locator('#salesFunnelOverview > details > summary').click();
+ await expect(page.locator('#salesFunnelOverview .sales-funnel-stages')).toBeHidden();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  expect(audit.external).toEqual([]);expect(audit.errors).toEqual([]);
 });
 test('list and board preserve independent sort, filters and record context on return',async({page})=>{

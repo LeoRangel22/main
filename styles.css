@@ -13281,3 +13281,4 @@ body[data-page="app"] input:is([type="date"],[type="time"],[type="month"],[type=
 .commercial-calendar-heading > * { min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .commercial-calendar-heading > label { flex:0 1 240px; width:min(100%,240px); }
 .commercial-calendar-heading input { width:100%; min-width:0; max-width:100%; }
+.sales-funnel-overview > details:not([open]) > :not(summary) { display:none; }
