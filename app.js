@@ -10104,7 +10104,7 @@ function renderSalesFunnelOverview(items) {
   root.hidden = false;
   const states = getSalesFunnelItems(items).map(getSalesFunnelStateForItem).filter(Boolean);
   const expanded = root.querySelector("details")?.open ?? !window.matchMedia?.("(max-width: 600px)")?.matches;
-  root.innerHTML = `<details ${expanded ? "open" : ""}><summary>Onde cada venda está</summary><p>Resumo de todas as oportunidades. Cada oportunidade é contada uma vez; o filtro selecionado abaixo afeta a lista, não este resumo.</p>
+  root.innerHTML = `<details ${expanded ? "open" : ""}><summary>Onde cada venda está</summary><p>Resumo de todas as oportunidades. Cada oportunidade é contada uma vez; a busca e os filtros afetam a lista, não este resumo.</p>
     <div class="sales-funnel-stages">${salesFunnelStages.map(stage=>`<button type="button" data-sales-funnel="${stage.id}" aria-pressed="${state.activePipelineFilter === `sales:${stage.id}`}">
       <span>${stage.label}</span><strong>${states.filter(s=>s.id===stage.id).length}</strong><small>${stage.action}</small></button>`).join("")}</div>
     <p class="sales-funnel-evidence">Leitura baseada nos registros disponíveis. Aprovação não confirma pagamento; envio registrado não comprova entrega ou leitura.</p>
