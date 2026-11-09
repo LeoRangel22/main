@@ -10861,7 +10861,10 @@ function getClientRelationshipItems(client) {
 }
 
 function clientDirectoryMatches(item, query) {
-  return FunnelView.matches({...item, meta:[...(item.meta || []), getItemSearchText(item)]}, query);
+  // Keep dates and times out of free text tokens: a name ending in 00 is not 19:00.
+  // Preserve legacy whole-phrase searches while extending structured matching.
+  return FunnelView.matches({...item, meta:[...(item.meta || []), item.guests ? `${item.guests} pax` : "", item.status ? getProposalStatusLabel(item.status) : ""]}, query)
+    || getItemSearchText(item).includes(normalizeSearchValue(query));
 }
 
 function filterClientDirectory(clients, query) {

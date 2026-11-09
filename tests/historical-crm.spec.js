@@ -1,14 +1,8 @@
 const {test,expect}=require("@playwright/test");
+const {isolate}=require("./quality-fixtures.cjs");
 async function setup(page,width=1440){
- const errors=[],remote=[];
- page.on("pageerror",e=>errors.push(e.message));
+ const trace=await isolate(page),errors=trace.errors,remote=trace.external;
  await page.setViewportSize({width,height:950});
- await page.route("**/*",route=>{
-  const url=new URL(route.request().url());
-  if(["localhost","127.0.0.1"].includes(url.hostname))return route.continue();
-  if(url.hostname==="fonts.googleapis.com")return route.fulfill({contentType:"text/css",body:""});
-  remote.push(url.origin+url.pathname);return route.abort();
- });
  await page.goto("/clientes.html?qa=1");
  await page.evaluate(()=>{
   window.__historyCalls=[];
@@ -50,6 +44,8 @@ async function setup(page,width=1440){
   EventCrmHistory.setSession({client:window.__historyClient,user:{id:"synthetic-master",email:"master@example.test"}});
  });
  await expect(page.locator("#crmHistoryResults .crm-history-card")).toHaveCount(20);
+ await page.getByRole("link",{name:"Histórico recuperado",exact:true}).click();
+ await expect(page.locator("#clientHistoryArea")).toBeVisible();
  return {errors,remote};
 }
 test("historical accounts paginate and scope their contacts without operational writes",async({page})=>{

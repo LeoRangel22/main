@@ -88,6 +88,9 @@ test('client search combines names company event or receipt date and formatted p
   await expect(page.locator('#clientDirectory')).toContainText('Mariana Alfa');
   await expect(page.locator('#globalSearchResults')).toContainText('Mariana Alfa');
  }
+ await page.locator('#globalSearchInput').fill('Contato 19');
+ await expect(page.locator('.client-registry-card')).toHaveCount(1);
+ await expect(page.locator('#clientDirectory')).toContainText('Contato 19');
  await page.locator('#globalSearchInput').fill('Mariana 31/02/2099');
  await expect(page.locator('#clientRegistryMeta')).toContainText('0 de 0');
  await expect(page.locator('#globalSearchResults')).toContainText('Nada encontrado');
