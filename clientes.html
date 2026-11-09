@@ -71,7 +71,7 @@
             </details>
           </div>
           <div class="topbar-actions">
-            <a class="button-link secondary" href="./index.html">Dashboard</a>
+            <a class="button-link secondary" href="./index.html">Sistema de eventos</a>
             <a class="button-link secondary" href="./valores.html">Valores e produtos</a>
             <a class="button-link secondary" href="./comunicacao.html">Comunicação</a>
             <div class="topbar-action-row">
@@ -91,8 +91,8 @@
 
 
         <nav class="client-section-nav" aria-label="Áreas de clientes">
-          <a class="button-link secondary" href="#currentClients">Clientes atuais</a>
-          <a class="button-link secondary" href="#crmHistoryMount" id="clientHistoryLink" hidden>Histórico recuperado</a>
+          <a class="button-link secondary" href="#currentClients" tabindex="0" aria-current="location">Clientes atuais</a>
+          <a class="button-link secondary" href="#crmHistoryMount" id="clientHistoryLink" tabindex="0" hidden>Histórico recuperado</a>
         </nav>
 
         <section class="client-command-center" id="currentClients" tabindex="-1" aria-label="Busca e carteira de clientes">
@@ -124,7 +124,9 @@
             <button class="secondary" type="button" id="clientRegistryMore" hidden>Mostrar mais clientes</button>
           </div>
         </section>
-        <div id="crmHistoryMount" tabindex="-1"></div>
+        <section id="clientHistoryArea" tabindex="-1" aria-label="Histórico recuperado" hidden>
+          <div id="crmHistoryMount" tabindex="-1"></div>
+        </section>
       </section>
     </main>
 
