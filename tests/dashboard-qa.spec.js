@@ -2,6 +2,7 @@ const { test, expect } = require("@playwright/test");
 const {
   collectBrowserErrors,
   expectElementInViewport,
+  expectEditorTargetBelowChrome,
   expectNoBrowserErrors,
   expectNoHorizontalOverflow,
   expectScrolledNear,
@@ -311,7 +312,7 @@ test.describe("Dashboard interno em modo QA", () => {
     await expect(page.locator("#clientName")).toHaveValue(/Claudia/i);
     await expect(page.locator("#firstReplyPanel")).toBeVisible();
     await expectScrolledNear(page, "#firstReplyPanel", 300);
-    await expectElementInViewport(page, "#firstReplyPanel", { bottom: 120 });
+    await expectEditorTargetBelowChrome(page, "#firstReplyPanel");
 
     await page.locator("#salesCommand").scrollIntoViewIfNeeded();
     const changeTask = page.locator('#actionList [data-action-id="qa-proposal-alteracao"]');

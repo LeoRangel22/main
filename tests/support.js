@@ -49,6 +49,22 @@ async function expectElementInViewport(page, selector, { top = 0, bottom = 160 }
     .toBeLessThan(bottom);
 }
 
+async function expectEditorTargetBelowChrome(page, selector) {
+  const locator = page.locator(selector);
+  await expect(locator).toBeVisible();
+  await expect.poll(async () => locator.evaluate(target => {
+    const rect = target.getBoundingClientRect();
+    let chromeBottom = 0;
+    for (const chrome of [document.querySelector(".topbar"), document.querySelector("#loadedEditorBar")]) {
+      if (!chrome || chrome === target || !["sticky", "fixed"].includes(getComputedStyle(chrome).position)) continue;
+      const box = chrome.getBoundingClientRect();
+      if (box.bottom > 0 && box.top < innerHeight && box.right > rect.left && box.left < rect.right) chromeBottom = Math.max(chromeBottom, box.bottom);
+    }
+    return { top: rect.top, chromeBottom, height: innerHeight, unobscured: rect.top >= chromeBottom - 1, nearTop: rect.top <= chromeBottom + 32, visibleStart: rect.top + Math.min(44, rect.height) <= innerHeight };
+  }), { message: `${selector} should start visibly just below the fixed editor controls`, timeout: 8_000 })
+    .toMatchObject({ unobscured: true, nearTop: true, visibleStart: true });
+}
+
 async function expectNoHorizontalOverflow(page) {
   const overflow = await page.evaluate(() => ({
     viewport: window.innerWidth,
@@ -63,6 +79,7 @@ async function expectNoHorizontalOverflow(page) {
 module.exports = {
   collectBrowserErrors,
   expectElementInViewport,
+  expectEditorTargetBelowChrome,
   expectNoBrowserErrors,
   expectNoHorizontalOverflow,
   expectScrolledNear,
