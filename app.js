@@ -7443,7 +7443,7 @@ function syncDashboardDeepLinkState() {
 }
 
 async function applyPendingDashboardTarget() {
-  if (!state.session) return false;
+  if (document.body.dataset.page !== "app" || !state.session) return false;
 
   const targetKey = state.pendingDashboardProposalId
     ? `proposal:${state.pendingDashboardProposalId}`
@@ -7455,9 +7455,10 @@ async function applyPendingDashboardTarget() {
 
   if (state.pendingDashboardProposalId) {
     const proposal = state.proposals.find((item) => item.id === state.pendingDashboardProposalId);
-    if (!proposal) return false;
-    if (!(await ensureProposalJourneyDetails(proposal.id))) return false;
-    openSavedProposal(proposal.id, "Link direto");
+    if (!proposal) { setDashboardTargetFeedback("O registro solicitado ainda não está disponível no painel carregado. Aguarde a atualização ou confira o cadastro de clientes."); return false; }
+    if (!(await ensureProposalJourneyDetails(proposal.id))) { setDashboardTargetFeedback("Não foi possível abrir a proposta agora. Atualize o painel e tente novamente."); return false; }
+    if (openSavedProposal(proposal.id, "Link direto") !== true) return false;
+    setDashboardTargetFeedback("");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
   }
@@ -7469,14 +7470,16 @@ async function applyPendingDashboardTarget() {
   );
   if (linkedProposal) {
     if (!(await ensureProposalJourneyDetails(linkedProposal.id))) return false;
-    openSavedProposal(linkedProposal.id, "Link direto");
+    if (openSavedProposal(linkedProposal.id, "Link direto") !== true) return false;
+    setDashboardTargetFeedback("");
     state.lastAppliedDashboardTarget = targetKey;
     return true;
   }
 
   const request = state.quoteRequests.find((item) => item.id === state.pendingDashboardLeadId);
-  if (!request) return false;
+  if (!request) { setDashboardTargetFeedback("O registro solicitado ainda não está disponível no painel carregado. Aguarde a atualização ou confira o cadastro de clientes."); return false; }
   await applyQuoteRequest(request.id, "Link direto");
+  setDashboardTargetFeedback("");
   state.lastAppliedDashboardTarget = targetKey;
   return true;
 }
@@ -10942,16 +10945,89 @@ function renderClientQuoteComparison(client) {
     </div></details>`;
 }
 
+const CLIENT_DIRECTORY_VIEW_KEY = "events_client_directory_view_v1";
+let clientDirectoryVisibleCount = 24;
+let clientDirectoryLastTerm = "";
+let clientDirectoryViewRestored = false;
+
+function rememberClientDirectoryView() {
+  if (document.body.dataset.page !== "clientes" || !state.session?.user?.id) return;
+  try {
+    sessionStorage.setItem(CLIENT_DIRECTORY_VIEW_KEY, JSON.stringify({
+      user: state.session.user.id, savedAt: Date.now(),
+      term: (fields.globalSearchInput?.value || "").slice(0, 300),
+      count: clientDirectoryVisibleCount, scroll: Math.max(0, window.scrollY),
+    }));
+  } catch (_) { /* Navigation still works when tab storage is unavailable. */ }
+}
+
+function restoreClientDirectoryView(items) {
+  if (clientDirectoryViewRestored || document.body.dataset.page !== "clientes" || !state.session?.user?.id || !items.length) return;
+  clientDirectoryViewRestored = true;
+  try {
+    const view = JSON.parse(sessionStorage.getItem(CLIENT_DIRECTORY_VIEW_KEY) || "null");
+    if (!view || view.user !== state.session.user.id || !Number.isFinite(view.savedAt) || Date.now() - view.savedAt > 8 * 3600000) return;
+    if (typeof view.term !== "string" || view.term.length > 300) return;
+    fields.globalSearchInput.value = view.term;
+    clientDirectoryLastTerm = normalizeSearchValue(view.term);
+    clientDirectoryVisibleCount = Math.max(24, Math.min(10000, Number(view.count) || 24));
+    renderGlobalSearch(items);
+    if (Number.isFinite(view.scroll)) window.requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, view.scroll), behavior: "auto" }));
+  } catch (_) { /* Ignore obsolete or invalid tab-only state. */ }
+}
+
+function openClientWorkspaceRecord(kind, id) {
+  if (document.body.dataset.page === "app") return false;
+  if (!["proposal", "lead"].includes(kind) || !id || !state.session?.user) return false;
+  rememberClientDirectoryView();
+  const destination = new URL("./index.html", window.location.href);
+  if (QA_MODE) destination.searchParams.set("qa", "1");
+  if (document.body.dataset.page === "clientes") destination.searchParams.set("from", "clientes");
+  destination.searchParams.set(kind, id);
+  window.location.assign(destination.href);
+  return true;
+}
+
+function clientDirectoryReturnUrl() {
+  const url = new URL("./clientes.html", window.location.href);
+  if (QA_MODE) url.searchParams.set("qa", "1");
+  return url.pathname + url.search;
+}
+
+function setDashboardTargetFeedback(message) {
+  if (document.body.dataset.page !== "app") return;
+  let feedback = document.querySelector("#dashboardTargetFeedback");
+  if (!feedback && message) {
+    feedback = document.createElement("p");
+    feedback.id = "dashboardTargetFeedback";
+    feedback.className = "team-status";
+    feedback.setAttribute("role", "status");
+    document.querySelector("#salesCommand")?.before(feedback);
+  }
+  if (feedback) { feedback.textContent = message; feedback.hidden = !message; }
+}
+
 function renderClientRegistry(items = getPipelineItems()) {
   if (!nodes.clientDirectory) return;
+  restoreClientDirectoryView(items);
   const clients = getClientRegistry(items);
   const relationshipReviews = document.body?.dataset?.page === "clientes" ? getClientRelationshipReviews(clients) : null;
   const term = normalizeSearchValue(fields.globalSearchInput?.value || "");
   const filtered = term ? clients.filter((client) => client.searchText.includes(term)) : clients;
-  const maxClients = document.body?.dataset?.page === "clientes" ? 24 : 6;
+  const isClientsPage = document.body?.dataset?.page === "clientes";
+  if (term !== clientDirectoryLastTerm) { clientDirectoryVisibleCount = 24; clientDirectoryLastTerm = term; }
+  const maxClients = isClientsPage ? clientDirectoryVisibleCount : 6;
+  const shown = Math.min(filtered.length, maxClients);
+  const more = document.querySelector("#clientRegistryMore");
+  if (more) {
+    more.hidden = !isClientsPage || shown >= filtered.length;
+    more.textContent = `Mostrar mais ${Math.min(24, filtered.length - shown)} clientes`;
+  }
   if (nodes.clientRegistryMeta) {
     const recurring = clients.filter((client) => client.items.length > 1).length;
-    nodes.clientRegistryMeta.textContent = `${clients.length} cliente(s) · ${recurring} com histórico`;
+    nodes.clientRegistryMeta.textContent = isClientsPage
+      ? `${shown} de ${filtered.length} cliente(s) exibidos${term ? ` · ${clients.length} na carteira` : ""} · ${recurring} com histórico`
+      : `${clients.length} cliente(s) · ${recurring} com histórico`;
   }
   if (!clients.length) {
     nodes.clientDirectory.innerHTML = `<p>Nenhum cliente carregado ainda.</p>`;
@@ -11312,6 +11388,7 @@ function renderLoadedEditorBar() {
     </div>
     <div class="loaded-editor-actions">
       ${dirty ? `<span class="loaded-editor-dirty">Não salvo</span>` : `<span class="loaded-editor-saved">Atualizado</span>`}
+      ${new URL(window.location.href).searchParams.get("from") === "clientes" ? `<a class="button-link secondary" href="${escapeHtml(clientDirectoryReturnUrl())}">Voltar aos clientes</a>` : ""}
       <button class="secondary" type="button" data-return-pipeline-stage="${escapeHtml(context.stageId || "lead_recebido")}">Voltar ao funil</button>
     </div>
   `;
@@ -11355,6 +11432,7 @@ async function safeOpenSavedProposal(proposalId, sourceLabel = "", targetMode = 
     showToast("Não encontrei essa proposta no histórico carregado. Clique em Atualizar e tente novamente.");
     return false;
   }
+  if (document.body.dataset.page !== "app") return openClientWorkspaceRecord("proposal", proposalId);
   if (!(await confirmEditorSwitch())) return false;
   if (!(await ensureProposalJourneyDetails(proposalId))) return false;
   if (openSavedProposal(proposalId, sourceLabel) !== true) return false;
@@ -11371,6 +11449,7 @@ async function safeApplyQuoteRequest(requestId, sourceLabel = "", targetMode = "
     showToast("Não encontrei esse lead carregado. Clique em Atualizar e tente novamente.");
     return;
   }
+  if (document.body.dataset.page !== "app") return openClientWorkspaceRecord("lead", requestId);
   if (!(await confirmEditorSwitch())) return;
   await applyQuoteRequest(requestId, sourceLabel);
   scheduleLoadedEditorJump(targetMode, "auto");
@@ -13786,6 +13865,10 @@ async function logoutSupabase() {
   const currentUser = state.session?.user?.id || state.session?.user?.email;
   if (state.supabase !== client || (currentUser && currentUser !== user)) return false;
   resetCommercialDashboard();
+  try { sessionStorage.removeItem(CLIENT_DIRECTORY_VIEW_KEY); } catch (_) {}
+  clientDirectoryViewRestored = false;
+  clientDirectoryVisibleCount = 24;
+  clientDirectoryLastTerm = "";
   state.session = null;
   state.proposalSendFeedback = null;
   clearTariffApplication();
@@ -16770,6 +16853,13 @@ function bindEvents() {
     }
     const requestButton = event.target.closest("button[data-use-request]");
     if (requestButton) await safeApplyQuoteRequest(requestButton.dataset.useRequest, "Busca global");
+  });
+  document.querySelector("#clientRegistryMore")?.addEventListener("click", () => {
+    const previousCount = clientDirectoryVisibleCount;
+    clientDirectoryVisibleCount += 24;
+    renderClientRegistry();
+    const firstNew = nodes.clientDirectory?.children[previousCount];
+    if (firstNew) { firstNew.setAttribute("tabindex", "-1"); firstNew.focus(); }
   });
   nodes.clientDirectory?.addEventListener("click", async (event) => {
     const proposalButton = event.target.closest("button[data-proposal-id]");
