@@ -969,6 +969,21 @@ textarea[aria-invalid="true"] {
 }
 
 .client-section-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.clients-page .client-section-nav { position: sticky; top: var(--client-section-top, 8px); z-index: 20; padding: 8px; background: var(--panel, #fff); border: 1px solid rgba(24,58,45,.16); border-radius: 8px; }
+.clients-page .client-section-nav a { min-height: 44px; min-width: 0; overflow-wrap: anywhere; }
+.clients-page .client-section-nav a[aria-current="location"] { background: #183a2d; color: #fff; }
+.clients-page #currentClients[hidden], .clients-page #clientHistoryArea[hidden] { display: none; }
+.clients-page #currentClients:focus-visible, .clients-page #clientHistoryArea:focus-visible, .clients-page .client-section-nav a:focus-visible { outline: 3px solid #9b4c00; outline-offset: 3px; }
+.clients-page .global-search-hit > :is(span,strong,small) { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
+.clients-page .global-search-hit > button { grid-column: 2; align-self: center; min-height: 44px; }
+.clients-page .command-heading span { color: #8b4300; }
+.client-directory-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; min-width: 0; }
+.client-directory-filters label { display: grid; gap: 6px; min-width: 0; }
+.client-directory-filters select { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; appearance: none; overflow: hidden; text-overflow: ellipsis; padding-right: 28px; background-image: linear-gradient(45deg,transparent 50%,#183a2d 50%),linear-gradient(135deg,#183a2d 50%,transparent 50%); background-position: calc(100% - 16px) 50%,calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.client-directory-filters small { grid-column: 1 / -1; overflow-wrap: anywhere; color: #425a4f; }
+.client-directory-filters button { min-height: 44px; }
+@media (max-width:600px) { .client-directory-filters { grid-template-columns: minmax(0,1fr); } }
+@media (max-height:560px) { .clients-page .client-section-nav { position: static; } }
 .client-section-nav [hidden], .auth-locked .client-section-nav { display: none; }
 #currentClients, #crmHistoryMount { scroll-margin-top: 16px; }
 

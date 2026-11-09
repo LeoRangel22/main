@@ -165,7 +165,7 @@
         if(record.post_sale_review_required)article.append(element("span","Revisar pós-venda","crm-history-tag"));
       }
       line(article,"Último registro:",formatDate(record.last_contact_at||record.last_document_at));
-      article.append(button("Ver histórico e fontes",()=>openRecord(record.id)));
+      article.append(button("Ver histórico e fontes",event=>{event.currentTarget.focus({preventScroll:true});openRecord(record.id);}));
       return article;
     }
     async function load() {

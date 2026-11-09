@@ -35,5 +35,5 @@ test('normal authenticated API errors remain actionable',async()=>{
 test('approval evidence rollout uses a new script URL and preserves app navigation',()=>{
  const html=fs.readFileSync(`${__dirname}/../aprovacoes.html`,'utf8');
  assert.match(html,/aprovacoes\.js\?v=20261022-effective-watch/);
- assert.ok(html.includes('Painel comercial e operação'));
+ assert.ok(html.includes('href="./index.html">Sistema de eventos</a>'));
 });

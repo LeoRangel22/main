@@ -55,7 +55,7 @@ test('incomplete monitor evidence remains unavailable without blocking the core 
 });
 test('mobile navigation reaches the existing commercial and operational panel without horizontal overflow',async({page})=>{
  await page.setViewportSize({width:320,height:760});await mount(page);
- await expect(page.getByRole('link',{name:'Painel comercial e operação'})).toHaveAttribute('href','./index.html');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await expect(page.locator('#workspace .toolbar').getByRole('link',{name:'Sistema de eventos',exact:true})).toHaveAttribute('href','./index.html');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
 });
 
 test('pausa comprovada exige nova confirmação e nunca dispara ao abrir',async({page})=>{await mount(page,{transport:'paused'});await expect(page.locator('.status')).toContainText('envio pausado antes da tentativa');await expect(page.getByRole('button',{name:'Revisar e tentar envio pausado',exact:true})).toBeVisible();expect(await page.evaluate(()=>window.evidenceCalls.map(x=>x.action))).toEqual(['get']);await page.getByRole('button',{name:'Revisar e tentar envio pausado',exact:true}).click();await expect(page.locator('#notice')).toContainText('Marque a confirmação');expect(await page.evaluate(()=>window.evidenceCalls.map(x=>x.action))).toEqual(['get']);});
