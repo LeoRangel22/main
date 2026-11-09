@@ -1,5 +1,5 @@
 {
-  "commit": "abcfc1d8566ea0e3f6f52772da4099386ecb5beb",
+  "commit": "fceb147075aae9b6ce4f14fba97e64b6da79f8df",
   "schemaHead": "20261107115749_historical_crm_owner_read.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
@@ -32,14 +32,14 @@
     "clientes.html": "fe3f62837ddedec53e28a64869a5f79d0eb10fcc9f6fded4f6208d93a505edf0",
     "comunicacao.html": "c2844b6e14d78cb687fa5f1b6fab2b53f38d74a9f6f10819c32c4191e2fc18e1",
     "valores.html": "38af3226070d2c453c11a6b638d766e064934feda59496e4c58fbc4073399224",
-    "formulario.html": "a2bdb0373b78f3330596c8e0dea87f0dc00fbc09abd086b3e3a4e57ba3a8c496",
+    "formulario.html": "56136863c467c2e11326472ecad21a4939b0b161f6cd87ca31a439f3093027bc",
     "proposta.html": "aec80e832eed6a0235485f334f064587beb516934da92055823209a7fc935142",
     "styles.css": "4b59dcf83518708d90d052d05d27ba6d2c33d8997dfd8eec484f1ac4f5bd85d9",
     "app.js": "d7f6cba09745e0606d27471689db827bdaed082564f26de4982bf4a04d7a0c4c",
     "event-readiness.js": "581409bd23329de23e79064a6f4caabfb2b0a776457d7bcb95860cf99981ec39",
     "event-operations.js": "059c2c7eea4b1eb5e3d28952ee72affe1867d8e79ec2d1bd1549b926b6728d75",
     "analytics.js": "0ad4d90cb1097a990df4a98efa5800cb6d52fb5e82d1c7e25fedde7b41e2f278",
-    "formulario.js": "605ac5f3cb91423a15adf14a5fa23929911c2d9fc755ca6b17fb9f3945313853",
+    "formulario.js": "0b61ac0aea352377893c1b68ea71c308b439c4f67b4e8950aeb1ba5b024f0cb9",
     "proposta.js": "7c638273e4e6951eef65864716a639016fe51d8216b0d524b08e5ed5fb7a52b2",
     "production-planning.js": "3e3f2d682194c52d4ed4ed8318c24f9176364b142da3d65aae567e14aef1d747",
     "production-ui.js": "afb1fabee2d3ae8eb0698da05741ce5a1801de798315ba34b2837725c683301a",
