@@ -13287,3 +13287,21 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(str
   background-size: 5px 5px;
   background-repeat: no-repeat;
 }
+
+/* Client journey: explicit progress, direct review, and no footer overlay. */
+.public-form-body .public-form-steps { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.public-form-body .public-form-steps li { min-width:0; white-space:normal; }
+.public-form-body .public-form-steps em { min-width:0; overflow-wrap:anywhere; }
+.public-form-body .form-progress > div { display:block; }
+.public-form-body .form-step-next { justify-self:start; min-height:44px; margin-top:8px; }
+.public-form-body #timeRangeHelp { color:var(--muted); line-height:1.4; }
+.public-form-body .consult-step h2:focus,
+.public-form-body #finalReviewTitle:focus { outline:3px solid var(--verde-escuro); outline-offset:4px; }
+.public-form-body .public-form-actions { position:static; }
+.public-proposal-nav { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.public-proposal-nav a,
+.public-proposal-nav .public-proposal-jump { flex:1 1 auto; margin:0; width:auto; min-height:44px; padding:10px 12px; border:1px solid var(--verde); border-radius:8px; color:var(--verde-escuro); background:var(--verde-claro); font-weight:800; text-align:center; text-decoration:none; }
+.public-proposal-nav .public-proposal-jump { background:var(--verde-escuro); color:var(--white); }
+#commercialTerms, #decisionActions, #publicProposalItems { scroll-margin-top:12px; }
+#commercialTerms > a[data-proposal-section] { display:inline-flex; align-items:center; min-height:44px; color:var(--verde-escuro); font-weight:800; }
+.public-proposal-contact-card { overflow-wrap:anywhere; }

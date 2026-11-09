@@ -203,7 +203,7 @@ const extraChips = [...document.querySelectorAll("[data-extra-chip]")];
 const selectedProfiles = new Set();
 const uiState = { language: loadLanguage() };
 const analyticsFormState = { started: false, submitted: false, lastStep: "eventDetails" };
-const stepOrder = ["moment", "profile", "eventDetails", "contact", "recommendation", "briefing"];
+const stepOrder = ["eventDetails", "contact"];
 
 const steps = {
   moment: document.querySelector("#momentStep"),
@@ -249,6 +249,14 @@ function applyConversionStepOrder() {
     steps[name].querySelector(".section-heading > span").textContent = String(index + 1).padStart(2, "0");
   });
   ["moment", "profile", "recommendation", "briefing"].forEach((name) => content.append(steps[name]));
+  for (const [name, next] of [["moment", "profile"], ["profile", "recommendation"], ["recommendation", "briefing"], ["briefing", "review"], ["contact", "review"]]) {
+    if (steps[name].querySelector("[data-form-next]")) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary form-step-next";
+    button.dataset.formNext = next;
+    steps[name].append(button);
+  }
 }
 
 const momentLabels = {
@@ -396,7 +404,7 @@ const copy = {
     introEyebrow: "Consultoria de eventos",
     introTitle: "Seu evento começa aqui",
     introBody: "Informe a data, o grupo e seu contato. O formato pode ser definido com a equipe.",
-    stepLabels: ["Quando", "Ocasião", "Data e grupo", "Contato", "Formato", "Preferências"],
+    stepLabels: ["Data e grupo", "Contato"],
     commercialSummary: "Ver janelas mais indicadas",
     commercialWindows: [
       "Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.",
@@ -574,7 +582,7 @@ const copy = {
     introEyebrow: "Event advisory",
     introTitle: "Your event starts here",
     introBody: "Share your date, group size and contact. Our team can help you choose the format.",
-    stepLabels: ["When", "Occasion", "Date & group", "Contact", "Format", "Preferences"],
+    stepLabels: ["Date & group", "Contact"],
     commercialSummary: "See the most recommended windows",
     commercialWindows: [
       "Weekday mornings: breakfast, brunch and coffee break.",
@@ -754,7 +762,7 @@ copy.es = {
     introEyebrow: "Asesoría para eventos",
     introTitle: "Tu evento empieza aquí",
     introBody: "Indica la fecha, el tamaño del grupo y tus datos de contacto. Nuestro equipo puede ayudarte a elegir el formato.",
-    stepLabels: ["Cuándo", "Ocasión", "Fecha y grupo", "Contacto", "Formato", "Preferencias"],
+    stepLabels: ["Fecha y grupo", "Contacto"],
     commercialSummary: "Ver los horarios más recomendados",
     commercialWindows: [
       "Mañanas de lunes a viernes: desayuno, brunch y pausa para café.",
@@ -1345,7 +1353,7 @@ function applyStaticCopy() {
   current.select.leadSource.forEach((text, index) => {
     if (fields.leadSource.options[index]) fields.leadSource.options[index].text = text;
   });
-  updateProgress(stepOrder.find((step, index) => progressSteps[index]?.hasAttribute("data-active")) || "eventDetails");
+  updateProgress(uiState.activeStep || getCurrentProgressStep());
 }
 
 function renderLocalizedChoices() {
@@ -1381,6 +1389,7 @@ function getFormatGroupSizeNote(formatId, guests = getGuestCount()) {
 }
 
 function setLanguage(language) {
+  const hadValidationError = Boolean(uiState.validationAttempted) || (statusNode.dataset.status === "error" && Boolean(statusNode.querySelector("ul")));
   uiState.language = ["pt", "en", "es"].includes(language) ? language : "pt";
   writeFormStorage(LANGUAGE_KEY, uiState.language);
   const accessibility = getFormAccessibilityCopy();
@@ -1428,9 +1437,9 @@ function setLanguage(language) {
   renderFinalReview();
   renderReturningClientCopy();
   if (typeof partialCaptureState !== "undefined") { renderPartialCaptureStatus(); schedulePartialCapture(); }
-  if (statusNode.dataset.status === "error" && statusNode.querySelector("ul")) {
+  if (hadValidationError) {
     setStatus(getCopy().labels.defaultStatus, "neutral");
-    validateSnapshot(getSnapshot(getOrCreateReferenceCode()));
+    validateSnapshot(getSnapshot(getOrCreateReferenceCode()), { moveFocus: false });
   }
 }
 
@@ -1452,20 +1461,51 @@ function setStatusChecklist(title, items, footer = "") {
 }
 
 function resetStatusIfError() {
-  if (statusNode.dataset.status === "error") {
-    setStatus(getCopy().labels.defaultStatus, "neutral");
+  if (uiState.validationAttempted) {
+    if (validateSnapshot(getSnapshot(getOrCreateReferenceCode()), { moveFocus: false })) setStatus(getCopy().labels.defaultStatus, "neutral");
+    return;
   }
+  if (statusNode.dataset.status === "error") setStatus(getCopy().labels.defaultStatus, "neutral");
 }
 
+const formJourneyCopy = {
+  pt: { next: { profile: "Continuar para ocasião", recommendation: "Ver formatos", briefing: "Continuar para preferências", review: "Revisar pedido" }, step: "Etapa {n} de 2 · Personalização opcional", optional: "Personalização opcional · Seus dados essenciais continuam preservados", progress: "Dados essenciais preenchidos", period: "O período desejado define as opções de horário. Explorar um momento em Personalizar não altera este campo." },
+  en: { next: { profile: "Continue to occasion", recommendation: "View formats", briefing: "Continue to preferences", review: "Review request" }, step: "Step {n} of 2 · Personalization is optional", optional: "Optional personalization · Your essential details are preserved", progress: "Essential details completed", period: "Your preferred period defines the available times. Exploring a moment in Personalize does not change this field." },
+  es: { next: { profile: "Continuar a ocasión", recommendation: "Ver formatos", briefing: "Continuar a preferencias", review: "Revisar solicitud" }, step: "Paso {n} de 2 · Personalización opcional", optional: "Personalización opcional · Tus datos esenciales se conservan", progress: "Datos esenciales completos", period: "El período deseado define las opciones de horario. Explorar un momento en Personalizar no cambia este campo." },
+};
+function renderFormNavigation() {
+  const current = formJourneyCopy[uiState.language];
+  document.querySelectorAll("[data-form-next]").forEach(button => {
+    const label = current.next[button.dataset.formNext];
+    if (button.textContent !== label) button.textContent = label;
+  });
+  const help = document.querySelector("#timeRangeHelp");
+  if (help && help.textContent !== current.period) help.textContent = current.period;
+}
 function updateProgress(stepName = "eventDetails") {
-  const current = getCopy();
-  const index = Math.max(0, stepOrder.indexOf(stepName));
-  const percent = ((index + 1) / stepOrder.length) * 100;
-  if (progressText) progressText.textContent = localizedText("Essentials first · About 2 minutes", "O essencial primeiro · Cerca de 2 minutos");
-  if (progressBar) progressBar.style.width = `${percent}%`;
+  uiState.activeStep = stepName;
+  const current = formJourneyCopy[uiState.language];
+  const index = stepOrder.indexOf(stepName);
+  const email = fields.email.value.trim(), phone = fields.phone.value.trim();
+  const complete = [
+    Boolean(fields.date.value || fields.dateFlex.value.trim()) && getGuestCount() !== null,
+    hasUsableName(fields.name.value.trim()) && Boolean(email || phone) && (!email || isValidEmail(email)) && (!phone || isValidContactPhone(phone)),
+  ];
+  const count = complete.filter(Boolean).length;
+  if (progressText) progressText.textContent = stepName === "review" ? current.next.review : index < 0 ? current.optional : current.step.replace("{n}", String(index + 1));
+  if (progressBar) {
+    progressBar.style.width = `${count * 50}%`;
+    const meter = progressBar.parentElement;
+    meter.setAttribute("role", "progressbar");
+    meter.setAttribute("aria-label", current.progress);
+    meter.setAttribute("aria-valuemin", "0");
+    meter.setAttribute("aria-valuemax", "2");
+    meter.setAttribute("aria-valuenow", String(count));
+  }
   progressSteps.forEach((step, stepIndex) => {
     step.toggleAttribute("data-active", stepIndex === index);
-    step.toggleAttribute("data-complete", stepIndex < index);
+    step.toggleAttribute("data-complete", complete[stepIndex]);
+    if (stepIndex === index) step.setAttribute("aria-current", "step"); else step.removeAttribute("aria-current");
   });
 }
 
@@ -1645,8 +1685,7 @@ function canCapturePartialLead() {
 }
 
 function getCurrentProgressStep() {
-  const index = progressSteps.findIndex((step) => step.hasAttribute("data-active"));
-  return stepOrder[Math.max(0, index)] || "contact";
+  return analyticsFormState.lastStep || "eventDetails";
 }
 
 function notifyPartialCapture(kind, token) {
@@ -1904,6 +1943,8 @@ function formatReviewDate(value) {
 }
 
 function renderFinalReview() {
+  renderFormNavigation();
+  updateProgress(uiState.activeStep || "eventDetails");
   if (!finalReviewGrid) return;
   const current = getCopy();
   const pendingLabel = localizedText("To be defined", "A definir");
@@ -2250,14 +2291,18 @@ function clearAllStepValidity() {
   Object.keys(steps).forEach((stepName) => setStepValidity(stepName, true));
 }
 
-function scrollToStep(stepName, force = false) {
-  const step = steps[stepName];
+function scrollToStep(stepName, force = false, focusTarget = null) {
+  const step = stepName === "review" ? document.querySelector("#finalReviewCard") : steps[stepName];
+  if (!step) return;
   updateProgress(stepName);
-  const optional = step?.closest("details");
+  const optional = step.closest("details");
   if (optional) optional.open = true;
-  if (!step || (!force && !mobileFormQuery.matches)) return;
+  if (!force && !mobileFormQuery.matches) return;
   window.requestAnimationFrame(() => {
-    step.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = focusTarget || step.querySelector("h2") || step;
+    if (!target.matches("input,select,textarea,button,a[href],[tabindex]")) target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: focusTarget ? "center" : "start" });
   });
 }
 
@@ -2393,7 +2438,7 @@ function selectFormat(formatId) {
   renderRecommendations();
   renderFinalReview();
   schedulePartialCapture();
-  scrollToStep("briefing");
+  recommendationList.querySelector(`[data-format-id="${formatId}"]`)?.focus({ preventScroll: true });
 }
 
 function handleChoiceClick(event) {
@@ -2418,7 +2463,7 @@ function handleChoiceClick(event) {
   renderRecommendations();
   renderFinalReview();
   schedulePartialCapture();
-  if (choiceGroup === "moment") scrollToStep("profile");
+  // Keep the choice in place; the explicit Continue control advances.
 }
 
 function handleFormatClick(event) {
@@ -2520,13 +2565,12 @@ function getPayload(snapshot) {
   };
 }
 
-function failValidation(field, stepName, message) {
+function failValidation(field, stepName, message, { moveFocus = true } = {}) {
   const current = getCopy();
   setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [message], current.messages.fixThisPointFooter || "");
   setStepValidity(stepName, false);
   setFieldValidity(field, false, message);
-  field?.focus();
-  scrollToStep(stepName, true);
+  if (moveFocus) scrollToStep(stepName, true, field);
   return false;
 }
 
@@ -2541,57 +2585,29 @@ function getFriendlySubmitError(error, current) {
   return current.messages.submitError;
 }
 
-function validateSnapshot(snapshot) {
+function validateSnapshot(snapshot, options = {}) {
+  uiState.validationAttempted = true;
   const current = getCopy();
   clearAllStepValidity();
   Object.values(fields).forEach((field) => setFieldValidity(field, true));
-  if (getGuestCount() === null) return failValidation(fields.guests, "eventDetails", getGuestCountError());
+  if (getGuestCount() === null) return failValidation(fields.guests, "eventDetails", getGuestCountError(), options);
   applyLeadFallbacks(snapshot);
-  const hasEventDateOrWindow = Boolean(snapshot.evento.data || snapshot.evento.dataFlexivel);
-
-  if (!hasEventDateOrWindow) {
-    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.missingDate], current.messages.fixThisPointFooter || "");
-    setStepValidity("eventDetails", false);
-    setFieldValidity(fields.date, false);
-    setFieldValidity(fields.dateFlex, false);
-    scrollToStep("eventDetails", true);
-    return false;
+  if (!snapshot.evento.data && !snapshot.evento.dataFlexivel) {
+    setFieldValidity(fields.date, false, current.messages.missingDate);
+    setFieldValidity(fields.dateFlex, false, current.messages.missingDate);
+    const target = [fields.date, fields.dateFlex].find(field => field.getClientRects().length) || fields.date;
+    return failValidation(target, "eventDetails", current.messages.missingDate, options);
   }
-
-  if (!snapshot.cliente.nome) {
-    return failValidation(fields.name, "contact", current.messages.requiredName);
-  }
-
-  if (!hasUsableName(snapshot.cliente.nome)) {
-    return failValidation(fields.name, "contact", current.messages.invalidName);
-  }
-
-  const hasEmail = Boolean(snapshot.cliente.email);
-  const hasPhone = Boolean(snapshot.cliente.whatsapp);
+  if (!snapshot.cliente.nome) return failValidation(fields.name, "contact", current.messages.requiredName, options);
+  if (!hasUsableName(snapshot.cliente.nome)) return failValidation(fields.name, "contact", current.messages.invalidName, options);
+  const hasEmail = Boolean(snapshot.cliente.email), hasPhone = Boolean(snapshot.cliente.whatsapp);
   if (!hasEmail && !hasPhone) {
     const message = getPartialCaptureCopy().contact;
     setFieldValidity(fields.phone, false, message);
-    return failValidation(fields.email, "contact", message);
+    return failValidation(fields.email, "contact", message, options);
   }
-
-  if (hasEmail && !isValidEmail(snapshot.cliente.email)) {
-    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidEmail], current.messages.fixThisPointFooter || "");
-    setStepValidity("contact", false);
-    setFieldValidity(fields.email, false);
-    fields.email.focus();
-    scrollToStep("contact", true);
-    return false;
-  }
-
-  if (hasPhone && !isValidContactPhone(snapshot.cliente.whatsapp)) {
-    setStatusChecklist(current.messages.fixThisPointTitle || current.messages.submitError, [current.messages.invalidPhone], current.messages.fixThisPointFooter || "");
-    setStepValidity("contact", false);
-    setFieldValidity(fields.phone, false);
-    fields.phone.focus();
-    scrollToStep("contact", true);
-    return false;
-  }
-
+  if (hasEmail && !isValidEmail(snapshot.cliente.email)) return failValidation(fields.email, "contact", current.messages.invalidEmail, options);
+  if (hasPhone && !isValidContactPhone(snapshot.cliente.whatsapp)) return failValidation(fields.phone, "contact", current.messages.invalidPhone, options);
   return true;
 }
 
@@ -3009,6 +3025,7 @@ async function submitRequest(event) {
     return;
   }
   form.reset();
+  uiState.validationAttempted = false;
   fields.moment.value = "";
   fields.clientType.value = "";
   fields.profile.value = "";
@@ -3031,8 +3048,20 @@ async function submitRequest(event) {
 }
 
 applyConversionStepOrder();
-document.querySelector("#formPersonalizeNav").addEventListener("click", () => {
-  document.querySelector("#personalizeOptions").open = true;
+for (const [id, step] of [["quickPathLink", "eventDetails"], ["quickContactLink", "contact"], ["formContactNav", "contact"], ["formPersonalizeNav", "moment"]]) {
+  document.getElementById(id).addEventListener("click", event => {
+    event.preventDefault();
+    window.history.pushState(null, "", event.currentTarget.getAttribute("href"));
+    scrollToStep(step, true);
+  });
+}
+window.addEventListener("popstate", () => {
+  const step = { "#eventDetailsStep": "eventDetails", "#contactStep": "contact", "#personalizeOptions": "moment" }[window.location.hash];
+  if (step) scrollToStep(step, true);
+});
+form.addEventListener("click", event => {
+  const next = event.target.closest("[data-form-next]");
+  if (next) scrollToStep(next.dataset.formNext, true);
 });
 form.addEventListener("focusin", (event) => {
   const name = Object.keys(steps).find((key) => steps[key].contains(event.target));
@@ -3149,6 +3178,9 @@ extraChips.forEach((chip) => chip.addEventListener("change", () => setStepValidi
 langButtons.forEach((button) =>
   button.addEventListener("click", () => {
     setLanguage(button.dataset.lang);
+    const url = new URL(window.location.href);
+    url.searchParams.set("lang", uiState.language);
+    window.history.replaceState(null, "", url);
   }),
 );
 initializeCaptureIdentity();

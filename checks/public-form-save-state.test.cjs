@@ -7,7 +7,7 @@ const receipt={request_id:'00000000-0000-4000-8000-000000000002',opportunity_id:
 function setup(){
  const requests=[],pending=[],timers=new Map(),messages=[],history=[],shared=new Map([['token',token]]);let timer=0;
  const current={referencia:'SYNTHETIC',cliente:{nome:'Pessoa Sintetica',email:'person@example.test',whatsapp:''},evento:{observacoes:'v1'},enviadoEm:'time-one'};
- const context=vm.createContext({uiState:{language:'pt'},partialCaptureTimer:null,CAPTURE_TOKEN_KEY:'token',formStorageMemory:{token},progressSteps:[],stepOrder:[],
+ const context=vm.createContext({uiState:{language:'pt'},partialCaptureTimer:null,CAPTURE_TOKEN_KEY:'token',formStorageMemory:{token},analyticsFormState:{lastStep:'contact'},progressSteps:[],stepOrder:[],
   fields:{name:{value:current.cliente.nome},email:{value:current.cliente.email},phone:{value:''},guests:{value:'30'}},
   getSnapshot:()=>structuredClone(current),getOrCreateReferenceCode:()=>current.referencia,getCaptureToken:()=>token,
   getPublicSupabaseClient:()=>({rpc:(name,payload)=>{const d=deferred();requests.push({name,payload:structuredClone(payload)});pending.push(d);return d.promise;}}),
