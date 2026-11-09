@@ -13252,3 +13252,21 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
   .pipeline-search-controls { flex-wrap: wrap; }
   .pipeline-search-controls button { min-height: 44px; }
 }
+
+/* Direct pipeline navigation: one natural page scroll in the stage list. */
+.pipeline-view-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:12px 0; }
+.pipeline-view-controls label { display:grid; gap:5px; font-weight:700; min-width:0; }
+.pipeline-view-controls select { width:100%; min-width:0; min-height:44px; }
+.sales-funnel-overview > details > summary { cursor:pointer; font-weight:800; font-size:1.15rem; min-height:44px; }
+body[data-page="app"] .pipeline-board [hidden] { display:none; }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-row { display:block; overflow:visible; }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-column { width:100%; box-sizing:border-box; max-width:none; }
+body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-column-list { max-height:none; height:auto; overflow:visible; overscroll-behavior:auto; }
+.pipeline-card:focus-visible { outline:3px solid #183a2d; outline-offset:3px; }
+@media(max-width:600px) {
+  .pipeline-view-controls { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .pipeline-view-controls label:nth-child(2) { grid-column:1/-1; grid-row:1; }
+  .pipeline-view-controls label { font-size:.85rem; }
+  body[data-page="app"] .pipeline-panel .pipeline-quick-filters { margin:8px 0; }
+  body[data-page="app"] .pipeline-panel .pipeline-quick-filters { display:none; }
+}
