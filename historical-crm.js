@@ -103,6 +103,7 @@
       listAbort?.abort();detailAbort?.abort();listAbort=null;detailAbort=null;
       state.selected=null;state.organization=null;state.query="";state.offset=0;state.total=0;
       nodes.search.value="";nodes.scope.hidden=true;nodes.scopeName.textContent="";nodes.period.textContent="";
+      const historyLink=byId("clientHistoryLink");if(historyLink)historyLink.hidden=true;
       nodes.list.replaceChildren();nodes.stats.replaceChildren();nodes.detail.replaceChildren();nodes.detailTitle.textContent="";
       nodes.page.textContent="";nodes.status.textContent="";root.hidden=true;
       if(nodes.dialog.open)nodes.dialog.close();
@@ -276,7 +277,7 @@
         const nextIdentity=next?.user?.id||null,nextClient=next?.client||null;
         if(nextIdentity===identity&&nextClient===client)return;
         clear();identity=nextIdentity;client=nextClient;
-        if(identity&&client){root.hidden=false;load();}
+        if(identity&&client){root.hidden=false;const historyLink=byId("clientHistoryLink");if(historyLink)historyLink.hidden=false;load();}
       },
       destroy(){clear();identity=null;client=null;}
     };

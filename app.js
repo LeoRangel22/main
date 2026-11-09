@@ -9370,11 +9370,13 @@ function updateAuthUI() {
   if (!loginButton || !logoutButton || !recoverButton || !nodes.authStatus || !fields.loginEmail || !fields.magicLinkUrl) return;
   const isConnected = Boolean(state.supabase);
   const isLoggedIn = Boolean(state.session?.user && isTeamEmail(state.session.user.email));
+  const wasLocked = document.body.classList.contains("auth-locked");
   if (typeof window !== "undefined") window.EventCrmHistory?.setSession({ client: state.supabase, user: isLoggedIn && isSuperAdminSession() ? state.session.user : null });
 
   if (!isLoggedIn && typeof resetConsultativeEditor === "function") resetConsultativeEditor();
   document.body.classList.toggle("auth-locked", !isLoggedIn);
   document.body.classList.toggle("auth-connected", isLoggedIn);
+  if (isLoggedIn && wasLocked) window.requestAnimationFrame(() => navigateWorkspaceSection(window.location.hash, false));
 
   loginButton.disabled = !isConnected || isLoggedIn;
   if (passwordLoginButton) passwordLoginButton.disabled = !isConnected || isLoggedIn;
@@ -10540,6 +10542,25 @@ function setWorkspaceMode(mode) {
   }
   renderWorkspaceMode();
   renderPipeline();
+}
+
+// Only known page sections may change the workspace. Proposal/lead and OAuth
+// fragments keep their existing handlers; navigation never opens or saves a record.
+function navigateWorkspaceSection(hash, moveFocus = true) {
+  if (document.body.dataset.page !== "app" || !state.session?.user || !isTeamEmail(state.session.user.email)) return;
+  const modes = { "#salesCommand": "sales", "#salesPipeline": "sales", "#quoteWorkspace": "sales", "#operationWorkspace": "operations" };
+  if (!Object.prototype.hasOwnProperty.call(modes, hash)) return;
+  const target = document.getElementById(hash.slice(1));
+  if (!target) return;
+  const mode = modes[hash];
+  // Keep the complete view when it already exposes the commercial destination.
+  if (mode === "operations" ? state.workspaceMode !== mode : state.workspaceMode === "operations") setWorkspaceMode(mode);
+  if (!target.getClientRects().length) return;
+  if (moveFocus) {
+    target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+  }
+  target.scrollIntoView({ block: "start", behavior: "auto" });
 }
 
 function getPipelineQuickFilterDefinitions() {
@@ -16770,6 +16791,11 @@ function bindEvents() {
     if (!button) return;
     setWorkspaceMode(button.dataset.workspaceMode);
   });
+  document.querySelector(".admin-quick-nav")?.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest('a[href^="#"]');
+    if (link) navigateWorkspaceSection(link.getAttribute("href"));
+  });
   nodes.ownerMetrics?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-pipeline-stage-jump]");
     if (!button) return;
@@ -17036,6 +17062,7 @@ if (fields.generalTerms) fields.generalTerms.value = loadGeneralTerms();
 syncDateTimeFromFields();
 syncDashboardDeepLinkState();
 window.addEventListener("hashchange", async () => {
+  navigateWorkspaceSection(window.location.hash);
   syncDashboardDeepLinkState();
   await applyPendingDashboardTarget();
 });
