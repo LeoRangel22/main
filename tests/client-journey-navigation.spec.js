@@ -105,7 +105,7 @@ for(const lang of ['pt','en'])test('public read-only navigation and adjustment d
  await page.locator('#publicCancelResponse').click();await expect(page.locator('#publicProposalResponseForm')).toBeHidden();await expect(page.locator('[data-public-action="alteracao"]')).toBeFocused();
  await page.locator('[data-public-action="alteracao"]').click();await expect(page.locator('#publicResponseMessage')).toHaveValue('Synthetic request without commercial acceptance.');
  expect(audit.calls.filter(c=>c.name==='respond_public_proposal_v2')).toHaveLength(0);
- for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:844});await expectPageWidth(page);}
+ for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:844});await expect(page.locator('.public-proposal-nav [href="#commercialTerms"]')).toBeVisible();await expectPageWidth(page);}
  await page.setViewportSize({width:390,height:844});await page.addStyleTag({content:'html{font-size:200%}'});await expectPageWidth(page);
  clean(audit);
 });

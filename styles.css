@@ -13300,7 +13300,7 @@ body[data-page="app"] .pipeline-board[data-layout="list"] .pipeline-card :is(str
 .public-form-body .public-form-actions { position:static; }
 .public-proposal-nav { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .public-proposal-nav a,
-.public-proposal-nav .public-proposal-jump { flex:1 1 auto; margin:0; width:auto; min-height:44px; padding:10px 12px; border:1px solid var(--verde); border-radius:8px; color:var(--verde-escuro); background:var(--verde-claro); font-weight:800; text-align:center; text-decoration:none; }
+.public-proposal-nav .public-proposal-jump { display:flex; align-items:center; justify-content:center; flex:1 1 auto; margin:0; width:auto; min-height:44px; padding:10px 12px; border:1px solid var(--verde); border-radius:8px; color:var(--verde-escuro); background:var(--verde-claro); font-weight:800; text-align:center; text-decoration:none; }
 .public-proposal-nav .public-proposal-jump { background:var(--verde-escuro); color:var(--white); }
 #commercialTerms, #decisionActions, #publicProposalItems { scroll-margin-top:12px; }
 #commercialTerms > a[data-proposal-section] { display:inline-flex; align-items:center; min-height:44px; color:var(--verde-escuro); font-weight:800; }
