@@ -274,7 +274,8 @@
               <div class="library-summary" id="commercialLibrarySummary"></div>
             </section>
 
-            <div class="table-wrap">
+            <p id="pricesScrollHint">Deslize a tabela para ver todas as colunas. Pelo teclado, selecione a tabela e use as setas.</p>
+            <div class="table-wrap" role="region" aria-label="Planilha de produtos" aria-describedby="pricesScrollHint" tabindex="0" data-table-scroll>
               <table>
                 <thead>
                   <tr>
@@ -305,7 +306,7 @@
               <h2>Custos de privatização</h2>
             </div>
             <p>Atualize abertura, pico, fechamento e valores. Pico parcial e pico total entram automaticamente quando o evento cai no pico. Fora do pico é apenas a privatização total opcional, cobrada só se a equipe incluir exclusividade na proposta.</p>
-            <div class="privatization-rules-wrap">
+            <div class="privatization-rules-wrap" role="region" aria-label="Tabela de privatização" aria-describedby="pricesScrollHint" tabindex="0" data-table-scroll>
               <table class="privatization-rules-table">
                 <thead>
                   <tr>

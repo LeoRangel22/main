@@ -300,9 +300,19 @@ summary:focus-visible {
 
 .values-layout {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 32px;
   padding-top: 8px;
+  overflow-wrap: anywhere;
 }
+
+.values-layout > .prices-editor { min-width: 0; }
+.values-layout .table-wrap, .values-layout .privatization-rules-wrap { min-width: 0; max-width: 100%; }
+.values-layout [data-table-scroll]:focus-visible { outline: 3px solid #9b4c00; outline-offset: 3px; }
+.values-layout .values-command-panel > *, .values-layout .spreadsheet-actions { min-width: 0; }
+.values-layout .spreadsheet-actions { grid-template-columns: minmax(0, 1fr); }
+.values-layout .spreadsheet-actions button { min-width: 0; white-space: normal; }
+@media (max-width: 900px) { .values-layout .values-command-panel { grid-template-columns: minmax(0, 1fr); } }
 
 .compact-team {
   padding-bottom: 24px;
