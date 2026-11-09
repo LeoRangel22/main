@@ -7240,6 +7240,7 @@ function getScrollableAncestors(node) {
 
 function scrollToNodeReliably(target, { offset = 12, behavior = "smooth", settle = true } = {}) {
   if (!target) return;
+  offset = Math.max(offset, editorScrollOffset(target));
   const generation = editorScrollGeneration;
   const scroll = (scrollBehavior = behavior) => {
     if (generation !== editorScrollGeneration || document.querySelector(".send-confirm-dialog[open]")) return;
@@ -11382,6 +11383,58 @@ function syncEditorLeaveProtection() {
   editorLeaveProtectionActive = active;
 }
 
+function editorHeaderOffset() {
+  const header = document.querySelector(".topbar");
+  return header && ["sticky", "fixed"].includes(getComputedStyle(header).position) ? header.getBoundingClientRect().height : 0;
+}
+
+function editorScrollOffset(target) {
+  const bar = nodes.loadedEditorBar;
+  const inForm = target?.closest?.("#quoteForm") && target !== bar;
+  const barHeight = inForm && bar && !bar.classList.contains("is-hidden") && getComputedStyle(bar).position === "sticky" ? bar.getBoundingClientRect().height : 0;
+  return editorHeaderOffset() + barHeight + 16;
+}
+
+function syncEditorToolbarOffsets() {
+  if (!nodes.loadedEditorBar) return;
+  const root = document.documentElement, header = editorHeaderOffset();
+  const barHeight = !nodes.loadedEditorBar.classList.contains("is-hidden") && getComputedStyle(nodes.loadedEditorBar).position === "sticky" ? nodes.loadedEditorBar.getBoundingClientRect().height : 0;
+  for (const [name, value] of [["--editor-toolbar-top", header + 8], ["--editor-content-top", header + barHeight + 16]]) {
+    const text = value + "px";
+    if (root.style.getPropertyValue(name) !== text) root.style.setProperty(name, text);
+  }
+}
+
+function syncEditorToolbarButtons() {
+  const bar = nodes.loadedEditorBar;
+  if (!bar) return;
+  const original = document.querySelector("#saveDraftBtn");
+  const busy = Boolean(state.proposalSaveInProgress);
+  bar.querySelectorAll("[data-editor-action]").forEach(button => {
+    const disabled = !state.session?.user || (button.dataset.editorAction === "draft" && (!original || original.disabled));
+    if (button.disabled !== Boolean(disabled)) button.disabled = Boolean(disabled);
+    button.setAttribute("aria-disabled", String(Boolean(disabled) || busy));
+    button.setAttribute("aria-busy", String(busy));
+  });
+}
+
+function initializeEditorToolbar() {
+  if (!nodes.loadedEditorBar) return;
+  if (typeof ResizeObserver !== "undefined") {
+    const sizes = new ResizeObserver(syncEditorToolbarOffsets);
+    [document.querySelector(".topbar"), nodes.loadedEditorBar].filter(Boolean).forEach(node => sizes.observe(node));
+  }
+  if (typeof MutationObserver !== "undefined") {
+    const controls = new MutationObserver(syncEditorToolbarButtons);
+    ["#saveDraftBtn", "#saveProposalBtn"].forEach(selector => {
+      const node = document.querySelector(selector);
+      if (node) controls.observe(node, { attributes: true, attributeFilter: ["disabled", "aria-busy"] });
+    });
+  }
+  window.addEventListener("resize", syncEditorToolbarOffsets, { passive: true });
+  syncEditorToolbarOffsets();
+}
+
 function renderLoadedEditorBar() {
   syncEditorLeaveProtection();
   if (!nodes.loadedEditorBar) return;
@@ -11392,6 +11445,7 @@ function renderLoadedEditorBar() {
     nodes.loadedEditorBar.innerHTML = "";
     return;
   }
+  const focusedAction = nodes.loadedEditorBar.contains(document.activeElement) ? document.activeElement?.dataset?.editorAction : "";
   const dirty = hasUnsavedEditorChanges();
   const dateLabel = context.date ? formatDateFromIso(context.date) : "Data a definir";
   const timeLabel = context.time ? String(context.time).slice(0, 5) : "Horário a definir";
@@ -11404,16 +11458,22 @@ function renderLoadedEditorBar() {
   nodes.loadedEditorBar.innerHTML = `
     <div class="loaded-editor-main">
       <span>${escapeHtml(context.sourceLabel || "Carregado do funil")}</span>
-      <strong>Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
+      <strong title="${escapeHtml([context.name, dateLabel, context.type].join(" · "))}">Você está editando: ${escapeHtml(context.name)} · ${escapeHtml(dateLabel)} · ${escapeHtml(context.type)}</strong>
       ${activeProposal?.snapshot?.amendmentOf ? `<p role="status">Aditivo em rascunho — o acordo confirmado não foi alterado. Não liberado para envio ou execução.</p>` : ""}
-      <small>Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
+      <small class="loaded-editor-trail">Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
+      <small class="loaded-editor-quote-meta" data-editor-summary>${escapeHtml(versionLabel || "Nova proposta")} · ${getGuestCount()} pax · <b data-editor-total>${formatMoney(getQuoteTotals().total)}</b></small>
     </div>
     <div class="loaded-editor-actions">
+      <button class="primary" type="button" data-editor-action="draft" aria-label="Salvar agora como rascunho" title="Salva somente o rascunho, sem enviar ao cliente.">Salvar agora</button>
+      <button class="secondary" type="button" data-editor-action="review" aria-label="Revisar esta versão">Revisar</button>
       ${dirty ? `<span class="loaded-editor-dirty">Não salvo</span>` : `<span class="loaded-editor-saved">Atualizado</span>`}
       ${new URL(window.location.href).searchParams.get("from") === "clientes" ? `<a class="button-link secondary" href="${escapeHtml(clientDirectoryReturnUrl())}">Voltar aos clientes</a>` : ""}
       <button class="secondary" type="button" data-return-pipeline-stage="${escapeHtml(context.stageId || "lead_recebido")}">Voltar ao funil</button>
     </div>
   `;
+  syncEditorToolbarButtons();
+  syncEditorToolbarOffsets();
+  if (focusedAction) nodes.loadedEditorBar.querySelector(`[data-editor-action="${focusedAction}"]:not(:disabled)`)?.focus({ preventScroll: true });
 }
 
 async function confirmEditorSwitch() {
@@ -15032,7 +15092,14 @@ function scrollToReviewTarget(target) {
   const selector = targets[target] || "#sendReviewPanel";
   const node = document.querySelector(selector);
   scrollToNodeReliably(node, { behavior: "smooth", offset: 14 });
+  const navigationGeneration = editorScrollGeneration;
   window.setTimeout(() => {
+    if (navigationGeneration !== editorScrollGeneration) return;
+    if (target === "items" || target === "review") {
+      const focusTarget = node?.querySelector("h2,h3") || node;
+      if (focusTarget) { focusTarget.setAttribute("tabindex", "-1"); focusTarget.focus({ preventScroll: true }); }
+      return;
+    }
     if (target === "source") {
       const data = getFormSourceData();
       const missing = getFormSourceMissingItems(data);
@@ -16617,6 +16684,7 @@ function addProductType() {
 }
 
 function bindEvents() {
+  initializeEditorToolbar();
   // Once the user acts, an earlier editor opening must not move their target.
   const stopEditorJumpsOnIntent = () => { if (state.activeEditorContext) editorScrollGeneration += 1; };
   document.addEventListener("pointerdown", stopEditorJumpsOnIntent, true);
@@ -16771,6 +16839,24 @@ function bindEvents() {
     if (event.target.closest("button, a")) editorScrollGeneration += 1;
   });
   nodes.loadedEditorBar?.addEventListener("click", (event) => {
+    const action = event.target.closest("button[data-editor-action]");
+    if (action) {
+      if (!state.session?.user || state.proposalSaveInProgress) return;
+      if (action.dataset.editorAction === "draft") {
+        const original = document.querySelector("#saveDraftBtn");
+        if (original && !original.disabled) original.click();
+        syncEditorToolbarButtons();
+      } else if (action.dataset.editorAction === "review") {
+        editorScrollGeneration += 1;
+        if (typeof salesGuide !== "undefined") { salesGuide.focused = false; renderSalesGuide(); }
+        const panel = nodes.sendReviewPanel;
+        if (!panel) return;
+        panel.setAttribute("tabindex", "-1");
+        panel.focus({ preventScroll: true });
+        scrollToNodeReliably(panel, { behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", settle: false });
+      }
+      return;
+    }
     const button = event.target.closest("button[data-return-pipeline-stage]");
     if (!button) return;
     returnToPipelineContext(button.dataset.returnPipelineStage);

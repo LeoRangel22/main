@@ -1,5 +1,5 @@
 const {test,expect}=require('@playwright/test');
-const {collectBrowserErrors,expectNoBrowserErrors,expectNoHorizontalOverflow}=require('./support');
+const {collectBrowserErrors,expectNoBrowserErrors,expectNoHorizontalOverflow,expectEditorTargetBelowChrome}=require('./support');
 
 async function prepare(page) {
   await page.goto('/index.html?qa=1');
@@ -61,7 +61,8 @@ test('correction is an explicit choice and never continues sending',async({page}
   await dialog.locator('[data-send-correction="client"]').first().click();
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(()=>window.modalAttempt)).toBe(false);
-  await expect.poll(()=>page.evaluate(()=>document.querySelector('#clientDataSection').getBoundingClientRect().top)).toBeLessThan(100);
+  await expectEditorTargetBelowChrome(page,'#clientDataSection');
+  await expect(page.locator('#eventTime')).toBeFocused();
   expect(await page.evaluate(()=>window.modalWrites)).toEqual([]);
 });
 
