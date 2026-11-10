@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Valores e Produtos | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=429f943cf5f509fe" />
+    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=3f99f001dc7eb3af" />
   </head>
   <body class="auth-locked" data-page="values">
     <main class="app-shell">
@@ -274,7 +274,8 @@
               <div class="library-summary" id="commercialLibrarySummary"></div>
             </section>
 
-            <div class="table-wrap">
+            <p id="pricesScrollHint">Deslize a tabela para ver todas as colunas. Pelo teclado, selecione a tabela e use as setas.</p>
+            <div class="table-wrap" role="region" aria-label="Planilha de produtos" aria-describedby="pricesScrollHint" tabindex="0" data-table-scroll>
               <table>
                 <thead>
                   <tr>
@@ -305,7 +306,7 @@
               <h2>Custos de privatização</h2>
             </div>
             <p>Atualize abertura, pico, fechamento e valores. Pico parcial e pico total entram automaticamente quando o evento cai no pico. Fora do pico é apenas a privatização total opcional, cobrada só se a equipe incluir exclusividade na proposta.</p>
-            <div class="privatization-rules-wrap">
+            <div class="privatization-rules-wrap" role="region" aria-label="Tabela de privatização" aria-describedby="pricesScrollHint" tabindex="0" data-table-scroll>
               <table class="privatization-rules-table">
                 <thead>
                   <tr>
