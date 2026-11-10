@@ -312,7 +312,14 @@ summary:focus-visible {
 .values-layout .values-command-panel > *, .values-layout .spreadsheet-actions { min-width: 0; }
 .values-layout .spreadsheet-actions { grid-template-columns: minmax(0, 1fr); }
 .values-layout .spreadsheet-actions button { min-width: 0; white-space: normal; }
-@media (max-width: 900px) { .values-layout .values-command-panel { grid-template-columns: minmax(0, 1fr); } }
+body[data-page="valores"] .team-panel { min-width: 0; overflow-wrap: anywhere; }
+body[data-page="valores"] .team-panel .section-heading { flex-wrap: wrap; }
+body[data-page="valores"] .team-access > * { min-width: 0; }
+@media (max-width: 900px) {
+  .values-layout .values-command-panel,
+  body[data-page="valores"] .team-panel,
+  body[data-page="valores"] .team-access { grid-template-columns: minmax(0, 1fr); }
+}
 
 .compact-team {
   padding-bottom: 24px;

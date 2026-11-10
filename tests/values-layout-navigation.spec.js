@@ -40,7 +40,9 @@ for(const width of [320,390,768,900,1440])test('values tables scroll within the 
  expect(a.external).toEqual([]);expect(a.errors).toEqual([]);
 });
 test('values controls reflow with 200 percent text without changing catalog values',async({page,browserName})=>{
- const a=await open(page,320);await page.addStyleTag({content:'html{font-size:200% !important}'});
+ const a=await open(page,320);
+ await page.locator('#authStatus').evaluate(e=>{e.textContent='Conectado como responsavel-de-eventos@empresa.example.test · Super admin.';});
+ await page.addStyleTag({content:'html{font-size:200% !important}'});
  await checkTables(page);
  await page.locator('.values-command-panel').evaluate(e=>e.scrollIntoView({block:'start'}));
  await page.screenshot({path:'quality-results/values-layout-200-'+browserName+'.png'});
