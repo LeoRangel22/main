@@ -68,6 +68,12 @@
       "baselineGzipBytes": 1014,
       "maxRawBytes": 4005,
       "maxGzipBytes": 1268
+    },
+    {
+      "path": "historical-classification.js",
+      "policy": "New owner review editor, loaded only on eligible historical record details; original reader budget unchanged.",
+      "maxRawBytes": 14500,
+      "maxGzipBytes": 5000
     }
   ]
 }
