@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 const dest=path.join(root,'dist');
 // Explicit public surface: tooling, SQL, tests and credentials cannot be copied.
 const publicFiles=[
-  'historical-crm.js','historical-crm.css',
+  'historical-crm.js','historical-crm.css','historical-classification.js',
   'captura-respostas.html','captura-respostas.js',
   'piloto-respostas.html','piloto-respostas.js',
   'conciliar-teste-email.html','conciliar-teste-email.js',
@@ -28,6 +28,12 @@ for(const file of publicFiles) {
 }
 const supabaseEntry=path.join(path.dirname(require.resolve('@supabase/supabase-js/package.json')),'dist/module/index.js');
 esbuild.buildSync({entryPoints:[supabaseEntry],bundle:true,format:'iife',globalName:'supabase',platform:'browser',target:['es2020'],minify:true,outfile:path.join(dest,'vendor/supabase.js')});
+const reviewHash=crypto.createHash('sha256').update(fs.readFileSync(path.join(dest,'historical-classification.js'))).digest('hex').slice(0,16);
+const readerPath=path.join(dest,'historical-crm.js');
+const reader=fs.readFileSync(readerPath,'utf8');
+const lazyImport='import("./historical-classification.js?v=review-1")';
+if(!reader.includes(lazyImport)) throw Error('Missing classification lazy import');
+fs.writeFileSync(readerPath,reader.replace(lazyImport,'import("./historical-classification.js?v=review-1&h='+reviewHash+'")'));
 // Preserve the human-readable rollout tag while making every already-versioned
 // local script/style URL change whenever its bytes change. No source files,
 // external URLs, credentials or unversioned SDK paths are rewritten.

@@ -104,6 +104,7 @@ async function checks(c) {
   await require('../checks/public-view-visibility.cjs')(c,sql,migrationFiles);
   await require('../checks/anon-table-write-hardening.cjs')(c,sql,migrationFiles);
   await require('../checks/historical-crm-owner-read.cjs')(c,sql,fixtureOwner,migrationFiles);
+  await require('../checks/historical-classification-review.cjs')(c,sql,fixtureOwner,migrationFiles);
 }
 async function concurrent(c,name) {
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);

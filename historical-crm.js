@@ -99,7 +99,7 @@
     function status(text,error) { nodes.status.textContent=text; nodes.status.classList.toggle("crm-history-error",Boolean(error)); }
     function loading(on) { root.setAttribute("aria-busy",String(on));nodes.refresh.disabled=on;nodes.prev.disabled=on||state.offset===0;nodes.next.disabled=on||state.offset+20>=state.total; }
     function clear() {
-      generation++;request++;detailRequest++;if(timer)window.clearTimeout(timer);timer=null;
+      reviewController?.clear();generation++;request++;detailRequest++;if(timer)window.clearTimeout(timer);timer=null;
       listAbort?.abort();detailAbort?.abort();listAbort=null;detailAbort=null;
       state.selected=null;state.organization=null;state.query="";state.offset=0;state.total=0;
       nodes.search.value="";nodes.scope.hidden=true;nodes.scopeName.textContent="";nodes.period.textContent="";
@@ -164,6 +164,7 @@
         article.append(element("p",record.next_action||"Revisar relacionamento"));
         if(record.post_sale_review_required)article.append(element("span","Revisar pós-venda","crm-history-tag"));
       }
+      if(record.classification_review?.revision){line(article,"Classificação manual:",({customer:"Cliente ou potencial cliente",supplier:"Fornecedor",service:"Serviço",other:"Outro correspondente",unknown:"A revisar"})[record.classification_review.classification]||"Mantida da fonte");}
       line(article,"Último registro:",formatDate(record.last_contact_at||record.last_document_at));
       article.append(button("Ver histórico e fontes",event=>{event.currentTarget.focus({preventScroll:true});openRecord(record.id);}));
       return article;
@@ -213,7 +214,11 @@
       }
       return area;
     }
+
+    let reviewController=null;
+    function preventReviewExit(e){return reviewController?.preventReviewExit(e)||false;}
     async function openRecord(id,offset) {
+      if(preventReviewExit())return;
       if(!identity||!client)return;
       state.selected={id,kind:state.kind};state.sourceOffset=offset||0;
       const g=generation,n=++detailRequest,kind=state.kind;
@@ -251,6 +256,16 @@
           nodes.detail.append(observations);
         }
         nodes.detail.append(renderSources(data));
+        if(["organization","contact"].includes(kind)){
+          if(data.classification_review){
+            try{
+            if(!window.EventCrmClassification)await import("./historical-classification.js?v=review-1");
+            if(g!==generation||n!==detailRequest||!nodes.dialog.open)return;
+            reviewController=reviewController||window.EventCrmClassification.create({element,line,button,formatDate,nodes,state,load,openRecord,updateSort,identity:()=>identity,client:()=>client,generation:()=>generation,detailRequest:()=>detailRequest});
+            nodes.detail.append(reviewController.renderReview(data));
+            }catch(e){if(g===generation&&n===detailRequest&&nodes.dialog.open)nodes.detail.append(element("p","Edição de classificação indisponível. As fontes originais continuam disponíveis."));}
+          }else nodes.detail.append(element("p","A classificação manual não está disponível para este registro. As fontes originais continuam preservadas."));
+        }
       }catch(e){
         if(g!==generation||n!==detailRequest||!nodes.dialog.open)return;
         nodes.detail.replaceChildren(element("p",e.code==="42501"?"Sessão Master indisponível. Entre novamente.":"Não foi possível consultar este registro."));
@@ -269,8 +284,9 @@
     nodes.prev.addEventListener("click",()=>{state.offset=Math.max(0,state.offset-20);load();});
     nodes.next.addEventListener("click",()=>{if(state.offset+20<state.total){state.offset+=20;load();}});
     nodes.clearScope.addEventListener("click",()=>{state.organization=null;state.offset=0;nodes.scope.hidden=true;nodes.scopeName.textContent="";load();});
-    nodes.close.addEventListener("click",()=>nodes.dialog.close());
-    nodes.dialog.addEventListener("close",()=>{detailRequest++;detailAbort?.abort();state.selected=null;nodes.detail.replaceChildren();nodes.detailTitle.textContent="";});
+    nodes.close.addEventListener("click",e=>{if(!preventReviewExit(e))nodes.dialog.close();});
+    nodes.dialog.addEventListener("cancel",e=>preventReviewExit(e));
+    nodes.dialog.addEventListener("close",()=>{reviewController?.clear();detailRequest++;detailAbort?.abort();state.selected=null;nodes.detail.replaceChildren();nodes.detailTitle.textContent="";});
     updateSort();
     return {
       setSession(next) {
