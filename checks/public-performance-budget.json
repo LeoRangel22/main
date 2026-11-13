@@ -74,6 +74,12 @@
       "policy": "New owner review editor, loaded only on eligible historical record details; original reader budget unchanged.",
       "maxRawBytes": 14500,
       "maxGzipBytes": 5000
+    },
+    {
+      "path": "form-guidance.js",
+      "policy": "Initial format guidance in a separate cacheable script; existing form budget unchanged.",
+      "maxRawBytes": 6500,
+      "maxGzipBytes": 2500
     }
   ]
 }

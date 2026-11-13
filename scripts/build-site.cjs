@@ -16,7 +16,7 @@ const publicFiles=[
   'recibo-whatsapp.html','recibo-whatsapp.js',
   'piloto-whatsapp.html','piloto-whatsapp.js',
   'aditivos.html','aditivos.js','amendment-ui.js','amendment.css','index.html', 'aprovacoes.html', 'aprovacoes.js', 'approval-config.js', 'approval.css', 'remote-approval-ui.js','clientes.html','comunicacao.html','valores.html','formulario.html','proposta.html',
-  'styles.css','app.js','event-readiness.js','event-operations.js','analytics.js','formulario.js','proposta.js',
+  'styles.css','app.js','event-readiness.js','event-operations.js','analytics.js','form-guidance.js','formulario.js','proposta.js',
   'production-planning.js','production-ui.js','payment-ui.js','sales-guide.js','event-metrics.js','event-workspace.js','operational-ui.js','event-data.js','event-performance.js','commercial-rules.js','commercial-dashboard.js',
   'assets/logo-embaixada.svg','assets/logo-reducao.svg','assets/venue.jpg',
   'orcamento/index.html','painel/index.html',

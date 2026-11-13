@@ -1,0 +1,18 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
+const {stripTypeScriptTypes}=require('node:module');
+function api(){const c=vm.createContext({Request,Response,URL,AbortController,Error,TypeError,setTimeout,fetch:()=>{throw Error('Unexpected network')}});vm.runInContext(stripTypeScriptTypes(fs.readFileSync(__dirname+'/../supabase/functions/_shared/mailbox-read-fetch.ts','utf8').replace(/^export /gm,'')),c);return vm.runInContext('createMailboxReadFetcher',c);}
+for(const status of [502,503,504])test('a transient GET '+status+' recovers once under the same deadline',async()=>{
+ let calls=0;const waits=[],options={method:'GET',headers:{Authorization:'SYNTHETIC_PRIVATE'},signal:new AbortController().signal};
+ const failed=new Response('SYNTHETIC_PRIVATE_BODY',{status});
+ const read=api()(async(_url,received)=>{assert.equal(received,options);return ++calls===1?failed:new Response('ok');},async ms=>{waits.push(ms)});
+ const response=await read('https://example.invalid',options);assert.equal(await response.text(),'ok');assert.equal(calls,2);assert.deepEqual(waits,[250]);assert.equal(failed.bodyUsed,true);
+});
+test('persistent failure stops after two GET attempts',async()=>{let calls=0;const read=api()(async()=>{calls++;return new Response('',{status:503})},async()=>{});assert.equal((await read('https://example.invalid')).status,503);assert.equal(calls,2)});
+for(const status of [400,401,403,404,408,429,500])test('HTTP '+status+' is never hammered with an immediate retry',async()=>{let calls=0;const read=api()(async()=>{calls++;return new Response('',{status})},async()=>assert.fail('Unexpected pause'));assert.equal((await read('https://example.invalid')).status,status);assert.equal(calls,1)});
+for(const method of ['POST','PUT','PATCH','DELETE'])test(method+' mutations and OAuth are not retried',async()=>{let calls=0;const read=api()(async()=>{calls++;return new Response('',{status:503})},async()=>assert.fail('Unexpected pause'));assert.equal((await read('https://example.invalid',{method})).status,503);assert.equal(calls,1)});
+test('Request method is respected when init omits it',async()=>{let calls=0;const read=api()(async()=>{calls++;return new Response('',{status:503})},async()=>assert.fail('Unexpected pause'));await read(new Request('https://example.invalid',{method:'POST'}));assert.equal(calls,1)});
+test('network failure of an idempotent GET gets only one recovery attempt',async()=>{let calls=0;const read=api()(async()=>{if(++calls===1)throw new TypeError('SYNTHETIC_PRIVATE_TRANSPORT');return new Response('ok')},async()=>{});assert.equal(await(await read('https://example.invalid')).text(),'ok');assert.equal(calls,2)});
+test('final transport diagnostic never includes the underlying private error',async()=>{let calls=0;const read=api()(async()=>{calls++;throw new TypeError('SYNTHETIC_PRIVATE_TRANSPORT')},async()=>{});await assert.rejects(()=>read('https://example.invalid'),{message:'provider_transport_failed'});assert.equal(calls,2)});
+test('an aborted request retains the deadline and is not repeated',async()=>{const c=new AbortController();c.abort();let calls=0;const read=api()(async()=>{calls++;throw Object.assign(new Error('SYNTHETIC_PRIVATE_TIMEOUT'),{name:'AbortError'})},async()=>assert.fail('Unexpected pause'));await assert.rejects(()=>read('https://example.invalid',{signal:c.signal}),{message:'provider_timeout'});assert.equal(calls,1)});
+test('program errors are not mistaken for transient network failures',async()=>{let calls=0;const read=api()(async()=>{calls++;throw Error('logic')},async()=>assert.fail('Unexpected pause'));await assert.rejects(()=>read('https://example.invalid'),{message:'logic'});assert.equal(calls,1)});
+
