@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planeje seu Evento | Embaixada Carioca</title>
-    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=3f99f001dc7eb3af" />
+    <link rel="stylesheet" href="./styles.css?v=20261018-synergy&amp;h=6492fec88c79a344" />
   </head>
   <body class="public-form-body">
     <a class="skip-link" href="#clientQuoteForm">Ir para o formulário</a>
@@ -128,7 +128,7 @@
               <summary id="commercialWindowsSummary">Ver janelas mais indicadas</summary>
               <span id="commercialWindow1">Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.</span>
               <span id="commercialWindow2">Início do almoço de 2ª a 6ª: Almoço Carioca.</span>
-              <span id="commercialWindow3">Após 17h de domingo a 5ª: welcome drink e coquetéis.</span>
+              <span id="commercialWindow3">A partir das 17h: welcome drink e coquetéis. Aos sábados, a partir das 18h.</span>
               <span id="commercialWindow4">Das 19h às 21h: encontros elegantes, leves e objetivos.</span>
             </details>
           </section>
@@ -187,6 +187,16 @@
                   placeholder="Ex.: primeira quinzena de agosto…"
                 />
               </label>
+            <fieldset class="form-format-start" aria-describedby="quickFormatHelp quickFormatAdvice">
+              <legend id="quickFormatTitle">Que formato você imagina?</legend>
+              <p id="quickFormatHelp">Escolha uma direção. Você pode ajustar depois ou pedir ajuda.</p>
+              <div class="form-format-start-options">
+                <button type="button" data-quick-format="breakfast" aria-pressed="false"><strong>Café da manhã / coffee break</strong><span>Manhã em dias úteis</span></button>
+                <button type="button" data-quick-format="cocktail" aria-pressed="false"><strong>Coquetel / confraternização</strong><span>A partir das 17h; sábado, das 18h</span></button>
+                <button type="button" data-quick-format="recommendation" aria-pressed="false"><strong>Outro formato / preciso de ajuda</strong><span>A equipe ajuda a definir</span></button>
+              </div>
+              <p id="quickFormatAdvice" role="status" aria-live="polite"></p>
+            </fieldset>
               <label>
                 <span id="dateFlexibleLabel">A data pode mudar?</span>
                 <select id="requestDateIsFlexible" name="data_e_flexivel" autocomplete="off">
@@ -423,6 +433,7 @@
 
     <script defer src="./vendor/supabase.js"></script>
     <script defer src="./analytics.js?v=20261018-synergy&amp;h=0ad4d90cb1097a99"></script>
-    <script defer src="./formulario.js?v=20261015-approval-closure&amp;h=0b61ac0aea352377"></script>
+    <script defer src="./form-guidance.js?v=guided-1&amp;h=51311f186fe1dd72"></script>
+    <script defer src="./formulario.js?v=20261015-approval-closure&amp;h=1f81d1cb9ae89fac"></script>
   </body>
 </html>
