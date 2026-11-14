@@ -15698,6 +15698,12 @@ function isOwnProposalSendRevision(before, after) {
     if (before.status === "proposta_pronta") {
       delete copy.proxima_acao; delete copy.proxima_acao_em;
     }
+    // The send finalizer also makes the server's commercial-content lock sticky.
+    // Recognize only its boolean false -> true transition; booking and all
+    // commercial content still have to match the reviewed revision exactly.
+    if (before.journey_commercial_locked === false && after.journey_commercial_locked === true) {
+      delete copy.journey_commercial_locked;
+    }
     if (copy.snapshot.event) delete copy.snapshot.event.signalDeadlineAt;
     return copy;
   };
