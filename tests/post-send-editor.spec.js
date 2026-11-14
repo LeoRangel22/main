@@ -12,6 +12,8 @@ async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
     const saved=await saveCurrentProposal('negociacao',null,{forSharing:true});
     if(!saved)throw Error(state.lastProposalSaveError);
     if(saved.publication_status!=='ready'||saved.status!=='proposta_pronta')throw Error('Expected reviewed publication lifecycle');
+    Object.assign(saved,{journey_commercial_locked:false,journey_booked_locked:false});
+    state.editorProposalBase=structuredClone(saved);upsertProposalState(saved);
     window.beforeSend=structuredClone(saved);
     window.realSave=state.supabase.rpc.bind(state.supabase);
     state.supabase.rpc=async(name,args)=>{
@@ -33,6 +35,7 @@ async function prepare(page,channel,{concurrent=false,readFailure=false}={}) {
       row.status='proposta_enviada';
       row.publication_status='sent';row.sent_at='2026-10-12T20:00:00Z';row.updated_at=row.sent_at;
       row.snapshot.event.signalDeadlineAt='2026-10-14T20:00:00Z';
+      row.journey_commercial_locked=true;
       if(concurrent){row.revision++;row.snapshot.event.notes='Alteração de outra pessoa';}
       upsertProposalState(row);
       return {data:{ok:true,message:'Aceito; entrega não confirmada.'}};

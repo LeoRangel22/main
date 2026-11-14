@@ -7,10 +7,12 @@ const helpers=source.slice(source.indexOf('function proposalSendContent('),sourc
 function fixture(){
   const before={id:'test',revision:2,status:'proposta_pronta',publication_status:'ready',sent_at:null,
     updated_at:'before',proxima_acao:'Enviar proposta',proxima_acao_em:'before',
+    journey_commercial_locked:false,journey_booked_locked:false,
     snapshot:{event:{notes:'approved',signalDeadlineAt:null},totals:{total:100},prices:[{id:1,price:100}]}};
   const after=structuredClone(before);
   Object.assign(after,{revision:3,status:'proposta_enviada',publication_status:'sent',sent_at:'sent',updated_at:'after',proxima_acao:'Retomar cliente',proxima_acao_em:'after'});
   after.snapshot.event.signalDeadlineAt='deadline';
+  after.journey_commercial_locked=true;
   return {before,after};
 }
 function setup(){
@@ -33,6 +35,9 @@ for(const [name,mutate] of [
   ['client response',p=>p.snapshot.clienteResposta={acao:'alteracao'}],['payment',p=>p.snapshot.pagamentoSinal={valor:100}],
   ['wrong proposal',p=>p.id='other'],['summary',p=>p._dashboard_summary=true],
   ['wrong stage',p=>p.status='confirmado'],['missing row',p=>p.snapshot=null],
+  ['invalid commercial lock',p=>p.journey_commercial_locked='true'],
+  ['missing commercial lock',p=>delete p.journey_commercial_locked],
+  ['booking lock',p=>p.journey_booked_locked=true],
 ]) test(`concurrent or incomplete ${name} never advances base`,async()=>{
   const {before,after,state,context:c}=setup();const base=state.editorProposalBase;mutate(after);
   assert.equal(await c.reconcileProposalEditorAfterSend(c.captureProposalSendEditor(before)),'conflict');
@@ -60,6 +65,21 @@ test('accepted duplicate with identical revision is safe, changed duplicate is n
 test('JSON key order does not simulate a concurrent write',()=>{
   const {before,after,context:c}=setup();after.snapshot={prices:after.snapshot.prices,totals:after.snapshot.totals,event:after.snapshot.event};
   assert.equal(c.isOwnProposalSendRevision(before,after),true);
+});
+
+test('an existing commercial lock is preserved, never cleared by reconciliation',async()=>{
+  const {before,after,state,context:c}=setup();before.journey_commercial_locked=true;
+  state.editorProposalBase=structuredClone(before);
+  assert.equal(c.isOwnProposalSendRevision(before,after),true);
+  after.journey_commercial_locked=false;const base=state.editorProposalBase;
+  assert.equal(await c.reconcileProposalEditorAfterSend(c.captureProposalSendEditor(before)),'conflict');
+  assert.equal(state.editorProposalBase,base);
+});
+
+test('a lock change without the send revision cannot advance the editor base',()=>{
+  const {before,after,context:c}=setup();before.publication_status='sent';before.sent_at=after.sent_at;
+  before.status=after.status;after.revision=before.revision;
+  assert.equal(c.isOwnProposalSendRevision(before,after),false);
 });
 test('both reviewed provider sends reconcile, without weakening server revision checks',()=>{
   for(const name of ['sendProposalWhatsAppViaZapi','sendProposalEmailViaZepto']){

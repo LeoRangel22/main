@@ -108,4 +108,31 @@ begin
 
  reset role;
 end; $$;
+
+-- A real first send advances both the revision and the sticky commercial lock.
+-- No network/provider calls: finish only records an isolated synthetic result.
+do $$
+declare actor uuid; opp uuid; send uuid; before_send public.propostas; after_send public.propostas;
+begin
+ perform set_config('request.jwt.claims','',true);
+ select id into actor from auth.users order by id limit 1;
+ assert actor is not null,'Seeded fixture actor required';
+ insert into public.oportunidades(cliente_nome,status) values('Own-send lock fixture','proposta_pronta') returning id into opp;
+ insert into public.propostas(oportunidade_id,cliente_nome,tipo_evento,data_evento,horario_evento,convidados,duracao,subtotal,taxa_servico,total,status,publication_status,is_current,snapshot)
+ values(opp,'Own-send lock fixture','Coffee Break','2099-11-18','10:00',20,2,1000,120,1120,'proposta_pronta','ready',true,
+ '{"event":{"type":"Coffee Break","date":"2099-11-18","time":"10:00","guests":20,"duration":2,"notes":"Keep local text"},"totals":{"subtotal":1000,"serviceFee":120,"total":1120}}') returning * into before_send;
+ assert not before_send.journey_commercial_locked and not before_send.journey_booked_locked;
+ insert into public.event_outbox(proposal_id,opportunity_id,fingerprint,channel,destination,body,status,approved_by,reviewed_revision)
+ values(before_send.id,opp,'own-send-lock:'||before_send.id::text,'email','fixture@example.test','Synthetic recording only','sending',actor,before_send.revision) returning id into send;
+ perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+ set local role service_role;
+ perform public.finish_event_send(send,'accepted','fixture-provider-id',null);
+ reset role;
+ select * into after_send from public.propostas where id=before_send.id;
+ assert after_send.revision=before_send.revision+1;
+ assert after_send.journey_commercial_locked and not after_send.journey_booked_locked;
+ assert after_send.publication_status='sent' and after_send.status='proposta_enviada' and after_send.sent_at is not null;
+ assert after_send.snapshot#>>'{event,signalDeadlineAt}' is not null;
+ assert (after_send.snapshot#-'{event,signalDeadlineAt}')=(before_send.snapshot#-'{event,signalDeadlineAt}');
+end; $$;
 rollback;
