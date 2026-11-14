@@ -171,16 +171,6 @@
               <span>04</span>
               <h2 id="eventDetailsTitle">Detalhes do evento</h2>
             </div>
-            <fieldset class="form-format-start" aria-describedby="quickFormatHelp quickFormatAdvice">
-              <legend id="quickFormatTitle">Que formato você imagina?</legend>
-              <p id="quickFormatHelp">Escolha uma direção. Você pode ajustar depois ou pedir ajuda.</p>
-              <div class="form-format-start-options">
-                <button type="button" data-quick-format="breakfast" aria-pressed="false"><strong>Café da manhã / coffee break</strong><span>Manhã em dias úteis</span></button>
-                <button type="button" data-quick-format="cocktail" aria-pressed="false"><strong>Coquetel / confraternização</strong><span>A partir das 17h; sábado, das 18h</span></button>
-                <button type="button" data-quick-format="recommendation" aria-pressed="false"><strong>Outro formato / preciso de ajuda</strong><span>A equipe ajuda a definir</span></button>
-              </div>
-              <p id="quickFormatAdvice" role="status" aria-live="polite"></p>
-            </fieldset>
             <div class="fields-grid event-details-grid">
               <label>
                 <span id="eventDateLabel">Data desejada</span>
@@ -197,6 +187,16 @@
                   placeholder="Ex.: primeira quinzena de agosto…"
                 />
               </label>
+            <fieldset class="form-format-start" aria-describedby="quickFormatHelp quickFormatAdvice">
+              <legend id="quickFormatTitle">Que formato você imagina?</legend>
+              <p id="quickFormatHelp">Escolha uma direção. Você pode ajustar depois ou pedir ajuda.</p>
+              <div class="form-format-start-options">
+                <button type="button" data-quick-format="breakfast" aria-pressed="false"><strong>Café da manhã / coffee break</strong><span>Manhã em dias úteis</span></button>
+                <button type="button" data-quick-format="cocktail" aria-pressed="false"><strong>Coquetel / confraternização</strong><span>A partir das 17h; sábado, das 18h</span></button>
+                <button type="button" data-quick-format="recommendation" aria-pressed="false"><strong>Outro formato / preciso de ajuda</strong><span>A equipe ajuda a definir</span></button>
+              </div>
+              <p id="quickFormatAdvice" role="status" aria-live="polite"></p>
+            </fieldset>
               <label>
                 <span id="dateFlexibleLabel">A data pode mudar?</span>
                 <select id="requestDateIsFlexible" name="data_e_flexivel" autocomplete="off">

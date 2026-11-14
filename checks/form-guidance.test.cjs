@@ -12,4 +12,3 @@ for(const [language,outside]of[['pt','fora dessa sugestão'],['en','outside this
 }
 test('no selection invents a format or injects user input',()=>{const x=render({language:'pt',selected:'',date:'PRIVATE_SYNTHETIC',time:''});assert.equal(x.nodes.get('quickFormatAdvice').textContent,'');assert.ok(x.buttons.every(b=>b.attrs['aria-pressed']==='false'));});
 test('public guidance asset is allowlisted, version-hashed and loaded before the form controller',()=>{const r=JSON.parse(fs.readFileSync('dist/release.json')),bytes=fs.readFileSync('dist/form-guidance.js'),hash=crypto.createHash('sha256').update(bytes).digest('hex'),html=fs.readFileSync('dist/formulario.html','utf8');assert.equal(r.assets['form-guidance.js'],hash);assert.ok(html.includes('form-guidance.js?v=guided-1&amp;h='+hash.slice(0,16)));assert.ok(html.indexOf('form-guidance.js?v=')<html.indexOf('formulario.js?v='));});
-

@@ -21,4 +21,3 @@ export function createMailboxReadFetcher(
   throw new Error('provider_transport_failed');
  }) as typeof fetch;
 }
-

@@ -13262,7 +13262,7 @@ body[data-page="app"] .pipeline-card.has-sales-stage { gap: 5px; }
 
 
 .public-form-body .conditional-contact-field.is-hidden { display: none; }
-.public-form-body .form-format-start { margin: 0 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.public-form-body .form-format-start { grid-column: 1 / -1; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 .public-form-body .form-format-start legend { font-weight: 800; padding: 0 4px; }
 .public-form-body .form-format-start p { font-size: .85rem; line-height: 1.5; margin: 4px 0 10px; }
 .public-form-body .form-format-start-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
