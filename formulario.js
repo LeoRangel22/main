@@ -409,7 +409,7 @@ const copy = {
     commercialWindows: [
       "Manhã de 2ª a 6ª: café da manhã, brunch e coffee break.",
       "Início do almoço de 2ª a 6ª: Almoço Carioca.",
-      "Após 17h de domingo a 5ª: welcome drink e coquetéis.",
+      "A partir das 17h: welcome drink e coquetéis. Aos sábados, a partir das 18h.",
       "Das 19h às 21h: encontros elegantes, leves e objetivos.",
     ],
     momentOptions: [
@@ -587,7 +587,7 @@ const copy = {
     commercialWindows: [
       "Weekday mornings: breakfast, brunch and coffee break.",
       "Start of lunch on weekdays: Carioca Lunch.",
-      "After 5pm from Sunday to Thursday: welcome drink and cocktails.",
+      "From 5pm: welcome drinks and cocktails. On Saturdays, from 6pm.",
       "From 7pm to 9pm: elegant, light and objective gatherings.",
     ],
     momentOptions: [
@@ -767,7 +767,7 @@ copy.es = {
     commercialWindows: [
       "Mañanas de lunes a viernes: desayuno, brunch y pausa para café.",
       "Inicio del almuerzo de lunes a viernes: Almuerzo Carioca.",
-      "Después de las 17:00, de domingo a jueves: bebida de bienvenida y cócteles.",
+      "Desde las 17:00: bebida de bienvenida y cócteles. Los sábados, desde las 18:00.",
       "De 19:00 a 21:00: encuentros elegantes, ligeros y centrados en lo esencial.",
     ],
     momentOptions: [
@@ -1942,7 +1942,15 @@ function formatReviewDate(value) {
   return `${day}/${month}/${year}`;
 }
 
+function renderQuickFormatChoice() {
+  const guidance = window.EventFormGuidance;
+  const region = document.querySelector(".form-format-start");
+  if (region) region.hidden = !guidance;
+  guidance?.render({ language: uiState.language, selected: getFormatIdByLabel(fields.eventType.value), date: fields.date.value, time: fields.time.value });
+}
+
 function renderFinalReview() {
+  renderQuickFormatChoice();
   renderFormNavigation();
   updateProgress(uiState.activeStep || "eventDetails");
   if (!finalReviewGrid) return;
@@ -2176,15 +2184,12 @@ function updateContactRequirements() {
   fields.endClientName.setAttribute("aria-required", "false");
   fields.groupName.required = false;
   fields.groupName.setAttribute("aria-required", "false");
-  endClientField?.classList.toggle("is-hidden", !agencyClient);
-  groupNameField?.classList.toggle("is-hidden", !tourismAgency);
+  endClientField?.classList.toggle("is-hidden", !agencyClient && !fields.endClientName.value.trim());
+  groupNameField?.classList.toggle("is-hidden", !tourismAgency && !fields.groupName.value.trim());
   if (!agencyClient) {
-    fields.endClientName.value = "";
-    fields.groupName.value = "";
     setFieldValidity(fields.endClientName, true);
     setFieldValidity(fields.groupName, true);
   } else if (!tourismAgency) {
-    fields.groupName.value = "";
     setFieldValidity(fields.groupName, true);
   }
   if (companyHelp) {
@@ -2430,7 +2435,7 @@ function renderRecommendations() {
     .join("");
 }
 
-function selectFormat(formatId) {
+function selectFormat(formatId, { focus = true } = {}) {
   const item = getFormatDefinition(formatId);
   if (!item) return;
   fields.eventType.value = formats[formatId].label;
@@ -2438,7 +2443,7 @@ function selectFormat(formatId) {
   renderRecommendations();
   renderFinalReview();
   schedulePartialCapture();
-  recommendationList.querySelector(`[data-format-id="${formatId}"]`)?.focus({ preventScroll: true });
+  if (focus) recommendationList.querySelector(`[data-format-id="${formatId}"]`)?.focus({ preventScroll: true });
 }
 
 function handleChoiceClick(event) {
@@ -3085,6 +3090,13 @@ updateContactGuidance();
 renderFinalReview();
 // Preserve the client's flexibility choice when restoring the page.
 form.addEventListener("click", handleChoiceClick);
+form.addEventListener("click", event => {
+  const button = event.target.closest("[data-quick-format]");
+  if (button) {
+    selectFormat(button.dataset.quickFormat, { focus: false });
+    button.focus({ preventScroll: true });
+  }
+});
 recommendationList.addEventListener("click", handleFormatClick);
 finalReviewGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-review-step]");

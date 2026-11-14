@@ -208,6 +208,8 @@ export function mailboxThreadHeaders(row:any,headerResponse:any,mailbox:string,o
 
 // Exact internal error names only. Never expose provider payloads, credentials or message content.
 const SAFE_MAILBOX_ERROR_CODES=new Set<string>([
+  "provider_timeout",
+  "provider_transport_failed",
   "transport_pending",
   "oauth_not_configured",
   "origins_invalid",

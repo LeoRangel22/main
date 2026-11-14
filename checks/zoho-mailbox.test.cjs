@@ -88,12 +88,12 @@ test('Scan cap and inconsistent duplicate metadata never produce a successful cu
 });
 
 async function handler(options={}){
- let serve;const fetches=[],rpcCalls=[],events=[];
+ let serve;const fetches=[],rpcCalls=[],events=[],diagnostics=[];
  const rows=options.rows||[row()];
  const cfg={enabled:true,channel_enabled:true,job_key:'job-key',account_id:accountId,mailbox,expected_account:mailbox,watermark_ms:now-600000,activated_at_ms:now-3600000,version:4,capture_send_ids:['00000000-0000-4000-8000-000000000001'],capture_started_at_ms:now-60000,capture_expires_at_ms:now+600000,capture_message_limit:20,capture_used_messages:0,...options.config};
  const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'never-visible',EVENT_MAILBOX_CLIENT_ID:'client',EVENT_MAILBOX_CLIENT_SECRET:'never-visible-client',EVENT_MAILBOX_REFRESH_TOKEN:'never-visible-refresh',...options.env};
  const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'||name==='event_mailbox_resolve_routed_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};if(options.bindingSequence)return{data:options.bindingSequence.shift()};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
- const sandbox=vm.createContext({...native,Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
+ const sandbox=vm.createContext({...native,console:{warn:value=>diagnostics.push(JSON.parse(value))},Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
    if(url.endsWith('/api/accounts'))return json(options.account||account());
@@ -103,9 +103,9 @@ async function handler(options={}){
    if(url.endsWith('/content?includeBlockContent=false'))return json(content);
    throw Error('Unexpected endpoint');
  }});
- for(const f of ['_shared/channel-events.ts','_shared/zoho-mailbox.ts','_shared/mailbox-reply-route.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
+ for(const f of ['_shared/channel-events.ts','_shared/mailbox-read-fetch.ts','_shared/zoho-mailbox.ts','_shared/mailbox-reply-route.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
  const response=await serve(new Request('https://example.test/worker',{method:options.method||'POST',headers:{'x-event-job-key':options.key||'job-key'},body:options.method==='GET'?undefined:(options.body??JSON.stringify({action:options.action||'sync'}))}));
- return{status:response.status,body:await response.json(),fetches,rpcCalls,events};
+ return{status:response.status,body:await response.json(),fetches,rpcCalls,events,diagnostics,retryAfter:response.headers.get('Retry-After')};
 }
 test('Dormant sync and unauthorized request make zero provider calls',async()=>{for(const options of [{config:{enabled:false}},{config:{channel_enabled:false}},{key:'bad'}]){const r=await handler(options);assert.ok([401,409].includes(r.status));assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);}});
 test('Malformed, unknown and large requests cannot invoke configuration or providers',async()=>{for(const body of ['null','[]','bad','{"action":"activate"}','{"action":"sync","approved":true}','x'.repeat(3000)]){const r=await handler({body});assert.equal(r.status,400);assert.equal(r.rpcCalls.length,0);assert.equal(r.fetches.length,0);}});
@@ -213,3 +213,5 @@ test('routed worker unknown capability stays metadata-only without RFC fallback'
  const r=await handler({header:headers({To:[routeAddress]}),binding:null});
  assert.equal(r.status,200);assert.equal(r.events[0].state,'review_required');assert.equal(r.events[0].event,null);assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_resolve_binding'),false);
 });
+
+test('worker failure diagnostics contain only an allowlisted code and stage, never private values',async()=>{const r=await handler({header:headers({'Message-Id':['never-visible-private-header']})});assert.equal(r.status,503);assert.equal(r.retryAfter,'120');assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);assert.equal(r.diagnostics.length,1);assert.deepEqual(Object.keys(r.diagnostics[0]).sort(),['code','event','stage']);assert.equal(r.diagnostics[0].stage,'binding');assert.equal(r.diagnostics[0].code,'message_id_invalid');assert.equal(JSON.stringify(r.diagnostics).includes('never-visible'),false);});
