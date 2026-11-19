@@ -88,24 +88,25 @@ test('Scan cap and inconsistent duplicate metadata never produce a successful cu
 });
 
 async function handler(options={}){
- let serve;const fetches=[],rpcCalls=[],events=[],diagnostics=[];
+ let serve;const fetches=[],rpcCalls=[],events=[],diagnostics=[],metrics=[];
  const rows=options.rows||[row()];
  const cfg={enabled:true,channel_enabled:true,job_key:'job-key',account_id:accountId,mailbox,expected_account:mailbox,watermark_ms:now-600000,activated_at_ms:now-3600000,version:4,capture_send_ids:['00000000-0000-4000-8000-000000000001'],capture_started_at_ms:now-60000,capture_expires_at_ms:now+600000,capture_message_limit:20,capture_used_messages:0,...options.config};
  const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'never-visible',EVENT_MAILBOX_CLIENT_ID:'client',EVENT_MAILBOX_CLIENT_SECRET:'never-visible-client',EVENT_MAILBOX_REFRESH_TOKEN:'never-visible-refresh',...options.env};
  const worker={rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='event_mailbox_worker_config')return{data:rpcCalls.filter(c=>c.name==='event_mailbox_worker_config').length>1?{...cfg,...options.changedConfig}:cfg};if(name==='event_mailbox_oauth_worker_credential'){if(options.vaultFailure)return{error:{message:'never-visible'}};return{data:options.vaultCredential||{available:false}};}if(name==='event_mailbox_resolve_binding'||name==='event_mailbox_resolve_routed_binding'){if(options.resolveFailure)return{error:{message:'never-visible'}};if(options.bindingSequence)return{data:options.bindingSequence.shift()};return{data:options.binding===undefined?{version:1,account_id:accountId,mailbox,send_id:'00000000-0000-4000-8000-000000000001',send_attempt:1,proposal_id:'00000000-0000-4000-8000-000000000002',proposal_revision:2,opportunity_id:'00000000-0000-4000-8000-000000000003',outbound_message_id:'<proposal@example.test>',origin:'verified_outbound_header',evidence_sha256:'a'.repeat(64)}:options.binding};}if(name==='event_mailbox_seen')return{data:options.seen||[]};if(name==='event_mailbox_commit_bound'){if(options.commitFailure)return{error:{message:'conflict'}};events.push(...args.items);return{};}throw Error('Unexpected RPC');}};
- const sandbox=vm.createContext({...native,console:{warn:value=>diagnostics.push(JSON.parse(value))},Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
+ const sandbox=vm.createContext({...native,console:{warn:value=>diagnostics.push(JSON.parse(value)),info:value=>{if(options.logFailure)throw Error('never-visible-logger');metrics.push(JSON.parse(value));}},Deno:{env:{get:k=>env[k]},serve:fn=>serve=fn},createClient:()=>worker,fetch:async(url,opts)=>{
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
    if(url.endsWith('/api/accounts'))return json(options.account||account());
    if(url.endsWith('/folders'))return json({data:[{folderId,folderType:'Inbox'},{folderId:'2',folderType:'Sent'}]});
    if(url.includes('/messages/search?')){const start=Number(new URL(url).searchParams.get('start'));return json({data:rows.slice(start-1,start+99)});}
+   if(url.includes('/messages/view?')){if(options.inboxFailure)return new Response('never-visible',{status:401});const start=Number(new URL(url).searchParams.get('start')),listed=options.inboxRows??rows.filter(r=>r.folderId===folderId);return json({data:listed.slice(start-1,start+99)});}
    if(url.endsWith('/header?raw=false'))return json(options.header||headers({'Message-Id':[`<${url.match(/messages\/(\d+)/)[1]}@example.test>`]}));
    if(url.endsWith('/content?includeBlockContent=false'))return json(content);
    throw Error('Unexpected endpoint');
  }});
  for(const f of ['_shared/channel-events.ts','_shared/mailbox-read-fetch.ts','_shared/zoho-mailbox.ts','_shared/mailbox-reply-route.ts','_shared/mailbox-thread-guard.ts','_shared/mailbox-capture-scope.ts','_shared/mailbox-token-source.ts','event-mailbox-sync/index.ts'])vm.runInContext(source(f),sandbox);
  const response=await serve(new Request('https://example.test/worker',{method:options.method||'POST',headers:{'x-event-job-key':options.key||'job-key'},body:options.method==='GET'?undefined:(options.body??JSON.stringify({action:options.action||'sync'}))}));
- return{status:response.status,body:await response.json(),fetches,rpcCalls,events,diagnostics,retryAfter:response.headers.get('Retry-After')};
+ return{status:response.status,body:await response.json(),fetches,rpcCalls,events,diagnostics,metrics,retryAfter:response.headers.get('Retry-After')};
 }
 test('Dormant sync and unauthorized request make zero provider calls',async()=>{for(const options of [{config:{enabled:false}},{config:{channel_enabled:false}},{key:'bad'}]){const r=await handler(options);assert.ok([401,409].includes(r.status));assert.equal(r.fetches.length,0);assert.equal(r.events.length,0);}});
 test('Malformed, unknown and large requests cannot invoke configuration or providers',async()=>{for(const body of ['null','[]','bad','{"action":"activate"}','{"action":"sync","approved":true}','x'.repeat(3000)]){const r=await handler({body});assert.equal(r.status,400);assert.equal(r.rpcCalls.length,0);assert.equal(r.fetches.length,0);}});
@@ -116,8 +117,8 @@ test('A quoted comma in an ordinary sender name does not stall the entire sync b
  const r=await handler({header:headers({From:['"Doe, Jane" <client@example.test>'],To:[`"Events, Team" <${mailbox}>`]})});
  assert.equal(r.status,200);assert.equal(r.events.length,1);assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_commit_bound').length,1);
 });
-test('20-item batch advances only to processed boundary and retains more work',async()=>{const r=await handler({rows:Array.from({length:25},(_,i)=>row(String(1700000000000000000n+BigInt(i)),received+i))});assert.equal(r.status,200);assert.equal(r.body.hasMore,true);assert.equal(r.events.length,20);const c=r.rpcCalls.find(c=>c.name==='event_mailbox_commit_bound');assert.equal(c.args.next_watermark_ms,received+19);assert.equal(c.args.expected_version,4);});
-test('Same-timestamp overflow and duplicate window replay do not drop unseen IDs',async()=>{const rows=Array.from({length:25},(_,i)=>row(String(1700000000000000000n+BigInt(i)),received));const first=await handler({rows});assert.equal(first.events.length,20);const second=await handler({rows,seen:first.events.map(e=>e.provider_id),config:{watermark_ms:received,version:5}});assert.equal(second.events.length,5);assert.equal(second.body.hasMore,false);});
+test('API-budgeted batch advances only to the processed boundary and retains more work',async()=>{const r=await handler({rows:Array.from({length:25},(_,i)=>row(String(1700000000000000000n+BigInt(i)),received+i))});assert.equal(r.status,200);assert.equal(r.body.hasMore,true);assert.ok(r.events.length>0&&r.events.length<20);const c=r.rpcCalls.find(c=>c.name==='event_mailbox_commit_bound');assert.equal(c.args.next_watermark_ms,received+r.events.length-1);assert.equal(c.args.expected_version,4);assert.ok(r.metrics[0].discovery.api_reads<=26);});
+test('Same-timestamp overflow across quota-limited cycles does not drop or duplicate unseen IDs',async()=>{const rows=Array.from({length:25},(_,i)=>row(String(1700000000000000000n+BigInt(i)),received)),seen=[];let more=true;for(let cycle=0;more&&cycle<5;cycle++){const r=await handler({rows,seen:[...seen],config:{watermark_ms:received,version:4+cycle}});assert.equal(r.status,200);assert.ok(r.metrics[0].discovery.api_reads<=26);seen.push(...r.events.map(e=>e.provider_id));more=r.body.hasMore;}assert.equal(more,false);assert.equal(seen.length,25);assert.equal(new Set(seen).size,25);});
 test('Provider, account, parser, and commit failures preserve cursor and redact diagnostics',async()=>{
  for(const options of [{failFetch:true},{account:{data:[]}},{header:headers({'Message-Id':['bad']})},{commitFailure:true}]){const r=await handler(options);assert.equal(r.status,503);assert.equal(r.events.length,0);assert.equal(JSON.stringify(r.body).includes('never-visible'),false);if(!options.commitFailure)assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);}
 });
@@ -214,4 +215,29 @@ test('routed worker unknown capability stays metadata-only without RFC fallback'
  assert.equal(r.status,200);assert.equal(r.events[0].state,'review_required');assert.equal(r.events[0].event,null);assert.equal(r.fetches.some(f=>f.url.includes('/content?')),false);assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_resolve_binding'),false);
 });
 
-test('worker failure diagnostics contain only an allowlisted code and stage, never private values',async()=>{const r=await handler({header:headers({'Message-Id':['never-visible-private-header']})});assert.equal(r.status,503);assert.equal(r.retryAfter,'120');assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);assert.equal(r.diagnostics.length,1);assert.deepEqual(Object.keys(r.diagnostics[0]).sort(),['code','event','stage']);assert.equal(r.diagnostics[0].stage,'binding');assert.equal(r.diagnostics[0].code,'message_id_invalid');assert.equal(JSON.stringify(r.diagnostics).includes('never-visible'),false);});
+test('worker failure diagnostics contain only allowlisted stage/code and aggregate counts, never private values',async()=>{const r=await handler({header:headers({'Message-Id':['never-visible-private-header']})});assert.equal(r.status,503);assert.equal(r.retryAfter,'120');assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);assert.equal(r.diagnostics.length,1);assert.deepEqual(Object.keys(r.diagnostics[0]).sort(),['code','discovery','event','stage']);assert.equal(r.diagnostics[0].stage,'binding');assert.equal(r.diagnostics[0].code,'message_id_invalid');assert.equal(JSON.stringify(r.diagnostics).includes('never-visible'),false);});
+
+test('indexed search omission is rescued by the verified Inbox tail and counted separately',async()=>{
+ const r=await handler({rows:[],inboxRows:[row()]});assert.equal(r.status,200);assert.equal(r.events.length,1);assert.equal(r.events[0].state,'prepared');
+ assert.equal(r.metrics.length,1);const m=r.metrics[0];assert.equal(m.stage,'committed');assert.equal(m.discovery.search_in_window,0);assert.equal(m.discovery.inbox_only,1);assert.equal(m.discovery.union,1);assert.equal(m.outcomes.prepared,1);assert.ok(m.latency.max_age_seconds>=300);
+});
+test('overlapping sources and already-seen rows never fetch or store the response twice',async()=>{
+ const one=await handler();assert.equal(one.events.length,1);assert.equal(one.metrics[0].discovery.inbox_only,0);assert.equal(one.fetches.filter(f=>f.url.includes('/content?')).length,1);
+ const seen=await handler({seen:[row().messageId]});assert.equal(seen.events.length,0);assert.equal(seen.metrics[0].discovery.seen,1);assert.equal(seen.fetches.some(f=>/\/(header|content)\?/.test(f.url)),false);
+});
+test('Inbox discovery errors or conflicting metadata abort before headers and cursor commit',async()=>{
+ for(const options of [{inboxFailure:true},{inboxRows:[row(row().messageId,received-1)]},{inboxRows:[{...row(),fromAddress:'other@example.test'}]}]){
+  const r=await handler(options);assert.equal(r.status,503);assert.equal(r.events.length,0);assert.equal(r.rpcCalls.some(c=>c.name==='event_mailbox_commit_bound'),false);assert.equal(r.fetches.some(f=>/\/(header|content)\?/.test(f.url)),false);
+ }
+});
+test('source counts, selection reasons and age telemetry contain no message or identity data',async()=>{
+ for(const options of [{},{binding:null},{header:headers({'In-Reply-To':[]})}]){
+  const r=await handler(options);assert.equal(r.status,200);const m=r.metrics[0],serialized=JSON.stringify(m);
+  assert.deepEqual(Object.keys(m).sort(),['discovery','event','latency','outcomes','review_reasons','schema','stage']);
+  for(const privateValue of [mailbox,accountId,folderId,row().messageId,'client@example.test','never-visible','job-key','proposal@example.test','Podemos conversar'])assert.equal(serialized.includes(privateValue),false);
+  if(options.binding===null)assert.equal(m.review_reasons.unmatched_thread,1);
+ }
+});
+test('telemetry failure after a successful commit cannot turn it into a resend or uncertain write',async()=>{
+ const r=await handler({logFailure:true});assert.equal(r.status,200);assert.equal(r.events.length,1);assert.equal(r.rpcCalls.filter(c=>c.name==='event_mailbox_commit_bound').length,1);assert.equal(r.fetches.filter(f=>f.url.includes('/content?')).length,1);
+});

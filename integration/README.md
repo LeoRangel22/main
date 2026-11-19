@@ -33,3 +33,17 @@ The browser blocks external requests. These tests do not contact ZeptoMail or
 Zoho, deploy functions, enable production capture, send email, register payment
 or reserve an event. Passing them does not establish the cause of a production
 message omitted by the Zoho API scan, nor does it replace live homologation.
+
+The separate continuous-discovery case extends this proof to delayed visibility:
+an already-advanced cursor, V1 technical revision 2 versus current revision 4,
+the same already-eligible 3h35-old ID/time exposed by Inbox throughout while search
+omits it, transient GET retry, indexed source catch-up, failure without cursor
+advance and durable duplicate-free readback. The pinned v49 entry fixture matches
+the search-only deployed entry; it advances without discovering the item before
+the candidate imports it from the identical provider catalogue. The search mock
+honors `receivedTime`; the folder mock rejects that undocumented parameter. API
+budget batches, duplicate-free equal timestamps and uncertain commit readback are
+also verified with real SQL. Vault strings and connection/control rows are synthetic,
+scoped to this disposable database and removed/disabled before the fixture commit.
+See [mailbox discovery](../docs/mailbox-discovery.md) for the sampling limits and
+the distinction between a preventive mitigation and a proven production cause.

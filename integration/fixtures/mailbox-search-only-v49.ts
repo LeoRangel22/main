@@ -1,0 +1,78 @@
+// Regression snapshot of the deployed search-only entry point at c52849bf357a6d2272ca6eaa366882f0d4c9a270.
+// Isolated VM fixture only; never deployed.
+import { mailboxTokenEnvironment } from '../_shared/mailbox-token-source.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { sameSecret } from '../_shared/channel-events.ts';
+import { ZOHO_MAILBOX, mailboxBoundedText, mailboxToken, mailboxJson, verifyMailboxAccount, mailboxFolders, collectMailboxWindow, mailboxSafeErrorCode } from '../_shared/zoho-mailbox.ts';
+
+import { createBoundMailboxPreparer } from '../_shared/mailbox-thread-guard.ts';
+
+import { mailboxCaptureScope } from '../_shared/mailbox-capture-scope.ts';
+import { createMailboxReadFetcher } from '../_shared/mailbox-read-fetch.ts';
+
+const readMailbox=createMailboxReadFetcher();
+const respond=(status:number,data:any)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...(status===503?{'Retry-After':'120'}:{})}});
+Deno.serve(async(req:Request)=>{
+  if(req.method!=='POST')return respond(405,{ok:false,code:'method_invalid'});
+  let stage='configuration',authenticated=false;
+  try{
+    let raw;try{raw=await mailboxBoundedText(req,2048);}catch{return respond(400,{ok:false,code:'request_invalid'});}
+    let body;try{body=JSON.parse(raw);}catch{return respond(400,{ok:false,code:'request_invalid'});}
+    if(!body||typeof body!=='object'||Array.isArray(body)||!['sync','diagnose'].includes(body.action)||Object.keys(body).some(k=>k!=='action'))return respond(400,{ok:false,code:'request_invalid'});
+    const worker=createClient(Deno.env.get('SUPABASE_URL')||'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'',{auth:{persistSession:false}});
+    const {data:cfg,error}=await worker.rpc('event_mailbox_worker_config');
+    if(error||!cfg)return respond(503,{ok:false,code:'configuration_unavailable'});
+    if(!sameSecret(req.headers.get('x-event-job-key')||'',cfg.job_key))return respond(401,{ok:false,code:'origin_unauthenticated'});
+    authenticated=true;
+    let scope: ReturnType<typeof mailboxCaptureScope> | undefined; if(body.action==='sync'){try{scope=mailboxCaptureScope(cfg);}catch{return respond(409,{ok:false,code:'mailbox_capture_inactive'});}}
+    if(scope&&scope.remaining===0)return respond(200,{ok:true,processed:0,hasMore:false,code:'capture_limit'});
+    const tokenEnv=await mailboxTokenEnvironment(worker,cfg.account_id,k=>Deno.env.get(k));
+    const configured=['EVENT_MAILBOX_CLIENT_ID','EVENT_MAILBOX_CLIENT_SECRET','EVENT_MAILBOX_REFRESH_TOKEN'].every(k=>Boolean(tokenEnv(k)));
+
+    if(body.action==='sync' && (cfg.enabled!==true||cfg.channel_enabled!==true))return respond(409,{ok:false,code:'mailbox_disabled'});
+    if(!configured||!cfg.account_id||cfg.mailbox!==ZOHO_MAILBOX||cfg.expected_account!==ZOHO_MAILBOX)return respond(409,{ok:false,code:'mailbox_setup_pending',diagnostic:{oauth_configured:configured,account_pinned:Boolean(cfg.account_id),mailbox_verified:false}});
+    stage='oauth';
+    const auth=await mailboxToken(tokenEnv),base=`${auth.api}/api/accounts/${cfg.account_id}`;
+    stage='account';
+    const account=await mailboxJson(auth.api+'/api/accounts',{method:'GET',headers:auth.headers},1048576,readMailbox);
+    const owned=verifyMailboxAccount(account,cfg.account_id,cfg.mailbox);
+    if(body.action==='diagnose')return respond(200,{ok:true,diagnostic:{oauth_configured:true,mailbox_verified:true,provider:'zoho_mail',enabled:cfg.enabled===true&&cfg.channel_enabled===true}});
+    const prepare=createBoundMailboxPreparer({
+      resolve:async q=>{const {data,error}=await worker.rpc(q.reply_routes.length?'event_mailbox_resolve_routed_binding':'event_mailbox_resolve_binding',{target_account_id:q.account_id,target_mailbox:q.mailbox,sender:q.from,target_message_id:q.message_id,reply_candidates:q.reply_candidates,...(q.reply_routes.length?{reply_routes:q.reply_routes}:{})});if(error)throw new Error('thread_lookup_unavailable');return data;},
+      content:async q=>{stage='content';const {data:latest,error}=await worker.rpc('event_mailbox_worker_config');if(error||!latest||!sameSecret(req.headers.get('x-event-job-key')||'',latest.job_key)||latest.account_id!==cfg.account_id||latest.mailbox!==cfg.mailbox||latest.expected_account!==cfg.expected_account||latest.version!==cfg.version||JSON.stringify(mailboxCaptureScope(latest))!==JSON.stringify(scope))throw new Error('mailbox_capture_inactive');return mailboxJson(base+'/folders/'+q.folder_id+'/messages/'+q.provider_id+'/content?includeBlockContent=false',{method:'GET',headers:auth.headers},524288,readMailbox);}
+    });
+    const upper=Date.now()-120000;
+    if(!Number.isSafeInteger(cfg.watermark_ms)||!Number.isSafeInteger(cfg.activated_at_ms)||!Number.isSafeInteger(cfg.version))throw new Error('cursor_invalid');
+    if(upper<cfg.watermark_ms)return respond(200,{ok:true,processed:0,hasMore:false});
+    stage='folders';
+    const folders=mailboxFolders(await mailboxJson(base+'/folders',{method:'GET',headers:auth.headers},1048576,readMailbox));
+    stage='scan';
+    const scan=await collectMailboxWindow(auth.api,auth.headers,cfg.account_id,cfg.watermark_ms,cfg.activated_at_ms,upper,readMailbox);
+    if(scan.rows.some(r=>!folders.known.has(r.folderId)))throw new Error('folder_unverified');
+    const candidates=scan.rows.filter(r=>!folders.excluded.has(r.folderId));
+    stage='deduplication';
+    const {data:seen,error:seenError}=await worker.rpc('event_mailbox_seen',{provider_ids:candidates.map(r=>r.messageId)});
+    if(seenError||!Array.isArray(seen)||seen.some(id=>typeof id!=='string'))throw new Error('dedup_unavailable');
+    const seenSet=new Set(seen),unseen=candidates.filter(r=>!seenSet.has(r.messageId)),selected=unseen.slice(0,scope!.remaining),items=[];
+    // Sequential, bounded reads. A failure aborts the whole transaction and preserves the cursor.
+    for(const row of selected){
+      const path=`${base}/folders/${row.folderId}/messages/${row.messageId}`;
+      stage='header';
+      const header=await mailboxJson(path+'/header?raw=false',{method:'GET',headers:auth.headers},131072,readMailbox);
+      stage='binding';
+      const result=await prepare(cfg,row,header,owned);
+      items.push({provider_id:row.messageId,received_at_ms:row.receivedAt,state:result.state,reason:('reason' in result)?result.reason:null,inbound_message_id:('inbound_message_id' in result)?result.inbound_message_id:null,sender:('sender' in result)?result.sender:null,reply_candidates:('reply_candidates' in result)?result.reply_candidates:null,reply_routes:('reply_routes' in result)?result.reply_routes:[],binding:('binding' in result)?result.binding:null,event:('event' in result)?result.event:null});
+    }
+    const hasMore=unseen.length>selected.length;
+    const next=hasMore?Math.max(cfg.watermark_ms,selected[selected.length-1].receivedAt):upper;
+    stage='commit';
+    const {error:commitError}=await worker.rpc('event_mailbox_commit_bound',{expected_version:cfg.version,expected_account_id:cfg.account_id,expected_watermark_ms:cfg.watermark_ms,next_watermark_ms:next,items});
+    if(commitError)throw new Error('commit_conflict');
+    return respond(200,{ok:true,processed:selected.length,hasMore});
+  }catch(error){
+    const code=mailboxSafeErrorCode(error);
+    if(authenticated)console.warn(JSON.stringify({event:'mailbox_sync_failed',stage,code}));
+    return respond(503,{ok:false,code});
+  }
+});
+
