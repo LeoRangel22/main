@@ -45,8 +45,10 @@ async function reflow(page) {
   expect(result.scroll,JSON.stringify(result)).toBeLessThanOrEqual(result.width+1);
 }
 async function names(page) {
-  const controls = page.locator('input:not([type=hidden]), select, textarea, button');
-  for (const element of await controls.all()) if (await element.isVisible()) await expect(element).toHaveAccessibleName(/\S/, {timeout:1000});
+  // Filter in the browser rather than issuing one roundtrip per hidden editor
+  // control. The assertion still checks every visible native control's name.
+  const controls = page.locator('input:not([type=hidden]):visible, select:visible, textarea:visible, button:visible');
+  for (const element of await controls.all()) await expect(element).toHaveAccessibleName(/\S/, {timeout:1000});
 }
 function clean({remote,errors}) { expect(remote).toEqual([]); expect(errors).toEqual([]); }
 

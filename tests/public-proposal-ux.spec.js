@@ -122,12 +122,12 @@ test.describe("Decisão do cliente na proposta", () => {
   test("aprovação não confirma reserva e comprovante pode ser enviado depois sem nova aprovação", async ({ page }) => {
     const errors = collectBrowserErrors(page);
     await openProposal(page);
-    await page.getByRole("button", { name: "Aprovar e seguir para reserva" }).click();
+    await page.getByRole("button", { name: "Aprovar proposta" }).click();
     await expect(page.locator("#publicProposalResponseForm")).toBeVisible();
     await expect(page.locator("#publicPaymentInfoSlot")).toBeVisible();
     await page.getByRole("button", { name: "Enviar aprovação à equipe" }).click();
     await expect(page.getByText("Aprovação recebida", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Aprovar e seguir para reserva" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Aprovar proposta" })).toHaveCount(0);
     await expect(page.getByText("Sinal recebido e reserva confirmada")).toHaveCount(0);
     await page.getByRole("button", { name: "Enviar comprovante do sinal" }).click();
     await expect(page.locator("#publicLaterProofForm")).toBeVisible();
@@ -151,7 +151,7 @@ test.describe("Decisão do cliente na proposta", () => {
     await page.locator("#publicResponseMessage").fill("Trocar horário para 10h.");
     await page.getByRole("button", { name: "Enviar pedido de ajuste" }).click();
     await expect(page.getByText("Ajuste solicitado", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Aprovar e seguir para reserva" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Aprovar proposta" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Tirar dúvida no WhatsApp" })).toHaveAttribute("href", /wa\.me\/5521971426007/);
   });
 
@@ -160,9 +160,9 @@ test.describe("Decisão do cliente na proposta", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.locator(".public-proposal-summary")).toContainText("Estimated total");
     await expect(page.locator(".public-commercial-summary")).toContainText("Cable car tickets are not included");
-    await expect(page.getByRole("button", { name: "Approve and proceed to booking" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve proposal" })).toBeVisible();
     await page.getByRole("button", { name: "PT" }).click();
-    await expect(page.getByRole("button", { name: "Aprovar e seguir para reserva" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Aprovar proposta" })).toBeVisible();
   });
 
   test("nova versão destaca mudanças relevantes para o cliente", async ({ page }) => {

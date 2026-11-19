@@ -96,6 +96,9 @@ async function checks(c) {
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
   await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
+  await apply(c,'checks/approved-signal-followup.sql'); console.log('PASS approval persists signal followup and owner without financial or reservation change');
+  await apply(c,'checks/requested-adjustment-version.sql'); console.log('PASS requested 30->32 adjustment persists V2 with original content and response preserved');
+  await require('../checks/email-release-rollback.cjs')(c,sql);
   await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
   await apply(c,'checks/gerencia-identity.sql'); console.log('PASS Gerencia self-sign, authority boundaries, verification, authorship and revoke');
   await apply(c,'checks/whatsapp-single-pilot.sql'); console.log('PASS pilot owner, anonymous/other-account denial, once-only claim, uncertainty and immutable history');
@@ -107,6 +110,7 @@ async function checks(c) {
   await require('../checks/historical-classification-review.cjs')(c,sql,fixtureOwner,migrationFiles);
 }
 async function concurrent(c,name) {
+  await require('../checks/lead-alert-concurrency.cjs')(c,connect,name);
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-capture-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-reply-route-concurrency.cjs')(c,connect,name);

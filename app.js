@@ -2683,6 +2683,25 @@ function getProposalVersions(proposal) {
     .sort((a, b) => Number(b.versao || 1) - Number(a.versao || 1) || new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
+function getProposalJourneySendEvidence(proposal) {
+  if (!proposal?.id) return null;
+  const sends = typeof eventOps !== "undefined" ? eventOps.outbox || [] : [];
+  const accepted = sends.filter(row => row.proposal_id === proposal.id && row.status === "accepted" &&
+    ["email", "whatsapp"].includes(row.channel)).sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  if (accepted) {
+    const channel = accepted.channel === "email" ? "E-mail" : "WhatsApp";
+    const label = ["delivered", "read"].includes(accepted.delivery_status) ? `${channel}: entrega confirmada pelo canal`
+      : accepted.delivery_status === "failed" ? `${channel}: falha de entrega`
+      : `${channel}: aceito; entrega não confirmada`;
+    return { label, at: accepted.created_at };
+  }
+  if (proposal.publication_status === "sent" && Number.isFinite(Date.parse(proposal.sent_at))) {
+    return { label: "Registrado; entrega não confirmada", at: proposal.sent_at };
+  }
+  const legacy = getCommercialHistory(proposal.snapshot || {}).find(entry => ["email_envio", "whatsapp_envio", "envio"].includes(entry.type));
+  return legacy ? {label:"Registrado no histórico; entrega não confirmada",at:legacy.at} : null;
+}
+
 function renderProposalJourney(proposal) {
   const versions = getProposalVersions(proposal);
   const newest = versions[0];
@@ -2692,7 +2711,7 @@ function renderProposalJourney(proposal) {
     versions.find((row) => row.publication_status !== "draft");
   const views = state.proposalViews.filter((view) => view.proposta_id === published?.id);
   const lastView = views.reduce((last, view) => !last || view.created_at > last ? view.created_at : last, "");
-  const lastSend = getCommercialHistory(published?.snapshot || {}).find((entry) => ["email_envio", "whatsapp_envio", "envio"].includes(entry.type));
+  const lastSend = getProposalJourneySendEvidence(published);
   const clientResponse = published?.cliente_resposta || published?.snapshot?.clienteResposta?.acao || proposal.cliente_resposta || proposal.snapshot?.clienteResposta?.acao;
   const responseLabel = { confirmar: "Aprovou", alteracao: "Pediu ajustes", cancelar: "Não vai seguir" }[clientResponse] || "Aguardando resposta";
   return `
@@ -2703,7 +2722,7 @@ function renderProposalJourney(proposal) {
       </div>
       <div class="proposal-journey-facts">
         <div><span>Link disponível</span><strong>${published ? escapeHtml(formatSavedAt(published.created_at)) : "Não gerado"}</strong></div>
-        <div><span>Envio registrado</span><strong>${lastSend ? `${lastSend.type === "email_envio" ? "E-mail" : lastSend.type === "whatsapp_envio" ? "WhatsApp" : "Manual"} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
+        <div><span>Envio registrado</span><strong>${lastSend ? `${escapeHtml(lastSend.label)} · ${escapeHtml(formatSavedAt(lastSend.at))}` : "Ainda não registrado"}</strong></div>
         <div><span>Visualização do link</span><strong>${views.length ? `${views.reduce((sum, view) => sum + Number(view.view_count || 1), 0)} · última ${escapeHtml(formatSavedAt(lastView))}` : "Nenhuma registrada"}</strong></div>
         <div><span>Próximo passo</span><strong>${escapeHtml(getOpportunityForItem({ opportunityId: proposal.oportunidade_id })?.proxima_acao || "Definir com a equipe")}</strong></div>
       </div>
@@ -5545,7 +5564,7 @@ function isSendReviewApproved(items = getProposalReviewItems()) {
   return Boolean(state.sendReviewApprovedSignature && state.sendReviewApprovedSignature === getSendReviewSignature(items));
 }
 
-function approveSendReview() {
+function approveSendReview({ quiet = false } = {}) {
   if (!ensureTariffApplicationConfirmed()) return false;
   const items = getProposalReviewItems();
   const summary = getProposalReviewSummary(items);
@@ -5571,7 +5590,7 @@ function approveSendReview() {
     alerts: alerts.map((item) => ({ level: item.level, title: item.title, detail: item.detail, kind: item.kind })),
   };
   renderSendReview();
-  showToast("Revisão aprovada. Agora pode enviar a proposta com segurança.");
+  if (!quiet) showToast("Revisão aprovada. Agora pode enviar a proposta com segurança.");
   return true;
 }
 
@@ -11586,6 +11605,7 @@ function renderLoadedEditorBar() {
       ${activeProposal?.snapshot?.amendmentOf ? `<p role="status">Aditivo em rascunho — o acordo confirmado não foi alterado. Não liberado para envio ou execução.</p>` : ""}
       <small class="loaded-editor-trail">Funil &gt; ${escapeHtml(stageLabel)} &gt; ${escapeHtml(context.name)}${versionLabel ? ` · ${escapeHtml(versionLabel)}` : ""}${dirty ? " · alterações não salvas" : ""}</small>
       <small class="loaded-editor-quote-meta" data-editor-summary>${escapeHtml(versionLabel || "Nova proposta")} · ${getGuestCount()} pax · <b data-editor-total>${formatMoney(getQuoteTotals().total)}</b></small>
+      ${state.proposalSaveFeedback?.context === JSON.stringify([state.activeProposalId,state.activeQuoteRequestId,state.manualSourceKey]) ? `<p class="proposal-save-feedback" role="alert">${escapeHtml(state.proposalSaveFeedback.message)}</p>` : ""}
     </div>
     <div class="loaded-editor-actions">
       <button class="primary" type="button" data-editor-action="draft" aria-label="Salvar agora como rascunho" title="Salva somente o rascunho, sem enviar ao cliente.">Salvar agora</button>
@@ -14240,6 +14260,7 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   let committedProposal = null;
   try {
   state.lastProposalSaveError = "";
+  state.proposalSaveFeedback = null;
   const sessionCheck = await ensureTeamSessionForWrite("salvar a proposta");
   if (!sessionCheck.ok) {
     state.lastProposalSaveError = sessionCheck.message;
@@ -14291,13 +14312,12 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
   if (!options.asDraft && !(isContractedProposal(activeProposal) && !options.forSharing) && (options.markReady || normalizedNext === "proposta_pronta" || normalizedNext === "proposta_enviada")) {
     const reviewItems = getProposalReviewItems();
     const reviewSummary = getProposalReviewSummary(reviewItems);
-    if (!reviewSummary.ready || !isSendReviewApproved(reviewItems)) {
+    if (!reviewSummary.ready || (!isSendReviewApproved(reviewItems) && !(options.forSharing && options.forPreview))) {
       renderSendReview();
-      showToast(
-        reviewSummary.ready
+      state.lastProposalSaveError = reviewSummary.ready
           ? "Antes de deixar a proposta pronta, aprove o checklist de revisão."
-          : "Antes de deixar a proposta pronta, corrija o checklist de revisão.",
-      );
+          : "Antes de deixar a proposta pronta, corrija o checklist de revisão.";
+      showToast(state.lastProposalSaveError);
       nodes.sendReviewPanel?.scrollIntoView({ behavior: "smooth", block: "center" });
       return null;
     }
@@ -14610,6 +14630,10 @@ async function saveCurrentProposal(status, signalInfo = null, options = {}) {
     return null;
   } finally {
     state.proposalSaveInProgress = false;
+    if (sameEditor() && state.lastProposalSaveError) {
+      state.proposalSaveFeedback = {context:initialEditorIdentity,message:state.lastProposalSaveError};
+      renderLoadedEditorBar();
+    }
     syncEditorLeaveProtection();
     if (saveButton) { saveButton.disabled = wasDisabled; saveButton.removeAttribute("aria-busy"); }
   }
@@ -15350,10 +15374,14 @@ async function openPipelineCardElement(card) {
   }
 }
 
-async function ensureProposalForSharing({ forApproval = false } = {}) {
+async function ensureProposalForSharing({ forApproval = false, deferSendReview = false } = {}) {
   if (!forApproval && !(await remoteProposalMayShare())) return null;
   state.lastProposalShareError = "";
-  if (!(await ensureProposalReadyForSending())) return null;
+  if (deferSendReview) {
+    // E-mail has one final review containing the saved version and exact message.
+    // This preparation may save a draft, but never approves or sends it.
+    if (!ensureTariffApplicationConfirmed() || !getProposalReviewSummary().ready) return null;
+  } else if (!(await ensureProposalReadyForSending())) return null;
   const activeProposal = state.editorProposalBase?.id === state.activeProposalId
     ? state.editorProposalBase : state.proposals.find((item) => item.id === state.activeProposalId);
   const status = activeProposal?.status && activeProposal.status !== "cancelado" ? activeProposal.status : "proposta_pronta";
@@ -15362,7 +15390,7 @@ async function ensureProposalForSharing({ forApproval = false } = {}) {
     !activeProposal._dashboard_summary && ["ready", "sent"].includes(activeProposal.publication_status) &&
     activeProposal.public_token && !activeProposal.public_token_revoked_at &&
     Date.parse(activeProposal.public_token_expires_at) > Date.now();
-  const saved = reuseReady ? structuredClone(activeProposal) : await saveCurrentProposal(status, null, { forSharing: true });
+  const saved = reuseReady ? structuredClone(activeProposal) : await saveCurrentProposal(status, null, { forSharing: true, forPreview: deferSendReview });
   if (!saved) {
     state.lastProposalShareError = state.lastProposalSaveError || "Não foi possível salvar a proposta antes do envio.";
     return null;
@@ -15519,8 +15547,11 @@ function buildProposalWhatsAppMessage(proposalUrl) {
   return renderCommunicationTemplateText(template.whatsappBody, context, proposalUrl);
 }
 
-function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", html = "", sender = "", replyTo = "", proposalUrl = "", proposal = null }) {
+function confirmClientSend({ channel, destination, title = "Proposta comercial", action = "enviar", message = "", subject = "", html = "", sender = "", replyTo = "", proposalUrl = "", proposal = null, reviewAtConfirmation = false }) {
   const signature = getSendReviewSignature();
+  const reviewClient = state.supabase, reviewUser = state.session?.user?.id;
+  const sameEmailContext = () => channel !== "E-mail" || (state.supabase === reviewClient && state.session?.user?.id === reviewUser &&
+    (!proposal || (state.activeProposalId === proposal.id && Number(state.editorProposalBase?.revision) === Number(proposal.revision))));
   const clientName = fields.clientName.value.trim() || "cliente";
   const eventType = getCurrentEventType();
   const eventDate = fields.eventDate.value || getEventDateLabel();
@@ -15600,6 +15631,7 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
         <p class="send-confirm-details">${escapeHtml(details)}</p>
       </details>
       <label class="event-ops-check"><input type="checkbox" required/> Revisei a mensagem completa, o destinatário e as condições desta proposta.</label>
+      <p class="send-confirm-error" role="alert"></p>
       <div class="send-confirm-actions">
         <button type="submit" value="cancel" formnovalidate class="secondary">Cancelar</button>
         <button type="submit" value="confirm" class="primary">${action.startsWith("abrir") ? "Abrir e-mail" : "Confirmar envio"}</button>
@@ -15608,10 +15640,20 @@ function confirmClientSend({ channel, destination, title = "Proposta comercial",
     document.body.append(dialog);
     const emailFrame = dialog.querySelector(".send-confirm-email");
     if (emailFrame) emailFrame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">' + html;
+    dialog.querySelector("form").addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "confirm") return;
+      if (!sameEmailContext() || signature !== getSendReviewSignature() || (reviewAtConfirmation && !getProposalReviewSummary().ready)) {
+        event.preventDefault();
+        dialog.querySelector(".send-confirm-error").textContent = "A proposta ou a sessão mudou. Volte e revise a versão atual.";
+        dialog.querySelector('[value="confirm"]').disabled = true;
+        return;
+      }
+      if (reviewAtConfirmation && !approveSendReview({ quiet: true })) event.preventDefault();
+    });
     dialog.addEventListener("close", () => {
       const unchanged = signature === getSendReviewSignature();
       if (dialog.returnValue === "confirm" && !unchanged) showToast("Os dados mudaram. Revise a mensagem novamente antes de enviar.");
-      resolve(dialog.returnValue === "confirm" && unchanged && Boolean(message.trim()));
+      resolve(dialog.returnValue === "confirm" && unchanged && sameEmailContext() && Boolean(message.trim()) && (!reviewAtConfirmation || isSendReviewApproved()));
       dialog.remove();
     }, { once: true });
     showStableSendDialog(dialog);
@@ -15904,11 +15946,14 @@ async function sendProposalWhatsAppViaZapi({ proposal, proposalUrl, message, tit
   }
 }
 
-async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial" }) {
+async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message, subject, title = "Proposta comercial", reviewAtConfirmation = false }) {
   const outcomeContext = {client: state.supabase, user: state.session?.user?.id};
   const approvalEnabled = await remoteProposalApprovalEnabled();
   if (approvalEnabled === null) return false;
-  if (approvalEnabled) return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
+  if (approvalEnabled) {
+    if (reviewAtConfirmation && !(await ensureProposalReadyForSending())) return false;
+    return requestRemoteProposalApproval("email", { proposal, proposalUrl, email, message, subject, title });
+  }
   if (proposalDispatchGuard() || hasPendingProposalWrite()) {
     showToast("Aguarde o envio ou a gravação atual terminar. Suas alterações continuam no editor.");
     return false;
@@ -15960,6 +16005,7 @@ async function sendProposalEmailViaZepto({ proposal, proposalUrl, email, message
       title,
       message: emailPreview.text, html: emailPreview.html, sender: emailPreview.sender, replyTo:emailPreview.replyTo,
       subject: emailPreview.subject, proposalUrl, proposal,
+      reviewAtConfirmation,
       action: "enviar agora pelo ZeptoMail e registrar no histórico",
     });
     if (!confirmed) {
@@ -16056,8 +16102,11 @@ async function openEmail() {
     fields.clientEmail?.focus?.();
     return;
   }
-  if (!(await ensureProposalReadyForSending())) return;
-  const share = await ensureProposalForSharing({ forApproval: true });
+  if (!getProposalReviewSummary().ready) {
+    await ensureProposalReadyForSending();
+    return;
+  }
+  const share = await ensureProposalForSharing({ forApproval: true, deferSendReview: true });
   if (!share?.saved || !share?.url) {
     const detail = state.lastProposalShareError || "E-mail não enviado: não foi possível gerar o link seguro da proposta.";
     createIntegrationLog({
@@ -16075,6 +16124,7 @@ async function openEmail() {
     proposalUrl: share.url,
     email,
     title: "Proposta comercial",
+    reviewAtConfirmation: true,
   });
 }
 

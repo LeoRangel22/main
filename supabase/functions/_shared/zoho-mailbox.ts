@@ -91,7 +91,7 @@ export function mailboxFolders(response:any) {
   for(const f of response.data){const id=mailboxId(f?.folderId);if(known.has(id)||typeof f.folderType!=='string')throw new Error('folders_invalid');known.add(id);if(['sent','drafts','trash','spam','outbox','templates'].includes(f.folderType.toLowerCase()))excluded.add(id);}
   return {known,excluded};
 }
-export async function collectMailboxWindow(api:string,headers:Record<string,string>,accountId:string,watermark:number,activatedAt:number,upper:number,fetcher:typeof fetch=fetch) {
+export async function collectMailboxWindow(api:string,headers:Record<string,string>,accountId:string,watermark:number,activatedAt:number,upper:number,fetcher:typeof fetch=fetch,observe?:(metadata:{messageId:string;folderId:string;receivedAt:number})=>void) {
   mailboxId(accountId);milliseconds(watermark);milliseconds(activatedAt);milliseconds(upper);
   if(watermark<activatedAt||upper<watermark)throw new Error('cursor_invalid');
   // Date search is deliberately broader than the millisecond filter. No unread filter.
@@ -100,7 +100,7 @@ export async function collectMailboxWindow(api:string,headers:Record<string,stri
     const query=new URLSearchParams({searchKey:`fromDate:${dateSyntax(lower-86400000)}::groupResult:false`,receivedTime:String(upper),start:String(page*100+1),limit:'100',includeto:'true'});
     const result=await mailboxJson(`${api}/api/accounts/${accountId}/messages/search?${query}`,{method:'GET',headers},1048576,fetcher);
     if(!Array.isArray(result.data)||result.data.length>100)throw new Error('messages_invalid');
-    for(const row of result.data){const id=mailboxId(row?.messageId),folderId=mailboxId(row?.folderId),receivedAt=milliseconds(row.receivedTime??row.receivedtime);if(found.has(id)){const old=found.get(id);if(old.receivedAt!==receivedAt||old.folderId!==folderId)throw new Error('scan_changed');continue;}if(receivedAt>=lower&&receivedAt<=upper)found.set(id,{...row,messageId:id,folderId,receivedAt});}
+    for(const row of result.data){const id=mailboxId(row?.messageId),folderId=mailboxId(row?.folderId),receivedAt=milliseconds(row.receivedTime??row.receivedtime);observe?.({messageId:id,folderId,receivedAt});if(found.has(id)){const old=found.get(id);if(old.receivedAt!==receivedAt||old.folderId!==folderId)throw new Error('scan_changed');continue;}if(receivedAt>=lower&&receivedAt<=upper)found.set(id,{...row,messageId:id,folderId,receivedAt});}
     if(result.data.length<100)return {lower,upper,rows:[...found.values()].sort((a,b)=>a.receivedAt-b.receivedAt||a.messageId.localeCompare(b.messageId))};
   }
   // Offset scan exceeded the bounded window. Never claim completion or move the cursor.

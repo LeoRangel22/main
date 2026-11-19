@@ -156,6 +156,9 @@ test('aprovação final mostra corpo e invalida mudança de dados durante revis�
   await page.evaluate(()=>{window.qaReviewResult=null;confirmClientSend({channel:'E-mail',destination:'review@example.test',subject:'Assunto exato',message:'Mensagem completa revisada\nLinha final',proposalUrl:'https://example.test/proposta'}).then(result=>window.qaReviewResult=result);});
   const d=page.locator('.send-confirm-dialog');await expect(d.locator('.send-confirm-message')).toHaveValue('Mensagem completa revisada\nLinha final');await expect(d).toContainText('Assunto exato');
   await d.locator('input[type="checkbox"]').check();await page.evaluate(()=>fields.clientEmail.value='changed@example.test');await d.getByRole('button',{name:'Confirmar envio'}).click();
+  await expect(d.getByRole('alert')).toContainText('mudou');
+  await expect(d.getByRole('button',{name:'Confirmar envio'})).toBeDisabled();
+  await d.getByRole('button',{name:'Cancelar',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>window.qaReviewResult)).toBe(false);
 });
 

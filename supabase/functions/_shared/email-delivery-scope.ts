@@ -1,4 +1,5 @@
 import { providerFetch } from './email-delivery.ts';
+import { emailDeliveryPin,emailLogEvidence } from './email-provider-evidence.ts';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const fields = (value: any, keys: string[]) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k));
@@ -84,17 +85,16 @@ export async function reconcileScopedEmailDeliveries(worker: any, scope: any) {
       try { logs = await providerFetch(url.href, { headers: { Authorization: 'Zoho-oauthtoken ' + token.access_token } }); }
       catch { results.push({ sendId: row.id, state: 'uncertain' }); return fail('provider_result_uncertain'); }
       if (!await configuration() || !open()) return fail('window_or_configuration_changed');
-      if (!logs || logs.status !== 'success' || Object.hasOwn(logs, 'error') || !Array.isArray(logs.data) || logs.data.length > 100) return fail('provider_result_invalid');
-      const exact = logs.data.filter((r: any) => r && r.request_id === row.provider_id && r.mailagent_key === scope.agent && typeof r.to === 'string' && r.to.trim().toLowerCase() === row.destination);
-      if (exact.length !== 1) return fail('provider_correlation_uncertain');
-      if (exact[0].status !== 'delivered') { results.push({ sendId: row.id, state: 'not_confirmed' }); continue; }
-      if (exact[0].email_reference != null && !safeText(exact[0].email_reference)) return fail('provider_result_invalid');
+      const pin=emailDeliveryPin(row);let evidence;
+      try{evidence=emailLogEvidence(logs,pin,scope.agent);}catch{return fail('provider_result_invalid');}
+      if(!evidence)return fail('provider_correlation_uncertain');
+      if(!evidence.delivered){results.push({sendId:row.id,state:'not_confirmed'});continue;}
       // Do not reuse the broad poller's key: an old pending event may already
       // bind that key to another send. This namespace pins this exact attempt.
-      const saved = await worker.rpc('ingest_event_provider_events', { target_provider: 'zepto', events: [{ key: 'scoped-log-delivered:' + row.id + ':' + row.attempts + ':' + row.provider_id, channel: 'email', kind: 'status', message_id: row.provider_id, provider_reference: exact[0].email_reference || null, send_id: row.id, send_attempt: row.attempts, destination: row.destination, signal: 'delivered', occurred_at: new Date().toISOString() }] });
+      const saved = await worker.rpc('ingest_event_provider_events', { target_provider: 'zepto', events: [{ key: 'scoped-log-delivered:' + row.id + ':' + row.attempts + ':' + row.provider_id, channel: 'email', kind: 'status', message_id: row.provider_id, provider_reference: evidence.reference, send_id: row.id, send_attempt: row.attempts, destination: row.destination, signal: 'delivered', occurred_at: new Date().toISOString() }] });
       if (saved.error) return fail('persistence_uncertain');
-      const readback = await worker.from('event_outbox').select('id,proposal_id,reviewed_revision,provider_id,attempts,delivery_status').eq('id', row.id).maybeSingle();
-      if (readback.error || readback.data?.proposal_id !== row.proposal_id || readback.data?.reviewed_revision !== row.reviewed_revision || readback.data?.provider_id !== row.provider_id || readback.data?.attempts !== row.attempts || !['delivered', 'read'].includes(readback.data?.delivery_status)) return fail('readback_uncertain');
+      const readback = await worker.from('event_outbox').select('id,proposal_id,reviewed_revision,provider_id,attempts,destination,channel,status,delivery_status').eq('id', row.id).maybeSingle();
+      if (readback.error || !readback.data || Object.entries(pin).some(([key,value])=>readback.data[key]!==value) || readback.data.channel!=='email' || readback.data.status!=='accepted' || !['delivered', 'read'].includes(readback.data.delivery_status)) return fail('readback_uncertain');
       results.push({ sendId: row.id, state: 'confirmed' });
     }
     return { ok: results.length === 2 && results.every(r => r.state === 'confirmed'), code: 'completed', results, automaticSyncChanged: false, messageAttempted: false };
