@@ -34,8 +34,8 @@ jobs:
             test-results/
           retention-days: 7
   database:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -62,6 +62,18 @@ jobs:
         run: bash scripts/restore-test.sh
         env:
           PG_TEST_CONTAINER: ${{ job.services.postgres.id }}
+      - run: npx playwright install --with-deps chromium
+      - name: Normal adjustment UI and mailbox worker against isolated PostgreSQL
+        run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgres://postgres:event-test-only@127.0.0.1:5432/postgres
+      - name: Retain isolated database integration evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: database-integration-evidence
+          path: database-integration-results/
+          retention-days: 7
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 12

@@ -81,7 +81,8 @@ async function apply(c,file) {
   if(privateSignoffs) { await apply(c,'checks/private-signoffs-upgrade-assert.sql'); console.log('PASS private signoffs install dormant, preserve existing public functions, evidence, identities and channels'); }
 }
 async function create(name) {
-  await admin.query(`create database ${name}`);
+  // JSON snapshots/history contain Unicode on every platform, including Windows.
+  await admin.query(`create database ${name} encoding 'UTF8' template template0`);
   const c=await connect(name);
   await apply(c,'supabase/bootstrap/platform-test.sql');
   for (const f of JSON.parse(sql('supabase/bootstrap/manifest.json'))) await apply(c,f);
