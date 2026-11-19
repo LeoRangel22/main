@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const address = new URL(process.env.TEST_DATABASE_URL || 'postgres://postgres:event-test-only@127.0.0.1:5432/postgres');
 if (!['localhost','127.0.0.1','postgres'].includes(address.hostname)) throw Error('Only an isolated local test database is permitted');
 const admin = new Client({ connectionString: address.toString() });
-const sql = (file) => fs.readFileSync(path.join(root,file),'utf8');
+const sql = (file) => fs.readFileSync(path.join(root,file),'utf8').replace(/\r\n/g,'\n');
 const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }

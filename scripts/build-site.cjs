@@ -24,7 +24,11 @@ const publicFiles=[
 fs.rmSync(dest,{recursive:true,force:true});
 for(const file of publicFiles) {
   const target=path.join(dest,file); fs.mkdirSync(path.dirname(target),{recursive:true});
-  fs.copyFileSync(path.join(root,file),target);
+  // Git checkouts may use CRLF on Windows. Emit the same UTF-8 text artifact
+  // everywhere so byte budgets, release hashes and SQL/browser CI agree.
+  if (/\.(?:js|css|html|svg)$/.test(file)) {
+    fs.writeFileSync(target,fs.readFileSync(path.join(root,file),'utf8').replace(/\r\n/g,'\n'));
+  } else fs.copyFileSync(path.join(root,file),target);
 }
 const supabaseEntry=path.join(path.dirname(require.resolve('@supabase/supabase-js/package.json')),'dist/module/index.js');
 esbuild.buildSync({entryPoints:[supabaseEntry],bundle:true,format:'iife',globalName:'supabase',platform:'browser',target:['es2020'],minify:true,outfile:path.join(dest,'vendor/supabase.js')});

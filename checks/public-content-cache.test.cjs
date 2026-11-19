@@ -48,6 +48,7 @@ test('publication includes current application, portal and production code under
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'dist/release.json'),'utf8'));
  for(const [page,asset] of [['index.html','app.js'],['index.html','production-ui.js'],['proposta.html','proposta.js']]){
   const html=fs.readFileSync(path.join(root,'dist',page),'utf8');assert.ok(html.includes('h='+manifest.assets[asset].slice(0,16)));
-  assert.equal(sha(fs.readFileSync(path.join(root,asset))),manifest.assets[asset]);
+  const canonical=fs.readFileSync(path.join(root,asset),'utf8').replace(/\r\n/g,'\n');
+  assert.equal(sha(Buffer.from(canonical,'utf8')),manifest.assets[asset]);
  }
 });
