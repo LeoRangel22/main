@@ -465,18 +465,25 @@ Deno.serve(async (req) => {
         token: Boolean(zeptoToken),
         fromEmail: Boolean(fromEmail),
         toEmail: Boolean(toEmail),
+        destinationMatchesEvents: toEmail.trim().toLowerCase() === "eventos@embaixadacarioca.com.br",
+        recipientCount: 1,
       },
     })
   }
 
   const configuredSecret = Deno.env.get("LEAD_WEBHOOK_SECRET")
-  if (!configuredSecret) {
-    return response({ ok: false, error: "LEAD_WEBHOOK_SECRET not configured" }, 500)
+  const receivedSecret = req.headers.get("x-webhook-secret")
+  if (!receivedSecret || receivedSecret.length > 8192) {
+    return response({ ok: false, error: "Unauthorized" }, 401)
   }
 
-  const receivedSecret = req.headers.get("x-webhook-secret")
-  if (!receivedSecret || receivedSecret !== configuredSecret) {
-    return response({ ok: false, error: "Unauthorized" }, 401)
+  const worker=createClient(Deno.env.get('SUPABASE_URL')||'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'',{auth:{persistSession:false}})
+  try {
+    const auth=await worker.rpc('event_authorize_lead_webhook',{candidate_secret:receivedSecret})
+    if(auth.error||typeof auth.data?.valid!=='boolean'||typeof auth.data?.legacyAllowed!=='boolean')throw Error('auth_unavailable')
+    if(!auth.data.valid&&!(auth.data.legacyAllowed&&configuredSecret&&receivedSecret===configuredSecret))return response({ok:false,error:'Unauthorized'},401)
+  } catch {
+    return response({ok:false,error:'Authentication unavailable'},503)
   }
 
   try {
@@ -493,7 +500,6 @@ Deno.serve(async (req) => {
       return response({ ok: true, skipped: true, reason: "Missing record" })
     }
 
-    const worker=createClient(Deno.env.get('SUPABASE_URL')||'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'',{auth:{persistSession:false}})
     let ids: string[]
     if(payload.action==='scan-abandoned') {
       const due=await worker.rpc('event_due_lead_alerts')
