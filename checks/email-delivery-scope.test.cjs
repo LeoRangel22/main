@@ -29,6 +29,7 @@ function fixture(options={}) {
     const selected=rows.filter(r=>filters.every(f=>f(r)));
     if(update){for(const r of selected){assert.ok(ids.slice(0,2).includes(r.id));updates.push(r.id);Object.assign(r,update);}return{data:selected.map(r=>({id:r.id}))};}
     if(single&&options.readbackError)return{error:{message:'synthetic'}};
+    if(single&&options.wrongReadback)return{data:{...selected[0],[options.wrongReadback]:'other'}};
     return{data:single?structuredClone(selected[0]||null):selected.map(r=>structuredClone(r))};
    }).then(resolve,reject)};return q;}
  };
@@ -41,10 +42,12 @@ function fixture(options={}) {
   if(options.providerError)throw Error('private-error-not-to-be-returned');
   if(options.expireDuringRequest)now+=700000;
   const data={request_id:row.provider_id,mailagent_key:'synthetic-agent',to:row.destination,status:options.status||'delivered',email_reference:'synthetic-mail-reference'};
+  if(options.clientReferenceMismatch)data.client_reference='EV:another-send:1';
   if(options.mismatch)data[options.mismatch]='other';
   return options.malformed?{status:'success',data:{}}:options.duplicate?{status:'success',data:[data,data]}:{status:options.failureStatus?'failure':'success',...(options.explicitError?{error:{code:'synthetic'}}:{}),data:[data]};
  };
  const context=vm.createContext({URL,URLSearchParams,Date:Clock,Set,Number,providerFetch,Deno:{env:{get:k=>options.missingOAuth||options.missingNames?.includes(k)?undefined:k.includes('URL')?undefined:'synthetic-not-a-credential'}}});
+ vm.runInContext(source('_shared/email-provider-evidence.ts'),context);
  vm.runInContext(source('_shared/email-delivery-scope.ts'),context);
  const run=()=>vm.runInContext('reconcileScopedEmailDeliveries',context)(worker,payload);
  const assertIsolated=()=>{assert.equal(JSON.stringify(rows[2]),originalThird);assert.equal(cfg.enabled,false);assert.equal(cfg.delivery_sync_ready,false);assert.ok(events.every(e=>ids.slice(0,2).includes(e.send_id)));};
@@ -65,6 +68,10 @@ for(const [label,settings,expected] of [['not signed in',{signed:false},401],['n
  const c=vm.createContext({Request,Response,URL,Deno:{env:{get:()=>''},serve:fn=>handler=fn},createClient:()=>caller,prepareScopedEmailDeliveries:async()=>{prepares++;return{ok:true};}});
  vm.runInContext(source('event-channel-admin/index.ts'),c);
  const r=await handler(new Request('https://example.test/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'prepare-email-scoped',sendIds:ids.slice(0,2)})}));assert.equal(r.status,expected);assert.equal(prepares,expected===200?1:0);
+});
+for(const options of [{clientReferenceMismatch:true},{wrongReadback:'id'},{wrongReadback:'destination'},{wrongReadback:'channel'}])test('scoped correlation rejects contradictory proof and never replays '+JSON.stringify(options),async()=>{
+ const f=fixture(options);assert.equal((await f.run()).ok,false);const before=f.calls.length;
+ assert.equal((await f.run()).ok,false);assert.equal(f.calls.length,before);f.assertIsolated();
 });
 test('legacy event-key collision cannot apply an old pending receipt to a third send',async()=>{const f=fixture({legacyCollision:true});assert.equal((await f.run()).ok,true);assert.equal(f.events[0].key,'scoped-log-delivered:'+ids[0]+':1:synthetic-1');f.assertIsolated();});
 for(const [name,mutate] of [

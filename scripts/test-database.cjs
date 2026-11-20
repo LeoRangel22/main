@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const address = new URL(process.env.TEST_DATABASE_URL || 'postgres://postgres:event-test-only@127.0.0.1:5432/postgres');
 if (!['localhost','127.0.0.1','postgres'].includes(address.hostname)) throw Error('Only an isolated local test database is permitted');
 const admin = new Client({ connectionString: address.toString() });
-const sql = (file) => fs.readFileSync(path.join(root,file),'utf8');
+const sql = (file) => fs.readFileSync(path.join(root,file),'utf8').replace(/\r\n/g,'\n');
 const migrationFiles = fs.readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
 const priority = migrationFiles.find(f=>f.endsWith('_priority_integrity_release.sql'));
 async function connect(name) { const url = new URL(address); url.pathname=`/${name}`; const c = new Client({connectionString:url.toString()}); await c.connect(); return c; }
@@ -81,7 +81,8 @@ async function apply(c,file) {
   if(privateSignoffs) { await apply(c,'checks/private-signoffs-upgrade-assert.sql'); console.log('PASS private signoffs install dormant, preserve existing public functions, evidence, identities and channels'); }
 }
 async function create(name) {
-  await admin.query(`create database ${name}`);
+  // JSON snapshots/history contain Unicode on every platform, including Windows.
+  await admin.query(`create database ${name} encoding 'UTF8' template template0`);
   const c=await connect(name);
   await apply(c,'supabase/bootstrap/platform-test.sql');
   for (const f of JSON.parse(sql('supabase/bootstrap/manifest.json'))) await apply(c,f);
@@ -96,6 +97,9 @@ async function checks(c) {
     await apply(c,`checks/${f}.sql`); console.log(`PASS ${f}`);
   }
   await apply(c,'checks/manual-send-record.sql'); console.log('PASS reviewed manual send preserves negotiation without transport');
+  await apply(c,'checks/approved-signal-followup.sql'); console.log('PASS approval persists signal followup and owner without financial or reservation change');
+  await apply(c,'checks/requested-adjustment-version.sql'); console.log('PASS requested 30->32 adjustment persists V2 with original content and response preserved');
+  await require('../checks/email-release-rollback.cjs')(c,sql);
   await apply(c,'checks/whatsapp-preparation.sql'); console.log('PASS read-only WhatsApp preparation and exact receipt/reply correlation');
   await apply(c,'checks/gerencia-identity.sql'); console.log('PASS Gerencia self-sign, authority boundaries, verification, authorship and revoke');
   await apply(c,'checks/whatsapp-single-pilot.sql'); console.log('PASS pilot owner, anonymous/other-account denial, once-only claim, uncertainty and immutable history');
@@ -107,6 +111,7 @@ async function checks(c) {
   await require('../checks/historical-classification-review.cjs')(c,sql,fixtureOwner,migrationFiles);
 }
 async function concurrent(c,name) {
+  await require('../checks/lead-alert-concurrency.cjs')(c,connect,name);
   await require('../checks/smtp-neutral-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-capture-concurrency.cjs')(c,connect,name);
   await require('../checks/mailbox-reply-route-concurrency.cjs')(c,connect,name);

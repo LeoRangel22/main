@@ -160,7 +160,8 @@ test.describe("Dashboard interno em modo QA", () => {
     await page.locator('[data-pipeline-card-id="qa-proposal-sem-resposta"]').getByRole("button", { name: /Reenviar|Abrir/i }).click();
     await expect(page.locator(".proposal-journey")).toContainText("V1 publicada");
     await expect(page.locator(".proposal-journey")).toContainText("Envio registrado");
-    await expect(page.locator(".proposal-journey")).toContainText("Ainda não registrado");
+    await expect(page.locator(".proposal-journey")).toContainText("Registrado; entrega não confirmada");
+    await expect(page.locator(".proposal-journey")).not.toContainText("Ainda não registrado");
     await expect(page.locator(".proposal-journey")).toContainText("1 · última");
     await expect(page.locator(".proposal-version-list summary")).toHaveText("Ver 1 versão preservada");
     await page.evaluate(() => {

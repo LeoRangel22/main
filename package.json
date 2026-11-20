@@ -10,7 +10,8 @@
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report",
     "build": "node scripts/build-site.cjs",
-    "test:db": "node scripts/test-database.cjs"
+    "test:db": "node scripts/test-database.cjs",
+    "test:integration": "playwright test --config=playwright.database.config.cjs"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",

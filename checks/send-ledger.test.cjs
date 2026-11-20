@@ -14,7 +14,7 @@ test('email owner pilot: existing neutral SMTP pilot does not depend on owner po
 test('email sender: compatibility dry-run has no claim or provider side effect',async()=>{const r=await run('email',{skipPreview:true,payload:{dryRun:true}});assert.equal(r.status,200);assert.equal(r.body.ownerReplyPilotContract,'owner-pilot-v1');assert.equal(r.calls.begin.length,0);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,0);});
 
 async function run(channel, scenario = {}) {
-  const calls = { routePreviews:[],routeBinds:[],fetch: 0, smtp: 0, begin: [], finish: [], smtpFinalizations: [] };
+  const calls = { logs:[],routePreviews:[],routeBinds:[],fetch: 0, smtp: 0, begin: [], finish: [], smtpFinalizations: [] };
   let smtpRecord;
   let ownerPolicy=scenario.ownerPolicy??null;
   const proposal = { id: '00000000-0000-4000-8000-000000000111', revision: 3, is_current:true, status:'proposta_pronta', oportunidade_id:'00000000-0000-4000-8000-000000000113', public_token: 'token', cliente_nome: 'Cliente', total: 1120, snapshot: { event: {signalDeadlineHours:72}, selectedItems:[{nome:'Coffee Break aprovado',descricao:'Café e frutas',calc:{total:1000}}] } };
@@ -53,15 +53,15 @@ async function run(channel, scenario = {}) {
   if(scenario.routePilot!==undefined)env.EVENT_PROPOSAL_REPLY_ROUTE_PILOT=scenario.routePilot;
   if(scenario.sender)env.PROPOSAL_FROM_EMAIL=scenario.sender;
   if(scenario.replyTo)env.PROPOSAL_REPLY_TO_EMAIL=scenario.replyTo;
-  const context = vm.createContext({ Buffer, setTimeout, clearTimeout, crypto: require('node:crypto').webcrypto, TextEncoder, Request, Response, URL, AbortSignal, Intl, Date:FixtureDate, console: { error() {} }, createClient: () => client, Deno: { env: { get: key => env[key] }, serve: fn => handler = fn }, fetch: async (url, options) => {
+  const context = vm.createContext({ Buffer, setTimeout, clearTimeout, crypto: require('node:crypto').webcrypto, TextEncoder,TextDecoder, Request, Response, URL, AbortSignal, Intl, Date:FixtureDate, console: { error(...args) {calls.logs.push(args);} }, createClient: () => client, Deno: { env: { get: key => env[key] }, serve: fn => handler = fn }, fetch: async (url, options) => {
     calls.fetch++; calls.providerPayload=JSON.parse(options.body);
     if (scenario.timeout) throw new Error('Timeout');
     if(String(url).includes('script.google.com'))return new Response(JSON.stringify({ok:!scenario.http,version:2,account:'bot:embaixada_urca',id:calls.providerPayload.id,contentHash:calls.providerPayload.contentHash,status:scenario.http===400?'failed':scenario.http?'uncertain':'accepted',attempted:true,...(!scenario.http?{providerId:'provider'}:{})}));
     if(scenario.readError)return{ok:true,status:200,text:async()=>{throw Error('Synthetic body read failure');}};
-    const providerBody=Object.hasOwn(scenario,'providerBody')?scenario.providerBody:{ messageId: 'provider', request_id: 'provider' };
+    const providerBody=Object.hasOwn(scenario,'providerBody')?scenario.providerBody:{data:[{code:'EM_104',message:'Email request received'}],message:'OK',object:'email',request_id:'provider'};
     return new Response(scenario.malformedJson?'{invalid':JSON.stringify(providerBody), { status: scenario.http || 200 });
   } });
-  for (const file of ['_shared/mailbox-reply-route.ts','_shared/mailbox-owner-pilot.ts','_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
+  for (const file of ['_shared/email-provider-evidence.ts','_shared/mailbox-reply-route.ts','_shared/mailbox-owner-pilot.ts','_shared/bot-dispatch.ts','_shared/send-ledger.ts','_shared/neutral-smtp.ts', `send-proposal-${channel}/index.ts`]) {
     const source = fs.readFileSync(`${__dirname}/../supabase/functions/${file}`, 'utf8').replace(/^import .*;\s*$/gm, '').replace(/^export /gm, '');
     vm.runInContext(stripTypeScriptTypes(source), context);
   }
@@ -113,6 +113,11 @@ test('email: prévia retorna HTML e texto completos sem gravar ou enviar', async
   assert.match(r.body.text,/https:\/\/wa.me\/5521971426007/);
   assert.match(r.body.contentHash,/^[a-f0-9]{64}$/);
   assert.equal(r.calls.fetch,0);assert.equal(r.calls.begin.length,0);assert.equal(r.calls.finish.length,0);
+});
+test('email: persistence failure retains the send ID and never replays transport',async()=>{
+ const ledger={},r=await run('email',{ledger,finishError:true});assert.equal(r.status,500);assert.equal(r.body.deliveryStatus,'uncertain');
+ assert.equal(r.body.sendId,r.calls.finish[0].send_id);assert.equal(r.calls.fetch,1);
+ assert.equal((await run('email',{ledger})).calls.fetch,0);
 });
 test('email: provedor recebe exatamente o HTML e texto revisados',async()=>{
   const r=await run('email'); assert.equal(r.status,200);
@@ -253,3 +258,22 @@ test('email pilot: pause-write failure remains uncertain and reload does not rep
 test('email neutral: scoped commercial gate preserves old neutral renderer',async()=>{const r=await run('email',{neutral:true,routePilot:pilotConfig()});assert.equal(r.status,200);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,1);assert.equal(r.calls.routePreviews.length,0);assert.equal(r.preview.replyTo,'eventos@embaixadacarioca.com.br');});
 
 test('email pilot: clock expiry after bind pauses before transport',async()=>{const r=await run('email',{routePilot:pilotConfig(),expirePilotAtBind:true});assert.equal(r.status,409);assert.equal(r.calls.fetch,0);assert.equal(r.calls.smtp,0);assert.equal(r.calls.routeBinds.length,1);assert.equal(r.calls.finish[0].send_status,'paused');assert.equal(r.body.code,'reply_route_gate_changed');});
+for(const [name,providerBody]of [
+ ['tracking ID alone',{request_id:'fixture-request'}],
+ ['application error with tracking ID',{message:'OK',request_id:'fixture-request',data:[{code:'TM_4001'}]}],
+ ['failed envelope',{message:'OK',status:'failure',request_id:'fixture-request',data:[{code:'EM_104'}]}],
+ ['mixed acknowledgements',{message:'OK',request_id:'fixture-request',data:[{code:'EM_104'},{code:'TM_4001'}]}],
+ ['oversized acknowledgement',{message:'OK',request_id:'fixture-request',data:[{code:'EM_104'}],padding:'x'.repeat(70000)}],
+])test('email: provider acceptance needs bounded positive evidence: '+name,async()=>{
+ const ledger={},r=await run('email',{providerBody,ledger});
+ assert.equal(r.status,409);assert.equal(r.body.deliveryStatus,'uncertain');assert.equal(r.calls.fetch,1);
+ assert.equal(r.calls.finish[0].send_status,'uncertain');assert.equal(r.calls.finish[0].external_message_id,null);
+ assert.equal((await run('email',{ledger})).calls.fetch,0);
+});
+for(const http of [400,500])test('email: HTTP '+http+' error content stays out of response and logs',async()=>{
+ const r=await run('email',{http,providerBody:{error:{message:'FICTIONAL_PRIVATE_MARKER',recipient:'private-recipient@example.invalid'}}});
+ assert.ok(!JSON.stringify({body:r.body,logs:r.calls.logs}).includes('FICTIONAL_PRIVATE_MARKER'));
+ assert.ok(!JSON.stringify({body:r.body,logs:r.calls.logs}).includes('private-recipient'));
+ assert.equal(r.body.deliveryStatus,http===400?'failed':'uncertain');assert.equal(r.calls.fetch,1);
+ assert.equal(r.calls.finish[0].send_status,r.body.deliveryStatus);assert.equal(r.body.sendId,r.calls.finish[0].send_id);
+});

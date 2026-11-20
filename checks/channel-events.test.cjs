@@ -120,12 +120,12 @@ async function admin(action,{team=true,manager=true,conflict=false,approved=true
   return{};
  }};
  const env={SUPABASE_URL:'https://example.test',EVENT_BOT_BRIDGE_URL:'https://script.google.com/macros/s/deployment/exec',EVENT_BOT_BRIDGE_SECRET:'s'.repeat(40),ZAPI_INSTANCE_ID:'value',ZAPI_TOKEN:'value',ZAPI_CLIENT_TOKEN:'value'};
- const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,createClient:()=>client,Deno:{env:{get:key=>env[key]},serve:fn=>handler=fn},fetch:async(url,options={})=>{
+ const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,TextEncoder,TextDecoder,createClient:()=>client,Deno:{env:{get:key=>env[key]},serve:fn=>handler=fn},fetch:async(url,options={})=>{
   requests.push({url,options});
   if(String(url).startsWith('https://script.google.com/'))return new Response(JSON.stringify(bridgePayload({nextCursor:bridgeCursor(12),events:[],...bridgeResponse})));
   return new Response(JSON.stringify({connected:true,receivedCallbackUrl:currentCallback,messageStatusCallbackUrl:currentCallback}),{status:200});
  }});
- for(const file of ['_shared/email-delivery.ts','_shared/bot-dispatch.ts','_shared/bot-bridge.ts','event-channel-admin/index.ts'])vm.runInContext(source(file),c);
+ for(const file of ['_shared/email-provider-evidence.ts','_shared/email-delivery.ts','_shared/bot-dispatch.ts','_shared/bot-bridge.ts','event-channel-admin/index.ts'])vm.runInContext(source(file),c);
  const res=await handler(new Request('https://example.test/admin',{method:'POST',body:JSON.stringify({action,approved,instanceId,scopeId})}));
  return{status:res.status,body:await res.json(),fetchCount:requests.length,requests,rpcCalls,rpcNames:rpcCalls.map(call=>call.name)};
 }
@@ -185,13 +185,18 @@ test('Interface: mudança de conta ou escopo invalida revisão e preserva escopo
 });
 
 async function emailLogs({configured=true,status='delivered',to='customer@example.test',duplicates=false}={}){
- const ingest=[];let fetches=0;
+ const ingest=[];let fetches=0,updating=false;
+ const row={id:'00000000-0000-4000-8000-000000000001',proposal_id:'00000000-0000-4000-8000-000000000002',reviewed_revision:2,channel:'email',status:'accepted',provider_id:'request',destination:'customer@example.test',attempts:1,delivery_checked_at:null,delivery_status:null};
  const log={request_id:'request',mailagent_key:'agent',to,status,email_reference:'message@example.test'};
- const chain={select(){return this;},eq(){return this;},or(){return this;},not(){return this;},gte(){return this;},order(){return this;},update(){return this;},async limit(){return{data:[{id:'00000000-0000-4000-8000-000000000001',provider_id:'request',destination:'customer@example.test',attempts:1}]};}};
- const worker={from:()=>chain,rpc:async(name,args)=>{if(name==='event_channel_worker_config')return{data:{expected_account:'agent'}};ingest.push(args);return{};}};
- const c=vm.createContext({URL,URLSearchParams,Date,AbortSignal,Response,Deno:{env:{get:key=>configured&&['EVENT_ZOHO_CLIENT_ID','EVENT_ZOHO_CLIENT_SECRET','EVENT_ZOHO_REFRESH_TOKEN'].includes(key)?'value':undefined}},fetch:async url=>{fetches++;return new Response(JSON.stringify(url.includes('/oauth/')?{access_token:'oauth'}:{data:duplicates?[log,log]:[log]}));}});
- vm.runInContext(source('_shared/email-delivery.ts'),c);const r=await vm.runInContext('syncEmailDeliveries',c)(worker);return{r,fetches,ingest};
+ const chain={select(){return this;},eq(){return this;},is(){return this;},or(){return this;},not(){return this;},gte(){return this;},order(){return this;},
+  update(v){updating=true;Object.assign(row,v);return this;},async limit(){return{data:[structuredClone(row)]};},
+  async maybeSingle(){return{data:structuredClone(row)};},then(resolve){return Promise.resolve({data:updating?[{id:row.id}]:[structuredClone(row)]}).then(resolve);}};
+ const worker={from:()=>{updating=false;return chain;},rpc:async(name,args)=>{if(name==='event_channel_worker_config')return{data:{expected_account:'agent'}};ingest.push(args);row.delivery_status='delivered';return{};}};
+ const c=vm.createContext({URL,URLSearchParams,Date,AbortSignal,Response,TextEncoder,TextDecoder,crypto:require('node:crypto').webcrypto,Deno:{env:{get:key=>configured&&['EVENT_ZOHO_CLIENT_ID','EVENT_ZOHO_CLIENT_SECRET','EVENT_ZOHO_REFRESH_TOKEN'].includes(key)?'value':undefined}},fetch:async url=>{fetches++;return new Response(JSON.stringify(url.includes('/oauth/')?{access_token:'oauth'}:{status:'success',data:duplicates?[log,log]:[log]}));}});
+ vm.runInContext(source('_shared/email-provider-evidence.ts'),c);vm.runInContext(source('_shared/email-delivery.ts'),c);
+ try{const r=await vm.runInContext('syncEmailDeliveries',c)(worker);return{r,fetches,ingest};}catch{return{r:{ok:false},fetches,ingest};}
 }
+
 test('Entrega de e-mail: sem OAuth de leitura não presume estado',async()=>{const r=await emailLogs({configured:false});assert.equal(r.r.ok,false);assert.equal(r.fetches,0);});
 test('Entrega de e-mail: registro exato confirma destino e Message-ID',async()=>{const r=await emailLogs();assert.equal(r.ingest[0].events[0].signal,'delivered');assert.equal(r.ingest[0].events[0].provider_reference,'message@example.test');});
 for(const scenario of [{status:'opened'},{to:'other@example.test'},{duplicates:true}])test(`Entrega de e-mail: rejeita evidência insuficiente ${JSON.stringify(scenario)}`,async()=>assert.equal((await emailLogs(scenario)).ingest.length,0));
@@ -201,7 +206,7 @@ async function deliveryWorker({correctKey=true,providerFailure=false,configFailu
  let handler,fetches=0;const rpcCalls=[];const env={SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'private',ZAPI_INSTANCE_ID:'instance',ZAPI_TOKEN:'zapi-token-should-not-leak',ZAPI_CLIENT_TOKEN:'client-token-should-not-leak'};
  const client={rpc:async(name,args)=>{rpcCalls.push({name,args});if(initialFailure)throw Error('database');if(args?.target_provider==='zapi'&&configFailure)return{error:{message:'db'}};return{data:{delivery_job_key:'job-key',secret:'callback-secret',enabled:false}};}};
  const c=vm.createContext({Request,Response,URL,URLSearchParams,Date,AbortSignal,TextEncoder,TextDecoder,Uint8Array,btoa,crypto:require('node:crypto').webcrypto,createClient:()=>client,Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},fetch:async()=>{fetches++;if(providerFailure)throw new Error('provider');return new Response(JSON.stringify({connected:true,receivedCallbackUrl:'https://bot.example.test/hook?secret=hidden',messageStatusCallbackUrl:''}));}});
- for(const f of ['_shared/channel-events.ts','_shared/email-delivery.ts','event-email-delivery/index.ts'])vm.runInContext(source(f),c);
+ for(const f of ['_shared/channel-events.ts','_shared/email-provider-evidence.ts','_shared/email-delivery.ts','event-email-delivery/index.ts'])vm.runInContext(source(f),c);
  const res=await handler(new Request('https://example.test/worker',{method:'POST',headers:{'x-event-job-key':correctKey?'job-key':'bad'},body:rawBody}));return{status:res.status,body:await res.text(),fetches,rpcCalls};
 }
 test('Diagnóstico interno: chave errada não acessa provedores',async()=>{const r=await deliveryWorker({correctKey:false});assert.equal(r.status,401);assert.equal(r.fetches,0);});

@@ -87,11 +87,13 @@ function milliseconds(value: unknown) {
 function dateSyntax(ms:number) {const d=new Date(ms);return `${String(d.getUTCDate()).padStart(2,'0')}-${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}-${d.getUTCFullYear()}`;}
 export function mailboxFolders(response:any) {
   if(!Array.isArray(response?.data)||response.data.length>1000) throw new Error('folders_invalid');
-  const excluded=new Set<string>(),known=new Set<string>();
-  for(const f of response.data){const id=mailboxId(f?.folderId);if(known.has(id)||typeof f.folderType!=='string')throw new Error('folders_invalid');known.add(id);if(['sent','drafts','trash','spam','outbox','templates'].includes(f.folderType.toLowerCase()))excluded.add(id);}
-  return {known,excluded};
+  const excluded=new Set<string>(),known=new Set<string>(),inbox=new Set<string>();
+  // Zoho also labels user-created folders as type Inbox. Only the canonical
+  // root path identifies the system Inbox; never guess from a localized name.
+  for(const f of response.data){const id=mailboxId(f?.folderId);if(known.has(id)||typeof f.folderType!=='string')throw new Error('folders_invalid');known.add(id);const type=f.folderType.toLowerCase();if(f.path==='/Inbox'&&type!=='inbox')throw new Error('folder_unverified');if(type==='inbox'&&f.path==='/Inbox')inbox.add(id);if(['sent','drafts','trash','spam','outbox','templates'].includes(type))excluded.add(id);}
+  return {known,excluded,inbox};
 }
-export async function collectMailboxWindow(api:string,headers:Record<string,string>,accountId:string,watermark:number,activatedAt:number,upper:number,fetcher:typeof fetch=fetch) {
+export async function collectMailboxWindow(api:string,headers:Record<string,string>,accountId:string,watermark:number,activatedAt:number,upper:number,fetcher:typeof fetch=fetch,observe?:(metadata:{messageId:string;folderId:string;receivedAt:number})=>void) {
   mailboxId(accountId);milliseconds(watermark);milliseconds(activatedAt);milliseconds(upper);
   if(watermark<activatedAt||upper<watermark)throw new Error('cursor_invalid');
   // Date search is deliberately broader than the millisecond filter. No unread filter.
@@ -100,11 +102,53 @@ export async function collectMailboxWindow(api:string,headers:Record<string,stri
     const query=new URLSearchParams({searchKey:`fromDate:${dateSyntax(lower-86400000)}::groupResult:false`,receivedTime:String(upper),start:String(page*100+1),limit:'100',includeto:'true'});
     const result=await mailboxJson(`${api}/api/accounts/${accountId}/messages/search?${query}`,{method:'GET',headers},1048576,fetcher);
     if(!Array.isArray(result.data)||result.data.length>100)throw new Error('messages_invalid');
-    for(const row of result.data){const id=mailboxId(row?.messageId),folderId=mailboxId(row?.folderId),receivedAt=milliseconds(row.receivedTime??row.receivedtime);if(found.has(id)){const old=found.get(id);if(old.receivedAt!==receivedAt||old.folderId!==folderId)throw new Error('scan_changed');continue;}if(receivedAt>=lower&&receivedAt<=upper)found.set(id,{...row,messageId:id,folderId,receivedAt});}
+    for(const row of result.data){const id=mailboxId(row?.messageId),folderId=mailboxId(row?.folderId),receivedAt=milliseconds(row.receivedTime??row.receivedtime);observe?.({messageId:id,folderId,receivedAt});if(found.has(id)){const old=found.get(id);if(old.receivedAt!==receivedAt||old.folderId!==folderId)throw new Error('scan_changed');continue;}if(receivedAt>=lower&&receivedAt<=upper)found.set(id,{...row,messageId:id,folderId,receivedAt});}
     if(result.data.length<100)return {lower,upper,rows:[...found.values()].sort((a,b)=>a.receivedAt-b.receivedAt||a.messageId.localeCompare(b.messageId))};
   }
   // Offset scan exceeded the bounded window. Never claim completion or move the cursor.
   throw new Error('mailbox_backlog');
+}
+
+// Independent, bounded supplement to indexed search, using the documented READ
+// folder listing. Never assumes sortBy=date orders receivedTime: filter locally,
+// examine every sampled row, and report saturation instead of claiming absence.
+// No historical traversal, unread filter, content fetch or cursor mutation.
+export async function collectMailboxInboxTail(api:string,headers:Record<string,string>,accountId:string,inboxId:string,lower:number,upper:number,fetcher:typeof fetch=fetch) {
+  mailboxId(accountId);mailboxId(inboxId);milliseconds(lower);milliseconds(upper);
+  if(upper<lower)throw new Error('cursor_invalid');
+  const found=new Map<string,any>();let listed=0;
+  for(let page=0;page<3;page++){
+    const query=new URLSearchParams({folderId:inboxId,start:String(page*100+1),limit:'100',status:'all',sortBy:'date',sortorder:'false',threadedMails:'false',includeto:'true',includesent:'false',includearchive:'false'});
+    const result=await mailboxJson(`${api}/api/accounts/${accountId}/messages/view?${query}`,{method:'GET',headers},1048576,fetcher);
+    if(!Array.isArray(result?.data)||result.data.length>100||result.status?.code!==undefined&&result.status.code!==200)throw new Error('messages_invalid');
+    for(const row of result.data){
+      const messageId=mailboxId(row?.messageId),folderId=mailboxId(row?.folderId),receivedAt=milliseconds(row.receivedTime??row.receivedtime);
+      if(folderId!==inboxId)throw new Error('folder_unverified');
+      listed++;
+      const next={messageId,folderId,receivedAt,fromAddress:row.fromAddress};
+      const prior=found.get(messageId);
+      if(prior)found.set(messageId,mergeMailboxDiscovery([prior],[next]).rows[0]);
+      else found.set(messageId,next);
+    }
+    if(result.data.length<100)return {listed,capped:false,rows:[...found.values()].filter(r=>r.receivedAt>=lower&&r.receivedAt<=upper)};
+  }
+  return {listed,capped:true,rows:[...found.values()].filter(r=>r.receivedAt>=lower&&r.receivedAt<=upper)};
+}
+
+// A provider ID is one message across discovery sources. Conflicting provenance
+// aborts the cycle; it cannot authorize the first matching sender/route by chance.
+export function mergeMailboxDiscovery(search:any[],inbox:any[]) {
+  const found=new Map<string,any>();let inboxOnly=0;
+  for(const [source,rows] of [search,inbox].entries())for(const row of rows){
+    const next={messageId:mailboxId(row?.messageId),folderId:mailboxId(row?.folderId),receivedAt:milliseconds(row?.receivedAt),fromAddress:row?.fromAddress};
+    if(next.fromAddress!==undefined&&typeof next.fromAddress!=='string')throw new Error('messages_invalid');
+    const prior=found.get(next.messageId);
+    if(prior){
+      if(prior.folderId!==next.folderId||prior.receivedAt!==next.receivedAt||prior.fromAddress&&next.fromAddress&&prior.fromAddress.trim().toLowerCase()!==next.fromAddress.trim().toLowerCase())throw new Error('scan_changed');
+      if(!prior.fromAddress&&next.fromAddress)prior.fromAddress=next.fromAddress;
+    }else{found.set(next.messageId,next);if(source===1)inboxOnly++;}
+  }
+  return {inboxOnly,rows:[...found.values()].sort((a,b)=>a.receivedAt-b.receivedAt||a.messageId.localeCompare(b.messageId))};
 }
 // Only fields used for destination, identity and thread binding enter this map.
 // Other headers remain opaque; their values cannot authorize content access.
@@ -217,6 +261,7 @@ const SAFE_MAILBOX_ERROR_CODES=new Set<string>([
   "provider_auth_failed",
   "provider_rate_limited",
   "mailbox_backlog",
+  "mailbox_read_budget",
   "recipient_unverified",
   "sender_mismatch",
   "message_id_invalid",

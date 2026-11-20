@@ -663,7 +663,7 @@ function renderProposal(proposal) {
         <p>${canDecide ? tr("Confira os itens e condições. Depois, aprove ou peça um ajuste.", "Review the items and terms. Then approve or request a change.") : escapeHtml(decision.note)}</p>
       </div>
       <div class="public-proposal-buttons">
-        ${canDecide ? `<button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">${tr("Aprovar e seguir para reserva", "Approve and proceed to booking")}</button>
+        ${canDecide ? `<button class="primary public-proposal-main-cta" type="button" data-public-action="confirmar">${tr("Aprovar proposta", "Approve proposal")}</button>
         <button class="secondary" type="button" data-public-action="alteracao">${tr("Pedir ajuste", "Request a change")}</button>
         <button class="secondary danger-light" type="button" data-public-action="cancelar">${tr("Não seguir com esta proposta", "Decline this proposal")}</button>` : ""}
         ${canSendProof ? `<button class="primary public-proposal-main-cta" type="button" data-upload-proof>${tr("Enviar comprovante do sinal", "Send deposit receipt")}</button>` : ""}

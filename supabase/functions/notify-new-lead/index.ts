@@ -20,7 +20,12 @@
   snapshot?: Record<string, unknown>
 }
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { emailProviderJson,zeptoAcceptedRequestId } from '../_shared/email-provider-evidence.ts';
+import { dispatchLeadAlert } from '../_shared/lead-alert-dispatch.ts';
+
 type WebhookPayload = {
+  action?: 'scan-abandoned'
   dryRun?: boolean
   type?: "INSERT" | "UPDATE" | "DELETE"
   table?: string
@@ -387,12 +392,15 @@ async function sendZeptoEmail(record: LeadRecord) {
 
   const zeptoResponse = await fetch("https://api.zeptomail.com/v1.1/email", {
     method: "POST",
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000),
     headers: {
       Accept: "application/json",
       Authorization: authorizationToken,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      client_reference: `LEAD:${record.id}:${record.capture_status === 'complete' ? 'complete' : 'abandoned'}`,
       from: {
         address: fromEmail,
         name: fromName,
@@ -420,11 +428,12 @@ async function sendZeptoEmail(record: LeadRecord) {
   })
 
   if (!zeptoResponse.ok) {
-    const errorBody = await zeptoResponse.text()
-    throw new Error(`Falha ao enviar com ZeptoMail: ${zeptoResponse.status} ${errorBody}`)
+    try { await zeptoResponse.body?.cancel() } catch {}
+    return { state: zeptoResponse.status >= 400 && zeptoResponse.status < 500 ? 'failed' : 'uncertain' }
   }
 
-  return await zeptoResponse.json()
+  const providerId = zeptoAcceptedRequestId(await emailProviderJson(zeptoResponse,65536))
+  return providerId ? { state:'accepted',providerId } : { state:'uncertain' }
 }
 
 Deno.serve(async (req) => {
@@ -438,7 +447,8 @@ Deno.serve(async (req) => {
 
   let payload: WebhookPayload
   try {
-    payload = (await req.json()) as WebhookPayload
+    payload = (await emailProviderJson(new Response(req.body,{headers:req.headers}),65536)) as WebhookPayload
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw Error('request_invalid')
   } catch (_error) {
     return response({ ok: false, error: "Invalid JSON" }, 400)
   }
@@ -470,34 +480,32 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (payload.type !== "INSERT") {
+    if (payload.action !== 'scan-abandoned' && !['INSERT','UPDATE'].includes(payload.type || '')) {
       return response({ ok: true, skipped: true, reason: "Not an insert event" })
     }
 
-    if (payload.table !== "solicitacoes_cotacao") {
+    if (payload.action !== 'scan-abandoned' && payload.table !== "solicitacoes_cotacao") {
       return response({ ok: true, skipped: true, reason: "Not target table" })
     }
 
     const record = payload.record
-    if (!record) {
+    if (payload.action !== 'scan-abandoned' && !record) {
       return response({ ok: true, skipped: true, reason: "Missing record" })
     }
 
-    await sendZeptoEmail(record)
-
-    return response({
-      ok: true,
-      message: "Lead notification sent",
-      leadId: record.id ?? null,
-    })
-  } catch (error) {
-    console.error("notify-new-lead error", error)
-    return response(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      500,
-    )
+    const worker=createClient(Deno.env.get('SUPABASE_URL')||'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'',{auth:{persistSession:false}})
+    let ids: string[]
+    if(payload.action==='scan-abandoned') {
+      const due=await worker.rpc('event_due_lead_alerts')
+      if(due.error||!Array.isArray(due.data)||due.data.length>10)throw Error('scan_unavailable')
+      ids=due.data
+    } else ids=[record!.id || '']
+    if(ids.some(id=>typeof id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))||new Set(ids).size!==ids.length)return response({ok:false,error:'request_invalid'},400)
+    const results=[]
+    for(const id of ids) results.push(await dispatchLeadAlert(worker,id,sendZeptoEmail))
+    return response({ok:true,results,message:'Consulta concluída. Aceite do provedor não comprova entrega.'})
+  } catch {
+    console.error(JSON.stringify({event:'lead_alert_failed',code:'receipt_or_transport_unconfirmed'}))
+    return response({ok:false,error:'alert_unconfirmed',message:'Consulte o registro antes de repetir. Nenhum transporte será repetido automaticamente.'},503)
   }
 })

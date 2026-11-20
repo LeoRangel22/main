@@ -5,7 +5,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'../dist');
 test('public bundle excludes database, development and operating files',()=>{
   assert.ok(fs.existsSync(path.join(root,'index.html')));
-  for(const name of ['supabase','checks','tests','scripts','node_modules','package.json','package-lock.json','README.md','.github']) assert.equal(fs.existsSync(path.join(root,name)),false,name);
+  for(const name of ['supabase','checks','tests','scripts','node_modules','package.json','package-lock.json','README.md','.github','.gitattributes']) assert.equal(fs.existsSync(path.join(root,name)),false,name);
 });
 test('local HTML references resolve inside public bundle',()=>{
   function walk(dir) { return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]); }
@@ -16,5 +16,12 @@ test('local HTML references resolve inside public bundle',()=>{
       const ref=match[1].split('?')[0]; if(/^(?:https?:|mailto:|tel:|data:)/.test(ref)) continue;
       assert.ok(fs.existsSync(path.resolve(path.dirname(file),ref)),`${path.basename(file)} -> ${ref}`);
     }
+  }
+});
+
+test('public text artifacts have platform-independent line endings',()=>{
+  function walk(dir) { return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]); }
+  for(const file of walk(root).filter(f=>/\.(?:js|css|html|svg)$/.test(f))) {
+    assert.equal(fs.readFileSync(file,'utf8').includes('\r\n'),false,path.relative(root,file));
   }
 });

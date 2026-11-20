@@ -1,4 +1,5 @@
 import { validatePreparedReplyRoute, proposalReplyRoutingGate } from '../_shared/mailbox-reply-route.ts';
+import { emailProviderJson, zeptoAcceptedRequestId } from '../_shared/email-provider-evidence.ts';
 import { ownerReplyRoutingGate } from '../_shared/mailbox-owner-pilot.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -333,6 +334,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, message: "Método não permitido." }, 405);
   }
 
+  let activeSendId:string|null=null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -463,6 +465,7 @@ Deno.serve(async (req) => {
     try { claim = await claimSend(supabase, proposal, payload, "email", email, emailContent.text, subject); }
     catch (error) { return jsonResponse({ ok: false, message: String(error instanceof Error ? error.message : error) }, 409); }
     if (!claim.claimed) return jsonResponse(duplicateResult(claim), duplicateResult(claim).ok ? 200 : 409);
+    activeSendId=claim.send.id;
     if(replyRoute){
       let bound=false;
       try{const result=await worker.rpc("event_email_reply_route_bind",{target_route:replyRoute.id,target_send:claim.send.id,expected_attempt:claim.send.attempts,context_hash:replyRoute.context_hash,reviewed_content_hash:emailContent.contentHash,send_body:emailContent.text});bound=!result.error&&result.data?.bound===true;}
@@ -529,48 +532,27 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Resultado incerto. Confira o e-mail antes de repetir." }, 409);
     }
 
-    let rawBody = "";
-    try { rawBody = await zeptoResponse.text(); }
-    catch (_) { /* An unreadable body is not an acknowledgement; retain HTTP error classification below. */ }
-    let zeptoBody: unknown = rawBody;
-    try {
-      zeptoBody = JSON.parse(rawBody);
-    } catch (_error) {
-      zeptoBody = rawBody;
-    }
-
     if (!zeptoResponse.ok) {
-      await finishSend(worker, claim.send.id, zeptoResponse.status >= 500 ? "uncertain" : "failed", null, getZeptoErrorMessage(zeptoResponse.status));
-      console.error("ZeptoMail proposal error:", zeptoResponse.status, zeptoBody);
-      return jsonResponse(
-        {
-          ok: false,
-          message: getZeptoErrorMessage(zeptoResponse.status),
-          configured: {
-            token: Boolean(zeptoAuth.token),
-            tokenSecret: zeptoAuth.envName || null,
-            fromEmail: Boolean(fromEmail),
-          },
-          details: zeptoBody,
-        },
-        502,
-      );
+      const deliveryStatus = zeptoResponse.status >= 500 ? "uncertain" : "failed";
+      // Error bodies can contain submitted addresses/content. Never consume,
+      // return or log them; diagnostics contain fixed codes and HTTP status only.
+      try { await zeptoResponse.body?.cancel(); } catch {}
+      await finishSend(worker, claim.send.id, deliveryStatus, null, getZeptoErrorMessage(zeptoResponse.status));
+      console.error(JSON.stringify({event:"proposal_email_failed",stage:"provider",code:"provider_http_error",httpStatus:zeptoResponse.status}));
+      return jsonResponse({ok:false,sendId:claim.send.id,deliveryStatus,code:"provider_http_error",message:getZeptoErrorMessage(zeptoResponse.status)},502);
     }
-
-    // ZeptoMail returns an object with a top-level string request_id, not an RPC row array.
-    const receipt = typeof zeptoBody === "object" && zeptoBody && !Array.isArray(zeptoBody) ? zeptoBody as Record<string, unknown> : null;
-    const providerId = typeof receipt?.request_id === "string" ? receipt.request_id.trim() : "";
-    const explicitError = receipt && (Object.hasOwn(receipt, "error") ||
-      (typeof receipt.data === "object" && receipt.data && !Array.isArray(receipt.data) && Object.hasOwn(receipt.data, "error_code")));
-    if (!providerId || explicitError) {
+    let receipt:unknown=null;
+    try { receipt = await emailProviderJson(zeptoResponse,65536); } catch { /* Uncertain acknowledgement; never retry. */ }
+    const providerId = zeptoAcceptedRequestId(receipt);
+    if (!providerId) {
       await finishSend(worker, claim.send.id, "uncertain", null, "Resposta do provedor sem confirmação válida. Conferir antes de repetir.");
-      return jsonResponse({ ok: false, sendId: claim.send.id, deliveryStatus: "uncertain", message: "Envio não confirmado pelo provedor. Confira o histórico e o provedor antes de repetir." }, 409);
+      return jsonResponse({ok:false,sendId:claim.send.id,deliveryStatus:"uncertain",message:"Envio não confirmado pelo provedor. Confira o histórico e o provedor antes de repetir."},409);
     }
     await finishSend(worker, claim.send.id, "accepted", providerId);
     return jsonResponse({ ok: true, email, sendId: claim.send.id, deliveryStatus: "accepted", message: "Aceito pelo ZeptoMail. Entrega não confirmada." });
   } catch (error) {
-    console.error("send-proposal-email fatal:", error);
-    return jsonResponse({ ok: false, message: "Erro interno ao enviar e-mail." }, 500);
+    console.error(JSON.stringify({event:"proposal_email_failed",stage:"operation",code:"operation_unconfirmed"}));
+    return jsonResponse({ok:false,...(activeSendId?{sendId:activeSendId,deliveryStatus:"uncertain",code:"send_result_unconfirmed"}:{}),message:activeSendId?"Resultado não confirmado. Consulte o histórico e o provedor antes de repetir.":"Erro interno ao enviar e-mail."},500);
   }
 });
 
