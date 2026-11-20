@@ -6114,7 +6114,7 @@ textarea {
 .price-list {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   align-items: stretch;
 }
 
@@ -6168,6 +6168,8 @@ textarea {
 .price-row-body {
   display: grid;
   gap: 11px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   position: relative;
   z-index: 1;
 }

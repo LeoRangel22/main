@@ -94,3 +94,17 @@ test('desktop keeps its quote controls after a landscape round trip without savi
   }
   await expectUnchanged(page, context);
 });
+
+for (const width of [844, 1024]) test(`enlarged catalogue text remains inside its card at ${width}px`, async ({ page }) => {
+  const context = await prepare(page, width, 600, 2);
+  await page.locator('#quoteItemsSection').scrollIntoViewIfNeeded();
+  const clipped = await page.locator('.price-row').evaluateAll(cards => cards.flatMap(card => {
+    const content = card.querySelector('.price-row-body');
+    const box = card.getBoundingClientRect();
+    const text = content.getBoundingClientRect();
+    return text.right > box.right + 1 || content.scrollWidth > content.clientWidth + 1
+      ? [content.querySelector('.price-name').textContent.trim()] : [];
+  }));
+  expect(clipped, 'Catalogue names, prices and selection labels must remain readable').toEqual([]);
+  await expectUnchanged(page, context);
+});
