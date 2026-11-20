@@ -11543,8 +11543,9 @@ function syncEditorToolbarOffsets() {
   // Use natural heights even after releasing sticky positioning, so zoom and
   // viewport changes cannot repeatedly toggle the layout or hide focused fields.
   const topbar = document.querySelector(".topbar");
+  const stickyHeader = topbar && getComputedStyle(topbar).getPropertyValue("--editor-header-sticky").trim() === "1";
   const visibleBar = !nodes.loadedEditorBar.classList.contains("is-hidden");
-  const chromeHeight = (topbar?.getBoundingClientRect().height || 0)
+  const chromeHeight = (stickyHeader ? topbar.getBoundingClientRect().height : 0)
     + (visibleBar ? nodes.loadedEditorBar.getBoundingClientRect().height : 0);
   document.body.classList.toggle("editor-chrome-tall", chromeHeight + 16 > window.innerHeight * 0.4);
   const root = document.documentElement, header = editorHeaderOffset();

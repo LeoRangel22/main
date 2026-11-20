@@ -6177,6 +6177,7 @@ textarea {
 .price-card-topline {
   align-items: start;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: space-between;
 }
@@ -6221,6 +6222,7 @@ textarea {
 
 .price-select-indicator {
   align-items: center;
+  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(24, 58, 45, 0.1);
   border-radius: 999px;
@@ -11149,6 +11151,7 @@ body[data-page="app"] .workspace {
 }
 
 .auth-connected .topbar {
+  --editor-header-sticky: 1;
   align-items: center;
   backdrop-filter: blur(18px);
   background: rgba(250, 252, 249, 0.94);
@@ -11642,6 +11645,7 @@ body[data-page="app"] .pipeline-card-bottom-row {
   }
 
   .auth-connected .topbar {
+    --editor-header-sticky: 0;
     grid-template-columns: 1fr;
     position: static;
   }
@@ -13386,6 +13390,17 @@ body[data-page="app"].auth-connected.editor-chrome-tall .loaded-editor-bar { pos
 body[data-page="app"] .loaded-editor-actions [aria-busy="true"] { opacity:.65; cursor:wait; }
 body[data-page="app"] .loaded-editor-actions button:focus-visible { outline:3px solid var(--amarelo-claro); outline-offset:3px; }
 body[data-page="app"] :is(#sendReviewPanel,#eventConfigSection h2):focus { outline:3px solid var(--verde-escuro); outline-offset:3px; }
+/* Screen zoom must reflow the preview without changing the printed proposal. */
+@media screen {
+  #proposalPaper { overflow-wrap:anywhere; }
+  #proposalPaper .proposal-header { flex-wrap:wrap; }
+  #proposalPaper .proposal-total-box { max-width:100%; }
+  #proposalPaper .proposal-table { table-layout:auto; }
+  .proposal-summary-strip,
+  .proposal-totals { grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr)); }
+  .proposal-summary-strip > div,
+  .proposal-totals > div { min-width:0; overflow-wrap:anywhere; }
+}
 #quoteForm select[data-source-field] {
   appearance:none; overflow:hidden; min-width:0; max-width:100%; width:100%; text-overflow:ellipsis; padding-right:32px;
   background-image:linear-gradient(45deg,transparent 50%,var(--verde-escuro) 50%),linear-gradient(135deg,var(--verde-escuro) 50%,transparent 50%);
