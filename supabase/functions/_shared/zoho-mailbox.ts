@@ -88,7 +88,9 @@ function dateSyntax(ms:number) {const d=new Date(ms);return `${String(d.getUTCDa
 export function mailboxFolders(response:any) {
   if(!Array.isArray(response?.data)||response.data.length>1000) throw new Error('folders_invalid');
   const excluded=new Set<string>(),known=new Set<string>(),inbox=new Set<string>();
-  for(const f of response.data){const id=mailboxId(f?.folderId);if(known.has(id)||typeof f.folderType!=='string')throw new Error('folders_invalid');known.add(id);if(f.folderType.toLowerCase()==='inbox')inbox.add(id);if(['sent','drafts','trash','spam','outbox','templates'].includes(f.folderType.toLowerCase()))excluded.add(id);}
+  // Zoho also labels user-created folders as type Inbox. Only the canonical
+  // root path identifies the system Inbox; never guess from a localized name.
+  for(const f of response.data){const id=mailboxId(f?.folderId);if(known.has(id)||typeof f.folderType!=='string')throw new Error('folders_invalid');known.add(id);const type=f.folderType.toLowerCase();if(f.path==='/Inbox'&&type!=='inbox')throw new Error('folder_unverified');if(type==='inbox'&&f.path==='/Inbox')inbox.add(id);if(['sent','drafts','trash','spam','outbox','templates'].includes(type))excluded.add(id);}
   return {known,excluded,inbox};
 }
 export async function collectMailboxWindow(api:string,headers:Record<string,string>,accountId:string,watermark:number,activatedAt:number,upper:number,fetcher:typeof fetch=fetch,observe?:(metadata:{messageId:string;folderId:string;receivedAt:number})=>void) {

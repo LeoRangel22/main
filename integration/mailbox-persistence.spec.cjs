@@ -25,7 +25,7 @@ async function worker(c,messages,options={}){
    if(u.origin==='https://accounts.zoho.com'&&u.pathname==='/oauth/v2/token')return json({access_token:'synthetic-only'});
    expect(u.origin).toBe('https://mail.zoho.com');expect(requestOptions.method||'GET').toBe('GET');
    if(u.pathname==='/api/accounts')return json({data:[{accountId:account,type:'ZOHO_ACCOUNT',enabled:true,mailboxStatus:'enabled',incomingBlocked:false,emailAddress:[{mailId:mailbox,isConfirmed:true,isAlias:false}]}]});
-   if(u.pathname===`/api/accounts/${account}/folders`)return json({data:[{folderId:folder,folderType:'Inbox'}]});
+   if(u.pathname===`/api/accounts/${account}/folders`)return json({data:[{folderId:folder,folderType:'Inbox',path:'/Inbox'},{folderId:'2560636000000013018',folderType:'Inbox',path:'/Customers'}]});
    if(u.pathname===`/api/accounts/${account}/messages/search`){
     expect(u.searchParams.get('searchKey')).toContain('::groupResult:false');
     expect(u.searchParams.get('searchKey')).not.toContain('unread');

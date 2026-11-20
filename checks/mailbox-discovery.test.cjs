@@ -3,11 +3,25 @@ const fs=require('node:fs'),vm=require('node:vm'),{stripTypeScriptTypes}=require
 const source=file=>stripTypeScriptTypes(fs.readFileSync(`${__dirname}/../supabase/functions/_shared/${file}`,'utf8').replace(/^export /gm,''));
 const context=vm.createContext({URL,URLSearchParams,Request,Response,Headers,TextEncoder,TextDecoder,AbortSignal,Date,Uint8Array,Set,Map,fetch:()=>{throw Error('Unexpected network');},setTimeout});
 for(const f of ['zoho-mailbox.ts','mailbox-read-fetch.ts'])vm.runInContext(source(f),context);
-const api=vm.runInContext('({collectMailboxInboxTail,mergeMailboxDiscovery,createMailboxReadFetcher})',context);
+const api=vm.runInContext('({mailboxFolders,collectMailboxInboxTail,mergeMailboxDiscovery,createMailboxReadFetcher})',context);
 const now=Date.now(),lower=now-86400000,upper=now-120000,account='9900000000000000001',inbox='9900000000000000014';
 const row=(id,time=now-300000)=>({messageId:String(id),folderId:inbox,receivedTime:String(time),fromAddress:'synthetic@example.test',subject:'never-copy-subject',summary:'never-copy-summary'});
 const json=data=>new Response(JSON.stringify({status:{code:200},data}),{headers:{'Content-Type':'application/json'}});
 const collect=fetcher=>api.collectMailboxInboxTail('https://mail.zoho.com',{},account,inbox,lower,upper,fetcher);
+
+test('Inbox selection requires the system root because custom folders share its provider type',()=>{
+ const folders=api.mailboxFolders({data:[{folderId:'1',folderType:'Inbox',path:'/Inbox',folderName:'Caixa de entrada'},
+  {folderId:'2',folderType:'Inbox',path:'/Customers',folderName:'Customers'},
+  {folderId:'3',folderType:'Inbox',path:'/Customers/Inbox',folderName:'Inbox'}]});
+ assert.deepEqual([...folders.inbox],['1']);assert.equal(folders.known.size,3);
+});
+test('missing or ambiguous system root never falls back to type, label, order or another path',()=>{
+ for(const data of [[{folderId:'1',folderType:'Inbox',folderName:'Inbox'}],
+  [{folderId:'1',folderType:'Inbox',path:'/Custom',folderName:'Inbox'}],
+  [{folderId:'1',folderType:'Inbox',path:'/inbox'}]])assert.equal(api.mailboxFolders({data}).inbox.size,0);
+ assert.equal(api.mailboxFolders({data:[{folderId:'1',folderType:'Inbox',path:'/Inbox'},{folderId:'2',folderType:'Inbox',path:'/Inbox'}]}).inbox.size,2);
+ assert.throws(()=>api.mailboxFolders({data:[{folderId:'1',folderType:'Sent',path:'/Inbox'}]}),/folder_unverified/);
+});
 
 test('Inbox listing uses only documented READ parameters and filters time locally without copying summaries',async()=>{
  let request;const r=await collect(async(url,options)=>{request={url:new URL(url),options};return json([row('1900000000000000001'),row('2',lower-1),row('3',upper+1)]);});

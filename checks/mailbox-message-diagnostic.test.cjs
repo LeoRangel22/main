@@ -14,7 +14,7 @@ function fixture(o={}){
  const ports={json:async url=>{
   calls.push(url);
   if(url.endsWith('/api/accounts'))return {data:[{accountId:o.wrongAccount?'1':account,type:'ZOHO_ACCOUNT',enabled:true,mailboxStatus:'enabled',incomingBlocked:false,emailAddress:[{mailId:mailbox,isConfirmed:true}]}]};
-  if(url.endsWith('/folders'))return{data:[{folderId:folder,folderType:o.excluded?'Sent':'Inbox'}]};
+  if(url.endsWith('/folders'))return{data:[{folderId:folder,folderType:o.excluded?'Sent':'Inbox',path:o.excluded?'/Sent':'/Inbox'}]};
   if(url.endsWith('/details'))return{data:row};
   if(url.endsWith('/header?raw=false'))return{data:{messageId:o.headerId??provider,headerContent:{From:[o.sender??'visitor@example.test'],To:[route],'Message-ID':['<reply@example.test>'],'In-Reply-To':['<outbound@example.test>']}}};
   throw Error('Content/mutation endpoint forbidden');

@@ -30,7 +30,7 @@ test('Exact confirmed enabled account/alias required; MX is not proof',()=>{
  const duplicate=account();duplicate.data.push(duplicate.data[0]);assert.throws(()=>api.verifyMailboxAccount(duplicate,accountId,mailbox));assert.throws(()=>api.verifyMailboxAccount(account(),accountId,'other@example.test'));
 });
 test('Folder identity is strict and excludes outgoing/private discarded folders',()=>{
- const result=api.mailboxFolders({data:[{folderId,folderType:'Inbox'},{folderId:'2',folderType:'Sent'},{folderId:'3',folderType:'Trash'}]});assert.ok(result.known.has(folderId));assert.ok(result.excluded.has('2'));assert.ok(result.excluded.has('3'));
+ const result=api.mailboxFolders({data:[{folderId,folderType:'Inbox',path:'/Inbox'},{folderId:'2',folderType:'Sent'},{folderId:'3',folderType:'Trash'}]});assert.ok(result.known.has(folderId));assert.ok(result.excluded.has('2'));assert.ok(result.excluded.has('3'));
  assert.throws(()=>api.mailboxFolders({data:[{folderId:123,folderType:'Inbox'}]}));
 });
 test('Normalization preserves RFC threading and emits only inert text',()=>{
@@ -97,7 +97,7 @@ async function handler(options={}){
    fetches.push({url,opts});if(options.failFetch)throw Error('Sensitive provider error never-visible');
    if(url.includes('/oauth/'))return json({access_token:'never-visible-token'});
    if(url.endsWith('/api/accounts'))return json(options.account||account());
-   if(url.endsWith('/folders'))return json({data:[{folderId,folderType:'Inbox'},{folderId:'2',folderType:'Sent'}]});
+   if(url.endsWith('/folders'))return json({data:[{folderId,folderType:'Inbox',path:'/Inbox'},{folderId:'2',folderType:'Sent'}]});
    if(url.includes('/messages/search?')){const start=Number(new URL(url).searchParams.get('start'));return json({data:rows.slice(start-1,start+99)});}
    if(url.includes('/messages/view?')){if(options.inboxFailure)return new Response('never-visible',{status:401});const start=Number(new URL(url).searchParams.get('start')),listed=options.inboxRows??rows.filter(r=>r.folderId===folderId);return json({data:listed.slice(start-1,start+99)});}
    if(url.endsWith('/header?raw=false'))return json(options.header||headers({'Message-Id':[`<${url.match(/messages\/(\d+)/)[1]}@example.test>`]}));

@@ -10,7 +10,12 @@ bound, not a lower bound.
 
 ## Supplement and limits
 
-- Exactly one Inbox must be identified by the verified folders response.
+- Exactly one system Inbox must be identified by the verified folders response:
+  type `Inbox` plus canonical path `/Inbox`. The provider also assigns type `Inbox`
+  to user-created folders, as shown in its official
+  [folder-list response](https://www.zoho.com/mail/help/api/get-all-folder-details.html).
+  A custom folder, localized display label, missing path or ambiguous root cannot
+  substitute for the system Inbox.
 - At most three pages of 100 metadata entries are read, ordered by `date`, with
   `status=all`, `threadedMails=false`, no sent/archive expansion and no unread
   filter. These parameters use the existing `ZohoMail.messages.READ` scope.

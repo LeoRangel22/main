@@ -12,7 +12,7 @@ const hdr=()=>({data:{headerContent:{From:['client@example.test'],To:[mailbox],'
 function fixture(patch={}){const calls=[];const fetcher=async(url,options)=>{calls.push({url,method:options.method});if(patch.onFetch)patch.onFetch(url);let data;
  if(url.endsWith('/oauth/v2/token'))data={access_token:'fixture-access'};
  else if(url.endsWith('/api/accounts'))data={data:[{accountId:account,type:'ZOHO_ACCOUNT',enabled:true,mailboxStatus:'enabled',incomingBlocked:false,emailAddress:[{mailId:mailbox,isConfirmed:true}]}]};
- else if(url.endsWith('/folders'))data={data:[{folderId:folder,folderType:patch.folderType||'Inbox'}]};
+ else if(url.endsWith('/folders'))data={data:[{folderId:folder,folderType:patch.folderType||'Inbox',path:patch.folderType==='Sent'?'/Sent':'/Inbox'}]};
  else if(url.includes('/messages/search?')){const query=new URL(url).searchParams;assert.equal(query.get('limit'),'20');assert.ok(query.get('searchKey').includes('sender:client@example.test'));data={data:patch.rows||[row()]};}
  else if(new URL(url).pathname.endsWith('/header')){assert.ok(url.includes('/folders/'+folder+'/messages/'));assert.equal(new URL(url).searchParams.get('raw'),'false');data=patch.headers||hdr();}
  else if(new URL(url).pathname.endsWith('/content')){assert.equal(new URL(url).searchParams.get('includeBlockContent'),'false');data={data:{content:patch.body??'<div>TESTE</div>'}};}
