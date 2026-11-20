@@ -1,0 +1,42 @@
+'use strict';
+const {Client}=require('pg'),fs=require('node:fs'),assert=require('node:assert/strict'),path=require('node:path');
+const uri=new URL(process.env.TEST_DATABASE_URL||'postgres://postgres:event-test-only@127.0.0.1:55439/postgres');
+if(!['127.0.0.1','localhost'].includes(uri.hostname))throw Error('isolated loopback only');
+const root=path.resolve(__dirname,'..'),admin=new Client({connectionString:uri.toString(),connectionTimeoutMillis:5000});
+(async()=>{await admin.connect();const db='events_webhook_rotation_'+Date.now();await admin.query('create database '+db);uri.pathname='/'+db;const c=new Client({connectionString:uri.toString()});await c.connect();
+try{
+ await c.query(`create schema extensions;create extension pgcrypto with schema extensions;create schema event_private;create schema vault;create schema net;
+ do $$begin if not exists(select 1 from pg_roles where rolname='anon')then create role anon;end if;if not exists(select 1 from pg_roles where rolname='authenticated')then create role authenticated;end if;if not exists(select 1 from pg_roles where rolname='service_role')then create role service_role;end if;end$$;
+ create table vault.decrypted_secrets(name text primary key,decrypted_secret text);
+ create table net.captured(id bigserial primary key,url text,headers jsonb,body jsonb);
+ create function net.http_post(url text,headers jsonb,body jsonb)returns bigint language sql as $$insert into net.captured(url,headers,body)values(url,headers,body)returning id$$;
+ create table public.solicitacoes_cotacao(id uuid primary key default gen_random_uuid(),capture_status text,capture_completed_at timestamptz,created_at timestamptz default now(),updated_at timestamptz default now(),capture_token text,cliente_nome text);
+ `);
+ for(const f of ['20261119045000_lead_alert_idempotency.sql','20261120210000_lead_webhook_vault_auth.sql'])await c.query(fs.readFileSync(path.join(root,'supabase/migrations',f),'utf8'));
+ const key='a'.repeat(64);await c.query("insert into vault.decrypted_secrets values('event_lead_webhook_url','https://abcdefghijklmnopqrst.supabase.co/functions/v1/notify-new-lead'),('event_lead_webhook_secret',$1)",[key]);
+ const auth=async candidate=>(await c.query('select public.event_authorize_lead_webhook($1) a',[candidate])).rows[0].a;
+ assert.deepEqual(await auth(key),{valid:true,legacyAllowed:true});assert.deepEqual(await auth('wrong-but-long-value'),{valid:false,legacyAllowed:true});
+ for(const bad of [null,'x'.repeat(8193),'x'.repeat(40)+'\n'])assert.deepEqual(await auth(bad),{valid:false,legacyAllowed:false});
+ assert.deepEqual(await auth('short'),{valid:false,legacyAllowed:true});
+ await c.query("update event_private.lead_alert_policy set enabled=true,started_at=now()-interval '16 minutes'");assert.deepEqual(await auth(key),{valid:true,legacyAllowed:false});
+ await c.query("update event_private.lead_webhook_rotation set legacy_until=now();update event_private.lead_alert_policy set enabled=false");assert.deepEqual(await auth(key),{valid:true,legacyAllowed:false});
+ const grants=(await c.query("select has_function_privilege('anon','public.event_authorize_lead_webhook(text)','execute') a,has_function_privilege('authenticated','public.event_authorize_lead_webhook(text)','execute') u,has_function_privilege('service_role','public.event_authorize_lead_webhook(text)','execute') s,has_table_privilege('service_role','event_private.lead_webhook_rotation','select') t")).rows[0];assert.deepEqual(grants,{a:false,u:false,s:true,t:false});
+ await c.query("set role anon");await assert.rejects(()=>c.query('select public.event_authorize_lead_webhook($1)',[key]),/permission denied/);await c.query('reset role');
+ assert.equal((await c.query('select event_private.dispatch_due_lead_alerts() x')).rows[0].x,'paused');
+ await c.query("update event_private.lead_alert_policy set enabled=true,started_at=now()");
+ assert.equal((await c.query('select event_private.dispatch_due_lead_alerts() x')).rows[0].x,'idle');assert.equal((await c.query('select count(*)::int n from net.captured')).rows[0].n,0);
+ await c.query(`create trigger notify_new_lead_webhook after insert on public.solicitacoes_cotacao for each row execute function event_private.notify_lead_vault();
+ create trigger notify_completed_quote_webhook after update of capture_status on public.solicitacoes_cotacao for each row when(old.capture_status='partial' and new.capture_status='complete')execute function event_private.notify_lead_vault();`);
+ const id=(await c.query("insert into public.solicitacoes_cotacao(capture_status,capture_token,cliente_nome) values('partial','private-fixture-token','private fixture person')returning id")).rows[0].id;
+ await c.query("update public.solicitacoes_cotacao set capture_status='complete',capture_completed_at=now() where id=$1",[id]);
+ await c.query("update public.solicitacoes_cotacao set capture_status='complete' where id=$1",[id]);
+ const queued=(await c.query('select body,headers from net.captured order by id')).rows;assert.equal(queued.length,2);assert.deepEqual(queued[0].body.record,{id});assert.equal(queued[0].headers['x-webhook-secret'],key);assert.equal(JSON.stringify(queued).includes('private-fixture-token'),false);assert.equal(JSON.stringify(queued).includes('private fixture person'),false);
+ const other=new Client({connectionString:uri.toString()});await other.connect();let claims;try{claims=await Promise.all([c.query('select public.event_claim_lead_alert($1) a',[id]),other.query('select public.event_claim_lead_alert($1) a',[id])]);}finally{await other.end();}
+ const winners=claims.map(x=>x.rows[0].a).filter(x=>x.claimed);assert.equal(winners.length,1);assert.equal((await c.query('select public.event_finish_lead_alert($1,$2,$3) x',[winners[0].claimId,'accepted','fixture-provider'])).rows[0].x,true);
+ assert.equal((await c.query('select public.event_claim_lead_alert($1) a',[id])).rows[0].a.code,'already_claimed');
+ assert.equal((await c.query('select event_private.dispatch_due_lead_alerts() x')).rows[0].x,'idle');
+ assert.equal((await c.query('select count(*)::int n from event_private.lead_alert_receipts')).rows[0].n,1);
+ await c.query('begin');await c.query('drop trigger notify_new_lead_webhook on public.solicitacoes_cotacao');await c.query('rollback');assert.equal((await c.query("select count(*)::int n from pg_trigger where tgname='notify_new_lead_webhook'")).rows[0].n,1);
+ console.log(JSON.stringify({passed:true,database:db,checks:['new/legacy/invalid authentication','legacy expiry and irrevocable gate','RPC/table ACL','paused/idle no HTTP','partial-complete triggers minimal payload','concurrent claim and no duplicate','trigger rollback']})); 
+}finally{await c.end();await admin.end();}})().catch(e=>{console.error(e.message);process.exitCode=1});
+
