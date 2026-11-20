@@ -1,6 +1,6 @@
 {
-  "commit": "caf4f32228f113ce2725307e78937c6afad63bbe",
-  "schemaHead": "20261119050000_approved_signal_followup.sql",
+  "commit": "f65e7c8e9c0c677432f3dab723526e0f79ad2457",
+  "schemaHead": "20261120210000_lead_webhook_vault_auth.sql",
   "supabaseVersion": "2.57.4",
   "assets": {
     "historical-crm.js": "9fb4cccbd1e2c1001c511342b0d29989751c8c09af24cb20ffe954b03f993558",
