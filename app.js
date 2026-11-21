@@ -11540,6 +11540,14 @@ function editorScrollOffset(target) {
 
 function syncEditorToolbarOffsets() {
   if (!nodes.loadedEditorBar) return;
+  // Use natural heights even after releasing sticky positioning, so zoom and
+  // viewport changes cannot repeatedly toggle the layout or hide focused fields.
+  const topbar = document.querySelector(".topbar");
+  const stickyHeader = topbar && getComputedStyle(topbar).getPropertyValue("--editor-header-sticky").trim() === "1";
+  const visibleBar = !nodes.loadedEditorBar.classList.contains("is-hidden");
+  const chromeHeight = (stickyHeader ? topbar.getBoundingClientRect().height : 0)
+    + (visibleBar ? nodes.loadedEditorBar.getBoundingClientRect().height : 0);
+  document.body.classList.toggle("editor-chrome-tall", chromeHeight + 16 > window.innerHeight * 0.4);
   const root = document.documentElement, header = editorHeaderOffset();
   const barHeight = !nodes.loadedEditorBar.classList.contains("is-hidden") && getComputedStyle(nodes.loadedEditorBar).position === "sticky" ? nodes.loadedEditorBar.getBoundingClientRect().height : 0;
   for (const [name, value] of [["--editor-toolbar-top", header + 8], ["--editor-content-top", header + barHeight + 16]]) {
@@ -15180,6 +15188,9 @@ function showToast(message) {
   if (existing) existing.remove();
   const toast = document.createElement("div");
   toast.className = "toast";
+  toast.setAttribute("role", "status");
+  toast.setAttribute("aria-live", "polite");
+  toast.setAttribute("aria-atomic", "true");
   toast.textContent = message;
   document.body.appendChild(toast);
   window.setTimeout(() => toast.remove(), 2600);
