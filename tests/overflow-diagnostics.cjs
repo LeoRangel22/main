@@ -11,7 +11,7 @@ async function diagnoseOverflow(page) {
   const controls=[...document.querySelectorAll('input,select')].filter(n=>n.getClientRects().length);
   const controlCauses=controls.map(n=>({...describe(n),hide:measure([n],'display','none'),clip:measure([n],'overflow','hidden')})).filter(n=>n.hide<baseline||n.clip<baseline);
   const reductions=[];
-  const candidates=[...document.querySelectorAll('main, main > *, .workspace > *, .team-panel > *, .quote-layout > *, .form-section, .proposal-paper, .summary-panel')];
+  const candidates=[...document.querySelectorAll('main, main > *, .workspace > *, .team-panel > *, .quote-layout > *, .form-section, .proposal-paper, .summary-panel, #proposalPaper > *, #proposalContent > *, .proposal-page > *, .proposal-header > *, .proposal-summary-strip > *')];
   for(const n of candidates){const width=measure([n],'display','none');if(width<baseline)reductions.push({...describe(n),without:width});}
   return {baseline,limit,groups:out,controlCauses,reductions,restored:root.scrollWidth};
  });
